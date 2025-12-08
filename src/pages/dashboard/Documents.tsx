@@ -15,6 +15,16 @@ import { toast } from 'sonner';
 import { format, differenceInDays, isPast, addDays } from 'date-fns';
 import CreateFolderDialog from '@/components/documents/CreateFolderDialog';
 import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface FolderItem {
   id: string;
@@ -49,6 +59,8 @@ export default function Documents() {
   const [showUpload, setShowUpload] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+  const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
 
@@ -120,6 +132,27 @@ export default function Documents() {
 
   const handleBreadcrumbClick = (folderId: string | null) => {
     setCurrentFolderId(folderId);
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!deleteDocId || !deleteDocPath) return;
+
+    try {
+      // Delete from storage
+      await supabase.storage.from('documents').remove([deleteDocPath]);
+
+      // Delete record
+      const { error } = await supabase.from('documents').delete().eq('id', deleteDocId);
+      if (error) throw error;
+
+      setDocuments(prev => prev.filter(d => d.id !== deleteDocId));
+      toast.success('Document deleted');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDeleteDocId(null);
+      setDeleteDocPath(null);
+    }
   };
 
   const getDocumentStatus = (doc: DocumentItem) => {
@@ -332,6 +365,17 @@ export default function Documents() {
                             <Button variant="ghost" size="icon">
                               <Download className="h-4 w-4" />
                             </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => {
+                                setDeleteDocId(doc.id);
+                                setDeleteDocPath(doc.file_path);
+                              }}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       </Card>
@@ -382,6 +426,24 @@ export default function Documents() {
         folderId={currentFolderId}
         onSuccess={fetchFoldersAndDocuments}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteDocId} onOpenChange={() => { setDeleteDocId(null); setDeleteDocPath(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this document? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
