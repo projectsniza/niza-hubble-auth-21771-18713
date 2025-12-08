@@ -168,14 +168,15 @@ export default function CreateUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>
             Step {step} of 2: {step === 1 ? 'Basic Information' : 'Role & Permissions'}
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto pr-2">
         {step === 1 && (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -398,8 +399,9 @@ export default function CreateUserDialog({
             )}
           </div>
         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
           {step === 1 ? (
             <>
               <Button variant="outline" onClick={handleClose}>
