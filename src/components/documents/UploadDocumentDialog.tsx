@@ -9,27 +9,32 @@ import { CalendarIcon, Upload as UploadIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UploadDocumentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  folderId?: string;
+  onSuccess?: () => void;
 }
 
-export default function UploadDocumentDialog({ open, onOpenChange }: UploadDocumentDialogProps) {
+export default function UploadDocumentDialog({ open, onOpenChange, folderId, onSuccess }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [fileName, setFileName] = useState('');
   const [followUpDate, setFollowUpDate] = useState<Date>();
+  const [expiryDate, setExpiryDate] = useState<Date>();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setFileName(file.name);
+      setFileName(file.name.split('.')[0]);
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile) {
       toast({
         title: "Error",
@@ -39,15 +44,52 @@ export default function UploadDocumentDialog({ open, onOpenChange }: UploadDocum
       return;
     }
 
-    toast({
-      title: "Document Uploaded",
-      description: `Uploaded: ${fileName}${followUpDate ? ` with follow-up on ${format(followUpDate, 'PPP')}` : ''}`,
-    });
-    
-    setFileName('');
-    setFollowUpDate(undefined);
-    setSelectedFile(null);
-    onOpenChange(false);
+    setIsLoading(true);
+    try {
+      const fileExt = selectedFile.name.split('.').pop();
+      const filePath = `${crypto.randomUUID()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          title: fileName || selectedFile.name,
+          file_name: selectedFile.name,
+          file_path: filePath,
+          file_size: selectedFile.size,
+          file_type: selectedFile.type,
+          folder_id: folderId || null,
+          follow_up_date: followUpDate?.toISOString().split('T')[0] || null,
+          expiry_date: expiryDate?.toISOString().split('T')[0] || null,
+        });
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Document Uploaded",
+        description: `Uploaded: ${fileName || selectedFile.name}`,
+      });
+      
+      setFileName('');
+      setFollowUpDate(undefined);
+      setExpiryDate(undefined);
+      setSelectedFile(null);
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -83,6 +125,32 @@ export default function UploadDocumentDialog({ open, onOpenChange }: UploadDocum
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Expiry Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !expiryDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {expiryDate ? format(expiryDate, "PPP") : "Not set"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={expiryDate}
+                  onSelect={setExpiryDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">
@@ -125,9 +193,9 @@ export default function UploadDocumentDialog({ open, onOpenChange }: UploadDocum
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleUpload}>
+          <Button onClick={handleUpload} disabled={isLoading}>
             <UploadIcon className="h-4 w-4 mr-2" />
-            Upload
+            {isLoading ? 'Uploading...' : 'Upload'}
           </Button>
         </div>
       </DialogContent>

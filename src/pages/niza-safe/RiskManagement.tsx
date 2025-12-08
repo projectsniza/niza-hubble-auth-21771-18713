@@ -1,32 +1,192 @@
+import { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { FileText, AlertTriangle, AlertCircle, Clipboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 export default function RiskManagement() {
-  const riskModules = [
-    {
-      icon: FileText,
-      title: "Risk Assessments",
-      description: "Create and manage comprehensive risk assessments",
-      gradient: "from-primary to-accent"
-    },
-    {
-      icon: AlertTriangle,
-      title: "Hazardous Substances Risk Assessments",
-      description: "COSHH assessments and chemical safety management",
-      gradient: "from-accent to-primary"
-    },
-    {
-      icon: AlertCircle,
-      title: "Hazard Reporting",
-      description: "Report and track workplace hazards efficiently",
-      gradient: "from-primary/80 to-accent/80"
-    },
-    {
-      icon: Clipboard,
-      title: "Method Statements",
-      description: "Create safe working procedures and protocols",
-      gradient: "from-accent/80 to-primary/80"
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('risk-assessments');
+  const [riskAssessments, setRiskAssessments] = useState<any[]>([]);
+  const [coshhAssessments, setCoshhAssessments] = useState<any[]>([]);
+  const [hazardReports, setHazardReports] = useState<any[]>([]);
+  const [methodStatements, setMethodStatements] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [dialogType, setDialogType] = useState<'risk' | 'coshh' | 'hazard' | 'method'>('risk');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Form states
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    hazard_description: '',
+    control_measures: '',
+    risk_level: 'medium',
+    chemical_name: '',
+    storage_requirements: '',
+    exposure_limits: '',
+    location_details: '',
+    priority: 'medium',
+    responsibilities: '',
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [riskRes, coshhRes, hazardRes, methodRes] = await Promise.all([
+        supabase.from('risk_assessments').select('*').order('created_at', { ascending: false }),
+        supabase.from('coshh_assessments').select('*').order('created_at', { ascending: false }),
+        supabase.from('hazard_reports').select('*').order('created_at', { ascending: false }),
+        supabase.from('method_statements').select('*').order('created_at', { ascending: false }),
+      ]);
+
+      if (riskRes.data) setRiskAssessments(riskRes.data);
+      if (coshhRes.data) setCoshhAssessments(coshhRes.data);
+      if (hazardRes.data) setHazardReports(hazardRes.data);
+      if (methodRes.data) setMethodStatements(methodRes.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const openCreateDialog = (type: 'risk' | 'coshh' | 'hazard' | 'method') => {
+    setDialogType(type);
+    setFormData({
+      title: '',
+      description: '',
+      hazard_description: '',
+      control_measures: '',
+      risk_level: 'medium',
+      chemical_name: '',
+      storage_requirements: '',
+      exposure_limits: '',
+      location_details: '',
+      priority: 'medium',
+      responsibilities: '',
+    });
+    setShowCreateDialog(true);
+  };
+
+  const handleCreate = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id, branch_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (!profile?.organization_id || !profile?.branch_id) {
+        toast({
+          title: "Error",
+          description: "Organization or branch not configured",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      let error;
+      switch (dialogType) {
+        case 'risk':
+          ({ error } = await supabase.from('risk_assessments').insert({
+            title: formData.title,
+            description: formData.description,
+            hazard_description: formData.hazard_description,
+            control_measures: formData.control_measures,
+            risk_level: formData.risk_level,
+            organization_id: profile.organization_id,
+            branch_id: profile.branch_id,
+            created_by: user?.id,
+          }));
+          break;
+        case 'coshh':
+          ({ error } = await supabase.from('coshh_assessments').insert({
+            chemical_name: formData.chemical_name,
+            storage_requirements: formData.storage_requirements,
+            exposure_limits: formData.exposure_limits,
+            organization_id: profile.organization_id,
+            branch_id: profile.branch_id,
+            created_by: user?.id,
+          }));
+          break;
+        case 'hazard':
+          ({ error } = await supabase.from('hazard_reports').insert({
+            title: formData.title,
+            description: formData.description,
+            location_details: formData.location_details,
+            priority: formData.priority,
+            organization_id: profile.organization_id,
+            branch_id: profile.branch_id,
+            reported_by: user?.id,
+          }));
+          break;
+        case 'method':
+          ({ error } = await supabase.from('method_statements').insert({
+            title: formData.title,
+            responsibilities: formData.responsibilities,
+            organization_id: profile.organization_id,
+            branch_id: profile.branch_id,
+            created_by: user?.id,
+          }));
+          break;
+      }
+
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Created successfully" });
+      setShowCreateDialog(false);
+      fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getRiskBadgeColor = (level: string) => {
+    switch (level) {
+      case 'high': return 'bg-destructive text-destructive-foreground';
+      case 'medium': return 'bg-amber-500 text-white';
+      case 'low': return 'bg-green-500 text-white';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'bg-green-500 text-white';
+      case 'pending': return 'bg-amber-500 text-white';
+      case 'draft': return 'bg-muted text-muted-foreground';
+      case 'resolved': return 'bg-green-500 text-white';
+      case 'reported': return 'bg-blue-500 text-white';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const riskModules = [
+    { icon: FileText, title: "Risk Assessments", key: 'risk-assessments', count: riskAssessments.length, gradient: "from-primary to-accent" },
+    { icon: AlertTriangle, title: "COSHH Assessments", key: 'coshh', count: coshhAssessments.length, gradient: "from-accent to-primary" },
+    { icon: AlertCircle, title: "Hazard Reports", key: 'hazards', count: hazardReports.length, gradient: "from-primary/80 to-accent/80" },
+    { icon: Clipboard, title: "Method Statements", key: 'methods', count: methodStatements.length, gradient: "from-accent/80 to-primary/80" }
   ];
 
   return (
@@ -36,28 +196,348 @@ export default function RiskManagement() {
         <p className="text-muted-foreground">Identify, assess, and control workplace risks</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {riskModules.map((module, index) => (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        {riskModules.map((module) => (
           <Card 
-            key={index}
-            className="p-6 hover:shadow-lg transition-all cursor-pointer group border-border hover:border-primary/50"
+            key={module.key}
+            className={`p-4 cursor-pointer group border-border hover:border-primary/50 transition-all ${activeTab === module.key ? 'border-primary' : ''}`}
+            onClick={() => setActiveTab(module.key)}
           >
-            <div className="flex items-center gap-4">
-              <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${module.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                <module.icon className="w-8 h-8 text-white" />
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${module.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                <module.icon className="w-6 h-6 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg text-foreground mb-1 group-hover:text-primary transition-colors">
-                  {module.title}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {module.description}
-                </p>
+              <div>
+                <h3 className="font-semibold text-foreground">{module.title}</h3>
+                <p className="text-2xl font-bold text-primary">{module.count}</p>
               </div>
             </div>
           </Card>
         ))}
       </div>
+
+      <div className="flex items-center justify-between mb-6">
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button 
+          onClick={() => openCreateDialog(activeTab === 'risk-assessments' ? 'risk' : activeTab === 'coshh' ? 'coshh' : activeTab === 'hazards' ? 'hazard' : 'method')}
+          className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create New
+        </Button>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="risk-assessments">Risk Assessments</TabsTrigger>
+          <TabsTrigger value="coshh">COSHH</TabsTrigger>
+          <TabsTrigger value="hazards">Hazards</TabsTrigger>
+          <TabsTrigger value="methods">Method Statements</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="risk-assessments">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Risk Level</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Review Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {riskAssessments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No risk assessments found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  riskAssessments.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>
+                        <Badge className={getRiskBadgeColor(item.risk_level)}>{item.risk_level}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>{item.review_date ? format(new Date(item.review_date), 'PPP') : '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="coshh">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Chemical Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>SDS Expiry</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {coshhAssessments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No COSHH assessments found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  coshhAssessments.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.chemical_name}</TableCell>
+                      <TableCell>
+                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>{item.sds_expiry_date ? format(new Date(item.sds_expiry_date), 'PPP') : '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="hazards">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Reported</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {hazardReports.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No hazard reports found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  hazardReports.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>
+                        <Badge className={getRiskBadgeColor(item.priority)}>{item.priority}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="methods">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {methodStatements.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No method statements found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  methodStatements.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>
+                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              Create {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {dialogType === 'coshh' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Chemical Name</Label>
+                  <Input
+                    value={formData.chemical_name}
+                    onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
+                    placeholder="Enter chemical name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Storage Requirements</Label>
+                  <Textarea
+                    value={formData.storage_requirements}
+                    onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })}
+                    placeholder="Enter storage requirements"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Exposure Limits</Label>
+                  <Input
+                    value={formData.exposure_limits}
+                    onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })}
+                    placeholder="Enter exposure limits"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Enter title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Enter description"
+                  />
+                </div>
+                {dialogType === 'risk' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Hazard Description</Label>
+                      <Textarea
+                        value={formData.hazard_description}
+                        onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
+                        placeholder="Describe the hazard"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Control Measures</Label>
+                      <Textarea
+                        value={formData.control_measures}
+                        onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
+                        placeholder="Enter control measures"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Risk Level</Label>
+                      <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                {dialogType === 'hazard' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Location Details</Label>
+                      <Input
+                        value={formData.location_details}
+                        onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
+                        placeholder="Enter location details"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                {dialogType === 'method' && (
+                  <div className="space-y-2">
+                    <Label>Responsibilities</Label>
+                    <Textarea
+                      value={formData.responsibilities}
+                      onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
+                      placeholder="Enter responsibilities"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreate}>Create</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

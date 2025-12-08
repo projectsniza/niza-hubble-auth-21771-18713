@@ -4,10 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreateFolderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  parentFolderId?: string;
+  onSuccess?: () => void;
 }
 
 const FOLDER_COLORS = [
@@ -20,12 +23,13 @@ const FOLDER_COLORS = [
   { name: 'Purple', value: '#8B5CF6' },
 ];
 
-export default function CreateFolderDialog({ open, onOpenChange }: CreateFolderDialogProps) {
+export default function CreateFolderDialog({ open, onOpenChange, parentFolderId, onSuccess }: CreateFolderDialogProps) {
   const { toast } = useToast();
   const [folderName, setFolderName] = useState('');
   const [selectedColor, setSelectedColor] = useState(FOLDER_COLORS[0].value);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!folderName.trim()) {
       toast({
         title: "Error",
@@ -35,14 +39,51 @@ export default function CreateFolderDialog({ open, onOpenChange }: CreateFolderD
       return;
     }
 
-    toast({
-      title: "Folder Created",
-      description: `Created folder: ${folderName}`,
-    });
-    
-    setFolderName('');
-    setSelectedColor(FOLDER_COLORS[0].value);
-    onOpenChange(false);
+    setIsLoading(true);
+    try {
+      let path = folderName;
+      
+      if (parentFolderId) {
+        const { data: parentFolder } = await supabase
+          .from('folders')
+          .select('path')
+          .eq('id', parentFolderId)
+          .single();
+        
+        if (parentFolder) {
+          path = `${parentFolder.path}/${folderName}`;
+        }
+      }
+
+      const { error } = await supabase
+        .from('folders')
+        .insert({
+          name: folderName,
+          path,
+          parent_id: parentFolderId || null,
+          folder_type: 'general',
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Folder Created",
+        description: `Created folder: ${folderName}`,
+      });
+      
+      setFolderName('');
+      setSelectedColor(FOLDER_COLORS[0].value);
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create folder",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -88,8 +129,8 @@ export default function CreateFolderDialog({ open, onOpenChange }: CreateFolderD
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate}>
-            Create
+          <Button onClick={handleCreate} disabled={isLoading}>
+            {isLoading ? 'Creating...' : 'Create'}
           </Button>
         </div>
       </DialogContent>
