@@ -6,6 +6,12 @@ import { toast } from 'sonner';
 
 interface UserWithRole extends Profile {
   role: UserRole;
+  pending_count?: number;
+}
+
+interface ManagerPendingCount {
+  manager_id: string;
+  count: number;
 }
 
 export function useUsers() {
@@ -13,6 +19,28 @@ export function useUsers() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [managerPendingCounts, setManagerPendingCounts] = useState<Map<string, number>>(new Map());
+
+  const fetchPendingCounts = async (managerUsers: UserWithRole[]) => {
+    // Get pending employee counts for each manager's branch
+    const counts = new Map<string, number>();
+    
+    for (const manager of managerUsers.filter(u => u.role === 'manager' && u.branch_id)) {
+      const { count, error } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', manager.branch_id!)
+        .eq('account_activated', false)
+        .not('status', 'eq', 'terminated');
+
+      if (!error && count !== null) {
+        counts.set(manager.id, count);
+      }
+    }
+    
+    setManagerPendingCounts(counts);
+    return counts;
+  };
 
   const fetchUsers = async () => {
     try {
@@ -43,6 +71,9 @@ export function useUsers() {
       }) || [];
 
       setUsers(usersWithRoles);
+      
+      // Fetch pending counts for managers
+      await fetchPendingCounts(usersWithRoles);
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching users:', err);
@@ -131,6 +162,10 @@ export function useUsers() {
     );
   };
 
+  const getPendingCountForManager = (managerId: string): number => {
+    return managerPendingCounts.get(managerId) || 0;
+  };
+
   useEffect(() => {
     if (user) {
       fetchUsers();
@@ -146,6 +181,8 @@ export function useUsers() {
     updateUserProfile,
     getManagersAndHR,
     getManagersByBranch,
-    getHRByOrganization
+    getHRByOrganization,
+    getPendingCountForManager,
+    managerPendingCounts
   };
 }
