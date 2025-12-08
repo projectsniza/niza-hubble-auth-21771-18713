@@ -682,6 +682,8 @@ export type Database = {
           employee_id: string | null
           folder_type: string | null
           id: string
+          is_deletable: boolean | null
+          is_system: boolean | null
           name: string
           organization_id: string | null
           parent_id: string | null
@@ -696,6 +698,8 @@ export type Database = {
           employee_id?: string | null
           folder_type?: string | null
           id?: string
+          is_deletable?: boolean | null
+          is_system?: boolean | null
           name: string
           organization_id?: string | null
           parent_id?: string | null
@@ -710,6 +714,8 @@ export type Database = {
           employee_id?: string | null
           folder_type?: string | null
           id?: string
+          is_deletable?: boolean | null
+          is_system?: boolean | null
           name?: string
           organization_id?: string | null
           parent_id?: string | null
