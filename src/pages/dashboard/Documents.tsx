@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
-  Search, Clock, AlertTriangle, Eye, Download, Trash2 
+  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -25,6 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
 
 interface FolderItem {
   id: string;
@@ -35,6 +44,8 @@ interface FolderItem {
   organization_id: string | null;
   branch_id: string | null;
   employee_id: string | null;
+  is_system?: boolean;
+  is_deletable?: boolean;
 }
 
 interface DocumentItem {
@@ -53,6 +64,7 @@ export default function Documents() {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [rootFolderId, setRootFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -61,34 +73,53 @@ export default function Documents() {
   const [loading, setLoading] = useState(true);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
+  const [renameFolder, setRenameFolder] = useState<FolderItem | null>(null);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
 
+  // Initialize with Company Documents root folder
   useEffect(() => {
-    fetchFoldersAndDocuments();
+    const initializeRoot = async () => {
+      const { data: rootFolder } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('folder_type', 'root')
+        .eq('path', 'Company Documents')
+        .single();
+      
+      if (rootFolder) {
+        setRootFolderId(rootFolder.id);
+        setCurrentFolderId(rootFolder.id);
+      }
+    };
+    initializeRoot();
+  }, []);
+
+  useEffect(() => {
+    if (currentFolderId !== null) {
+      fetchFoldersAndDocuments();
+    }
   }, [currentFolderId]);
 
   const fetchFoldersAndDocuments = async () => {
     setLoading(true);
     try {
-      // Fetch folders
-      let foldersQuery = supabase.from('folders').select('*');
-      if (currentFolderId) {
-        foldersQuery = foldersQuery.eq('parent_id', currentFolderId);
-      } else {
-        foldersQuery = foldersQuery.is('parent_id', null);
-      }
-      const { data: foldersData } = await foldersQuery.order('name');
+      // Fetch subfolders of current folder
+      const { data: foldersData } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('parent_id', currentFolderId)
+        .order('name');
       setFolders(foldersData || []);
 
-      // Fetch documents
-      let docsQuery = supabase.from('documents').select('*');
-      if (currentFolderId) {
-        docsQuery = docsQuery.eq('folder_id', currentFolderId);
-      } else {
-        docsQuery = docsQuery.is('folder_id', null);
-      }
-      const { data: docsData } = await docsQuery.order('created_at', { ascending: false });
+      // Fetch documents in current folder
+      const { data: docsData } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('folder_id', currentFolderId)
+        .order('created_at', { ascending: false });
       setDocuments(docsData || []);
 
       // Build breadcrumbs
@@ -131,7 +162,12 @@ export default function Documents() {
   };
 
   const handleBreadcrumbClick = (folderId: string | null) => {
-    setCurrentFolderId(folderId);
+    // If clicking root or home, go to Company Documents
+    if (folderId === null && rootFolderId) {
+      setCurrentFolderId(rootFolderId);
+    } else {
+      setCurrentFolderId(folderId);
+    }
   };
 
   const handleDeleteDocument = async () => {
@@ -152,6 +188,34 @@ export default function Documents() {
     } finally {
       setDeleteDocId(null);
       setDeleteDocPath(null);
+    }
+  };
+
+  const handleRenameFolder = async () => {
+    if (!renameFolder || !newFolderName.trim()) return;
+
+    setIsRenaming(true);
+    try {
+      // Build new path
+      const pathParts = renameFolder.path.split('/');
+      pathParts[pathParts.length - 1] = newFolderName.trim();
+      const newPath = pathParts.join('/');
+
+      const { error } = await supabase
+        .from('folders')
+        .update({ name: newFolderName.trim(), path: newPath })
+        .eq('id', renameFolder.id);
+
+      if (error) throw error;
+
+      toast.success('Folder renamed successfully');
+      setRenameFolder(null);
+      setNewFolderName('');
+      fetchFoldersAndDocuments();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -176,6 +240,10 @@ export default function Documents() {
 
   const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
+
+  const isProtectedFolder = (folder: FolderItem) => {
+    return folder.is_deletable === false || folder.folder_type === 'root' || folder.folder_type === 'organization' || folder.folder_type === 'branch';
+  };
 
   if (!hasAccess) {
     return (
@@ -213,21 +281,15 @@ export default function Documents() {
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm mb-4">
-          <Button
-            variant="link"
-            className="h-auto p-0 text-primary"
-            onClick={() => handleBreadcrumbClick(null)}
-          >
-            All Folders
-          </Button>
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.id} className="flex items-center gap-2">
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               <Button
                 variant="link"
                 className={`h-auto p-0 ${index === breadcrumbs.length - 1 ? 'text-foreground font-medium' : 'text-primary'}`}
                 onClick={() => handleBreadcrumbClick(crumb.id)}
               >
+                {crumb.folder_type === 'root' && <Lock className="h-3 w-3 mr-1 inline" />}
                 {crumb.name}
               </Button>
             </div>
@@ -310,21 +372,59 @@ export default function Documents() {
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">Folders</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {folders.map((folder) => (
-                    <Card
-                      key={folder.id}
-                      onClick={() => handleFolderClick(folder.id)}
-                      className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Folder className="h-8 w-8 text-primary" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{folder.name}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{folder.folder_type}</p>
+                  {folders.map((folder) => {
+                    const isProtected = isProtectedFolder(folder);
+                    return (
+                      <Card
+                        key={folder.id}
+                        className="p-4 cursor-pointer hover:bg-muted/50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div onClick={() => handleFolderClick(folder.id)} className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="relative">
+                              <Folder className="h-8 w-8 text-primary" />
+                              {isProtected && (
+                                <Lock className="h-3 w-3 text-muted-foreground absolute -bottom-1 -right-1" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">{folder.name}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{folder.folder_type}</p>
+                            </div>
+                          </div>
+                          {/* Action buttons */}
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenameFolder(folder);
+                                setNewFolderName(folder.name);
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            {!isProtected && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // TODO: Add folder delete confirmation
+                                  toast.info('Folder deletion coming soon');
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -427,7 +527,7 @@ export default function Documents() {
         onSuccess={fetchFoldersAndDocuments}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete Document Confirmation */}
       <AlertDialog open={!!deleteDocId} onOpenChange={() => { setDeleteDocId(null); setDeleteDocPath(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -444,6 +544,36 @@ export default function Documents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rename Folder Dialog */}
+      <Dialog open={!!renameFolder} onOpenChange={(open) => { if (!open) { setRenameFolder(null); setNewFolderName(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>
+              Enter a new name for the folder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="folder-name">Folder Name</Label>
+            <Input
+              id="folder-name"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Enter folder name"
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRenameFolder(null); setNewFolderName(''); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleRenameFolder} disabled={isRenaming || !newFolderName.trim()}>
+              {isRenaming ? 'Renaming...' : 'Rename'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
