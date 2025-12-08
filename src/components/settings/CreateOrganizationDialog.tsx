@@ -3,27 +3,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 
 interface CreateOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (org: { name: string; description: string; hasDocumentFolder: boolean }) => void;
+  onSubmit: (name: string, autoCreateFolder: boolean) => void;
 }
 
 export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit }: CreateOrganizationDialogProps) {
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [hasDocumentFolder, setHasDocumentFolder] = useState(true);
+  const [autoCreateFolder, setAutoCreateFolder] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ name, description, hasDocumentFolder });
+    if (!name.trim()) return;
+    
+    setIsSubmitting(true);
+    await onSubmit(name.trim(), autoCreateFolder);
+    setIsSubmitting(false);
     setName('');
-    setDescription('');
-    setHasDocumentFolder(true);
-    onOpenChange(false);
+    setAutoCreateFolder(true);
   };
 
   return (
@@ -39,39 +40,31 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
               id="org-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Niza Superstores (Eastbourne) Ltd"
+              placeholder="e.g., Niza Group Eastbourne"
               required
-            />
-          </div>
-          <div>
-            <Label htmlFor="org-description">Description</Label>
-            <Textarea
-              id="org-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of your organization"
-              rows={3}
-              required
+              autoFocus
             />
           </div>
           <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
             <div className="space-y-0.5">
               <Label htmlFor="doc-folder">Create Document Folder</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically create a document folder for this organization
+                Auto-create: Company Documents/{name || '<Organization Name>'}/
               </p>
             </div>
             <Switch
               id="doc-folder"
-              checked={hasDocumentFolder}
-              onCheckedChange={setHasDocumentFolder}
+              checked={autoCreateFolder}
+              onCheckedChange={setAutoCreateFolder}
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create Organization</Button>
+            <Button type="submit" disabled={!name.trim() || isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create Organization'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

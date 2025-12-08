@@ -1,89 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, MapPin, Edit, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, Building2, MapPin, Trash2, FolderOpen, Loader2 } from 'lucide-react';
 import CreateOrganizationDialog from './CreateOrganizationDialog';
 import CreateBranchDialog from './CreateBranchDialog';
-import { toast } from 'sonner';
-
-interface Branch {
-  id: string;
-  name: string;
-  location: string;
-  managerId?: string;
-  hasDocumentFolder: boolean;
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  description: string;
-  branches: Branch[];
-  hasDocumentFolder: boolean;
-}
+import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function OrganizationManagement() {
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const { organizations, isLoading: orgsLoading, createOrganization, deleteOrganization } = useOrganizations();
+  const { branches, isLoading: branchesLoading, createBranch, deleteBranch } = useBranches();
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
+  const [deleteOrgId, setDeleteOrgId] = useState<string | null>(null);
+  const [deleteBranchId, setDeleteBranchId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem('niza_organizations');
-    if (stored) {
-      setOrganizations(JSON.parse(stored));
+  const handleCreateOrganization = async (name: string, autoCreateFolder: boolean) => {
+    await createOrganization(name, autoCreateFolder);
+    setCreateOrgOpen(false);
+  };
+
+  const handleCreateBranch = async (name: string, address: string) => {
+    if (!selectedOrgId) return;
+    await createBranch(selectedOrgId, name, address);
+    setCreateBranchOpen(false);
+  };
+
+  const handleDeleteOrganization = async () => {
+    if (deleteOrgId) {
+      await deleteOrganization(deleteOrgId);
+      setDeleteOrgId(null);
     }
-  }, []);
-
-  const saveOrganizations = (orgs: Organization[]) => {
-    setOrganizations(orgs);
-    localStorage.setItem('niza_organizations', JSON.stringify(orgs));
   };
 
-  const handleCreateOrganization = (org: Omit<Organization, 'id' | 'branches'>) => {
-    const newOrg: Organization = {
-      ...org,
-      id: Date.now().toString(),
-      branches: [],
-    };
-    saveOrganizations([...organizations, newOrg]);
-    toast.success('Organization created successfully');
+  const handleDeleteBranch = async () => {
+    if (deleteBranchId) {
+      await deleteBranch(deleteBranchId);
+      setDeleteBranchId(null);
+    }
   };
 
-  const handleCreateBranch = (branch: Omit<Branch, 'id'>) => {
-    if (!selectedOrg) return;
-    
-    const updatedOrgs = organizations.map(org => {
-      if (org.id === selectedOrg) {
-        return {
-          ...org,
-          branches: [...org.branches, { ...branch, id: Date.now().toString() }]
-        };
-      }
-      return org;
-    });
-    saveOrganizations(updatedOrgs);
-    toast.success('Branch created successfully');
+  const getBranchesForOrg = (orgId: string) => {
+    return branches.filter(b => b.organization_id === orgId);
   };
 
-  const handleDeleteOrganization = (orgId: string) => {
-    saveOrganizations(organizations.filter(org => org.id !== orgId));
-    toast.success('Organization deleted');
-  };
-
-  const handleDeleteBranch = (orgId: string, branchId: string) => {
-    const updatedOrgs = organizations.map(org => {
-      if (org.id === orgId) {
-        return {
-          ...org,
-          branches: org.branches.filter(b => b.id !== branchId)
-        };
-      }
-      return org;
-    });
-    saveOrganizations(updatedOrgs);
-    toast.success('Branch deleted');
-  };
+  if (orgsLoading || branchesLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -109,12 +86,14 @@ export default function OrganizationManagement() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold">{org.name}</h3>
-                    <p className="text-sm text-muted-foreground">{org.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {getBranchesForOrg(org.id).length} branches
+                    </p>
                   </div>
-                  {org.hasDocumentFolder && (
+                  {org.auto_create_folder && (
                     <div className="ml-2 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs flex items-center gap-1">
                       <FolderOpen className="h-3 w-3" />
-                      Document Folder
+                      Auto Folder
                     </div>
                   )}
                 </div>
@@ -124,7 +103,7 @@ export default function OrganizationManagement() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setSelectedOrg(org.id);
+                    setSelectedOrgId(org.id);
                     setCreateBranchOpen(true);
                   }}
                   className="gap-2"
@@ -135,7 +114,7 @@ export default function OrganizationManagement() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleDeleteOrganization(org.id)}
+                  onClick={() => setDeleteOrgId(org.id)}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -143,27 +122,28 @@ export default function OrganizationManagement() {
               </div>
             </div>
 
-            {org.branches.length > 0 && (
+            {getBranchesForOrg(org.id).length > 0 && (
               <div className="ml-14 space-y-3 mt-4 border-l-2 border-primary/20 pl-6">
-                {org.branches.map((branch) => (
+                {getBranchesForOrg(org.id).map((branch) => (
                   <div key={branch.id} className="flex items-center justify-between p-4 rounded-lg bg-card/50 border">
                     <div className="flex items-center gap-3">
                       <MapPin className="h-5 w-5 text-primary" />
                       <div>
                         <h4 className="font-semibold">{branch.name}</h4>
-                        <p className="text-sm text-muted-foreground">{branch.location}</p>
+                        {branch.address && (
+                          <p className="text-sm text-muted-foreground">{branch.address}</p>
+                        )}
                       </div>
-                      {branch.hasDocumentFolder && (
-                        <div className="ml-2 px-2 py-1 rounded-md bg-accent/10 text-accent text-xs flex items-center gap-1">
-                          <FolderOpen className="h-3 w-3" />
-                          Docs
+                      {branch.qr_enabled && (
+                        <div className="ml-2 px-2 py-1 rounded-md bg-accent/10 text-accent text-xs">
+                          QR Enabled
                         </div>
                       )}
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteBranch(org.id, branch.id)}
+                      onClick={() => setDeleteBranchId(branch.id)}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -199,6 +179,42 @@ export default function OrganizationManagement() {
         onOpenChange={setCreateBranchOpen}
         onSubmit={handleCreateBranch}
       />
+
+      <AlertDialog open={!!deleteOrgId} onOpenChange={() => setDeleteOrgId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Organization</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this organization and all its branches, employees, and documents.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOrganization} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteBranchId} onOpenChange={() => setDeleteBranchId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Branch</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this branch and all associated employees and documents.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteBranch} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

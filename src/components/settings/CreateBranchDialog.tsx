@@ -3,26 +3,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 
 interface CreateBranchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (branch: { name: string; location: string; hasDocumentFolder: boolean }) => void;
+  onSubmit: (name: string, address: string) => void;
 }
 
 export default function CreateBranchDialog({ open, onOpenChange, onSubmit }: CreateBranchDialogProps) {
   const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const [hasDocumentFolder, setHasDocumentFolder] = useState(true);
+  const [address, setAddress] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ name, location, hasDocumentFolder });
+    if (!name.trim()) return;
+    
+    setIsSubmitting(true);
+    await onSubmit(name.trim(), address.trim());
+    setIsSubmitting(false);
     setName('');
-    setLocation('');
-    setHasDocumentFolder(true);
-    onOpenChange(false);
+    setAddress('');
   };
 
   return (
@@ -38,38 +39,27 @@ export default function CreateBranchDialog({ open, onOpenChange, onSubmit }: Cre
               id="branch-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Main Street Branch"
+              placeholder="e.g., London Office"
               required
+              autoFocus
             />
           </div>
           <div>
-            <Label htmlFor="branch-location">Location</Label>
+            <Label htmlFor="branch-address">Address (Optional)</Label>
             <Input
-              id="branch-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g., 123 Main Street, London"
-              required
-            />
-          </div>
-          <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
-            <div className="space-y-0.5">
-              <Label htmlFor="branch-doc-folder">Create Document Folder</Label>
-              <p className="text-sm text-muted-foreground">
-                Automatically create a document folder for this branch
-              </p>
-            </div>
-            <Switch
-              id="branch-doc-folder"
-              checked={hasDocumentFolder}
-              onCheckedChange={setHasDocumentFolder}
+              id="branch-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g., 123 High Street, London"
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Add Branch</Button>
+            <Button type="submit" disabled={!name.trim() || isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Add Branch'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
