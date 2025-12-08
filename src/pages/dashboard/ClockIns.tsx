@@ -1,51 +1,268 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Search, Clock, User, QrCode, Plus } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MapPin, Search, Clock, User, QrCode, Plus, Settings, History } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+
+interface Location {
+  id: string;
+  name: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  radius: number | null;
+  qr_enabled: boolean | null;
+  is_active: boolean | null;
+  branch_id: string;
+}
+
+interface ClockIn {
+  id: string;
+  user_id: string;
+  clock_in_time: string;
+  clock_out_time: string | null;
+  clock_in_method: string | null;
+  location_id: string | null;
+  branch_id: string;
+}
 
 export default function ClockIns() {
+  const { user } = useAuth();
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [clockIns, setClockIns] = useState<ClockIn[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('locations');
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  const [newLocation, setNewLocation] = useState({
+    name: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    radius: '100',
+    branchId: '',
+    qrEnabled: true
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [locationsRes, clockInsRes, branchesRes] = await Promise.all([
+        supabase.from('locations').select('*').order('name'),
+        supabase.from('clock_ins').select('*').order('clock_in_time', { ascending: false }).limit(50),
+        supabase.from('branches').select('*').order('name')
+      ]);
+
+      setLocations(locationsRes.data || []);
+      setClockIns(clockInsRes.data || []);
+      setBranches(branchesRes.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateLocation = async () => {
+    if (!newLocation.name || !newLocation.branchId || !newLocation.latitude || !newLocation.longitude) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('locations').insert({
+        name: newLocation.name,
+        address: newLocation.address || null,
+        latitude: parseFloat(newLocation.latitude),
+        longitude: parseFloat(newLocation.longitude),
+        radius: parseInt(newLocation.radius),
+        branch_id: newLocation.branchId,
+        qr_enabled: newLocation.qrEnabled,
+        created_by: user?.id
+      });
+
+      if (error) throw error;
+
+      toast.success('Location created successfully');
+      setShowAddLocation(false);
+      setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100', branchId: '', qrEnabled: true });
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create location');
+    }
+  };
+
+  const handleClockIn = async (locationId: string) => {
+    try {
+      // Get current position
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        // Check if within geofence
+        const location = locations.find(l => l.id === locationId);
+        if (location) {
+          const distance = calculateDistance(latitude, longitude, location.latitude, location.longitude);
+          const radius = location.radius || 100;
+          
+          if (distance > radius) {
+            toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
+            return;
+          }
+        }
+
+        const { error } = await supabase.from('clock_ins').insert({
+          user_id: user?.id,
+          branch_id: location?.branch_id,
+          location_id: locationId,
+          clock_in_time: new Date().toISOString(),
+          clock_in_latitude: latitude,
+          clock_in_longitude: longitude,
+          clock_in_method: 'gps'
+        });
+
+        if (error) throw error;
+        toast.success('Clocked in successfully');
+        fetchData();
+      }, (error) => {
+        toast.error('Unable to get your location. Please enable GPS.');
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to clock in');
+    }
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+  };
+
+  const activeLocations = locations.filter(l => l.is_active);
+  const qrLocations = locations.filter(l => l.qr_enabled);
+  const todayClockIns = clockIns.filter(c => 
+    new Date(c.clock_in_time).toDateString() === new Date().toDateString()
+  );
 
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-foreground">Clock-ins & Locations</h2>
-          <p className="text-muted-foreground mt-1">Manage employee check-in locations and QR codes</p>
+          <p className="text-muted-foreground mt-1">Manage employee check-in locations and geofencing</p>
         </div>
         
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Location
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Location</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Location Name</label>
-                <Input placeholder="e.g., Main Office - London" />
+        {user?.role === 'super_admin' && (
+          <Dialog open={showAddLocation} onOpenChange={setShowAddLocation}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Location
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Location</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Location Name *</Label>
+                  <Input 
+                    value={newLocation.name}
+                    onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
+                    placeholder="e.g., Main Office - London" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch *</Label>
+                  <Select 
+                    value={newLocation.branchId}
+                    onValueChange={(v) => setNewLocation({ ...newLocation, branchId: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(branch => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input 
+                    value={newLocation.address}
+                    onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })}
+                    placeholder="Full address" 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Latitude *</Label>
+                    <Input 
+                      value={newLocation.latitude}
+                      onChange={(e) => setNewLocation({ ...newLocation, latitude: e.target.value })}
+                      placeholder="51.5074" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Longitude *</Label>
+                    <Input 
+                      value={newLocation.longitude}
+                      onChange={(e) => setNewLocation({ ...newLocation, longitude: e.target.value })}
+                      placeholder="-0.1278" 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Geofence Radius (meters)</Label>
+                  <Input 
+                    type="number"
+                    value={newLocation.radius}
+                    onChange={(e) => setNewLocation({ ...newLocation, radius: e.target.value })}
+                    placeholder="100" 
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="qr" 
+                    checked={newLocation.qrEnabled}
+                    onChange={(e) => setNewLocation({ ...newLocation, qrEnabled: e.target.checked })}
+                  />
+                  <Label htmlFor="qr">Enable QR Code check-in</Label>
+                </div>
+                <Button onClick={handleCreateLocation} className="w-full">Create Location</Button>
               </div>
-              <div>
-                <label className="text-sm font-medium">Address</label>
-                <Input placeholder="Full address" />
-              </div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="qr" defaultChecked />
-                <label htmlFor="qr" className="text-sm">Generate QR Code for this location</label>
-              </div>
-              <Button className="w-full">Create Location</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -53,7 +270,7 @@ export default function ClockIns() {
               <MapPin className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">0</p>
+              <p className="text-2xl font-bold text-foreground">{activeLocations.length}</p>
               <p className="text-xs text-muted-foreground">Active Locations</p>
             </div>
           </div>
@@ -65,8 +282,8 @@ export default function ClockIns() {
               <User className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">0</p>
-              <p className="text-xs text-muted-foreground">Total Employees</p>
+              <p className="text-2xl font-bold text-foreground">{clockIns.length}</p>
+              <p className="text-xs text-muted-foreground">Total Clock-ins</p>
             </div>
           </div>
         </Card>
@@ -77,7 +294,7 @@ export default function ClockIns() {
               <Clock className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">0</p>
+              <p className="text-2xl font-bold text-foreground">{todayClockIns.length}</p>
               <p className="text-xs text-muted-foreground">Clocked In Today</p>
             </div>
           </div>
@@ -89,13 +306,14 @@ export default function ClockIns() {
               <QrCode className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">0</p>
+              <p className="text-2xl font-bold text-foreground">{qrLocations.length}</p>
               <p className="text-xs text-muted-foreground">QR Locations</p>
             </div>
           </div>
         </Card>
       </div>
 
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input 
@@ -106,45 +324,123 @@ export default function ClockIns() {
         />
       </div>
 
-      <Card className="p-12 text-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <MapPin className="h-8 w-8 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">No locations configured</h3>
-            <p className="text-muted-foreground mb-4">Add your first location to enable employee clock-ins</p>
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add First Location
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Location</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Location Name</label>
-                  <Input placeholder="e.g., Main Office - London" />
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="locations" className="gap-2">
+            <MapPin className="h-4 w-4" />
+            Locations
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2">
+            <History className="h-4 w-4" />
+            Clock-in History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="locations" className="mt-6">
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : locations.length === 0 ? (
+            <Card className="p-12 text-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <MapPin className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Address</label>
-                  <Input placeholder="Full address" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">No locations configured</h3>
+                  <p className="text-muted-foreground mb-4">Add your first location to enable employee clock-ins</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="qr2" defaultChecked />
-                  <label htmlFor="qr2" className="text-sm">Generate QR Code for this location</label>
-                </div>
-                <Button className="w-full">Create Location</Button>
+                {user?.role === 'super_admin' && (
+                  <Button onClick={() => setShowAddLocation(true)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add First Location
+                  </Button>
+                )}
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </Card>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {locations.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase())).map(location => (
+                <Card key={location.id} className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground">{location.name}</h3>
+                      <p className="text-sm text-muted-foreground">{location.address || 'No address'}</p>
+                    </div>
+                    {location.qr_enabled && (
+                      <Badge variant="secondary" className="gap-1">
+                        <QrCode className="h-3 w-3" />
+                        QR
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                    <p>Radius: {location.radius || 100}m</p>
+                    <p>Lat: {location.latitude}, Lng: {location.longitude}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={() => handleClockIn(location.id)}>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Clock In
+                    </Button>
+                    {user?.role === 'super_admin' && (
+                      <Button size="sm" variant="outline">
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-6">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Clock In</TableHead>
+                  <TableHead>Clock Out</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clockIns.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No clock-in records found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  clockIns.map(clockIn => (
+                    <TableRow key={clockIn.id}>
+                      <TableCell>{format(new Date(clockIn.clock_in_time), 'dd MMM yyyy')}</TableCell>
+                      <TableCell>{format(new Date(clockIn.clock_in_time), 'HH:mm')}</TableCell>
+                      <TableCell>
+                        {clockIn.clock_out_time 
+                          ? format(new Date(clockIn.clock_out_time), 'HH:mm')
+                          : '-'
+                        }
+                      </TableCell>
+                      <TableCell className="capitalize">{clockIn.clock_in_method || 'GPS'}</TableCell>
+                      <TableCell>
+                        <Badge variant={clockIn.clock_out_time ? 'secondary' : 'default'}>
+                          {clockIn.clock_out_time ? 'Completed' : 'Active'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
