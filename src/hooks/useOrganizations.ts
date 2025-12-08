@@ -53,6 +53,23 @@ export function useOrganizations() {
 
   const deleteOrganization = async (id: string) => {
     try {
+      // First delete all folders associated with this organization
+      const { error: foldersError } = await supabase
+        .from('folders')
+        .delete()
+        .eq('organization_id', id);
+
+      if (foldersError) throw foldersError;
+
+      // Delete all branches associated with this organization
+      const { error: branchesError } = await supabase
+        .from('branches')
+        .delete()
+        .eq('organization_id', id);
+
+      if (branchesError) throw branchesError;
+
+      // Now delete the organization
       const { error } = await supabase
         .from('organizations')
         .delete()
@@ -151,6 +168,15 @@ export function useBranches(organizationId?: string) {
 
   const deleteBranch = async (id: string) => {
     try {
+      // First delete all folders associated with this branch
+      const { error: foldersError } = await supabase
+        .from('folders')
+        .delete()
+        .eq('branch_id', id);
+
+      if (foldersError) throw foldersError;
+
+      // Now delete the branch
       const { error } = await supabase
         .from('branches')
         .delete()
