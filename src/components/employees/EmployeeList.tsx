@@ -1,10 +1,31 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { UserPlus, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { UserPlus, Users, Loader2, MoreHorizontal, Eye, Trash2, UserCog } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface EmployeeListProps {
   searchQuery: string;
@@ -12,72 +33,254 @@ interface EmployeeListProps {
 
 export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const navigate = useNavigate();
-  const [filterBy, setFilterBy] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
+  const { user } = useAuth();
+  const [organizationFilter, setOrganizationFilter] = useState('all');
+  const [branchFilter, setBranchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
+
+  const { organizations } = useOrganizations();
+  const { branches } = useBranches();
+  
+  // Build filters based on user role
+  const employeeFilters = useMemo(() => {
+    const filters: any = { searchQuery };
+    
+    // Apply role-based restrictions
+    if (user?.role === 'manager') {
+      filters.branchId = user.branchId;
+    } else if (user?.role === 'hr') {
+      if (user.hrAccessLevel === 'branch') {
+        filters.branchId = user.branchId;
+      } else if (user.hrAccessLevel === 'organization') {
+        filters.organizationId = user.organizationId;
+      }
+    }
+    
+    // Apply manual filters (only if not already restricted by role)
+    if (organizationFilter !== 'all' && !filters.organizationId) {
+      filters.organizationId = organizationFilter;
+    }
+    if (branchFilter !== 'all' && !filters.branchId) {
+      filters.branchId = branchFilter;
+    }
+    if (statusFilter !== 'all') {
+      filters.status = statusFilter;
+    }
+    
+    return filters;
+  }, [user, organizationFilter, branchFilter, statusFilter, searchQuery]);
+
+  const { employees, isLoading, deleteEmployee } = useEmployees(employeeFilters);
+
+  const filteredBranches = organizationFilter !== 'all' 
+    ? branches.filter(b => b.organization_id === organizationFilter)
+    : branches;
+
+  const handleDeleteEmployee = async () => {
+    if (deleteEmployeeId) {
+      await deleteEmployee(deleteEmployeeId);
+      setDeleteEmployeeId(null);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Active</Badge>;
+      case 'onboarding':
+        return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">Onboarding</Badge>;
+      case 'pending':
+        return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Pending</Badge>;
+      case 'inactive':
+        return <Badge variant="secondary">Inactive</Badge>;
+      case 'terminated':
+        return <Badge variant="destructive">Terminated</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <Button className="gap-2">
+        <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2">
           <UserPlus className="h-5 w-5" />
-          Add employees
+          Add Employee
         </Button>
         
         <div className="flex gap-3">
-          <div className="w-48">
-            <Input placeholder="Name, job title" />
-          </div>
-          <Select value={filterBy} onValueChange={setFilterBy}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Filter by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="department">Department</SelectItem>
-              <SelectItem value="role">Role</SelectItem>
-            </SelectContent>
-          </Select>
+          {user?.role === 'super_admin' && (
+            <Select value={organizationFilter} onValueChange={(v) => {
+              setOrganizationFilter(v);
+              setBranchFilter('all');
+            }}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Organizations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Organizations</SelectItem>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name">First name (A - Z)</SelectItem>
-              <SelectItem value="joinDate">Join Date</SelectItem>
-              <SelectItem value="department">Department</SelectItem>
-            </SelectContent>
-          </Select>
+          {(user?.role === 'super_admin' || (user?.role === 'hr' && user.hrAccessLevel !== 'branch')) && (
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {filteredBranches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="onboarding">Onboarding</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <Card className="p-12 text-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <Users className="h-8 w-8 text-primary" />
+      {employees.length === 0 ? (
+        <Card className="p-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Users className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No employees found</h3>
+              <p className="text-muted-foreground mb-4">Add your first employee to get started</p>
+            </div>
+            <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add First Employee
+            </Button>
           </div>
-          <div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">No employees yet</h3>
-            <p className="text-muted-foreground mb-4">Add your first employee to get started</p>
-          </div>
-          <Button className="gap-2">
-            <UserPlus className="h-4 w-4" />
-            Add First Employee
-          </Button>
-        </div>
-      </Card>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Job Title</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Branch</TableHead>
+                <TableHead>Join Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[70px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {employees.map((employee) => (
+                <TableRow key={employee.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          {getInitials(employee.first_name, employee.last_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium">{employee.first_name} {employee.last_name}</p>
+                        <p className="text-sm text-muted-foreground">{employee.email}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{employee.job_title || '-'}</TableCell>
+                  <TableCell>{employee.department || '-'}</TableCell>
+                  <TableCell>
+                    <div>
+                      <p className="text-sm">{employee.branch?.name || '-'}</p>
+                      <p className="text-xs text-muted-foreground">{employee.organization?.name}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {employee.join_date 
+                      ? new Date(employee.join_date).toLocaleDateString() 
+                      : '-'
+                    }
+                  </TableCell>
+                  <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/dashboard/employee/${employee.id}`)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Profile
+                        </DropdownMenuItem>
+                        {employee.status === 'onboarding' && (
+                          <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
+                            <UserCog className="h-4 w-4 mr-2" />
+                            Continue Onboarding
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={() => setDeleteEmployeeId(employee.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      <AlertDialog open={!!deleteEmployeeId} onOpenChange={() => setDeleteEmployeeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this employee and all their documents.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEmployee} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

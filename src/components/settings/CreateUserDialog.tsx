@@ -1,151 +1,58 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Mail, ExternalLink } from 'lucide-react';
 
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (user: {
-    email: string;
-    name: string;
-    role: 'manager' | 'hr';
-    password: string;
-    organizationId?: string;
-    branchId?: string;
-  }) => void;
-  organizations: any[];
 }
 
-export default function CreateUserDialog({ open, onOpenChange, onSubmit, organizations }: CreateUserDialogProps) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<'manager' | 'hr'>('manager');
-  const [password, setPassword] = useState('');
-  const [organizationId, setOrganizationId] = useState<string>('');
-  const [branchId, setBranchId] = useState<string>('');
-
-  const selectedOrg = organizations.find(o => o.id === organizationId);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit({
-      email,
-      name,
-      role,
-      password,
-      organizationId: organizationId || undefined,
-      branchId: branchId || undefined,
-    });
-    // Reset form
-    setEmail('');
-    setName('');
-    setRole('manager');
-    setPassword('');
-    setOrganizationId('');
-    setBranchId('');
-    onOpenChange(false);
-  };
-
+export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create User</DialogTitle>
+          <DialogTitle>Invite New User</DialogTitle>
+          <DialogDescription>
+            New users are created through Supabase Auth
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="user-name">Full Name</Label>
-            <Input
-              id="user-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="John Doe"
-              required
-            />
+        
+        <div className="py-6 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Mail className="h-8 w-8 text-primary" />
           </div>
-          <div>
-            <Label htmlFor="user-email">Email</Label>
-            <Input
-              id="user-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="john@example.com"
-              required
-            />
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              To add a new user:
+            </p>
+            <ol className="text-sm text-left space-y-2 pl-4">
+              <li>1. Create the user in Supabase Auth dashboard</li>
+              <li>2. The user will automatically appear here</li>
+              <li>3. Assign their role and organization/branch</li>
+            </ol>
           </div>
-          <div>
-            <Label htmlFor="user-password">Password</Label>
-            <Input
-              id="user-password"
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="user-role">Role</Label>
-            <Select value={role} onValueChange={(value: 'manager' | 'hr') => setRole(value)}>
-              <SelectTrigger id="user-role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="hr">HR</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {role === 'manager' && (
-            <>
-              <div>
-                <Label htmlFor="user-org">Organization</Label>
-                <Select value={organizationId} onValueChange={(value) => {
-                  setOrganizationId(value);
-                  setBranchId(''); // Reset branch when org changes
-                }}>
-                  <SelectTrigger id="user-org">
-                    <SelectValue placeholder="Select organization" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {organizationId && selectedOrg?.branches.length > 0 && (
-                <div>
-                  <Label htmlFor="user-branch">Branch</Label>
-                  <Select value={branchId} onValueChange={setBranchId}>
-                    <SelectTrigger id="user-branch">
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedOrg.branches.map((branch: any) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Create User</Button>
-          </DialogFooter>
-        </form>
+          <Button 
+            variant="outline" 
+            className="gap-2"
+            onClick={() => window.open('https://supabase.com/dashboard/project/exapetzvebjmdbjwsipg/auth/users', '_blank')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open Supabase Dashboard
+          </Button>
+        </div>
+
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
