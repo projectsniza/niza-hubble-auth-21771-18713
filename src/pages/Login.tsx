@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,16 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,23 +41,29 @@ export default function Login() {
 
     setIsLoading(true);
     
-    // Simulate network delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const success = login(email, password);
+    const { error } = await login(email, password);
     setIsLoading(false);
     
-    if (success) {
+    if (!error) {
       toast({ title: 'Welcome back!', description: 'Login successful' });
       navigate('/dashboard');
     } else {
       toast({ 
         title: 'Login failed', 
-        description: 'Invalid email or password. Please try again.',
+        description: error,
         variant: 'destructive' 
       });
     }
   };
+
+  // Show nothing while checking auth status
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
