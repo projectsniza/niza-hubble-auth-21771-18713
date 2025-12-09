@@ -2332,9 +2332,55 @@ export type Database = {
           },
         ]
       }
+      training_documents: {
+        Row: {
+          created_at: string | null
+          document_type: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          training_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_type?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          training_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_type?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          training_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_documents_training_id_fkey"
+            columns: ["training_id"]
+            isOneToOne: false
+            referencedRelation: "trainings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trainings: {
         Row: {
+          assigned_to: string | null
           branch_id: string | null
+          completed_date: string | null
           created_at: string | null
           created_by: string | null
           deadline: string | null
@@ -2343,13 +2389,16 @@ export type Database = {
           document_path: string | null
           id: string
           organization_id: string | null
+          status: string | null
           tags: string[] | null
           title: string
           training_date: string | null
           updated_at: string | null
         }
         Insert: {
+          assigned_to?: string | null
           branch_id?: string | null
+          completed_date?: string | null
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
@@ -2358,13 +2407,16 @@ export type Database = {
           document_path?: string | null
           id?: string
           organization_id?: string | null
+          status?: string | null
           tags?: string[] | null
           title: string
           training_date?: string | null
           updated_at?: string | null
         }
         Update: {
+          assigned_to?: string | null
           branch_id?: string | null
+          completed_date?: string | null
           created_at?: string | null
           created_by?: string | null
           deadline?: string | null
@@ -2373,6 +2425,7 @@ export type Database = {
           document_path?: string | null
           id?: string
           organization_id?: string | null
+          status?: string | null
           tags?: string[] | null
           title?: string
           training_date?: string | null
