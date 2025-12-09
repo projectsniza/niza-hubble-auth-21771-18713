@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,16 +6,51 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import OrganizationManagement from '@/components/settings/OrganizationManagement';
 import UserManagement from '@/components/settings/UserManagement';
-import { Building2, Users, Lock, Eye, EyeOff } from 'lucide-react';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function Settings() {
   const { user, updatePassword } = useAuth();
+  const [displayName, setDisplayName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.name || '');
+    }
+  }, [user]);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!displayName.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: displayName.trim() })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update profile');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,8 +96,12 @@ export default function Settings() {
         <p className="text-muted-foreground">Manage your account and system settings</p>
       </div>
 
-      <Tabs defaultValue="password" className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList className="grid w-full max-w-2xl" style={{ gridTemplateColumns: canManageOrgs ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)' }}>
+          <TabsTrigger value="profile" className="gap-2">
+            <User className="h-4 w-4" />
+            Profile
+          </TabsTrigger>
           <TabsTrigger value="password" className="gap-2">
             <Lock className="h-4 w-4" />
             Password
@@ -80,6 +119,65 @@ export default function Settings() {
             </TabsTrigger>
           )}
         </TabsList>
+
+        <TabsContent value="profile">
+          <Card className="max-w-lg">
+            <CardHeader>
+              <CardTitle className="text-foreground">Profile Settings</CardTitle>
+              <CardDescription>
+                Update your profile information
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleProfileUpdate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-foreground">Email</Label>
+                  <Input
+                    id="email"
+                    value={user?.email || ''}
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-foreground">Display Name</Label>
+                  <Input
+                    id="name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Enter your name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-foreground">Role</Label>
+                  <Input
+                    value={user?.role?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''}
+                    disabled
+                    className="bg-muted capitalize"
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full"
+                  disabled={isUpdatingProfile}
+                >
+                  {isUpdatingProfile ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Profile'
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="password">
           <Card className="max-w-lg">
@@ -128,7 +226,14 @@ export default function Settings() {
                   className="w-full"
                   disabled={isChangingPassword}
                 >
-                  {isChangingPassword ? 'Updating...' : 'Update Password'}
+                  {isChangingPassword ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
                 </Button>
               </form>
             </CardContent>

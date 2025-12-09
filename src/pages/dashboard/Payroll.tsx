@@ -43,8 +43,9 @@ export default function Payroll() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch all employees (not just active) for salary setup
       const [employeesRes, salaryRes, payrollRes] = await Promise.all([
-        supabase.from('employees').select('*').eq('status', 'active'),
+        supabase.from('employees').select('*').in('status', ['active', 'onboarding']),
         supabase.from('salary_structures').select('*'),
         supabase.from('payroll_records').select('*').order('month', { ascending: false })
       ]);

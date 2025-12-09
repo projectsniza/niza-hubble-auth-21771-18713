@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MapPin, Search, Clock, User, QrCode, Plus, Settings, History } from 'lucide-react';
+import { MapPin, Search, Clock, User, QrCode, Plus, Settings, History, Info, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -36,6 +36,58 @@ interface ClockIn {
   branch_id: string;
 }
 
+// Convert DMS (Degrees Minutes Seconds) to Decimal
+const dmsToDecimal = (dms: string): number | null => {
+  // Pattern: 8°12'01.2"N or 77°16'43.9"E
+  const pattern = /(\d+)°(\d+)'([\d.]+)"([NSEW])/i;
+  const match = dms.trim().match(pattern);
+  
+  if (match) {
+    const degrees = parseFloat(match[1]);
+    const minutes = parseFloat(match[2]);
+    const seconds = parseFloat(match[3]);
+    const direction = match[4].toUpperCase();
+    
+    let decimal = degrees + minutes / 60 + seconds / 3600;
+    
+    if (direction === 'S' || direction === 'W') {
+      decimal = -decimal;
+    }
+    
+    return decimal;
+  }
+  return null;
+};
+
+// Parse coordinates in multiple formats
+const parseCoordinate = (input: string): number | null => {
+  const trimmed = input.trim();
+  
+  // Try as decimal first
+  const decimal = parseFloat(trimmed);
+  if (!isNaN(decimal)) {
+    return decimal;
+  }
+  
+  // Try as DMS
+  return dmsToDecimal(trimmed);
+};
+
+// Format decimal to DMS string
+const decimalToDms = (decimal: number, isLat: boolean): string => {
+  const direction = isLat 
+    ? (decimal >= 0 ? 'N' : 'S') 
+    : (decimal >= 0 ? 'E' : 'W');
+  
+  const abs = Math.abs(decimal);
+  const degrees = Math.floor(abs);
+  const minutesFloat = (abs - degrees) * 60;
+  const minutes = Math.floor(minutesFloat);
+  const seconds = ((minutesFloat - minutes) * 60).toFixed(1);
+  
+  return `${degrees}°${minutes}'${seconds}"${direction}`;
+};
+
 export default function ClockIns() {
   const { user } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
@@ -44,7 +96,10 @@ export default function ClockIns() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('locations');
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showEditLocation, setShowEditLocation] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coordinateFormat, setCoordinateFormat] = useState<'decimal' | 'dms'>('decimal');
   
   const [newLocation, setNewLocation] = useState({
     name: '',
@@ -85,12 +140,20 @@ export default function ClockIns() {
       return;
     }
 
+    const lat = parseCoordinate(newLocation.latitude);
+    const lng = parseCoordinate(newLocation.longitude);
+
+    if (lat === null || lng === null) {
+      toast.error('Invalid coordinate format. Use decimal (e.g., 8.200333) or DMS (e.g., 8°12\'01.2"N)');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('locations').insert({
         name: newLocation.name,
         address: newLocation.address || null,
-        latitude: parseFloat(newLocation.latitude),
-        longitude: parseFloat(newLocation.longitude),
+        latitude: lat,
+        longitude: lng,
         radius: parseInt(newLocation.radius),
         branch_id: newLocation.branchId,
         qr_enabled: newLocation.qrEnabled,
@@ -106,6 +169,55 @@ export default function ClockIns() {
     } catch (error: any) {
       toast.error(error.message || 'Failed to create location');
     }
+  };
+
+  const handleUpdateLocation = async () => {
+    if (!selectedLocation) return;
+
+    const lat = parseCoordinate(newLocation.latitude);
+    const lng = parseCoordinate(newLocation.longitude);
+
+    if (lat === null || lng === null) {
+      toast.error('Invalid coordinate format');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .update({
+          name: newLocation.name,
+          address: newLocation.address || null,
+          latitude: lat,
+          longitude: lng,
+          radius: parseInt(newLocation.radius),
+          qr_enabled: newLocation.qrEnabled
+        })
+        .eq('id', selectedLocation.id);
+
+      if (error) throw error;
+
+      toast.success('Location updated successfully');
+      setShowEditLocation(false);
+      setSelectedLocation(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update location');
+    }
+  };
+
+  const openEditDialog = (location: Location) => {
+    setSelectedLocation(location);
+    setNewLocation({
+      name: location.name,
+      address: location.address || '',
+      latitude: location.latitude.toString(),
+      longitude: location.longitude.toString(),
+      radius: (location.radius || 100).toString(),
+      branchId: location.branch_id,
+      qrEnabled: location.qr_enabled ?? true
+    });
+    setShowEditLocation(true);
   };
 
   const handleClockIn = async (locationId: string) => {
@@ -168,6 +280,123 @@ export default function ClockIns() {
     new Date(c.clock_in_time).toDateString() === new Date().toDateString()
   );
 
+  const renderLocationForm = (isEdit: boolean) => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Location Name *</Label>
+        <Input 
+          value={newLocation.name}
+          onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
+          placeholder="e.g., Main Office - London" 
+        />
+      </div>
+      {!isEdit && (
+        <div className="space-y-2">
+          <Label>Branch *</Label>
+          <Select 
+            value={newLocation.branchId}
+            onValueChange={(v) => setNewLocation({ ...newLocation, branchId: v })}
+          >
+            <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+            <SelectContent>
+              {branches.map(branch => (
+                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="space-y-2">
+        <Label>Address</Label>
+        <Input 
+          value={newLocation.address}
+          onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })}
+          placeholder="Full address" 
+        />
+      </div>
+      
+      {/* Coordinate Format Selector */}
+      <div className="space-y-2">
+        <Label>Coordinate Format</Label>
+        <div className="flex gap-2">
+          <Button 
+            type="button"
+            variant={coordinateFormat === 'decimal' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCoordinateFormat('decimal')}
+          >
+            Decimal (e.g., 8.200333)
+          </Button>
+          <Button 
+            type="button"
+            variant={coordinateFormat === 'dms' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCoordinateFormat('dms')}
+          >
+            DMS (e.g., 8°12'01.2"N)
+          </Button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Latitude *</Label>
+          <Input 
+            value={newLocation.latitude}
+            onChange={(e) => setNewLocation({ ...newLocation, latitude: e.target.value })}
+            placeholder={coordinateFormat === 'decimal' ? '8.200333' : '8°12\'01.2"N'} 
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Longitude *</Label>
+          <Input 
+            value={newLocation.longitude}
+            onChange={(e) => setNewLocation({ ...newLocation, longitude: e.target.value })}
+            placeholder={coordinateFormat === 'decimal' ? '77.278861' : '77°16\'43.9"E'} 
+          />
+        </div>
+      </div>
+      
+      <Card className="p-3 border-blue-200 bg-blue-50">
+        <div className="flex gap-2">
+          <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-blue-800">
+            <p className="font-medium">Supported Formats:</p>
+            <ul className="list-disc ml-4 mt-1 space-y-0.5">
+              <li>Decimal: 8.200333, 77.278861</li>
+              <li>DMS: 8°12'01.2"N, 77°16'43.9"E</li>
+            </ul>
+          </div>
+        </div>
+      </Card>
+      
+      <div className="space-y-2">
+        <Label>Geofence Radius (meters)</Label>
+        <Input 
+          type="number"
+          value={newLocation.radius}
+          onChange={(e) => setNewLocation({ ...newLocation, radius: e.target.value })}
+          placeholder="100" 
+        />
+        <p className="text-xs text-muted-foreground">
+          Employees must be within this distance to clock in
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <input 
+          type="checkbox" 
+          id="qr" 
+          checked={newLocation.qrEnabled}
+          onChange={(e) => setNewLocation({ ...newLocation, qrEnabled: e.target.checked })}
+        />
+        <Label htmlFor="qr">Enable QR Code check-in</Label>
+      </div>
+      <Button onClick={isEdit ? handleUpdateLocation : handleCreateLocation} className="w-full">
+        {isEdit ? 'Update Location' : 'Create Location'}
+      </Button>
+    </div>
+  );
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
@@ -184,83 +413,25 @@ export default function ClockIns() {
                 Add Location
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add New Location</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Location Name *</Label>
-                  <Input 
-                    value={newLocation.name}
-                    onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
-                    placeholder="e.g., Main Office - London" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Branch *</Label>
-                  <Select 
-                    value={newLocation.branchId}
-                    onValueChange={(v) => setNewLocation({ ...newLocation, branchId: v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-                    <SelectContent>
-                      {branches.map(branch => (
-                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Address</Label>
-                  <Input 
-                    value={newLocation.address}
-                    onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })}
-                    placeholder="Full address" 
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Latitude *</Label>
-                    <Input 
-                      value={newLocation.latitude}
-                      onChange={(e) => setNewLocation({ ...newLocation, latitude: e.target.value })}
-                      placeholder="51.5074" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Longitude *</Label>
-                    <Input 
-                      value={newLocation.longitude}
-                      onChange={(e) => setNewLocation({ ...newLocation, longitude: e.target.value })}
-                      placeholder="-0.1278" 
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Geofence Radius (meters)</Label>
-                  <Input 
-                    type="number"
-                    value={newLocation.radius}
-                    onChange={(e) => setNewLocation({ ...newLocation, radius: e.target.value })}
-                    placeholder="100" 
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="qr" 
-                    checked={newLocation.qrEnabled}
-                    onChange={(e) => setNewLocation({ ...newLocation, qrEnabled: e.target.checked })}
-                  />
-                  <Label htmlFor="qr">Enable QR Code check-in</Label>
-                </div>
-                <Button onClick={handleCreateLocation} className="w-full">Create Location</Button>
-              </div>
+              {renderLocationForm(false)}
             </DialogContent>
           </Dialog>
         )}
       </div>
+
+      {/* Edit Location Dialog */}
+      <Dialog open={showEditLocation} onOpenChange={setShowEditLocation}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Location</DialogTitle>
+          </DialogHeader>
+          {renderLocationForm(true)}
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -378,7 +549,12 @@ export default function ClockIns() {
                   </div>
                   <div className="space-y-2 text-sm text-muted-foreground mb-4">
                     <p>Radius: {location.radius || 100}m</p>
-                    <p>Lat: {location.latitude}, Lng: {location.longitude}</p>
+                    <p className="text-xs">
+                      Decimal: {location.latitude}, {location.longitude}
+                    </p>
+                    <p className="text-xs">
+                      DMS: {decimalToDms(location.latitude, true)}, {decimalToDms(location.longitude, false)}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" className="flex-1" onClick={() => handleClockIn(location.id)}>
@@ -386,8 +562,8 @@ export default function ClockIns() {
                       Clock In
                     </Button>
                     {user?.role === 'super_admin' && (
-                      <Button size="sm" variant="outline">
-                        <Settings className="h-4 w-4" />
+                      <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
+                        <Edit className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
