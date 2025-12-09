@@ -3,19 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserPlus, Search } from 'lucide-react';
+import { UserPlus, Search, Upload, FileSignature, Users, Calendar, UserCog } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import ManageTeams from '@/components/employees/ManageTeams';
-
 import AnnualLeaveBalance from '@/components/employees/AnnualLeaveBalance';
-import OnboardingApprovals from '@/components/onboarding/OnboardingApprovals';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
+import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
+import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
+import UserManagement from '@/components/settings/UserManagement';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Employees() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [activeTab, setActiveTab] = useState('employees');
 
   useEffect(() => {
     // If employee role, redirect to their own profile
@@ -36,12 +39,24 @@ export default function Employees() {
     );
   }
 
+  const handleBulkUploadSuccess = () => {
+    setShowBulkUpload(false);
+    setActiveTab('employees');
+  };
+
+  // Determine which tabs to show based on role
+  const showContractApprovals = user?.role === 'super_admin';
+  const showUserManagement = user?.role === 'super_admin';
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-foreground">Employee Hub</h2>
-        <div className="flex items-center gap-4">
-          <div className="relative w-96">
+        <div>
+          <h2 className="text-3xl font-bold text-foreground">Employee Hub</h2>
+          <p className="text-muted-foreground mt-1">Manage employees, onboarding, teams and users</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input 
               placeholder="Search employees..." 
@@ -50,40 +65,85 @@ export default function Employees() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {(user?.role === 'manager' || user?.role === 'hr' || user?.role === 'super_admin') && (
-            <Button onClick={() => navigate('/dashboard/add-employee')}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Employee
+          {user?.role === 'super_admin' && (
+            <Button variant="outline" onClick={() => setShowBulkUpload(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Upload
             </Button>
           )}
+          <Button onClick={() => navigate('/dashboard/add-employee')}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Employee
+          </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="employees" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-          <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
-          <TabsTrigger value="teams">Manage teams</TabsTrigger>
-          <TabsTrigger value="leave">Annual leave balance</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className={`grid w-full ${showContractApprovals && showUserManagement ? 'grid-cols-6' : showContractApprovals || showUserManagement ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          <TabsTrigger value="employees" className="gap-2">
+            <Users className="h-4 w-4" />
+            Employees
+          </TabsTrigger>
+          <TabsTrigger value="onboarding" className="gap-2">
+            <UserCog className="h-4 w-4" />
+            Onboarding
+          </TabsTrigger>
+          {showContractApprovals && (
+            <TabsTrigger value="approvals" className="gap-2">
+              <FileSignature className="h-4 w-4" />
+              Contract Approvals
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="teams" className="gap-2">
+            <Users className="h-4 w-4" />
+            Teams
+          </TabsTrigger>
+          <TabsTrigger value="leave" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            Annual Leave
+          </TabsTrigger>
+          {showUserManagement && (
+            <TabsTrigger value="users" className="gap-2">
+              <UserCog className="h-4 w-4" />
+              User Management
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="employees" className="space-y-4">
+        <TabsContent value="employees" className="space-y-4 mt-6">
           <EmployeeList searchQuery={searchQuery} />
         </TabsContent>
 
-        <TabsContent value="onboarding">
-          {user?.role === 'super_admin' && <OnboardingApprovals />}
-          {(user?.role === 'hr' || user?.role === 'manager') && <OnboardingManagement />}
+        <TabsContent value="onboarding" className="mt-6">
+          <OnboardingManagement />
         </TabsContent>
 
-        <TabsContent value="teams">
+        {showContractApprovals && (
+          <TabsContent value="approvals" className="mt-6">
+            <ContractApprovalsTab />
+          </TabsContent>
+        )}
+
+        <TabsContent value="teams" className="mt-6">
           <ManageTeams />
         </TabsContent>
 
-        <TabsContent value="leave">
+        <TabsContent value="leave" className="mt-6">
           <AnnualLeaveBalance searchQuery={searchQuery} />
         </TabsContent>
+
+        {showUserManagement && (
+          <TabsContent value="users" className="mt-6">
+            <UserManagement />
+          </TabsContent>
+        )}
       </Tabs>
+
+      <BulkUploadDialog 
+        open={showBulkUpload} 
+        onOpenChange={setShowBulkUpload}
+        onSuccess={handleBulkUploadSuccess}
+      />
     </div>
   );
 }
