@@ -3,14 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserPlus, Search, Upload, FileSignature, Users, Calendar, UserCog } from 'lucide-react';
+import { 
+  UserPlus, Search, Upload, FileSignature, Users, Calendar, 
+  UserCog, Settings, Briefcase 
+} from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
-import ManageTeams from '@/components/employees/ManageTeams';
+import TeamManagement from '@/components/employees/TeamManagement';
 import AnnualLeaveBalance from '@/components/employees/AnnualLeaveBalance';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
 import UserManagement from '@/components/settings/UserManagement';
+import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Employees() {
@@ -47,13 +51,24 @@ export default function Employees() {
   // Determine which tabs to show based on role
   const showContractApprovals = user?.role === 'super_admin';
   const showUserManagement = user?.role === 'super_admin';
+  const showOnboardingSettings = user?.role === 'super_admin';
+
+  // Calculate grid columns based on visible tabs
+  const getTabsGridCols = () => {
+    let count = 5; // Base: Employees, Onboarding, Teams, Leave, Users (always shown for super admin)
+    if (showContractApprovals) count++;
+    if (showOnboardingSettings) count++;
+    return `grid-cols-${count}`;
+  };
 
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-foreground">Employee Hub</h2>
-          <p className="text-muted-foreground mt-1">Manage employees, onboarding, teams and users</p>
+          <p className="text-muted-foreground mt-1">
+            Manage employees, onboarding, teams, users, and settings
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative w-80">
@@ -79,13 +94,13 @@ export default function Employees() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full ${showContractApprovals && showUserManagement ? 'grid-cols-6' : showContractApprovals || showUserManagement ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <TabsList className="w-full justify-start gap-1 h-auto flex-wrap">
           <TabsTrigger value="employees" className="gap-2">
             <Users className="h-4 w-4" />
             Employees
           </TabsTrigger>
           <TabsTrigger value="onboarding" className="gap-2">
-            <UserCog className="h-4 w-4" />
+            <Briefcase className="h-4 w-4" />
             Onboarding
           </TabsTrigger>
           {showContractApprovals && (
@@ -108,6 +123,12 @@ export default function Employees() {
               User Management
             </TabsTrigger>
           )}
+          {showOnboardingSettings && (
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Onboarding Settings
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="employees" className="space-y-4 mt-6">
@@ -125,7 +146,7 @@ export default function Employees() {
         )}
 
         <TabsContent value="teams" className="mt-6">
-          <ManageTeams />
+          <TeamManagement />
         </TabsContent>
 
         <TabsContent value="leave" className="mt-6">
@@ -135,6 +156,12 @@ export default function Employees() {
         {showUserManagement && (
           <TabsContent value="users" className="mt-6">
             <UserManagement />
+          </TabsContent>
+        )}
+
+        {showOnboardingSettings && (
+          <TabsContent value="settings" className="mt-6">
+            <OnboardingSettings />
           </TabsContent>
         )}
       </Tabs>
