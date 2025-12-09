@@ -93,42 +93,51 @@ export default function Documents() {
       
       if (rootFolder) {
         setRootFolderId(rootFolder.id);
-        setCurrentFolderId(rootFolder.id);
+        // Start at null to show Company Documents as the first folder
+        setCurrentFolderId(null);
       }
     };
     initializeRoot();
   }, []);
 
   useEffect(() => {
-    if (currentFolderId !== null) {
-      fetchFoldersAndDocuments();
-    }
-  }, [currentFolderId]);
+    fetchFoldersAndDocuments();
+  }, [currentFolderId, rootFolderId]);
 
   const fetchFoldersAndDocuments = async () => {
     setLoading(true);
     try {
-      // Fetch subfolders of current folder
-      const { data: foldersData } = await supabase
-        .from('folders')
-        .select('*')
-        .eq('parent_id', currentFolderId)
-        .order('name');
-      setFolders(foldersData || []);
-
-      // Fetch documents in current folder
-      const { data: docsData } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('folder_id', currentFolderId)
-        .order('created_at', { ascending: false });
-      setDocuments(docsData || []);
-
-      // Build breadcrumbs
-      if (currentFolderId) {
-        await buildBreadcrumbs(currentFolderId);
-      } else {
+      // If currentFolderId is null, show the root Company Documents folder
+      if (currentFolderId === null && rootFolderId) {
+        // Fetch the root folder to display it
+        const { data: rootFolder } = await supabase
+          .from('folders')
+          .select('*')
+          .eq('id', rootFolderId)
+          .single();
+        
+        setFolders(rootFolder ? [rootFolder] : []);
+        setDocuments([]);
         setBreadcrumbs([]);
+      } else if (currentFolderId) {
+        // Fetch subfolders of current folder
+        const { data: foldersData } = await supabase
+          .from('folders')
+          .select('*')
+          .eq('parent_id', currentFolderId)
+          .order('name');
+        setFolders(foldersData || []);
+
+        // Fetch documents in current folder
+        const { data: docsData } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('folder_id', currentFolderId)
+          .order('created_at', { ascending: false });
+        setDocuments(docsData || []);
+
+        // Build breadcrumbs
+        await buildBreadcrumbs(currentFolderId);
       }
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -418,7 +427,9 @@ export default function Documents() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-foreground truncate">{folder.name}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{folder.folder_type}</p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {folder.folder_type === 'root' ? 'Root folder' : folder.folder_type}
+                              </p>
                             </div>
                           </div>
                           {/* Action buttons */}
