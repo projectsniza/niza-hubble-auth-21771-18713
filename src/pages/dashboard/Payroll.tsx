@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, FileText, DollarSign, Users, Clock, Plus, Settings, Search } from 'lucide-react';
+import { Download, FileText, DollarSign, Users, Clock, Settings, Search, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -25,6 +25,7 @@ export default function Payroll() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showEditSalary, setShowEditSalary] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [salaryForm, setSalaryForm] = useState({
     basicSalary: '',
     hra: '',
@@ -76,6 +77,7 @@ export default function Payroll() {
   const handleSaveSalary = async () => {
     if (!selectedEmployee) return;
 
+    setIsSaving(true);
     try {
       const existing = salaryStructures.find(s => s.employee_id === selectedEmployee.id);
       
@@ -102,16 +104,26 @@ export default function Payroll() {
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to save salary');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleGeneratePayroll = async () => {
+    setIsSaving(true);
     try {
       const monthDate = new Date(selectedMonth + '-01');
+      let generated = 0;
       
       for (const employee of employees) {
         const salary = salaryStructures.find(s => s.employee_id === employee.id);
         if (!salary) continue;
+
+        // Check if already generated
+        const existing = payrollRecords.find(
+          p => p.employee_id === employee.id && p.month === monthDate.toISOString().split('T')[0]
+        );
+        if (existing) continue;
 
         const totalAllowances = (salary.hra || 0) + (salary.travel_allowance || 0) + (salary.other_allowances || 0);
         const totalDeductions = (salary.salary_advance || 0) + (salary.late_fine || 0);
@@ -126,12 +138,19 @@ export default function Payroll() {
           net_salary: netSalary,
           generated_by: user?.id
         });
+        generated++;
       }
 
-      toast.success('Payroll generated successfully');
+      if (generated > 0) {
+        toast.success(`Payroll generated for ${generated} employees`);
+      } else {
+        toast.info('No new payroll to generate');
+      }
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to generate payroll');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -141,6 +160,11 @@ export default function Payroll() {
     const totalDeductions = (salary.salary_advance || 0) + (salary.late_fine || 0);
     return (salary.basic_salary || 0) + totalAllowances - totalDeductions;
   };
+
+  // Separate configured and unconfigured employees
+  const configuredEmployeeIds = new Set(salaryStructures.map(s => s.employee_id));
+  const unconfiguredEmployees = employees.filter(e => !configuredEmployeeIds.has(e.id));
+  const configuredEmployees = employees.filter(e => configuredEmployeeIds.has(e.id));
 
   const totalMonthlyPayroll = salaryStructures.reduce((sum, s) => sum + calculateNetSalary(s), 0);
   const payslipsGenerated = payrollRecords.filter(p => 
@@ -187,13 +211,21 @@ export default function Payroll() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   // Admin/HR View
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-foreground">Payroll Management</h2>
-          <p className="text-muted-foreground mt-1">Process and manage employee payroll</p>
+          <p className="text-muted-foreground mt-1">Salary Setup & Process employee payroll</p>
         </div>
         <div className="flex gap-2">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -213,8 +245,8 @@ export default function Payroll() {
               })}
             </SelectContent>
           </Select>
-          <Button className="gap-2" onClick={handleGeneratePayroll}>
-            <DollarSign className="h-4 w-4" />
+          <Button className="gap-2" onClick={handleGeneratePayroll} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
             Generate Payroll
           </Button>
           <Button variant="outline" className="gap-2">
@@ -225,7 +257,7 @@ export default function Payroll() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
@@ -245,7 +277,19 @@ export default function Payroll() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{employees.length}</p>
-              <p className="text-xs text-muted-foreground">Employees</p>
+              <p className="text-xs text-muted-foreground">Total Employees</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 border-amber-200 bg-amber-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-amber-700">{unconfiguredEmployees.length}</p>
+              <p className="text-xs text-amber-600">Unconfigured</p>
             </div>
           </div>
         </Card>
@@ -264,12 +308,12 @@ export default function Payroll() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-              <Clock className="h-5 w-5 text-white" />
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{salaryStructures.length}</p>
-              <p className="text-xs text-muted-foreground">Salary Profiles</p>
+              <p className="text-2xl font-bold text-foreground">{configuredEmployees.length}</p>
+              <p className="text-xs text-muted-foreground">Configured</p>
             </div>
           </div>
         </Card>
@@ -289,56 +333,131 @@ export default function Payroll() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="setup">Salary Setup</TabsTrigger>
+          <TabsTrigger value="setup" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Salary Setup
+            {unconfiguredEmployees.length > 0 && (
+              <Badge variant="destructive" className="ml-1">{unconfiguredEmployees.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="monthly">Monthly Payroll</TabsTrigger>
           <TabsTrigger value="history">Payroll History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="setup" className="mt-6">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Basic Salary</TableHead>
-                  <TableHead>Allowances</TableHead>
-                  <TableHead>Deductions</TableHead>
-                  <TableHead>Net Salary</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {employees.filter(e => 
-                  `${e.first_name} ${e.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
-                ).map(employee => {
-                  const salary = salaryStructures.find(s => s.employee_id === employee.id);
-                  const totalAllowances = salary ? (salary.hra || 0) + (salary.travel_allowance || 0) + (salary.other_allowances || 0) : 0;
-                  const totalDeductions = salary ? (salary.salary_advance || 0) + (salary.late_fine || 0) : 0;
-                  const netSalary = calculateNetSalary(salary);
-                  
-                  return (
-                    <TableRow key={employee.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{employee.first_name} {employee.last_name}</p>
-                          <p className="text-sm text-muted-foreground">{employee.job_title}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>£{salary?.basic_salary?.toFixed(2) || '0.00'}</TableCell>
-                      <TableCell>£{totalAllowances.toFixed(2)}</TableCell>
-                      <TableCell>£{totalDeductions.toFixed(2)}</TableCell>
-                      <TableCell className="font-semibold">£{netSalary.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => handleEditSalary(employee)}>
-                          <Settings className="h-4 w-4" />
-                        </Button>
+        <TabsContent value="setup" className="mt-6 space-y-6">
+          {/* Unconfigured Employees First */}
+          {unconfiguredEmployees.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <h3 className="font-semibold text-lg">Unconfigured Employees ({unconfiguredEmployees.length})</h3>
+              </div>
+              <Card className="p-3 bg-amber-50 border-amber-200">
+                <p className="text-sm text-amber-800">
+                  These employees need salary structure configuration before payroll can be generated.
+                </p>
+              </Card>
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Job Title</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unconfiguredEmployees.filter(e => 
+                      `${e.first_name} ${e.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).map(employee => (
+                      <TableRow key={employee.id} className="bg-amber-50/50">
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{employee.first_name} {employee.last_name}</p>
+                            <p className="text-sm text-muted-foreground">{employee.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{employee.job_title || '-'}</TableCell>
+                        <TableCell>{employee.department || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
+                            Not Configured
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button size="sm" onClick={() => handleEditSalary(employee)} className="gap-1">
+                            <Settings className="h-4 w-4" />
+                            Configure
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
+          {/* Configured Employees */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <h3 className="font-semibold text-lg">Configured Employees ({configuredEmployees.length})</h3>
+            </div>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Basic Salary</TableHead>
+                    <TableHead>Allowances</TableHead>
+                    <TableHead>Deductions</TableHead>
+                    <TableHead>Net Salary</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {configuredEmployees.filter(e => 
+                    `${e.first_name} ${e.last_name}`.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).map(employee => {
+                    const salary = salaryStructures.find(s => s.employee_id === employee.id);
+                    const totalAllowances = salary ? (salary.hra || 0) + (salary.travel_allowance || 0) + (salary.other_allowances || 0) : 0;
+                    const totalDeductions = salary ? (salary.salary_advance || 0) + (salary.late_fine || 0) : 0;
+                    const netSalary = calculateNetSalary(salary);
+                    
+                    return (
+                      <TableRow key={employee.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{employee.first_name} {employee.last_name}</p>
+                            <p className="text-sm text-muted-foreground">{employee.job_title}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>£{salary?.basic_salary?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell className="text-green-600">+£{totalAllowances.toFixed(2)}</TableCell>
+                        <TableCell className="text-red-600">-£{totalDeductions.toFixed(2)}</TableCell>
+                        <TableCell className="font-semibold">£{netSalary.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditSalary(employee)}>
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {configuredEmployees.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No employees with salary configured yet
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="monthly" className="mt-6">
@@ -352,8 +471,8 @@ export default function Payroll() {
                   <h3 className="text-xl font-semibold text-foreground mb-2">No payroll for {format(new Date(selectedMonth), 'MMMM yyyy')}</h3>
                   <p className="text-muted-foreground mb-4">Generate payroll for this month</p>
                 </div>
-                <Button onClick={handleGeneratePayroll} className="gap-2">
-                  <DollarSign className="h-4 w-4" />
+                <Button onClick={handleGeneratePayroll} className="gap-2" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
                   Generate Payroll
                 </Button>
               </div>
@@ -383,8 +502,8 @@ export default function Payroll() {
                           </div>
                         </TableCell>
                         <TableCell>£{record.basic_salary?.toFixed(2)}</TableCell>
-                        <TableCell>£{record.total_allowances?.toFixed(2)}</TableCell>
-                        <TableCell>£{record.total_deductions?.toFixed(2)}</TableCell>
+                        <TableCell className="text-green-600">+£{record.total_allowances?.toFixed(2)}</TableCell>
+                        <TableCell className="text-red-600">-£{record.total_deductions?.toFixed(2)}</TableCell>
                         <TableCell className="font-semibold">£{record.net_salary?.toFixed(2)}</TableCell>
                         <TableCell>
                           <Button variant="outline" size="sm" className="gap-2">
@@ -419,10 +538,14 @@ export default function Payroll() {
                   const total = monthRecords.reduce((sum, r) => sum + (r.net_salary || 0), 0);
                   return (
                     <TableRow key={month}>
-                      <TableCell>{format(new Date(month), 'MMMM yyyy')}</TableCell>
+                      <TableCell className="font-medium">
+                        {format(new Date(month), 'MMMM yyyy')}
+                      </TableCell>
                       <TableCell>{monthRecords.length}</TableCell>
                       <TableCell className="font-semibold">£{total.toFixed(2)}</TableCell>
-                      <TableCell>{format(new Date(monthRecords[0]?.generated_at || month), 'dd MMM yyyy')}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">Completed</Badge>
+                      </TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" className="gap-2">
                           <Download className="h-4 w-4" />
@@ -432,6 +555,13 @@ export default function Payroll() {
                     </TableRow>
                   );
                 })}
+                {payrollRecords.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No payroll history yet
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </Card>
@@ -440,73 +570,124 @@ export default function Payroll() {
 
       {/* Edit Salary Dialog */}
       <Dialog open={showEditSalary} onOpenChange={setShowEditSalary}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Edit Salary - {selectedEmployee?.first_name} {selectedEmployee?.last_name}
+              {salaryStructures.find(s => s.employee_id === selectedEmployee?.id) ? 'Edit' : 'Configure'} Salary Structure
             </DialogTitle>
           </DialogHeader>
+          
+          {selectedEmployee && (
+            <div className="p-3 bg-muted rounded-lg mb-4">
+              <p className="font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+              <p className="text-sm text-muted-foreground">{selectedEmployee.job_title || 'No job title'}</p>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Basic Salary (£)</Label>
-              <Input 
-                type="number" 
+              <Input
+                type="number"
+                placeholder="0.00"
                 value={salaryForm.basicSalary}
-                onChange={(e) => setSalaryForm({ ...salaryForm, basicSalary: e.target.value })}
+                onChange={(e) => setSalaryForm(prev => ({ ...prev, basicSalary: e.target.value }))}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>HRA (£)</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.hra}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, hra: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Travel Allowance (£)</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.travelAllowance}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, travelAllowance: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Other Allowances (£)</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.otherAllowances}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, otherAllowances: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Salary Advance (£)</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.salaryAdvance}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, salaryAdvance: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Late Fine (£)</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.lateFine}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, lateFine: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Unpaid Leave Days</Label>
-                <Input 
-                  type="number" 
-                  value={salaryForm.unpaidLeaveDays}
-                  onChange={(e) => setSalaryForm({ ...salaryForm, unpaidLeaveDays: e.target.value })}
-                />
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3 text-green-600">Allowances</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>HRA (£)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={salaryForm.hra}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, hra: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Travel (£)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={salaryForm.travelAllowance}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, travelAllowance: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Other Allowances (£)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={salaryForm.otherAllowances}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, otherAllowances: e.target.value }))}
+                  />
+                </div>
               </div>
             </div>
-            <Button onClick={handleSaveSalary} className="w-full">Save Salary Structure</Button>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3 text-red-600">Deductions</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Salary Advance (£)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={salaryForm.salaryAdvance}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, salaryAdvance: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Late Fine (£)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={salaryForm.lateFine}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, lateFine: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Unpaid Leave Days</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={salaryForm.unpaidLeaveDays}
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, unpaidLeaveDays: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Net Salary Preview */}
+            <div className="border-t pt-4">
+              <div className="p-4 bg-primary/10 rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">Net Salary</p>
+                <p className="text-2xl font-bold text-primary">
+                  £{(
+                    (parseFloat(salaryForm.basicSalary) || 0) +
+                    (parseFloat(salaryForm.hra) || 0) +
+                    (parseFloat(salaryForm.travelAllowance) || 0) +
+                    (parseFloat(salaryForm.otherAllowances) || 0) -
+                    (parseFloat(salaryForm.salaryAdvance) || 0) -
+                    (parseFloat(salaryForm.lateFine) || 0)
+                  ).toFixed(2)}
+                </p>
+              </div>
+            </div>
           </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditSalary(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSalary} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

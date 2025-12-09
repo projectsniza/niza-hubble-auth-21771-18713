@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { 
   Plus, FileText, Settings, Upload, Trash2, Edit, GripVertical, 
-  FileCheck, ChevronUp, ChevronDown, Eye, Layers, Loader2, Save
+  FileCheck, ChevronUp, ChevronDown, Eye, Layers, Loader2, Save,
+  ClipboardList, Wallet
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,6 +28,13 @@ const fieldTypes = [
   { value: 'file', label: 'File Upload' },
   { value: 'textarea', label: 'Text Area' },
 ];
+
+interface FormSetting {
+  id: string;
+  form_type: string;
+  enabled: boolean;
+  form_order: number;
+}
 
 interface CustomPage {
   id: string;
@@ -67,10 +75,11 @@ interface DocumentRequirement {
 }
 
 export default function OnboardingSettings() {
-  const [activeTab, setActiveTab] = useState('custom-pages');
+  const [activeTab, setActiveTab] = useState('forms');
   const [isLoading, setIsLoading] = useState(true);
   
   // Data states
+  const [formSettings, setFormSettings] = useState<FormSetting[]>([]);
   const [customPages, setCustomPages] = useState<CustomPage[]>([]);
   const [contractTemplates, setContractTemplates] = useState<ContractTemplate[]>([]);
   const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
@@ -108,6 +117,33 @@ export default function OnboardingSettings() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      // Fetch form settings
+      const { data: settings } = await supabase
+        .from('onboarding_form_settings')
+        .select('*')
+        .order('form_order');
+      
+      // Create default settings if none exist
+      if (!settings || settings.length === 0) {
+        const defaultSettings = [
+          { form_type: 'application', enabled: true, form_order: 1 },
+          { form_type: 'checklist', enabled: true, form_order: 2 },
+          { form_type: 'bank_details', enabled: true, form_order: 3 }
+        ];
+        
+        for (const setting of defaultSettings) {
+          await supabase.from('onboarding_form_settings').insert(setting);
+        }
+        
+        const { data: newSettings } = await supabase
+          .from('onboarding_form_settings')
+          .select('*')
+          .order('form_order');
+        setFormSettings(newSettings || []);
+      } else {
+        setFormSettings(settings);
+      }
+
       // Fetch custom pages with fields
       const { data: pages, error: pagesError } = await supabase
         .from('onboarding_custom_pages')
@@ -149,6 +185,27 @@ export default function OnboardingSettings() {
       toast.error('Failed to load settings: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Toggle form setting
+  const handleToggleFormSetting = async (formType: string, enabled: boolean) => {
+    try {
+      const existing = formSettings.find(s => s.form_type === formType);
+      if (existing) {
+        await supabase
+          .from('onboarding_form_settings')
+          .update({ enabled })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('onboarding_form_settings')
+          .insert({ form_type: formType, enabled, form_order: formSettings.length + 1 });
+      }
+      setFormSettings(prev => prev.map(s => s.form_type === formType ? { ...s, enabled } : s));
+      toast.success(`${formType.replace('_', ' ')} form ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -453,6 +510,11 @@ export default function OnboardingSettings() {
     }
   };
 
+  const getFormSettingEnabled = (formType: string) => {
+    const setting = formSettings.find(s => s.form_type === formType);
+    return setting?.enabled ?? true;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -461,6 +523,84 @@ export default function OnboardingSettings() {
     );
   }
 
+  // Standard Forms Tab
+  const StandardFormsTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold">Standard Onboarding Forms</h3>
+        <p className="text-sm text-muted-foreground">
+          Enable or disable standard forms in the onboarding workflow
+        </p>
+      </div>
+
+      <Card className="p-4 bg-blue-50 border-blue-200">
+        <p className="text-sm text-blue-800">
+          These forms appear between Basic Details and Contract Creation steps. 
+          Disabled forms will be skipped in the onboarding workflow.
+        </p>
+      </Card>
+
+      <div className="space-y-3">
+        {/* Application Form */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <ClipboardList className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Application Form</p>
+                <p className="text-sm text-muted-foreground">Employee application with personal details</p>
+              </div>
+            </div>
+            <Switch
+              checked={getFormSettingEnabled('application')}
+              onCheckedChange={(checked) => handleToggleFormSetting('application', checked)}
+            />
+          </div>
+        </Card>
+
+        {/* Starter Checklist */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileCheck className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">HMRC Starter Checklist</p>
+                <p className="text-sm text-muted-foreground">Tax information and employee statement</p>
+              </div>
+            </div>
+            <Switch
+              checked={getFormSettingEnabled('checklist')}
+              onCheckedChange={(checked) => handleToggleFormSetting('checklist', checked)}
+            />
+          </div>
+        </Card>
+
+        {/* Bank Details */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Wallet className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Bank Account Details</p>
+                <p className="text-sm text-muted-foreground">Bank information for salary payments</p>
+              </div>
+            </div>
+            <Switch
+              checked={getFormSettingEnabled('bank_details')}
+              onCheckedChange={(checked) => handleToggleFormSetting('bank_details', checked)}
+            />
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+
   // Custom Pages Tab
   const CustomPagesTab = () => (
     <div className="space-y-6">
@@ -468,7 +608,7 @@ export default function OnboardingSettings() {
         <div>
           <h3 className="text-lg font-semibold">Custom Onboarding Pages</h3>
           <p className="text-sm text-muted-foreground">
-            Create custom pages that appear between Basic Details and Contract Creation
+            Create custom pages with form fields for additional data collection
           </p>
         </div>
         <Button onClick={() => { setEditingPage(null); setPageName(''); setPageDescription(''); setIsPageDialogOpen(true); }} className="gap-2">
@@ -476,13 +616,6 @@ export default function OnboardingSettings() {
           Add Custom Page
         </Button>
       </div>
-
-      <Card className="p-4 bg-blue-50 border-blue-200">
-        <p className="text-sm text-blue-800">
-          Custom pages appear in the onboarding workflow in the order shown below. 
-          Use the arrows to change sequence.
-        </p>
-      </Card>
 
       <div className="space-y-3">
         {customPages.sort((a, b) => a.page_order - b.page_order).map((page, index) => (
@@ -505,9 +638,9 @@ export default function OnboardingSettings() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Order: Step {index + 2} (after Basic Details)
-                </p>
+                {page.description && (
+                  <p className="text-xs text-muted-foreground mt-1">{page.description}</p>
+                )}
                 
                 {/* Fields list */}
                 {page.fields && page.fields.length > 0 && (
@@ -702,47 +835,10 @@ export default function OnboardingSettings() {
               className="mt-4"
               onClick={() => { setTemplateName(''); setTemplateType('full_time'); setIsTemplateDialogOpen(true); }}
             >
-              Create your first template
+              Add your first template
             </Button>
           </Card>
         )}
-      </div>
-
-      {/* Branding Section */}
-      <div className="pt-6 border-t">
-        <h4 className="font-semibold mb-4">Contract Branding</h4>
-        <Card className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Company Logo</Label>
-              <p className="text-xs text-muted-foreground">Appears in contract header</p>
-            </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Upload Logo
-            </Button>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Header Template</Label>
-              <p className="text-xs text-muted-foreground">Custom header for all contracts</p>
-            </div>
-            <Button variant="outline" size="sm">
-              <Edit className="h-4 w-4 mr-1" />
-              Edit Header
-            </Button>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Footer Template</Label>
-              <p className="text-xs text-muted-foreground">Custom footer for all contracts</p>
-            </div>
-            <Button variant="outline" size="sm">
-              <Edit className="h-4 w-4 mr-1" />
-              Edit Footer
-            </Button>
-          </div>
-        </Card>
       </div>
     </div>
   );
@@ -754,45 +850,35 @@ export default function OnboardingSettings() {
         <div>
           <h3 className="text-lg font-semibold">Document Requirements</h3>
           <p className="text-sm text-muted-foreground">
-            Define mandatory and optional documents for employee onboarding
+            Configure required documents for employee onboarding
           </p>
         </div>
-        <Button onClick={() => { setEditingDocument(null); setDocName(''); setDocDescription(''); setDocMandatory(false); setIsDocumentDialogOpen(true); }} className="gap-2">
+        <Button onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setEditingDocument(null); setIsDocumentDialogOpen(true); }} className="gap-2">
           <Plus className="h-4 w-4" />
-          Add Document Type
+          Add Document
         </Button>
       </div>
 
-      <Card className="p-4 bg-green-50 border-green-200">
-        <p className="text-sm text-green-800">
-          <strong>Right to Work</strong> is locked as mandatory and cannot be removed or disabled. 
-          All other documents can be configured as needed.
-        </p>
-      </Card>
-
       <div className="space-y-3">
-        {documentRequirements.sort((a, b) => a.doc_order - b.doc_order).map((doc, index) => (
+        {documentRequirements.sort((a, b) => a.doc_order - b.doc_order).map((doc) => (
           <Card key={doc.id} className={`p-4 ${!doc.enabled ? 'opacity-60' : ''}`}>
             <div className="flex items-center gap-4">
               <div className="cursor-grab text-muted-foreground hover:text-foreground">
                 <GripVertical className="h-5 w-5" />
               </div>
               
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <FileCheck className="h-5 w-5 text-primary" />
-              </div>
-              
               <div className="flex-1">
                 <div className="flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-primary" />
                   <span className="font-medium">{doc.name}</span>
                   {doc.is_mandatory && (
-                    <Badge variant="destructive" className="text-xs">Mandatory</Badge>
+                    <Badge variant="destructive" className="text-xs">Required</Badge>
                   )}
                   {doc.is_locked && (
                     <Badge variant="secondary" className="text-xs">Locked</Badge>
                   )}
                   {!doc.enabled && (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">Disabled</Badge>
+                    <Badge variant="outline" className="text-xs">Disabled</Badge>
                   )}
                 </div>
                 {doc.description && (
@@ -801,22 +887,23 @@ export default function OnboardingSettings() {
               </div>
 
               <div className="flex items-center gap-2">
+                <Switch
+                  checked={doc.enabled}
+                  onCheckedChange={(checked) => handleToggleDocument(doc.id, checked)}
+                  disabled={doc.is_locked}
+                />
+                
                 {!doc.is_locked && (
                   <>
-                    <Switch
-                      checked={doc.enabled}
-                      onCheckedChange={(checked) => handleToggleDocument(doc.id, checked)}
-                    />
-                    
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => { 
-                        setEditingDocument(doc); 
+                        setEditingDocument(doc);
                         setDocName(doc.name);
                         setDocDescription(doc.description || '');
                         setDocMandatory(doc.is_mandatory);
-                        setIsDocumentDialogOpen(true); 
+                        setIsDocumentDialogOpen(true);
                       }}
                     >
                       <Edit className="h-4 w-4" />
@@ -836,47 +923,64 @@ export default function OnboardingSettings() {
             </div>
           </Card>
         ))}
+
+        {documentRequirements.length === 0 && (
+          <Card className="p-8 text-center">
+            <FileCheck className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">No document requirements configured</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setEditingDocument(null); setIsDocumentDialogOpen(true); }}
+            >
+              Add your first document requirement
+            </Button>
+          </Card>
+        )}
       </div>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <Card className="p-4 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
-        <div className="flex items-center gap-3">
-          <Settings className="h-6 w-6 text-primary" />
-          <div>
-            <h2 className="text-xl font-bold">Onboarding Settings</h2>
-            <p className="text-sm text-muted-foreground">
-              Configure onboarding workflow, contract templates, and document requirements
-            </p>
-          </div>
-        </div>
-      </Card>
+      <div>
+        <h2 className="text-2xl font-bold">Onboarding Settings</h2>
+        <p className="text-muted-foreground">Configure the employee onboarding workflow</p>
+      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="forms" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Standard Forms
+          </TabsTrigger>
           <TabsTrigger value="custom-pages" className="gap-2">
             <Layers className="h-4 w-4" />
             Custom Pages
           </TabsTrigger>
-          <TabsTrigger value="contract-settings" className="gap-2">
+          <TabsTrigger value="contracts" className="gap-2">
             <FileText className="h-4 w-4" />
-            Contract Settings
+            Contracts
           </TabsTrigger>
-          <TabsTrigger value="document-requirements" className="gap-2">
+          <TabsTrigger value="documents" className="gap-2">
             <FileCheck className="h-4 w-4" />
-            Document Requirements
+            Documents
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="forms" className="mt-6">
+          <StandardFormsTab />
+        </TabsContent>
 
         <TabsContent value="custom-pages" className="mt-6">
           <CustomPagesTab />
         </TabsContent>
-        <TabsContent value="contract-settings" className="mt-6">
+
+        <TabsContent value="contracts" className="mt-6">
           <ContractSettingsTab />
         </TabsContent>
-        <TabsContent value="document-requirements" className="mt-6">
+
+        <TabsContent value="documents" className="mt-6">
           <DocumentRequirementsTab />
         </TabsContent>
       </Tabs>
@@ -885,21 +989,21 @@ export default function OnboardingSettings() {
       <Dialog open={isPageDialogOpen} onOpenChange={setIsPageDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPage ? 'Edit Custom Page' : 'Add Custom Page'}</DialogTitle>
+            <DialogTitle>{editingPage ? 'Edit' : 'Add'} Custom Page</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Page Name</Label>
               <Input
-                placeholder="e.g., Health Declaration"
+                placeholder="e.g., Emergency Contact"
                 value={pageName}
                 onChange={(e) => setPageName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Description (Optional)</Label>
+              <Label>Description (optional)</Label>
               <Textarea
-                placeholder="Describe what this page is for..."
+                placeholder="Describe what this page collects..."
                 value={pageDescription}
                 onChange={(e) => setPageDescription(e.target.value)}
               />
@@ -908,7 +1012,7 @@ export default function OnboardingSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPageDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSavePage} disabled={isSaving}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingPage ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
@@ -919,13 +1023,13 @@ export default function OnboardingSettings() {
       <Dialog open={isFieldDialogOpen} onOpenChange={setIsFieldDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingField ? 'Edit Field' : 'Add Field'}</DialogTitle>
+            <DialogTitle>{editingField ? 'Edit' : 'Add'} Field</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Field Label</Label>
               <Input
-                placeholder="e.g., Full Name"
+                placeholder="e.g., Phone Number"
                 value={fieldLabel}
                 onChange={(e) => setFieldLabel(e.target.value)}
               />
@@ -944,26 +1048,26 @@ export default function OnboardingSettings() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Placeholder (Optional)</Label>
+              <Label>Placeholder (optional)</Label>
               <Input
-                placeholder="e.g., Enter your name"
+                placeholder="e.g., Enter phone number..."
                 value={fieldPlaceholder}
                 onChange={(e) => setFieldPlaceholder(e.target.value)}
               />
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
-                id="required"
+                id="field-required"
                 checked={fieldRequired}
-                onCheckedChange={(checked) => setFieldRequired(checked === true)}
+                onCheckedChange={(checked) => setFieldRequired(checked as boolean)}
               />
-              <Label htmlFor="required">Required field</Label>
+              <Label htmlFor="field-required">Required field</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFieldDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setIsFieldDialogOpen(false); resetFieldForm(); }}>Cancel</Button>
             <Button onClick={handleSaveField} disabled={isSaving}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingField ? 'Update' : 'Add'}
             </Button>
           </DialogFooter>
@@ -980,7 +1084,7 @@ export default function OnboardingSettings() {
             <div className="space-y-2">
               <Label>Template Name</Label>
               <Input
-                placeholder="e.g., Full-Time Employment Contract"
+                placeholder="e.g., Full Time Contract"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
               />
@@ -992,10 +1096,10 @@ export default function OnboardingSettings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="full_time">Full-Time</SelectItem>
-                  <SelectItem value="part_time">Part-Time</SelectItem>
-                  <SelectItem value="intern">Internship</SelectItem>
-                  <SelectItem value="contractor">Contractor</SelectItem>
+                  <SelectItem value="full_time">Full Time</SelectItem>
+                  <SelectItem value="part_time">Part Time</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="temporary">Temporary</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1003,7 +1107,7 @@ export default function OnboardingSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsTemplateDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveTemplate} disabled={isSaving}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Create
             </Button>
           </DialogFooter>
@@ -1014,38 +1118,38 @@ export default function OnboardingSettings() {
       <Dialog open={isDocumentDialogOpen} onOpenChange={setIsDocumentDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingDocument ? 'Edit Document Requirement' : 'Add Document Requirement'}</DialogTitle>
+            <DialogTitle>{editingDocument ? 'Edit' : 'Add'} Document Requirement</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Document Name</Label>
               <Input
-                placeholder="e.g., ID Proof"
+                placeholder="e.g., Passport Copy"
                 value={docName}
                 onChange={(e) => setDocName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Description (Optional)</Label>
+              <Label>Description (optional)</Label>
               <Textarea
-                placeholder="Describe what documents are acceptable..."
+                placeholder="Describe the document..."
                 value={docDescription}
                 onChange={(e) => setDocDescription(e.target.value)}
               />
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
-                id="mandatory"
+                id="doc-mandatory"
                 checked={docMandatory}
-                onCheckedChange={(checked) => setDocMandatory(checked === true)}
+                onCheckedChange={(checked) => setDocMandatory(checked as boolean)}
               />
-              <Label htmlFor="mandatory">Mandatory document</Label>
+              <Label htmlFor="doc-mandatory">Mandatory document</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDocumentDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveDocument} disabled={isSaving}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingDocument ? 'Update' : 'Add'}
             </Button>
           </DialogFooter>

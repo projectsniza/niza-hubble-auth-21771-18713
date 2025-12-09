@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
@@ -7,18 +7,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Send, Upload, FileText, Check, User, Briefcase, FileCheck, Shield, File } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, Upload, FileText, Check, User, Briefcase, FileCheck, Shield, File, ClipboardList, Building2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import ApplicationForm from '@/components/onboarding/ApplicationForm';
+import StarterChecklist from '@/components/onboarding/StarterChecklist';
+import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
+import ContractTemplate from '@/components/onboarding/ContractTemplate';
 
-const STEPS = [
-  { id: 1, name: 'Basic Details', icon: User },
-  { id: 2, name: 'Contract Creation', icon: Briefcase },
-  { id: 3, name: 'Submit for Approval', icon: FileCheck },
-  { id: 4, name: 'Right to Work', icon: Shield },
-  { id: 5, name: 'Document Upload', icon: File },
-  { id: 6, name: 'Complete', icon: Check }
+interface FormSettings {
+  application: boolean;
+  checklist: boolean;
+  bank_details: boolean;
+}
+
+const BASE_STEPS = [
+  { id: 'basic', name: 'Basic Details', icon: User },
+  { id: 'application', name: 'Application Form', icon: ClipboardList },
+  { id: 'checklist', name: 'Starter Checklist', icon: FileCheck },
+  { id: 'bank_details', name: 'Bank Details', icon: Wallet },
+  { id: 'contract', name: 'Contract', icon: Briefcase },
+  { id: 'approval', name: 'Submit for Approval', icon: Send },
+  { id: 'rtw', name: 'Right to Work', icon: Shield },
+  { id: 'documents', name: 'Document Upload', icon: File },
+  { id: 'complete', name: 'Complete', icon: Check }
 ];
 
 interface FormData {
@@ -45,6 +58,7 @@ interface FormData {
 }
 
 export default function AddEmployee() {
+  const { id: employeeId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -52,6 +66,14 @@ export default function AddEmployee() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
+  const [employeeRecord, setEmployeeRecord] = useState<any>(null);
+  
+  // Form settings from database
+  const [formSettings, setFormSettings] = useState<FormSettings>({
+    application: true,
+    checklist: true,
+    bank_details: true
+  });
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -76,9 +98,25 @@ export default function AddEmployee() {
     additionalDocuments: [{ title: '', file: null, expiryDate: '', followUpDate: '' }]
   });
 
+  // Get active steps based on form settings
+  const getActiveSteps = () => {
+    return BASE_STEPS.filter(step => {
+      if (step.id === 'application') return formSettings.application;
+      if (step.id === 'checklist') return formSettings.checklist;
+      if (step.id === 'bank_details') return formSettings.bank_details;
+      return true;
+    });
+  };
+
+  const STEPS = getActiveSteps();
+
   useEffect(() => {
     fetchOrganizations();
-  }, []);
+    fetchFormSettings();
+    if (employeeId) {
+      fetchEmployee(employeeId);
+    }
+  }, [employeeId]);
 
   useEffect(() => {
     if (formData.organizationId) {
@@ -91,6 +129,68 @@ export default function AddEmployee() {
       fetchManagers(formData.branchId);
     }
   }, [formData.branchId]);
+
+  const fetchFormSettings = async () => {
+    const { data } = await supabase
+      .from('onboarding_form_settings')
+      .select('*');
+    
+    if (data) {
+      const settings: FormSettings = {
+        application: true,
+        checklist: true,
+        bank_details: true
+      };
+      
+      data.forEach(setting => {
+        if (setting.form_type === 'application') settings.application = setting.enabled ?? true;
+        if (setting.form_type === 'checklist') settings.checklist = setting.enabled ?? true;
+        if (setting.form_type === 'bank_details') settings.bank_details = setting.enabled ?? true;
+      });
+      
+      setFormSettings(settings);
+    }
+  };
+
+  const fetchEmployee = async (id: string) => {
+    const { data } = await supabase
+      .from('employees')
+      .select('*, employee_onboarding(*)')
+      .eq('id', id)
+      .single();
+    
+    if (data) {
+      setEmployeeRecord(data);
+      setFormData({
+        firstName: data.first_name || '',
+        lastName: data.last_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        dateOfBirth: data.date_of_birth || '',
+        address: data.address || '',
+        jobTitle: data.job_title || '',
+        department: data.department || '',
+        joinDate: data.join_date || '',
+        nationalInsuranceNumber: data.national_insurance_number || '',
+        emergencyContactName: data.emergency_contact_name || '',
+        emergencyContactPhone: data.emergency_contact_phone || '',
+        organizationId: data.organization_id || '',
+        branchId: data.branch_id || '',
+        managerId: data.manager_id || '',
+        contractFile: null,
+        shareCode: '',
+        govPortalLink: '',
+        rightToWorkDocument: null,
+        additionalDocuments: [{ title: '', file: null, expiryDate: '', followUpDate: '' }]
+      });
+      
+      // Set current step based on onboarding progress
+      if (data.employee_onboarding?.[0]) {
+        const onboarding = data.employee_onboarding[0];
+        setCurrentStep(onboarding.current_step - 1 || 0);
+      }
+    }
+  };
 
   const fetchOrganizations = async () => {
     const { data } = await supabase.from('organizations').select('*').order('name');
@@ -115,11 +215,17 @@ export default function AddEmployee() {
   };
 
   const handleNext = async () => {
-    if (currentStep === 0) {
-      // Validate basic details
+    const currentStepId = STEPS[currentStep]?.id;
+    
+    if (currentStepId === 'basic') {
       if (!formData.firstName || !formData.lastName || !formData.email || !formData.organizationId || !formData.branchId) {
         toast.error('Please fill in all required fields');
         return;
+      }
+      
+      // Create or update employee record after basic details
+      if (!employeeRecord) {
+        await saveBasicDetails();
       }
     }
 
@@ -136,10 +242,9 @@ export default function AddEmployee() {
     }
   };
 
-  const handleSubmitForApproval = async () => {
+  const saveBasicDetails = async () => {
     setLoading(true);
     try {
-      // Create employee record
       const { data: employee, error: empError } = await supabase
         .from('employees')
         .insert({
@@ -159,40 +264,77 @@ export default function AddEmployee() {
           branch_id: formData.branchId,
           manager_id: formData.managerId || null,
           created_by: user?.id,
-          status: 'pending'
+          status: 'onboarding'
         })
         .select()
         .single();
 
       if (empError) throw empError;
-
-      // Upload contract if provided
-      if (formData.contractFile && employee) {
-        const filePath = `contracts/${employee.id}/${formData.contractFile.name}`;
-        await supabase.storage.from('documents').upload(filePath, formData.contractFile);
-
-        // Create contract approval record
-        await supabase.from('contract_approvals').insert({
-          employee_id: employee.id,
-          submitted_by: user?.id,
-          contract_file_path: filePath,
-          contract_file_name: formData.contractFile.name,
-          status: 'pending'
-        });
-      }
-
-      toast.success('Employee submitted for approval');
-      setCurrentStep(3); // Move to Right to Work step
+      setEmployeeRecord(employee);
+      toast.success('Basic details saved');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to submit employee');
+      toast.error(error.message || 'Failed to save details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!employeeRecord) {
+      toast.error('Employee record not found');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create contract approval record
+      await supabase.from('contract_approvals').insert({
+        employee_id: employeeRecord.id,
+        submitted_by: user?.id,
+        status: 'pending'
+      });
+
+      // Update onboarding status
+      await supabase
+        .from('employee_onboarding')
+        .update({ 
+          contract_submitted_for_approval: true,
+          current_step: getStepIndex('approval') + 2
+        })
+        .eq('employee_id', employeeRecord.id);
+
+      toast.success('Contract submitted for approval');
+      handleNext();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit for approval');
     } finally {
       setLoading(false);
     }
   };
 
   const handleComplete = async () => {
-    toast.success('Employee onboarding completed!');
-    navigate('/dashboard/employees');
+    if (!employeeRecord) return;
+
+    try {
+      await supabase
+        .from('employees')
+        .update({ status: 'active' })
+        .eq('id', employeeRecord.id);
+
+      await supabase
+        .from('employee_onboarding')
+        .update({ completed_at: new Date().toISOString() })
+        .eq('employee_id', employeeRecord.id);
+
+      toast.success('Employee onboarding completed!');
+      navigate('/dashboard/employees');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const getStepIndex = (stepId: string) => {
+    return STEPS.findIndex(s => s.id === stepId);
   };
 
   const addDocument = () => {
@@ -208,6 +350,7 @@ export default function AddEmployee() {
   };
 
   const progress = ((currentStep + 1) / STEPS.length) * 100;
+  const currentStepId = STEPS[currentStep]?.id;
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -218,16 +361,16 @@ export default function AddEmployee() {
           </Button>
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-foreground">Employee Onboarding</h1>
-            <p className="text-muted-foreground">Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep].name}</p>
+            <p className="text-muted-foreground">Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep]?.name}</p>
           </div>
         </div>
 
         {/* Progress Steps */}
         <div className="space-y-4">
           <Progress value={progress} className="h-2" />
-          <div className="flex justify-between">
+          <div className="flex justify-between overflow-x-auto pb-2">
             {STEPS.map((step, index) => (
-              <div key={step.id} className={`flex flex-col items-center gap-1 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
+              <div key={step.id} className={`flex flex-col items-center gap-1 min-w-[60px] ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                   <step.icon className="h-4 w-4" />
                 </div>
@@ -238,8 +381,8 @@ export default function AddEmployee() {
         </div>
 
         <Card className="p-8">
-          {/* Step 1: Basic Details */}
-          {currentStep === 0 && (
+          {/* Step: Basic Details */}
+          {currentStepId === 'basic' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Basic Details</h2>
               
@@ -336,44 +479,48 @@ export default function AddEmployee() {
             </div>
           )}
 
-          {/* Step 2: Contract Creation */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Contract Creation</h2>
-              <p className="text-muted-foreground">Upload the employment contract for this employee. This will be submitted for Super Admin approval.</p>
-              
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                <input
-                  type="file"
-                  id="contract-upload"
-                  accept=".pdf,.doc,.docx"
-                  className="hidden"
-                  onChange={(e) => updateFormData({ contractFile: e.target.files?.[0] || null })}
-                />
-                <label htmlFor="contract-upload" className="cursor-pointer">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Upload className="h-8 w-8 text-primary" />
-                    </div>
-                    {formData.contractFile ? (
-                      <div className="flex items-center gap-2 text-primary">
-                        <FileText className="h-5 w-5" />
-                        <span>{formData.contractFile.name}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-foreground font-medium">Click to upload contract</p>
-                        <p className="text-sm text-muted-foreground">PDF, DOC, or DOCX</p>
-                      </>
-                    )}
-                  </div>
-                </label>
-              </div>
-            </div>
+          {/* Step: Application Form */}
+          {currentStepId === 'application' && employeeRecord && (
+            <ApplicationForm 
+              employeeId={employeeRecord.id}
+              employeeData={employeeRecord}
+              onSave={() => {}}
+              onNext={handleNext}
+            />
           )}
 
-          {/* Step 3: Submit for Approval */}
-          {currentStep === 2 && (
+          {/* Step: Starter Checklist */}
+          {currentStepId === 'checklist' && employeeRecord && (
+            <StarterChecklist 
+              employeeId={employeeRecord.id}
+              employeeData={employeeRecord}
+              onSave={() => {}}
+              onNext={handleNext}
+            />
+          )}
+
+          {/* Step: Bank Details */}
+          {currentStepId === 'bank_details' && employeeRecord && (
+            <BankDetailsForm 
+              employeeId={employeeRecord.id}
+              employeeData={employeeRecord}
+              onSave={() => {}}
+              onNext={handleNext}
+            />
+          )}
+
+          {/* Step: Contract */}
+          {currentStepId === 'contract' && employeeRecord && (
+            <ContractTemplate 
+              employeeId={employeeRecord.id}
+              employeeData={employeeRecord}
+              onSave={() => {}}
+              onNext={handleNext}
+            />
+          )}
+
+          {/* Step: Submit for Approval */}
+          {currentStepId === 'approval' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Submit for Approval</h2>
               <p className="text-muted-foreground">Review the details and submit for Super Admin approval. The contract will be reviewed and signed by the Super Admin.</p>
@@ -385,7 +532,6 @@ export default function AddEmployee() {
                   <div><span className="text-muted-foreground">Email:</span> {formData.email}</div>
                   <div><span className="text-muted-foreground">Job Title:</span> {formData.jobTitle}</div>
                   <div><span className="text-muted-foreground">Department:</span> {formData.department}</div>
-                  <div><span className="text-muted-foreground">Contract:</span> {formData.contractFile?.name || 'Not uploaded'}</div>
                 </div>
               </Card>
 
@@ -396,8 +542,8 @@ export default function AddEmployee() {
             </div>
           )}
 
-          {/* Step 4: Right to Work */}
-          {currentStep === 3 && (
+          {/* Step: Right to Work */}
+          {currentStepId === 'rtw' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Right to Work Check</h2>
               <p className="text-muted-foreground">Enter the Right to Work details for this employee.</p>
@@ -424,105 +570,111 @@ export default function AddEmployee() {
                     onChange={(e) => updateFormData({ rightToWorkDocument: e.target.files?.[0] || null })}
                   />
                   <label htmlFor="rtw-upload" className="cursor-pointer">
-                    {formData.rightToWorkDocument ? (
-                      <div className="flex items-center justify-center gap-2 text-primary">
-                        <FileText className="h-5 w-5" />
-                        <span>{formData.rightToWorkDocument.name}</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Upload document (PDF, JPG, PNG)</p>
-                      </div>
-                    )}
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      {formData.rightToWorkDocument ? (
+                        <span className="text-primary">{formData.rightToWorkDocument.name}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Click to upload document</span>
+                      )}
+                    </div>
                   </label>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 5: Document Upload */}
-          {currentStep === 4 && (
+          {/* Step: Document Upload */}
+          {currentStepId === 'documents' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Final Document Upload</h2>
-              <p className="text-muted-foreground">Upload any additional documents for this employee. Each document can have an expiry and follow-up date for tracking.</p>
+              <h2 className="text-xl font-semibold">Document Upload</h2>
+              <p className="text-muted-foreground">Upload additional required documents.</p>
               
               {formData.additionalDocuments.map((doc, index) => (
                 <Card key={index} className="p-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Document Title *</Label>
-                      <Input
-                        value={doc.title}
+                      <Label>Document Title</Label>
+                      <Input 
+                        value={doc.title} 
                         onChange={(e) => updateDocument(index, { title: e.target.value })}
-                        placeholder="e.g., Passport, DBS Check"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Upload File *</Label>
-                      <Input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => updateDocument(index, { file: e.target.files?.[0] || null })}
+                        placeholder="e.g., Passport, ID Card"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Expiry Date</Label>
-                      <Input
+                      <Input 
                         type="date"
-                        value={doc.expiryDate}
+                        value={doc.expiryDate} 
                         onChange={(e) => updateDocument(index, { expiryDate: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Follow-up Date</Label>
-                      <Input
+                      <Input 
                         type="date"
-                        value={doc.followUpDate}
+                        value={doc.followUpDate} 
                         onChange={(e) => updateDocument(index, { followUpDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>File</Label>
+                      <Input 
+                        type="file"
+                        onChange={(e) => updateDocument(index, { file: e.target.files?.[0] || null })}
                       />
                     </div>
                   </div>
                 </Card>
               ))}
               
-              <Button variant="outline" onClick={addDocument} className="w-full">
-                + Add Another Document
+              <Button variant="outline" onClick={addDocument} className="gap-2">
+                <File className="h-4 w-4" />
+                Add Another Document
               </Button>
             </div>
           )}
 
-          {/* Step 6: Complete */}
-          {currentStep === 5 && (
-            <div className="text-center space-y-6 py-8">
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                <Check className="h-10 w-10 text-primary" />
+          {/* Step: Complete */}
+          {currentStepId === 'complete' && (
+            <div className="space-y-6 text-center py-8">
+              <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                <Check className="h-10 w-10 text-green-600" />
               </div>
-              <div>
-                <h2 className="text-2xl font-semibold text-foreground">Onboarding Complete!</h2>
-                <p className="text-muted-foreground mt-2">The employee has been successfully onboarded. All documents have been saved to their folder.</p>
-              </div>
-              <Button onClick={handleComplete} className="gap-2">
-                View Employee List
-                <ArrowRight className="h-4 w-4" />
+              <h2 className="text-2xl font-semibold">Onboarding Complete!</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                All onboarding steps have been completed for {formData.firstName} {formData.lastName}. 
+                The employee is now ready to be activated in the system.
+              </p>
+              <Button onClick={handleComplete} size="lg" className="gap-2">
+                <Check className="h-5 w-5" />
+                Complete Onboarding
               </Button>
+            </div>
+          )}
+
+          {/* Navigation */}
+          {currentStepId !== 'complete' && (
+            <div className="flex justify-between mt-8 pt-6 border-t">
+              <Button 
+                variant="outline" 
+                onClick={handlePrevious} 
+                disabled={currentStep === 0}
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              
+              {currentStepId !== 'approval' && (
+                <Button onClick={handleNext} disabled={loading} className="gap-2">
+                  {loading ? 'Saving...' : 'Next'}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           )}
         </Card>
-
-        {/* Navigation */}
-        {currentStep !== 5 && currentStep !== 2 && (
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={handlePrevious} disabled={currentStep === 0}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Previous
-            </Button>
-            <Button onClick={handleNext}>
-              Next
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

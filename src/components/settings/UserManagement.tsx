@@ -576,7 +576,7 @@ export default function UserManagement() {
 
       {/* Activate Account Dialog */}
       <Dialog open={activateDialogOpen} onOpenChange={setActivateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5" />
@@ -639,19 +639,103 @@ export default function UserManagement() {
             </div>
 
             {selectedRole === 'hr' && (
-              <div className="space-y-2">
-                <Label>HR Access Level</Label>
-                <Select value={hrAccessLevel} onValueChange={(v) => setHrAccessLevel(v as 'full' | 'organization' | 'branch')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full">Full Access (All Organizations)</SelectItem>
-                    <SelectItem value="organization">Organization Only</SelectItem>
-                    <SelectItem value="branch">Branch Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label>HR Access Level</Label>
+                  <Select value={hrAccessLevel} onValueChange={(v) => setHrAccessLevel(v as 'full' | 'organization' | 'branch')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">Full Access (All Organizations)</SelectItem>
+                      <SelectItem value="organization">Organization Only</SelectItem>
+                      <SelectItem value="branch">Branch Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {hrAccessLevel !== 'full' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Organization</Label>
+                      <Select 
+                        value={selectedEmployee?.organization_id || ''} 
+                        disabled
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="From employee record" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {organizations.map(org => (
+                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Organization is inherited from employee record</p>
+                    </div>
+
+                    {hrAccessLevel === 'branch' && (
+                      <div className="space-y-2">
+                        <Label>Branch</Label>
+                        <Select 
+                          value={selectedEmployee?.branch_id || ''} 
+                          disabled
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="From employee record" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branches.filter(b => b.organization_id === selectedEmployee?.organization_id).map(branch => (
+                              <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Branch is inherited from employee record</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {selectedRole === 'manager' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Organization</Label>
+                  <Select 
+                    value={selectedEmployee?.organization_id || ''} 
+                    disabled
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="From employee record" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.map(org => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Organization is inherited from employee record</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select 
+                    value={selectedEmployee?.branch_id || ''} 
+                    disabled
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="From employee record" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.filter(b => b.organization_id === selectedEmployee?.organization_id).map(branch => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Branch is inherited from employee record</p>
+                </div>
+              </>
             )}
 
             <Card className="p-3 bg-blue-50 border-blue-200">
