@@ -386,15 +386,6 @@ export default function ClockIns() {
           Employees must be within this distance to clock in
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <input 
-          type="checkbox" 
-          id="qr" 
-          checked={newLocation.qrEnabled}
-          onChange={(e) => setNewLocation({ ...newLocation, qrEnabled: e.target.checked })}
-        />
-        <Label htmlFor="qr">Enable QR Code check-in</Label>
-      </div>
       <Button onClick={isEdit ? handleUpdateLocation : handleCreateLocation} className="w-full">
         {isEdit ? 'Update Location' : 'Create Location'}
       </Button>
