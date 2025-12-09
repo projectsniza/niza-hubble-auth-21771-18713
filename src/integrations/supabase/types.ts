@@ -677,6 +677,7 @@ export type Database = {
         Row: {
           access_level: string | null
           branch_id: string | null
+          color: string | null
           created_at: string | null
           created_by: string | null
           employee_id: string | null
@@ -693,6 +694,7 @@ export type Database = {
         Insert: {
           access_level?: string | null
           branch_id?: string | null
+          color?: string | null
           created_at?: string | null
           created_by?: string | null
           employee_id?: string | null
@@ -709,6 +711,7 @@ export type Database = {
         Update: {
           access_level?: string | null
           branch_id?: string | null
+          color?: string | null
           created_at?: string | null
           created_by?: string | null
           employee_id?: string | null
