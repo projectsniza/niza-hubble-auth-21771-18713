@@ -255,6 +255,94 @@ export type Database = {
           },
         ]
       }
+      contract_branding: {
+        Row: {
+          created_at: string
+          footer_template: string | null
+          header_template: string | null
+          id: string
+          logo_path: string | null
+          organization_id: string | null
+          primary_color: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          footer_template?: string | null
+          header_template?: string | null
+          id?: string
+          logo_path?: string | null
+          organization_id?: string | null
+          primary_color?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          footer_template?: string | null
+          header_template?: string | null
+          id?: string
+          logo_path?: string | null
+          organization_id?: string | null
+          primary_color?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_branding_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_templates: {
+        Row: {
+          contract_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean
+          merge_fields: Json | null
+          name: string
+          organization_id: string | null
+          template_file_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          contract_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          merge_fields?: Json | null
+          name: string
+          organization_id?: string | null
+          template_file_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contract_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          merge_fields?: Json | null
+          name?: string
+          organization_id?: string | null
+          template_file_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coshh_assessments: {
         Row: {
           approved_at: string | null
@@ -374,6 +462,66 @@ export type Database = {
           },
           {
             foreignKeyName: "daily_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_requirements: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          doc_order: number
+          enabled: boolean
+          id: string
+          is_locked: boolean
+          is_mandatory: boolean
+          name: string
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          doc_order?: number
+          enabled?: boolean
+          id?: string
+          is_locked?: boolean
+          is_mandatory?: boolean
+          name: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          doc_order?: number
+          enabled?: boolean
+          id?: string
+          is_locked?: boolean
+          is_mandatory?: boolean
+          name?: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_requirements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_requirements_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1277,6 +1425,113 @@ export type Database = {
           },
         ]
       }
+      onboarding_custom_pages: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          enabled: boolean
+          id: string
+          logo_path: string | null
+          name: string
+          organization_id: string | null
+          page_order: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          logo_path?: string | null
+          name: string
+          organization_id?: string | null
+          page_order?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          logo_path?: string | null
+          name?: string
+          organization_id?: string | null
+          page_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_custom_pages_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_custom_pages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_page_fields: {
+        Row: {
+          created_at: string
+          default_value: string | null
+          field_label: string
+          field_options: Json | null
+          field_order: number
+          field_type: string
+          id: string
+          is_required: boolean
+          page_id: string
+          placeholder: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_value?: string | null
+          field_label: string
+          field_options?: Json | null
+          field_order?: number
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          page_id: string
+          placeholder?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_value?: string | null
+          field_label?: string
+          field_options?: Json | null
+          field_order?: number
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          page_id?: string
+          placeholder?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_page_fields_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_custom_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           auto_create_folder: boolean | null
@@ -1450,9 +1705,12 @@ export type Database = {
         Row: {
           branch_id: string | null
           created_at: string
+          display_name: string | null
           email: string
+          force_password_change: boolean | null
           hr_access_level: Database["public"]["Enums"]["hr_access_level"] | null
           id: string
+          is_active: boolean | null
           name: string
           organization_id: string | null
           updated_at: string
@@ -1460,11 +1718,14 @@ export type Database = {
         Insert: {
           branch_id?: string | null
           created_at?: string
+          display_name?: string | null
           email: string
+          force_password_change?: boolean | null
           hr_access_level?:
             | Database["public"]["Enums"]["hr_access_level"]
             | null
           id: string
+          is_active?: boolean | null
           name: string
           organization_id?: string | null
           updated_at?: string
@@ -1472,11 +1733,14 @@ export type Database = {
         Update: {
           branch_id?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string
+          force_password_change?: boolean | null
           hr_access_level?:
             | Database["public"]["Enums"]["hr_access_level"]
             | null
           id?: string
+          is_active?: boolean | null
           name?: string
           organization_id?: string | null
           updated_at?: string
