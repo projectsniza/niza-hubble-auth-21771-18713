@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, FileCheck, Loader2, Upload, Shield, CheckCircle } from 'lucide-react';
+import { Download, FileCheck, Loader2, Upload, Users, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -31,11 +30,9 @@ interface ApprovedContract {
   } | null;
 }
 
-function ApprovedContractsTab() {
-  const navigate = useNavigate();
+function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: string) => void }) {
   const [contracts, setContracts] = useState<ApprovedContract[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
 
   useEffect(() => {
     fetchApprovedContracts();
@@ -97,103 +94,132 @@ function ApprovedContractsTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
-  // If an employee is selected for post-approval onboarding
+  if (contracts.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <FileCheck className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+        <p>No approved contracts yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Employee</TableHead>
+          <TableHead>Organization</TableHead>
+          <TableHead>Branch</TableHead>
+          <TableHead>Approved</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {contracts.map((contract) => (
+          <TableRow key={contract.id}>
+            <TableCell className="font-medium">
+              {contract.employee?.first_name} {contract.employee?.last_name}
+            </TableCell>
+            <TableCell>{contract.employee?.organization?.name || '-'}</TableCell>
+            <TableCell>{contract.employee?.branch?.name || '-'}</TableCell>
+            <TableCell>
+              {contract.approved_at 
+                ? format(new Date(contract.approved_at), 'dd MMM yyyy')
+                : '-'
+              }
+            </TableCell>
+            <TableCell>
+              {contract.employee?.status === 'active' ? (
+                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completed
+                </Badge>
+              ) : (
+                <Badge variant="secondary">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Pending Docs
+                </Badge>
+              )}
+            </TableCell>
+            <TableCell>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleDownload(contract)}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+                {contract.employee?.status !== 'active' && (
+                  <Button 
+                    size="sm"
+                    onClick={() => onSelectEmployee(contract.employee_id)}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Continue
+                  </Button>
+                )}
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function OnboardingProgressTab() {
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<'progress' | 'approved'>('progress');
+
   if (selectedEmployee) {
     return (
       <PostApprovalOnboarding 
         employeeId={selectedEmployee} 
-        onBack={() => {
-          setSelectedEmployee(null);
-          fetchApprovedContracts();
-        }}
+        onBack={() => setSelectedEmployee(null)}
       />
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-1">Approved Contracts</h2>
-        <p className="text-muted-foreground">Complete remaining onboarding steps and download contracts</p>
+      {/* Section Toggle */}
+      <div className="flex gap-2">
+        <Button
+          variant={activeSection === 'progress' ? 'default' : 'outline'}
+          onClick={() => setActiveSection('progress')}
+          className="gap-2"
+        >
+          <Users className="h-4 w-4" />
+          In Progress
+        </Button>
+        <Button
+          variant={activeSection === 'approved' ? 'default' : 'outline'}
+          onClick={() => setActiveSection('approved')}
+          className="gap-2"
+        >
+          <FileText className="h-4 w-4" />
+          Approved Contracts
+        </Button>
       </div>
 
-      {contracts.length === 0 ? (
-        <Card className="p-12 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <FileCheck className="h-8 w-8 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold mb-2">No approved contracts</h3>
-              <p className="text-muted-foreground">Approved contracts will appear here</p>
-            </div>
-          </div>
-        </Card>
+      {activeSection === 'progress' ? (
+        <OnboardingManagement />
       ) : (
         <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Organization</TableHead>
-                <TableHead>Branch</TableHead>
-                <TableHead>Approved At</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {contracts.map((contract) => (
-                <TableRow key={contract.id}>
-                  <TableCell className="font-medium">
-                    {contract.employee?.first_name} {contract.employee?.last_name}
-                  </TableCell>
-                  <TableCell>{contract.employee?.organization?.name || '-'}</TableCell>
-                  <TableCell>{contract.employee?.branch?.name || '-'}</TableCell>
-                  <TableCell>
-                    {contract.approved_at 
-                      ? format(new Date(contract.approved_at), 'dd MMM yyyy')
-                      : '-'
-                    }
-                  </TableCell>
-                  <TableCell>
-                    {contract.employee?.status === 'active' ? (
-                      <Badge className="bg-green-100 text-green-800">Completed</Badge>
-                    ) : (
-                      <Badge variant="secondary">Pending Documents</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleDownload(contract)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Download
-                      </Button>
-                      {contract.employee?.status !== 'active' && (
-                        <Button 
-                          size="sm"
-                          onClick={() => setSelectedEmployee(contract.employee_id)}
-                        >
-                          <Upload className="h-4 w-4 mr-1" />
-                          Continue
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="p-4 border-b">
+            <h3 className="text-lg font-semibold">Approved Contracts</h3>
+            <p className="text-sm text-muted-foreground">Download contracts and complete remaining onboarding steps</p>
+          </div>
+          <ApprovedContractsList onSelectEmployee={setSelectedEmployee} />
         </Card>
       )}
     </div>
@@ -203,9 +229,21 @@ function ApprovedContractsTab() {
 export default function Onboarding() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('onboarding');
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
 
   // Super Admin sees approval workflow + approved contracts
   if (user?.role === 'super_admin') {
+    if (selectedEmployee) {
+      return (
+        <div className="p-8">
+          <PostApprovalOnboarding 
+            employeeId={selectedEmployee} 
+            onBack={() => setSelectedEmployee(null)}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="p-8 space-y-6">
         <div>
@@ -215,7 +253,7 @@ export default function Onboarding() {
         
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="onboarding">Pending Approvals</TabsTrigger>
+            <TabsTrigger value="onboarding">Contract Approvals</TabsTrigger>
             <TabsTrigger value="contracts">Approved Contracts</TabsTrigger>
           </TabsList>
           
@@ -224,14 +262,20 @@ export default function Onboarding() {
           </TabsContent>
           
           <TabsContent value="contracts" className="mt-6">
-            <ApprovedContractsTab />
+            <Card>
+              <div className="p-4 border-b">
+                <h3 className="text-lg font-semibold">Approved Contracts</h3>
+                <p className="text-sm text-muted-foreground">Download contracts and complete remaining onboarding steps</p>
+              </div>
+              <ApprovedContractsList onSelectEmployee={setSelectedEmployee} />
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
     );
   }
 
-  // HR and Managers see management interface + approved contracts
+  // HR and Managers see management interface with embedded approved contracts
   if (user?.role === 'hr' || user?.role === 'manager') {
     return (
       <div className="p-8 space-y-6">
@@ -240,20 +284,7 @@ export default function Onboarding() {
           <p className="text-muted-foreground">Manage employee onboarding and contracts</p>
         </div>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="onboarding">Onboarding Progress</TabsTrigger>
-            <TabsTrigger value="contracts">Approved Contracts</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="onboarding" className="mt-6">
-            <OnboardingManagement />
-          </TabsContent>
-          
-          <TabsContent value="contracts" className="mt-6">
-            <ApprovedContractsTab />
-          </TabsContent>
-        </Tabs>
+        <OnboardingProgressTab />
       </div>
     );
   }

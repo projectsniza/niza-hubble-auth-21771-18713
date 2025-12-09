@@ -40,6 +40,25 @@ const getMenuItems = (role: string) => {
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
+    ];
+  }
+
+  // HR role - organization/branch-restricted view
+  if (role === 'hr') {
+    return [
+      { title: 'Home', icon: Home, path: '/dashboard' },
+      { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+      { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
+      { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
+      { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
+      { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
+      { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
+      { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
+      { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
+      { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
     ];
   }
 
