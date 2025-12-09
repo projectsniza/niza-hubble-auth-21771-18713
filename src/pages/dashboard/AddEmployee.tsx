@@ -514,7 +514,10 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               organizations={organizations}
               onSave={() => {}}
-              onSubmit={handleNext}
+              onSubmit={() => {
+                toast.success('Contract submitted for approval. Continue in Approved Contracts tab after Super Admin approves.');
+                navigate('/dashboard/employees');
+              }}
             />
           )}
 

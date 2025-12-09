@@ -1,56 +1,55 @@
 import { NavLink } from 'react-router-dom';
 import { 
-  Home, Users, UserPlus, FileText, Clock, Calendar, 
-  MapPin, DollarSign, Receipt, TrendingUp, MessageSquare,
-  CalendarDays, Megaphone, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings
+  Home, Users, FileText, Clock, Calendar, 
+  MapPin, DollarSign, TrendingUp,
+  CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
+  User, Briefcase
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 
 const getMenuItems = (role: string) => {
-  const baseItems = [
-    { title: 'Home', icon: Home, path: '/dashboard' },
-    { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
-  ];
-
+  // Employee gets restricted view
   if (role === 'employee') {
     return [
-      ...baseItems,
-      { title: 'My Profile', icon: Users, path: '/dashboard/my-profile' },
-      { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'My Dashboard', icon: Home, path: '/dashboard' },
+      { title: 'My Profile', icon: User, path: '/dashboard/my-profile' },
+      { title: 'Clock In/Out', icon: MapPin, path: '/dashboard/clock-ins' },
+      { title: 'My Schedule', icon: Calendar, path: '/dashboard/scheduling' },
+      { title: 'My Attendance', icon: Clock, path: '/dashboard/attendance' },
+      { title: 'My Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'My Leave', icon: Briefcase, path: '/dashboard/my-leave' },
+      { title: 'Pay Slips', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
-      { title: 'Daily reports', icon: MessageSquare, path: '/dashboard/daily-reports' },
-      { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
-      { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
-      { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
-      { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
     ];
   }
 
-  // manager role - show Maintenance instead of Documents
+  // Manager role - branch-restricted view
   if (role === 'manager') {
-    const items = [
-      ...baseItems,
-      { title: 'Maintenance', icon: Settings, path: '/dashboard/maintenance' },
-      { title: 'Daily reports', icon: MessageSquare, path: '/dashboard/daily-reports' },
-      { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
+    return [
+      { title: 'Home', icon: Home, path: '/dashboard' },
+      { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+      { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
+      { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
       { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
+      { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
+      { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
+      { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
     ];
-    return items;
   }
 
-  // super_admin, hr, and other roles
+  // super_admin, hr, and other roles - full access
   const items = [
-    ...baseItems,
+    { title: 'Home', icon: Home, path: '/dashboard' },
+    { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
     { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
-    { title: 'Daily reports', icon: MessageSquare, path: '/dashboard/daily-reports' },
     { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
     { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
     { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
@@ -118,7 +117,7 @@ export default function DashboardSidebar({ collapsed, onToggle }: DashboardSideb
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-foreground text-sm truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <p className="text-xs text-muted-foreground truncate capitalize">{user.role.replace('_', ' ')}</p>
             </div>
           </div>
         </div>
