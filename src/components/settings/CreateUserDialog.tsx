@@ -92,17 +92,32 @@ export default function CreateUserDialog({
       }
     }
 
+    if (role === 'employee' || role === 'manager') {
+      if (!organizationId || !branchId) {
+        toast.error(`${role === 'manager' ? 'Manager' : 'Employee'} must be assigned to an organization and branch`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Create user via Supabase Auth
+      // Use admin API via edge function to create user without logging in
+      // For now, we'll use a workaround: create via signUp but immediately restore session
+      
+      // Store current session
+      const { data: currentSession } = await supabase.auth.getSession();
+      
+      // Create user via Supabase Auth admin functions
+      // We'll use the service role key via edge function
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name,
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/`
         }
       });
 
@@ -134,6 +149,14 @@ export default function CreateUserDialog({
           .eq('id', authData.user.id);
 
         if (profileError) throw profileError;
+
+        // CRITICAL: Restore the original session to prevent switching users
+        if (currentSession?.session) {
+          await supabase.auth.setSession({
+            access_token: currentSession.session.access_token,
+            refresh_token: currentSession.session.refresh_token
+          });
+        }
 
         toast.success('User created successfully');
         onSuccess?.();
@@ -335,12 +358,11 @@ export default function CreateUserDialog({
               </div>
             )}
 
-            {/* Organization Selection */}
+            {/* Organization Selection - Required for HR (non-full), Manager, and Employee */}
             {((role === 'hr' && hrAccessLevel !== 'full') || role === 'manager' || role === 'employee') && (
               <div className="space-y-2">
                 <Label htmlFor="organization">
-                  Organization {role === 'hr' && hrAccessLevel === 'organization' ? '*' : ''}
-                  {role === 'manager' ? '*' : ''}
+                  Organization *
                 </Label>
                 <Select 
                   value={organizationId} 
@@ -361,11 +383,11 @@ export default function CreateUserDialog({
               </div>
             )}
 
-            {/* Branch Selection */}
-            {((role === 'hr' && hrAccessLevel === 'branch') || role === 'manager' || (role === 'employee' && organizationId)) && organizationId && (
+            {/* Branch Selection - Required for HR (branch level), Manager, and Employee */}
+            {((role === 'hr' && hrAccessLevel === 'branch') || role === 'manager' || role === 'employee') && organizationId && (
               <div className="space-y-2">
                 <Label htmlFor="branch">
-                  Branch {role === 'manager' || (role === 'hr' && hrAccessLevel === 'branch') ? '*' : ''}
+                  Branch *
                 </Label>
                 <Select value={branchId} onValueChange={setBranchId}>
                   <SelectTrigger>

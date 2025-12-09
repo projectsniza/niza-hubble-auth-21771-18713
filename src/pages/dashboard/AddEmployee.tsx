@@ -367,13 +367,13 @@ export default function AddEmployee() {
         {/* Progress Steps */}
         <div className="space-y-4">
           <Progress value={progress} className="h-2" />
-          <div className="flex justify-between overflow-x-auto pb-2">
+          <div className="grid grid-cols-8 gap-2 overflow-x-auto pb-2">
             {STEPS.map((step, index) => (
-              <div key={step.id} className={`flex flex-col items-center gap-1 min-w-[60px] ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+              <div key={step.id} className={`flex flex-col items-center gap-1 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                   <step.icon className="h-4 w-4" />
                 </div>
-                <span className="text-xs text-center hidden sm:block">{step.name}</span>
+                <span className="text-[10px] text-center leading-tight">{step.name}</span>
               </div>
             ))}
           </div>
