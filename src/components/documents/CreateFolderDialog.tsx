@@ -62,6 +62,7 @@ export default function CreateFolderDialog({ open, onOpenChange, parentFolderId,
           path,
           parent_id: parentFolderId || null,
           folder_type: 'general',
+          color: selectedColor,
         });
 
       if (error) throw error;

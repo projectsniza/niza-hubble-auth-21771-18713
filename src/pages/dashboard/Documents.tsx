@@ -46,6 +46,7 @@ interface FolderItem {
   employee_id: string | null;
   is_system?: boolean;
   is_deletable?: boolean;
+  color?: string;
 }
 
 interface DocumentItem {
@@ -73,6 +74,7 @@ export default function Documents() {
   const [loading, setLoading] = useState(true);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
+  const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
   const [renameFolder, setRenameFolder] = useState<FolderItem | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
@@ -242,7 +244,31 @@ export default function Documents() {
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
 
   const isProtectedFolder = (folder: FolderItem) => {
-    return folder.is_deletable === false || folder.folder_type === 'root' || folder.folder_type === 'organization' || folder.folder_type === 'branch';
+    return folder.is_deletable === false || 
+           folder.folder_type === 'root' || 
+           folder.folder_type === 'organization' || 
+           folder.folder_type === 'branch' || 
+           folder.folder_type === 'employee';
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!deleteFolderId) return;
+
+    try {
+      const { error } = await supabase
+        .from('folders')
+        .delete()
+        .eq('id', deleteFolderId);
+
+      if (error) throw error;
+
+      setFolders(prev => prev.filter(f => f.id !== deleteFolderId));
+      toast.success('Folder deleted');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDeleteFolderId(null);
+    }
   };
 
   if (!hasAccess) {
@@ -382,7 +408,10 @@ export default function Documents() {
                         <div className="flex items-center gap-3">
                           <div onClick={() => handleFolderClick(folder.id)} className="flex items-center gap-3 flex-1 min-w-0">
                             <div className="relative">
-                              <Folder className="h-8 w-8 text-primary" />
+                              <Folder 
+                                className="h-8 w-8" 
+                                style={{ color: folder.color || '#3B82F6' }} 
+                              />
                               {isProtected && (
                                 <Lock className="h-3 w-3 text-muted-foreground absolute -bottom-1 -right-1" />
                               )}
@@ -413,8 +442,7 @@ export default function Documents() {
                                 className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // TODO: Add folder delete confirmation
-                                  toast.info('Folder deletion coming soon');
+                                  setDeleteFolderId(folder.id);
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -539,6 +567,24 @@ export default function Documents() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Folder Confirmation */}
+      <AlertDialog open={!!deleteFolderId} onOpenChange={() => setDeleteFolderId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this folder? All documents and subfolders inside will also be deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteFolder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
