@@ -64,6 +64,66 @@ export type Database = {
           },
         ]
       }
+      bulk_uploads: {
+        Row: {
+          branch_id: string | null
+          created_at: string | null
+          error_log: Json | null
+          failed_records: number | null
+          file_name: string
+          id: string
+          organization_id: string | null
+          processed_records: number | null
+          status: string | null
+          total_records: number | null
+          updated_at: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          failed_records?: number | null
+          file_name: string
+          id?: string
+          organization_id?: string | null
+          processed_records?: number | null
+          status?: string | null
+          total_records?: number | null
+          updated_at?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          failed_records?: number | null
+          file_name?: string
+          id?: string
+          organization_id?: string | null
+          processed_records?: number | null
+          status?: string | null
+          total_records?: number | null
+          updated_at?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_uploads_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_uploads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clock_ins: {
         Row: {
           branch_id: string
@@ -509,6 +569,7 @@ export type Database = {
           account_activated: boolean | null
           address: string | null
           branch_id: string
+          bulk_upload_id: string | null
           created_at: string | null
           created_by: string | null
           date_of_birth: string | null
@@ -534,6 +595,7 @@ export type Database = {
           account_activated?: boolean | null
           address?: string | null
           branch_id: string
+          bulk_upload_id?: string | null
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null
@@ -559,6 +621,7 @@ export type Database = {
           account_activated?: boolean | null
           address?: string | null
           branch_id?: string
+          bulk_upload_id?: string | null
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null

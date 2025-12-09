@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserPlus, Users, Loader2, MoreHorizontal, Eye, Trash2, UserCog } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEmployees } from '@/hooks/useEmployees';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
+import EmployeeStatusBadge, { EMPLOYEE_STATUSES } from './EmployeeStatusBadge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,22 +84,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Active</Badge>;
-      case 'onboarding':
-        return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">Onboarding</Badge>;
-      case 'pending':
-        return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Pending</Badge>;
-      case 'inactive':
-        return <Badge variant="secondary">Inactive</Badge>;
-      case 'terminated':
-        return <Badge variant="destructive">Terminated</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+  // Status badge moved to separate component
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -154,15 +139,15 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           )}
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-44">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="onboarding">Onboarding</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              {EMPLOYEE_STATUSES.map(status => (
+                <SelectItem key={status.value} value={status.value}>
+                  {status.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -228,7 +213,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                       : '-'
                     }
                   </TableCell>
-                  <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                  <TableCell><EmployeeStatusBadge status={employee.status} /></TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
