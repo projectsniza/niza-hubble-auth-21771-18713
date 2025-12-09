@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
-  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2
+  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -316,6 +316,17 @@ export default function Documents() {
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm mb-4">
+          {/* Home icon to return to root folder view */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setCurrentFolderId(null)}
+            title="Go to root"
+          >
+            <Home className="h-4 w-4" />
+          </Button>
+          {breadcrumbs.length > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.id} className="flex items-center gap-2">
               {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
