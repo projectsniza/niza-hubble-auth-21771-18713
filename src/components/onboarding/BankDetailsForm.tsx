@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Download, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface BankDetailsFormProps {
@@ -102,8 +103,101 @@ export default function BankDetailsForm({
   };
 
   const handleDownloadPDF = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    const doc = new jsPDF();
+    let y = 20;
+    const lineHeight = 8;
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EMPLOYEE BANK DETAILS FORM', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Please complete the following information carefully.', pageWidth / 2, y, { align: 'center' });
+    y += 6;
+    doc.setTextColor(200, 100, 0);
+    doc.text('Incorrect information will result in a delay in payment.', pageWidth / 2, y, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    y += 15;
+    
+    // Form Fields
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('YOUR NAME:', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.your_name || '____________________', margin + 50, y);
+    y += lineHeight;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('YOUR TELEPHONE NUMBER:', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.telephone_number || '____________________', margin + 70, y);
+    y += lineHeight * 2;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('NAME OF BANK OR BUILDING SOCIETY:', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.bank_name || '____________________', margin, y);
+    y += lineHeight * 2;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('BANK OR BUILDING SOCIETY ADDRESS:', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    const addressLines = doc.splitTextToSize(formData.bank_address || '____________________', pageWidth - 2 * margin);
+    doc.text(addressLines, margin, y);
+    y += addressLines.length * 6 + lineHeight;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('TELEPHONE NUMBER OF YOUR BRANCH:', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.bank_telephone || '____________________', margin + 85, y);
+    y += lineHeight * 2;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('BANK SORT CODE:', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.sort_code || '__ - __ - __', margin + 50, y);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('BANK ACCOUNT NUMBER:', margin + 100, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.account_number || '________', margin + 165, y);
+    y += lineHeight * 2;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('BUILDING SOCIETY ROLL NUMBER (if applicable):', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.building_society_roll || '____________________', margin, y);
+    y += lineHeight * 2;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('NAME OF ACCOUNT HOLDER:', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.account_holder_name || '____________________', margin, y);
+    y += lineHeight * 2;
+    
+    // Declaration
+    doc.setFont('helvetica', 'bold');
+    doc.text('Declaration', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('I confirm that the bank details provided above are correct and that payments should be made to this account.', margin, y, { maxWidth: pageWidth - 2 * margin });
+    y += 15;
+    
+    doc.setFontSize(11);
+    doc.text(`Signature: ${formData.signature || '____________________'}`, margin, y);
+    doc.text(`Date: ${formData.signature_date || '____________________'}`, margin + 100, y);
+    
+    doc.save(`Bank_Details_${formData.your_name.replace(/\s/g, '_')}.pdf`);
+    toast.success('PDF downloaded successfully');
   };
 
   const formatSortCode = (value: string) => {

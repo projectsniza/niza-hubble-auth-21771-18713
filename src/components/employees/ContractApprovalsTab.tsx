@@ -15,9 +15,9 @@ export default function ContractApprovalsTab() {
   
   const { pendingApprovals, isLoading, approveContract, rejectContract } = usePendingApprovals();
 
-  const handleApprove = async (signature: string) => {
+  const handleApprove = async (signature: string, signatureType: string, signatureDate: string) => {
     if (selectedApproval) {
-      await approveContract(selectedApproval.id, signature);
+      await approveContract(selectedApproval.id, signature, signatureType, signatureDate);
       setSelectedApproval(null);
     }
   };

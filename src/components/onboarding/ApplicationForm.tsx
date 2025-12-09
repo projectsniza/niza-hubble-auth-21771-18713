@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Save, FileText } from 'lucide-react';
+import { Download, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface ApplicationFormProps {
@@ -158,8 +159,110 @@ export default function ApplicationForm({
   };
 
   const handleDownloadPDF = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    const doc = new jsPDF();
+    let y = 20;
+    const lineHeight = 7;
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(selectedOrg?.name || 'Organization', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(14);
+    doc.text('Application Form', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+    
+    // Section 1: Position
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('1. Position', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Closing date: ${formData.closing_date || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Position applied for: ${formData.position || '__________'}`, margin, y);
+    y += 12;
+    
+    // Section 2: Personal Information
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('2. Personal Information', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Title: ${formData.title || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Name: ${formData.name || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Address: ${formData.address || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Postcode: ${formData.postcode || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Phone: ${formData.phone || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Email: ${formData.email || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Eligible to work in UK: ${formData.eligible_to_work_uk ? 'Yes' : 'No'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Available start date: ${formData.start_date || '__________'}`, margin, y);
+    y += 12;
+    
+    // Section 3: Employment
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('3. Current Employment', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Current Employer: ${formData.current_employer || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Job Title: ${formData.current_job_title || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Present Salary: ${formData.present_salary || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Reason for leaving: ${formData.reason_leaving || '__________'}`, margin, y);
+    y += 12;
+
+    // Check if we need a new page
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+    
+    // Section 4: Referees
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Referees', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Referee 1: ${formData.referee1.name || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Contact: ${formData.referee1.email || '__________'} / ${formData.referee1.telephone || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Referee 2: ${formData.referee2.name || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Contact: ${formData.referee2.email || '__________'} / ${formData.referee2.telephone || '__________'}`, margin, y);
+    y += 15;
+    
+    // Signature
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Declaration', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('I confirm that all information provided is accurate.', margin, y);
+    y += 15;
+    doc.text(`Signature: ${formData.signature || '____________________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Date: ${formData.signature_date || '____________________'}`, margin, y);
+    
+    doc.save(`Application_Form_${formData.name.replace(/\s/g, '_')}.pdf`);
+    toast.success('PDF downloaded successfully');
   };
 
   const addEmploymentHistory = () => {
