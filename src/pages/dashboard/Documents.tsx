@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { format, differenceInDays, isPast, addDays } from 'date-fns';
 import CreateFolderDialog from '@/components/documents/CreateFolderDialog';
 import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
+import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +79,8 @@ export default function Documents() {
   const [renameFolder, setRenameFolder] = useState<FolderItem | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentItem | null>(null);
+  const [showDocumentDetails, setShowDocumentDetails] = useState(false);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
 
@@ -509,10 +512,26 @@ export default function Documents() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="ghost" size="icon">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => {
+                                setSelectedDocument(doc);
+                                setShowDocumentDetails(true);
+                              }}
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={async () => {
+                                const { data } = await supabase.storage
+                                  .from('documents')
+                                  .createSignedUrl(doc.file_path, 60);
+                                if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                              }}
+                            >
                               <Download className="h-4 w-4" />
                             </Button>
                             <Button 
@@ -642,6 +661,13 @@ export default function Documents() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Document Details Dialog */}
+      <DocumentDetailsDialog
+        open={showDocumentDetails}
+        onOpenChange={setShowDocumentDetails}
+        document={selectedDocument}
+      />
     </div>
   );
 }

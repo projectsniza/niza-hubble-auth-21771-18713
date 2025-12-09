@@ -15,6 +15,7 @@ import ApplicationForm from '@/components/onboarding/ApplicationForm';
 import StarterChecklist from '@/components/onboarding/StarterChecklist';
 import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
+import DocumentUploadStep from '@/components/onboarding/DocumentUploadStep';
 
 interface FormSettings {
   application: boolean;
@@ -566,53 +567,12 @@ export default function AddEmployee() {
 
           {/* Step: Document Upload */}
           {currentStepId === 'documents' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Document Upload</h2>
-              <p className="text-muted-foreground">Upload additional required documents.</p>
-              
-              {formData.additionalDocuments.map((doc, index) => (
-                <Card key={index} className="p-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Document Title</Label>
-                      <Input 
-                        value={doc.title} 
-                        onChange={(e) => updateDocument(index, { title: e.target.value })}
-                        placeholder="e.g., Passport, ID Card"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Expiry Date</Label>
-                      <Input 
-                        type="date"
-                        value={doc.expiryDate} 
-                        onChange={(e) => updateDocument(index, { expiryDate: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Follow-up Date</Label>
-                      <Input 
-                        type="date"
-                        value={doc.followUpDate} 
-                        onChange={(e) => updateDocument(index, { followUpDate: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>File</Label>
-                      <Input 
-                        type="file"
-                        onChange={(e) => updateDocument(index, { file: e.target.files?.[0] || null })}
-                      />
-                    </div>
-                  </div>
-                </Card>
-              ))}
-              
-              <Button variant="outline" onClick={addDocument} className="gap-2">
-                <File className="h-4 w-4" />
-                Add Another Document
-              </Button>
-            </div>
+            <DocumentUploadStep 
+              employeeId={employeeRecord?.id}
+              additionalDocuments={formData.additionalDocuments}
+              onUpdateDocument={updateDocument}
+              onAddDocument={addDocument}
+            />
           )}
 
           {/* Step: Complete */}

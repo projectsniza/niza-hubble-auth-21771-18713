@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings } from 'lucide-react';
+import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -21,8 +21,13 @@ export default function Performance() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [criteria, setCriteria] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [viewMode, setViewMode] = useState<'all' | 'company' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
   const [showAddReview, setShowAddReview] = useState(false);
   const [showAddCriteria, setShowAddCriteria] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -47,23 +52,39 @@ export default function Performance() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (selectedOrg) {
+      fetchBranches(selectedOrg);
+    } else {
+      setBranches([]);
+      setSelectedBranch('');
+    }
+  }, [selectedOrg]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [employeesRes, reviewsRes, criteriaRes] = await Promise.all([
-        supabase.from('employees').select('*').eq('status', 'active'),
+      const [employeesRes, reviewsRes, criteriaRes, orgsRes] = await Promise.all([
+        supabase.from('employees').select('*, branch:branches(id, name, organization_id), organization:organizations(id, name)').eq('status', 'active'),
         supabase.from('performance_reviews').select('*').order('created_at', { ascending: false }),
-        supabase.from('performance_criteria').select('*').eq('is_active', true)
+        supabase.from('performance_criteria').select('*').eq('is_active', true),
+        supabase.from('organizations').select('*').order('name')
       ]);
 
       setEmployees(employeesRes.data || []);
       setReviews(reviewsRes.data || []);
       setCriteria(criteriaRes.data || []);
+      setOrganizations(orgsRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    setBranches(data || []);
   };
 
   const handleAddReview = async () => {
@@ -121,20 +142,75 @@ export default function Performance() {
     }
   };
 
-  const filteredReviews = reviews.filter(review => {
+  // Filter employees based on view mode
+  const getFilteredEmployees = () => {
+    let filtered = employees;
+    
+    if (viewMode === 'organization' && selectedOrg) {
+      filtered = employees.filter(e => e.organization_id === selectedOrg);
+    } else if (viewMode === 'branch' && selectedBranch) {
+      filtered = employees.filter(e => e.branch_id === selectedBranch);
+    }
+    
+    return filtered;
+  };
+
+  // Get reviews for filtered employees
+  const getFilteredReviews = () => {
+    const filteredEmployeeIds = getFilteredEmployees().map(e => e.id);
+    return reviews.filter(r => filteredEmployeeIds.includes(r.employee_id));
+  };
+
+  // Calculate performance rankings
+  const getPerformanceRankings = () => {
+    const filteredEmployees = getFilteredEmployees();
+    const employeeRatings = filteredEmployees.map(emp => {
+      const empReviews = reviews.filter(r => r.employee_id === emp.id && r.status === 'completed');
+      const avgRating = empReviews.length > 0
+        ? empReviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / empReviews.length
+        : 0;
+      const avgGoals = empReviews.length > 0
+        ? empReviews.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / empReviews.length
+        : 0;
+      
+      return {
+        ...emp,
+        avgRating,
+        avgGoals,
+        reviewCount: empReviews.length,
+        score: avgRating * 20 + avgGoals * 0.3 // Combined score
+      };
+    }).filter(e => e.reviewCount > 0)
+      .sort((a, b) => b.score - a.score);
+
+    return employeeRatings;
+  };
+
+  const filteredReviews = getFilteredReviews().filter(review => {
     if (activeTab === 'pending') return review.status === 'draft';
     if (activeTab === 'completed') return review.status === 'completed';
     return true;
   });
 
-  const averageRating = reviews.length > 0 
-    ? (reviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / reviews.length).toFixed(1)
+  const currentReviews = getFilteredReviews();
+  const averageRating = currentReviews.length > 0 
+    ? (currentReviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / currentReviews.length).toFixed(1)
     : '0.0';
 
-  const completedReviews = reviews.filter(r => r.status === 'completed').length;
-  const avgGoalsProgress = reviews.length > 0
-    ? Math.round(reviews.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / reviews.length)
+  const completedReviews = currentReviews.filter(r => r.status === 'completed').length;
+  const avgGoalsProgress = currentReviews.length > 0
+    ? Math.round(currentReviews.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / currentReviews.length)
     : 0;
+
+  const rankings = getPerformanceRankings();
+  const topPerformers = rankings.slice(0, 5);
+
+  const getRankIcon = (index: number) => {
+    if (index === 0) return <Trophy className="h-5 w-5 text-yellow-500" />;
+    if (index === 1) return <Medal className="h-5 w-5 text-gray-400" />;
+    if (index === 2) return <Award className="h-5 w-5 text-amber-600" />;
+    return <span className="text-muted-foreground font-medium">#{index + 1}</span>;
+  };
 
   return (
     <div className="p-8 space-y-6">
@@ -298,8 +374,66 @@ export default function Performance() {
         </div>
       </div>
 
+      {/* View Mode Filters */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <Label className="font-medium">View By:</Label>
+          <div className="flex gap-2">
+            <Button 
+              variant={viewMode === 'all' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => { setViewMode('all'); setSelectedOrg(''); setSelectedBranch(''); }}
+            >
+              All Company
+            </Button>
+            <Button 
+              variant={viewMode === 'organization' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setViewMode('organization')}
+            >
+              <Building2 className="h-4 w-4 mr-1" />
+              By Organization
+            </Button>
+            <Button 
+              variant={viewMode === 'branch' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setViewMode('branch')}
+            >
+              <MapPin className="h-4 w-4 mr-1" />
+              By Branch
+            </Button>
+          </div>
+
+          {(viewMode === 'organization' || viewMode === 'branch') && (
+            <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSelectedBranch(''); }}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select Organization" />
+              </SelectTrigger>
+              <SelectContent>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {viewMode === 'branch' && selectedOrg && (
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </Card>
+
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -320,7 +454,7 @@ export default function Performance() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Based on {reviews.length} reviews
+              Based on {currentReviews.length} reviews
             </p>
           </CardContent>
         </Card>
@@ -333,8 +467,8 @@ export default function Performance() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{completedReviews} / {reviews.length}</div>
-            <Progress value={reviews.length > 0 ? (completedReviews / reviews.length) * 100 : 0} className="mt-2" />
+            <div className="text-3xl font-bold">{completedReviews} / {currentReviews.length}</div>
+            <Progress value={currentReviews.length > 0 ? (completedReviews / currentReviews.length) * 100 : 0} className="mt-2" />
           </CardContent>
         </Card>
 
@@ -350,7 +484,76 @@ export default function Performance() {
             <Progress value={avgGoalsProgress} className="mt-2" />
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Employees Reviewed
+            </CardTitle>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{rankings.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Out of {getFilteredEmployees().length} total
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Top Performers */}
+      {topPerformers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Top Performers
+              {viewMode !== 'all' && (
+                <Badge variant="secondary" className="ml-2">
+                  {viewMode === 'organization' && selectedOrg 
+                    ? organizations.find(o => o.id === selectedOrg)?.name
+                    : viewMode === 'branch' && selectedBranch
+                    ? branches.find(b => b.id === selectedBranch)?.name
+                    : 'All'
+                  }
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {topPerformers.map((emp, index) => (
+                <div key={emp.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-8 flex justify-center">
+                      {getRankIcon(index)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {emp.organization?.name} • {emp.branch?.name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">{emp.avgRating.toFixed(1)}</span>
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{emp.reviewCount} reviews</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{emp.avgGoals.toFixed(0)}%</p>
+                      <p className="text-xs text-muted-foreground">Goals</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -366,8 +569,8 @@ export default function Performance() {
       {/* Reviews List */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="all">All Reviews ({reviews.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending ({reviews.filter(r => r.status === 'draft').length})</TabsTrigger>
+          <TabsTrigger value="all">All Reviews ({currentReviews.length})</TabsTrigger>
+          <TabsTrigger value="pending">Pending ({currentReviews.filter(r => r.status === 'draft').length})</TabsTrigger>
           <TabsTrigger value="completed">Completed ({completedReviews})</TabsTrigger>
         </TabsList>
 
@@ -398,11 +601,12 @@ export default function Performance() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>Branch</TableHead>
                     <TableHead>Period</TableHead>
                     <TableHead>Rating</TableHead>
                     <TableHead>Goals Progress</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -416,6 +620,8 @@ export default function Performance() {
                             <p className="text-sm text-muted-foreground">{employee?.job_title}</p>
                           </div>
                         </TableCell>
+                        <TableCell>{employee?.organization?.name || '-'}</TableCell>
+                        <TableCell>{employee?.branch?.name || '-'}</TableCell>
                         <TableCell>
                           {review.review_period_start && review.review_period_end 
                             ? `${format(new Date(review.review_period_start), 'MMM yyyy')} - ${format(new Date(review.review_period_end), 'MMM yyyy')}`
@@ -439,12 +645,9 @@ export default function Performance() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={review.status === 'completed' ? 'default' : 'secondary'} className="capitalize">
+                          <Badge variant={review.status === 'completed' ? 'default' : 'secondary'}>
                             {review.status}
                           </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">View</Button>
                         </TableCell>
                       </TableRow>
                     );
