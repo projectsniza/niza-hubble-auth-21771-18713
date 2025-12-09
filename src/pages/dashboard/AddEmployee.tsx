@@ -484,6 +484,7 @@ export default function AddEmployee() {
             <ApplicationForm 
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
+              organizations={organizations}
               onSave={() => {}}
               onNext={handleNext}
             />
@@ -514,8 +515,9 @@ export default function AddEmployee() {
             <ContractTemplate 
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
+              organizations={organizations}
               onSave={() => {}}
-              onNext={handleNext}
+              onSubmit={handleNext}
             />
           )}
 
