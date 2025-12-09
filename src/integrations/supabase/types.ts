@@ -195,10 +195,14 @@ export type Database = {
           admin_signature: string | null
           approved_at: string | null
           approved_by: string | null
+          contract_content: Json | null
           contract_file_name: string | null
           contract_file_path: string | null
           created_at: string | null
           employee_id: string
+          employer_signature: string | null
+          employer_signature_type: string | null
+          employer_signed_date: string | null
           id: string
           rejection_reason: string | null
           signed_contract_path: string | null
@@ -213,10 +217,14 @@ export type Database = {
           admin_signature?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          contract_content?: Json | null
           contract_file_name?: string | null
           contract_file_path?: string | null
           created_at?: string | null
           employee_id: string
+          employer_signature?: string | null
+          employer_signature_type?: string | null
+          employer_signed_date?: string | null
           id?: string
           rejection_reason?: string | null
           signed_contract_path?: string | null
@@ -231,10 +239,14 @@ export type Database = {
           admin_signature?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          contract_content?: Json | null
           contract_file_name?: string | null
           contract_file_path?: string | null
           created_at?: string | null
           employee_id?: string
+          employer_signature?: string | null
+          employer_signature_type?: string | null
+          employer_signed_date?: string | null
           id?: string
           rejection_reason?: string | null
           signed_contract_path?: string | null
@@ -1475,6 +1487,85 @@ export type Database = {
           },
           {
             foreignKeyName: "onboarding_custom_pages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_form_responses: {
+        Row: {
+          created_at: string | null
+          employee_id: string
+          form_data: Json | null
+          form_type: string
+          id: string
+          signature: string | null
+          signed_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          employee_id: string
+          form_data?: Json | null
+          form_type: string
+          id?: string
+          signature?: string | null
+          signed_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          employee_id?: string
+          form_data?: Json | null
+          form_type?: string
+          id?: string
+          signature?: string | null
+          signed_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_form_responses_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_form_settings: {
+        Row: {
+          created_at: string | null
+          enabled: boolean | null
+          form_order: number | null
+          form_type: string
+          id: string
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean | null
+          form_order?: number | null
+          form_type: string
+          id?: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean | null
+          form_order?: number | null
+          form_type?: string
+          id?: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_form_settings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
