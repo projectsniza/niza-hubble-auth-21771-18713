@@ -152,13 +152,7 @@ export default function OnboardingManagement() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm text-muted-foreground">Current Step:</span>
                       </div>
-                      <EmployeeStatusBadge 
-                        status={employee.status || 'pending'}
-                        onboardingStep={currentStep}
-                        contractSubmitted={onboarding?.contract_submitted_for_approval}
-                        contractApproved={onboarding?.contract_approved}
-                        documentsUploaded={onboarding?.documents_uploaded}
-                      />
+                      <EmployeeStatusBadge status={employee.status || 'pending'} />
                     </div>
                     <div className="w-32">
                       <div className="text-xs text-muted-foreground mb-1 text-right">

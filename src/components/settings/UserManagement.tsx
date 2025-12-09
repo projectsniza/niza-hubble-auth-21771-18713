@@ -52,13 +52,13 @@ export default function UserManagement() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [selectedRole, setSelectedRole] = useState('employee');
-  const [hrAccessLevel, setHrAccessLevel] = useState('full');
+  const [selectedRole, setSelectedRole] = useState<'super_admin' | 'hr' | 'manager' | 'employee'>('employee');
+  const [hrAccessLevel, setHrAccessLevel] = useState<'full' | 'organization' | 'branch'>('full');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form states for editing
-  const [editRole, setEditRole] = useState('');
-  const [editHrAccessLevel, setEditHrAccessLevel] = useState('');
+  const [editRole, setEditRole] = useState<'super_admin' | 'hr' | 'manager' | 'employee'>('employee');
+  const [editHrAccessLevel, setEditHrAccessLevel] = useState<'full' | 'organization' | 'branch'>('full');
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editOrgId, setEditOrgId] = useState('');
   const [editBranchId, setEditBranchId] = useState('');
@@ -625,7 +625,7 @@ export default function UserManagement() {
 
             <div className="space-y-2">
               <Label>Assign Role</Label>
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as 'super_admin' | 'hr' | 'manager' | 'employee')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -641,7 +641,7 @@ export default function UserManagement() {
             {selectedRole === 'hr' && (
               <div className="space-y-2">
                 <Label>HR Access Level</Label>
-                <Select value={hrAccessLevel} onValueChange={setHrAccessLevel}>
+                <Select value={hrAccessLevel} onValueChange={(v) => setHrAccessLevel(v as 'full' | 'organization' | 'branch')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -695,7 +695,7 @@ export default function UserManagement() {
 
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={editRole} onValueChange={setEditRole}>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'super_admin' | 'hr' | 'manager' | 'employee')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -711,7 +711,7 @@ export default function UserManagement() {
             {editRole === 'hr' && (
               <div className="space-y-2">
                 <Label>HR Access Level</Label>
-                <Select value={editHrAccessLevel} onValueChange={setEditHrAccessLevel}>
+                <Select value={editHrAccessLevel} onValueChange={(v) => setEditHrAccessLevel(v as 'full' | 'organization' | 'branch')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
