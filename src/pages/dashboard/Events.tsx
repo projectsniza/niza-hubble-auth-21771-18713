@@ -24,6 +24,8 @@ interface Event {
   views_count: number | null;
   attending_count: number | null;
   created_at: string | null;
+  organization_id: string | null;
+  branch_id: string | null;
 }
 
 export default function Events() {
@@ -33,12 +35,16 @@ export default function Events() {
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
     eventType: 'announcement',
     eventDate: '',
     visibility: 'company',
+    organizationId: '',
+    branchId: '',
     isPinned: false
   });
 
@@ -54,7 +60,24 @@ export default function Events() {
 
   useEffect(() => {
     fetchEvents();
+    fetchOrganizations();
   }, []);
+
+  useEffect(() => {
+    if (newEvent.organizationId) {
+      fetchBranches(newEvent.organizationId);
+    }
+  }, [newEvent.organizationId]);
+
+  const fetchOrganizations = async () => {
+    const { data } = await supabase.from('organizations').select('*').order('name');
+    if (data) setOrganizations(data);
+  };
+
+  const fetchBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    if (data) setBranches(data);
+  };
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -80,6 +103,16 @@ export default function Events() {
       return;
     }
 
+    // Validate visibility scope
+    if (newEvent.visibility === 'organization' && !newEvent.organizationId) {
+      toast.error('Please select an organization');
+      return;
+    }
+    if (newEvent.visibility === 'branch' && !newEvent.branchId) {
+      toast.error('Please select a branch');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('events').insert({
         title: newEvent.title,
@@ -87,6 +120,8 @@ export default function Events() {
         event_type: newEvent.eventType,
         event_date: newEvent.eventDate || null,
         visibility: newEvent.visibility,
+        organization_id: newEvent.visibility !== 'company' ? newEvent.organizationId || null : null,
+        branch_id: newEvent.visibility === 'branch' ? newEvent.branchId || null : null,
         is_pinned: newEvent.isPinned,
         created_by: user?.id
       });
@@ -95,7 +130,7 @@ export default function Events() {
 
       toast.success('Event created successfully');
       setShowCreate(false);
-      setNewEvent({ title: '', description: '', eventType: 'announcement', eventDate: '', visibility: 'company', isPinned: false });
+      setNewEvent({ title: '', description: '', eventType: 'announcement', eventDate: '', visibility: 'company', organizationId: '', branchId: '', isPinned: false });
       fetchEvents();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create event');
@@ -190,7 +225,7 @@ export default function Events() {
                   </div>
                   <div className="space-y-2">
                     <Label>Visibility</Label>
-                    <Select value={newEvent.visibility} onValueChange={(v) => setNewEvent({ ...newEvent, visibility: v })}>
+                    <Select value={newEvent.visibility} onValueChange={(v) => setNewEvent({ ...newEvent, visibility: v, organizationId: '', branchId: '' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="company">Entire Company</SelectItem>
@@ -200,6 +235,36 @@ export default function Events() {
                     </Select>
                   </div>
                 </div>
+                
+                {/* Show organization selector for org/branch visibility */}
+                {(newEvent.visibility === 'organization' || newEvent.visibility === 'branch') && (
+                  <div className="space-y-2">
+                    <Label>Organization *</Label>
+                    <Select value={newEvent.organizationId} onValueChange={(v) => setNewEvent({ ...newEvent, organizationId: v, branchId: '' })}>
+                      <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                      <SelectContent>
+                        {organizations.map(org => (
+                          <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Show branch selector for branch visibility */}
+                {newEvent.visibility === 'branch' && newEvent.organizationId && (
+                  <div className="space-y-2">
+                    <Label>Branch *</Label>
+                    <Select value={newEvent.branchId} onValueChange={(v) => setNewEvent({ ...newEvent, branchId: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                      <SelectContent>
+                        {branches.map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Event Date</Label>
                   <Input 
