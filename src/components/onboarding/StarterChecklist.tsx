@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Download, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface StarterChecklistProps {
@@ -112,8 +113,96 @@ export default function StarterChecklist({
   };
 
   const handleDownloadPDF = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    const doc = new jsPDF();
+    let y = 20;
+    const lineHeight = 7;
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('STARTER CHECKLIST', pageWidth / 2, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('HMRC Starter Checklist for New Employees', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+    
+    // Employee's Personal Details
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text("Employee's Personal Details", margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`1. Last Name: ${formData.last_name || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`2. First Name(s): ${formData.first_names || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`3. Gender: ${formData.gender || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`4. Date of Birth: ${formData.date_of_birth || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`5. Home Address: ${formData.address || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`   Postcode: ${formData.postcode || '__________'}  Country: ${formData.country || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`6. National Insurance Number: ${formData.national_insurance || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`7. Employment Start Date: ${formData.employment_start_date || '__________'}`, margin, y);
+    y += 12;
+    
+    // Employee Statement
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Employee Statement', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Selected Statement: ${formData.statement || '__________'}`, margin, y);
+    y += 8;
+    
+    if (formData.statement === 'A') {
+      doc.text('Statement A: This is my first job since last 6 April...', margin, y, { maxWidth: pageWidth - 2 * margin });
+    } else if (formData.statement === 'B') {
+      doc.text('Statement B: This is now my only job but since last 6 April...', margin, y, { maxWidth: pageWidth - 2 * margin });
+    } else if (formData.statement === 'C') {
+      doc.text('Statement C: As well as my new job, I have another job...', margin, y, { maxWidth: pageWidth - 2 * margin });
+    }
+    y += 12;
+    
+    // Student Loan
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Student Loan', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`9. Have Student Loan: ${formData.has_student_loan ? 'Yes' : 'No'}`, margin, y);
+    y += lineHeight;
+    if (formData.has_student_loan) {
+      doc.text(`10. Repaying Direct: ${formData.repaying_direct ? 'Yes' : 'No'}`, margin, y);
+      y += lineHeight;
+      doc.text(`11. Loan Type: ${formData.student_loan_type || '__________'}`, margin, y);
+      y += lineHeight;
+    }
+    doc.text(`12. Finished studies before last 6 April: ${formData.finished_before_april ? 'Yes' : 'No'}`, margin, y);
+    y += 15;
+    
+    // Signature
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Declaration', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Signature: ${formData.signature || '____________________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Date: ${formData.signature_date || '____________________'}`, margin, y);
+    
+    doc.save(`Starter_Checklist_${formData.first_names}_${formData.last_name}.pdf`);
+    toast.success('PDF downloaded successfully');
   };
 
   return (

@@ -195,7 +195,7 @@ export function usePendingApprovals() {
     }
   };
 
-  const approveContract = async (approvalId: string, adminSignature: string) => {
+  const approveContract = async (approvalId: string, signature: string, signatureType: string, signatureDate: string) => {
     try {
       const { data, error } = await supabase
         .from('contract_approvals')
@@ -203,7 +203,10 @@ export function usePendingApprovals() {
           status: 'approved',
           approved_by: user?.id,
           approved_at: new Date().toISOString(),
-          admin_signature: adminSignature
+          admin_signature: signature,
+          employer_signature: signature,
+          employer_signature_type: signatureType,
+          employer_signed_date: signatureDate
         })
         .eq('id', approvalId)
         .select()
@@ -221,6 +224,12 @@ export function usePendingApprovals() {
             current_step: 4
           })
           .eq('employee_id', approval.employee_id);
+
+        // Update employee status
+        await supabase
+          .from('employees')
+          .update({ status: 'awaiting_signature' })
+          .eq('id', approval.employee_id);
       }
       
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));

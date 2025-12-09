@@ -28,7 +28,6 @@ const BASE_STEPS = [
   { id: 'checklist', name: 'Starter Checklist', icon: FileCheck },
   { id: 'bank_details', name: 'Bank Details', icon: Wallet },
   { id: 'contract', name: 'Contract', icon: Briefcase },
-  { id: 'approval', name: 'Submit for Approval', icon: Send },
   { id: 'rtw', name: 'Right to Work', icon: Shield },
   { id: 'documents', name: 'Document Upload', icon: File },
   { id: 'complete', name: 'Complete', icon: Check }
@@ -521,28 +520,7 @@ export default function AddEmployee() {
             />
           )}
 
-          {/* Step: Submit for Approval */}
-          {currentStepId === 'approval' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Submit for Approval</h2>
-              <p className="text-muted-foreground">Review the details and submit for Super Admin approval. The contract will be reviewed and signed by the Super Admin.</p>
-              
-              <Card className="p-6 bg-muted/50">
-                <h3 className="font-medium mb-4">Summary</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">Name:</span> {formData.firstName} {formData.lastName}</div>
-                  <div><span className="text-muted-foreground">Email:</span> {formData.email}</div>
-                  <div><span className="text-muted-foreground">Job Title:</span> {formData.jobTitle}</div>
-                  <div><span className="text-muted-foreground">Department:</span> {formData.department}</div>
-                </div>
-              </Card>
-
-              <Button onClick={handleSubmitForApproval} disabled={loading} className="w-full gap-2">
-                <Send className="h-4 w-4" />
-                {loading ? 'Submitting...' : 'Submit for Approval'}
-              </Button>
-            </div>
-          )}
+          {/* Contract step now includes Submit for Approval - no separate step needed */}
 
           {/* Step: Right to Work */}
           {currentStepId === 'rtw' && (

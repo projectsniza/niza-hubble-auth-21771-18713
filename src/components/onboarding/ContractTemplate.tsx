@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Save, Send, PenTool, Upload, Type } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 import { useAuth } from '@/contexts/AuthContext';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
@@ -278,8 +279,132 @@ export default function ContractTemplate({
   };
 
   const handleDownloadPDF = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    const doc = new jsPDF();
+    let y = 20;
+    const lineHeight = 7;
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CONTRACT OF EMPLOYMENT', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date: ${contractData.contract_date || '__________'}`, pageWidth / 2, y, { align: 'center' });
+    y += 15;
+    
+    // PARTIES
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PARTIES', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    
+    doc.text(`1. ${selectedOrg?.name || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`   Registered Number: ${contractData.registered_number || '__________'}`, margin, y);
+    y += lineHeight;
+    doc.text(`   Registered Office: ${contractData.registered_office || '__________'}`, margin, y, { maxWidth: pageWidth - 2 * margin - 10 });
+    y += 12;
+    
+    doc.text(`2. ${contractData.employee_name || '__________'} (Employee)`, margin, y);
+    y += lineHeight;
+    doc.text(`   Address: ${contractData.employee_address || '__________'}`, margin, y);
+    y += 15;
+    
+    // THE PARTIES AGREE
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('THE PARTIES AGREE:', margin, y);
+    y += 10;
+    
+    // 1. Appointment
+    doc.setFontSize(11);
+    doc.text('1. Appointment', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Commencement Date: ${contractData.commencement_date || '__________'}`, margin, y);
+    y += 10;
+    
+    // 2. Duties
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('2. Duties', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Job Title: ${contractData.job_title || '__________'}`, margin, y);
+    y += 10;
+    
+    // 3. Hours
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('3. Hours of Work', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Normal hours per week: ${contractData.hours_per_week || '__________'}`, margin, y);
+    y += 10;
+    
+    // 4. Salary
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('4. Salary', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Salary Rate: £${contractData.salary_rate || '__________'} per hour`, margin, y);
+    y += 10;
+    
+    // 5. Place of Work
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('5. Place of Work', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`${contractData.place_of_work || '__________'}`, margin, y, { maxWidth: pageWidth - 2 * margin });
+    y += 10;
+    
+    // 6. Holiday
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('6. Holiday', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Holiday entitlement: ${contractData.holiday_days || '28'} days per year`, margin, y);
+    y += 20;
+    
+    // Signatures
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AGREED by the parties', margin, y);
+    y += 15;
+    
+    doc.setFontSize(10);
+    doc.text('Employee Signature:', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text('Signature: ____________________', margin, y);
+    y += lineHeight;
+    doc.text('Date: ____________________', margin, y);
+    y += 15;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signed on behalf of the Employer:', margin, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text('Signature: ____________________', margin, y);
+    y += lineHeight;
+    doc.text('Date: ____________________', margin, y);
+    
+    doc.save(`Contract_${contractData.employee_name.replace(/\s/g, '_')}.pdf`);
+    toast.success('PDF downloaded successfully');
   };
 
   return (
