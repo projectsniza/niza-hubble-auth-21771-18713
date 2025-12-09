@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, FileCheck, Eye, Loader2 } from 'lucide-react';
+import { Download, FileCheck, Loader2, Upload, Shield, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import OnboardingApprovals from '@/components/onboarding/OnboardingApprovals';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
+import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
 
 interface ApprovedContract {
   id: string;
@@ -20,16 +22,20 @@ interface ApprovedContract {
   signed_contract_path: string | null;
   contract_file_path: string | null;
   employee: {
+    id: string;
     first_name: string;
     last_name: string;
+    status: string;
     branch: { name: string } | null;
     organization: { name: string } | null;
   } | null;
 }
 
 function ApprovedContractsTab() {
+  const navigate = useNavigate();
   const [contracts, setContracts] = useState<ApprovedContract[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
 
   useEffect(() => {
     fetchApprovedContracts();
@@ -48,8 +54,10 @@ function ApprovedContractsTab() {
           signed_contract_path,
           contract_file_path,
           employee:employees!contract_approvals_employee_id_fkey(
+            id,
             first_name,
             last_name,
+            status,
             branch:branches(name),
             organization:organizations(name)
           )
@@ -95,11 +103,24 @@ function ApprovedContractsTab() {
     );
   }
 
+  // If an employee is selected for post-approval onboarding
+  if (selectedEmployee) {
+    return (
+      <PostApprovalOnboarding 
+        employeeId={selectedEmployee} 
+        onBack={() => {
+          setSelectedEmployee(null);
+          fetchApprovedContracts();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold mb-1">Approved Contracts</h2>
-        <p className="text-muted-foreground">Download signed contracts for employees</p>
+        <p className="text-muted-foreground">Complete remaining onboarding steps and download contracts</p>
       </div>
 
       {contracts.length === 0 ? (
@@ -122,8 +143,8 @@ function ApprovedContractsTab() {
                 <TableHead>Employee</TableHead>
                 <TableHead>Organization</TableHead>
                 <TableHead>Branch</TableHead>
-                <TableHead>Signed Date</TableHead>
                 <TableHead>Approved At</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -136,16 +157,17 @@ function ApprovedContractsTab() {
                   <TableCell>{contract.employee?.organization?.name || '-'}</TableCell>
                   <TableCell>{contract.employee?.branch?.name || '-'}</TableCell>
                   <TableCell>
-                    {contract.employer_signed_date 
-                      ? format(new Date(contract.employer_signed_date), 'dd MMM yyyy')
-                      : '-'
-                    }
-                  </TableCell>
-                  <TableCell>
                     {contract.approved_at 
                       ? format(new Date(contract.approved_at), 'dd MMM yyyy')
                       : '-'
                     }
+                  </TableCell>
+                  <TableCell>
+                    {contract.employee?.status === 'active' ? (
+                      <Badge className="bg-green-100 text-green-800">Completed</Badge>
+                    ) : (
+                      <Badge variant="secondary">Pending Documents</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
@@ -157,6 +179,15 @@ function ApprovedContractsTab() {
                         <Download className="h-4 w-4 mr-1" />
                         Download
                       </Button>
+                      {contract.employee?.status !== 'active' && (
+                        <Button 
+                          size="sm"
+                          onClick={() => setSelectedEmployee(contract.employee_id)}
+                        >
+                          <Upload className="h-4 w-4 mr-1" />
+                          Continue
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

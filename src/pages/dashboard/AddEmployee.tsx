@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Send, Upload, FileText, Check, User, Briefcase, FileCheck, Shield, File, ClipboardList, Building2, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,7 +15,7 @@ import ApplicationForm from '@/components/onboarding/ApplicationForm';
 import StarterChecklist from '@/components/onboarding/StarterChecklist';
 import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
-import DocumentUploadStep from '@/components/onboarding/DocumentUploadStep';
+
 
 interface FormSettings {
   application: boolean;
@@ -28,10 +28,7 @@ const BASE_STEPS = [
   { id: 'application', name: 'Application Form', icon: ClipboardList },
   { id: 'checklist', name: 'Starter Checklist', icon: FileCheck },
   { id: 'bank_details', name: 'Bank Details', icon: Wallet },
-  { id: 'contract', name: 'Contract', icon: Briefcase },
-  { id: 'rtw', name: 'Right to Work', icon: Shield },
-  { id: 'documents', name: 'Document Upload', icon: File },
-  { id: 'complete', name: 'Complete', icon: Check }
+  { id: 'contract', name: 'Contract', icon: Briefcase }
 ];
 
 interface FormData {
@@ -368,7 +365,7 @@ export default function AddEmployee() {
         {/* Progress Steps */}
         <div className="space-y-4">
           <Progress value={progress} className="h-2" />
-          <div className="grid grid-cols-8 gap-2 overflow-x-auto pb-2">
+          <div className="grid grid-cols-5 gap-2 overflow-x-auto pb-2">
             {STEPS.map((step, index) => (
               <div key={step.id} className={`flex flex-col items-center gap-1 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
@@ -521,80 +518,8 @@ export default function AddEmployee() {
             />
           )}
 
-          {/* Contract step now includes Submit for Approval - no separate step needed */}
-
-          {/* Step: Right to Work */}
-          {currentStepId === 'rtw' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Right to Work Check</h2>
-              <p className="text-muted-foreground">Enter the Right to Work details for this employee.</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Share Code</Label>
-                  <Input value={formData.shareCode} onChange={(e) => updateFormData({ shareCode: e.target.value })} placeholder="Enter share code" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Gov.uk Portal Link</Label>
-                  <Input value={formData.govPortalLink} onChange={(e) => updateFormData({ govPortalLink: e.target.value })} placeholder="https://..." />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Right to Work Document</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                  <input
-                    type="file"
-                    id="rtw-upload"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="hidden"
-                    onChange={(e) => updateFormData({ rightToWorkDocument: e.target.files?.[0] || null })}
-                  />
-                  <label htmlFor="rtw-upload" className="cursor-pointer">
-                    <div className="flex flex-col items-center gap-2">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                      {formData.rightToWorkDocument ? (
-                        <span className="text-primary">{formData.rightToWorkDocument.name}</span>
-                      ) : (
-                        <span className="text-muted-foreground">Click to upload document</span>
-                      )}
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step: Document Upload */}
-          {currentStepId === 'documents' && (
-            <DocumentUploadStep 
-              employeeId={employeeRecord?.id}
-              additionalDocuments={formData.additionalDocuments}
-              onUpdateDocument={updateDocument}
-              onAddDocument={addDocument}
-            />
-          )}
-
-          {/* Step: Complete */}
-          {currentStepId === 'complete' && (
-            <div className="space-y-6 text-center py-8">
-              <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="h-10 w-10 text-green-600" />
-              </div>
-              <h2 className="text-2xl font-semibold">Onboarding Complete!</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                All onboarding steps have been completed for {formData.firstName} {formData.lastName}. 
-                The employee is now ready to be activated in the system.
-              </p>
-              <Button onClick={handleComplete} size="lg" className="gap-2">
-                <Check className="h-5 w-5" />
-                Complete Onboarding
-              </Button>
-            </div>
-          )}
-
           {/* Navigation */}
-          {currentStepId !== 'complete' && (
+          {currentStepId !== 'contract' && (
             <div className="flex justify-between mt-8 pt-6 border-t">
               <Button 
                 variant="outline" 
