@@ -148,12 +148,14 @@ export default function ClockIns() {
       return;
     }
 
+    console.log('Saving coordinates:', { lat, lng });
+    
     try {
       const { error } = await supabase.from('locations').insert({
         name: newLocation.name,
         address: newLocation.address || null,
-        latitude: lat,
-        longitude: lng,
+        latitude: parseFloat(lat.toFixed(8)),
+        longitude: parseFloat(lng.toFixed(8)),
         radius: parseInt(newLocation.radius),
         branch_id: newLocation.branchId,
         qr_enabled: newLocation.qrEnabled,
@@ -182,14 +184,16 @@ export default function ClockIns() {
       return;
     }
 
+    console.log('Updating coordinates:', { lat, lng });
+    
     try {
       const { error } = await supabase
         .from('locations')
         .update({
           name: newLocation.name,
           address: newLocation.address || null,
-          latitude: lat,
-          longitude: lng,
+          latitude: parseFloat(lat.toFixed(8)),
+          longitude: parseFloat(lng.toFixed(8)),
           radius: parseInt(newLocation.radius),
           qr_enabled: newLocation.qrEnabled
         })
