@@ -5,13 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, Calendar, 
-  UserCog, Settings, Briefcase 
+  UserCog, Settings, Briefcase, FileCheck 
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
 import AnnualLeaveBalance from '@/components/employees/AnnualLeaveBalance';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
+import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
 import UserManagement from '@/components/settings/UserManagement';
 import OnboardingSettings from '@/components/employees/OnboardingSettings';
@@ -50,6 +51,7 @@ export default function Employees() {
 
   // Determine which tabs to show based on role
   const showContractApprovals = user?.role === 'super_admin';
+  const showApprovedContracts = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
   const showUserManagement = user?.role === 'super_admin';
   const showOnboardingSettings = user?.role === 'super_admin';
 
@@ -109,6 +111,12 @@ export default function Employees() {
               Contract Approvals
             </TabsTrigger>
           )}
+          {showApprovedContracts && (
+            <TabsTrigger value="approved-contracts" className="gap-2">
+              <FileCheck className="h-4 w-4" />
+              Approved Contracts
+            </TabsTrigger>
+          )}
           <TabsTrigger value="teams" className="gap-2">
             <Users className="h-4 w-4" />
             Teams
@@ -142,6 +150,12 @@ export default function Employees() {
         {showContractApprovals && (
           <TabsContent value="approvals" className="mt-6">
             <ContractApprovalsTab />
+          </TabsContent>
+        )}
+
+        {showApprovedContracts && (
+          <TabsContent value="approved-contracts" className="mt-6">
+            <ApprovedContractsTab />
           </TabsContent>
         )}
 
