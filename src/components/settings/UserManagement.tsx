@@ -213,15 +213,11 @@ export default function UserManagement() {
       // Update role
       await updateUserRole(selectedUser.id, editRole);
       
-      // Super Admin should not be tied to any organization/branch
-      // They have full system access
-      const shouldClearScope = editRole === 'super_admin';
-      
       // Update profile
       await updateUserProfile(selectedUser.id, {
         name: selectedUser.name,
-        organization_id: shouldClearScope ? null : (editOrgId || null),
-        branch_id: shouldClearScope ? null : (editBranchId || null),
+        organization_id: editOrgId || null,
+        branch_id: editBranchId || null,
         hr_access_level: editRole === 'hr' ? editHrAccessLevel : null
       });
 
