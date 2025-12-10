@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileCheck, Loader2, Upload, CheckCircle2, Clock, Eye } from 'lucide-react';
+import { FileCheck, Loader2, Upload, CheckCircle2, Clock, Eye, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -213,6 +213,14 @@ export default function ApprovedContractsTab() {
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       View
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDownloadFile(contract)}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
                     </Button>
                     {contract.employee?.status !== 'active' && (
                       <Button 
