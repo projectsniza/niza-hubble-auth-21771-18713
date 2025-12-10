@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MapPin, Search, Clock, User, QrCode, Plus, Settings, History, Info, Edit } from 'lucide-react';
+import { MapPin, Search, Clock, User, QrCode, Plus, Settings, History, Info, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -222,6 +222,26 @@ export default function ClockIns() {
       qrEnabled: location.qr_enabled ?? true
     });
     setShowEditLocation(true);
+  };
+
+  const handleDeleteLocation = async (locationId: string) => {
+    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', locationId);
+
+      if (error) throw error;
+
+      toast.success('Location deleted successfully');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete location');
+    }
   };
 
   const handleClockIn = async (locationId: string) => {
@@ -557,9 +577,14 @@ export default function ClockIns() {
                       Clock In
                     </Button>
                     {user?.role === 'super_admin' && (
-                      <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDeleteLocation(location.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </Card>
