@@ -1,13 +1,13 @@
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileText, AlertCircle, UserPlus, DollarSign } from 'lucide-react';
+import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileText, AlertCircle, UserPlus, DollarSign, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 interface DocumentFollowUp {
   id: string;
@@ -29,6 +29,23 @@ interface PendingApproval {
   } | null;
 }
 
+interface DailyReport {
+  id: string;
+  title: string;
+  report_type: string | null;
+  submitted_at: string | null;
+  branch?: { name: string } | null;
+}
+
+interface MaintenanceTicket {
+  id: string;
+  title: string;
+  priority: string | null;
+  status: string | null;
+  created_at: string | null;
+  branch?: { name: string } | null;
+}
+
 export default function Overview() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -36,11 +53,15 @@ export default function Overview() {
   const [overdueFollowUps, setOverdueFollowUps] = useState<DocumentFollowUp[]>([]);
   const [upcomingFollowUps, setUpcomingFollowUps] = useState<DocumentFollowUp[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
+  const [maintenanceTickets, setMaintenanceTickets] = useState<MaintenanceTicket[]>([]);
 
   useEffect(() => {
     if (user?.role === 'super_admin') {
       fetchDocumentFollowUps();
       fetchPendingApprovals();
+      fetchDailyReports();
+      fetchMaintenanceTickets();
 
       // Real-time subscription for documents
       const documentsChannel = supabase
@@ -62,9 +83,31 @@ export default function Overview() {
         )
         .subscribe();
 
+      // Real-time subscription for daily reports
+      const reportsChannel = supabase
+        .channel('daily-reports-overview')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_reports' },
+          () => fetchDailyReports()
+        )
+        .subscribe();
+
+      // Real-time subscription for maintenance tickets
+      const maintenanceChannel = supabase
+        .channel('maintenance-overview')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'maintenance_tickets' },
+          () => fetchMaintenanceTickets()
+        )
+        .subscribe();
+
       return () => {
         supabase.removeChannel(documentsChannel);
         supabase.removeChannel(approvalsChannel);
+        supabase.removeChannel(reportsChannel);
+        supabase.removeChannel(maintenanceChannel);
       };
     }
   }, [user?.role]);
@@ -112,6 +155,49 @@ export default function Overview() {
 
     setPendingApprovals(data || []);
   };
+
+  const fetchDailyReports = async () => {
+    const { data } = await supabase
+      .from('daily_reports')
+      .select(`
+        id,
+        title,
+        report_type,
+        submitted_at,
+        branch:branches(name)
+      `)
+      .order('submitted_at', { ascending: false })
+      .limit(10);
+
+    setDailyReports(data || []);
+  };
+
+  const fetchMaintenanceTickets = async () => {
+    const { data } = await supabase
+      .from('maintenance_tickets')
+      .select(`
+        id,
+        title,
+        priority,
+        status,
+        created_at,
+        branch:branches(name)
+      `)
+      .neq('status', 'resolved')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    setMaintenanceTickets(data || []);
+  };
+
+  const highPriorityTickets = maintenanceTickets.filter(t => t.priority === 'high');
+  const mediumPriorityTickets = maintenanceTickets.filter(t => t.priority === 'medium');
+  const reportsByType = dailyReports.reduce((acc, r) => {
+    const type = r.report_type || 'report';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(r);
+    return acc;
+  }, {} as Record<string, DailyReport[]>);
 
   // Employee View
   if (user?.role === 'employee') {
@@ -425,47 +511,53 @@ export default function Overview() {
                   onClick={() => navigate('/dashboard/daily-reports')}
                   className="text-primary hover:text-primary"
                 >
-                  View all (5)
+                  View all ({dailyReports.length})
                 </Button>
               </div>
               <ScrollArea className="h-[300px] pr-4">
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-green-500">New Reports (3)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Branch Sales Report - Niza Forecourt</p>
-                        <p className="text-xs text-muted-foreground">Submitted by Department Manager • Today</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Inventory Update - Southwater</p>
-                        <p className="text-xs text-muted-foreground">Submitted by Department Manager • Today</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Weekly Performance Summary</p>
-                        <p className="text-xs text-muted-foreground">Submitted by Department Manager • Yesterday</p>
+                  {reportsByType['report']?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        <span className="text-green-500">Reports ({reportsByType['report']?.length || 0})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {reportsByType['report']?.map((report) => (
+                          <div key={report.id} className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/15 transition-colors cursor-pointer" onClick={() => navigate('/dashboard/daily-reports')}>
+                            <p className="text-sm font-medium">{report.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {report.branch?.name || 'Unknown Branch'} • {report.submitted_at ? formatDistanceToNow(new Date(report.submitted_at), { addSuffix: true }) : 'N/A'}
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-purple-500" />
-                      <span className="text-purple-500">Invoices (2)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Invoice #INV-2024-1245</p>
-                        <p className="text-xs text-muted-foreground">£2,450.00 • Pending review</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Invoice #INV-2024-1246</p>
-                        <p className="text-xs text-muted-foreground">£1,890.00 • Pending review</p>
+                  )}
+                  {reportsByType['invoice']?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-500" />
+                        <span className="text-purple-500">Invoices ({reportsByType['invoice']?.length || 0})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {reportsByType['invoice']?.map((report) => (
+                          <div key={report.id} className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/15 transition-colors cursor-pointer" onClick={() => navigate('/dashboard/daily-reports')}>
+                            <p className="text-sm font-medium">{report.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {report.branch?.name || 'Unknown Branch'} • {report.submitted_at ? formatDistanceToNow(new Date(report.submitted_at), { addSuffix: true }) : 'N/A'}
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )}
+                  {dailyReports.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No reports submitted</p>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -477,7 +569,7 @@ export default function Overview() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-primary" />
+                    <Wrench className="h-5 w-5 text-primary" />
                     Maintenance Requests
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">Active tickets</p>
@@ -488,43 +580,53 @@ export default function Overview() {
                   onClick={() => navigate('/dashboard/maintenance')}
                   className="text-primary hover:text-primary"
                 >
-                  View all (4)
+                  View all ({maintenanceTickets.length})
                 </Button>
               </div>
               <ScrollArea className="h-[300px] pr-4">
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-red-500" />
-                      <span className="text-red-500">High Priority (2)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">HVAC System Failure - Main Office</p>
-                        <p className="text-xs text-muted-foreground">Reported by Department Manager • 2 hours ago</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Water Leak in Storage Area</p>
-                        <p className="text-xs text-muted-foreground">Reported by Department Manager • 4 hours ago</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                      <span className="text-yellow-500">Medium Priority (2)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Parking Lot Light Replacement</p>
-                        <p className="text-xs text-muted-foreground">Reported by Department Manager • Yesterday</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">Office Door Lock Repair</p>
-                        <p className="text-xs text-muted-foreground">Reported by Department Manager • 2 days ago</p>
+                  {highPriorityTickets.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-red-500">High Priority ({highPriorityTickets.length})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {highPriorityTickets.map((ticket) => (
+                          <div key={ticket.id} className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition-colors cursor-pointer" onClick={() => navigate('/dashboard/maintenance')}>
+                            <p className="text-sm font-medium">{ticket.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ticket.branch?.name || 'Unknown Branch'} • {ticket.created_at ? formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true }) : 'N/A'}
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )}
+                  {mediumPriorityTickets.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                        <span className="text-yellow-500">Medium Priority ({mediumPriorityTickets.length})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {mediumPriorityTickets.map((ticket) => (
+                          <div key={ticket.id} className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500/15 transition-colors cursor-pointer" onClick={() => navigate('/dashboard/maintenance')}>
+                            <p className="text-sm font-medium">{ticket.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ticket.branch?.name || 'Unknown Branch'} • {ticket.created_at ? formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true }) : 'N/A'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {maintenanceTickets.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No active maintenance tickets</p>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>

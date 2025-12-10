@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,50 +7,93 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertCircle, Clock, CheckCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import { Search, Plus, AlertCircle, Clock, CheckCircle, Upload, Image as ImageIcon, X, Building2, MapPin, User, Eye, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+
+interface MaintenanceTicket {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string | null;
+  status: string | null;
+  images: any;
+  reported_by: string;
+  assigned_to: string | null;
+  branch_id: string;
+  organization_id: string;
+  created_at: string | null;
+  resolved_at: string | null;
+  branch?: { name: string } | null;
+  organization?: { name: string } | null;
+  reporter?: { name: string; display_name: string | null } | null;
+}
 
 export default function Maintenance() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateTicket, setShowCreateTicket] = useState(false);
   const [title, setTitle] = useState('');
-  const [explanation, setExplanation] = useState('');
+  const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [images, setImages] = useState<File[]>([]);
+  const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
 
-  const tickets = [
-    {
-      id: 1,
-      title: 'Refrigerator malfunction',
-      description: 'Main refrigerator unit not cooling properly',
-      priority: 'high',
-      status: 'pending',
-      date: '2025-03-01',
-      branch: 'ADDLESTONE',
-    },
-    {
-      id: 2,
-      title: 'Broken door lock',
-      description: 'Front entrance door lock needs replacement',
-      priority: 'medium',
-      status: 'in_progress',
-      date: '2025-02-28',
-      branch: 'BUCKSKIN',
-    },
-    {
-      id: 3,
-      title: 'Parking lot lighting',
-      description: 'Several lights in parking area not working',
-      priority: 'low',
-      status: 'resolved',
-      date: '2025-02-25',
-      branch: 'ADDLESTONE',
-    },
-  ];
+  useEffect(() => {
+    fetchTickets();
 
-  const handleSubmit = () => {
-    if (!title || !explanation || !priority) {
+    // Real-time subscription
+    const channel = supabase
+      .channel('maintenance-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maintenance_tickets' },
+        () => fetchTickets()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const fetchTickets = async () => {
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('maintenance_tickets')
+        .select(`
+          *,
+          branch:branches(name),
+          organization:organizations(name)
+        `)
+        .order('created_at', { ascending: false });
+
+      // If manager/hr, only show their own tickets
+      if (user.role === 'manager' || user.role === 'hr') {
+        query = query.eq('reported_by', user.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setTickets(data || []);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!title || !description || !priority) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields",
@@ -59,21 +102,131 @@ export default function Maintenance() {
       return;
     }
 
-    toast({
-      title: "Ticket Created",
-      description: "Your maintenance request has been submitted to the admin",
-    });
+    if (!user?.organizationId || !user?.branchId) {
+      toast({
+        title: "Error",
+        description: "You must be assigned to a branch to create tickets",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    setTitle('');
-    setExplanation('');
-    setPriority('medium');
-    setImages([]);
-    setShowCreateTicket(false);
+    setSubmitting(true);
+    try {
+      // Upload images if any
+      const uploadedImages: any[] = [];
+      for (const image of images) {
+        const fileName = `${Date.now()}-${image.name}`;
+        const filePath = `maintenance/${user.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, image);
+
+        if (uploadError) throw uploadError;
+
+        uploadedImages.push({
+          name: image.name,
+          path: filePath,
+          size: image.size,
+          type: image.type
+        });
+      }
+
+      const { error } = await supabase.from('maintenance_tickets').insert({
+        title,
+        description,
+        priority,
+        status: 'pending',
+        images: uploadedImages,
+        reported_by: user.id,
+        organization_id: user.organizationId,
+        branch_id: user.branchId
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Created",
+        description: "Your maintenance request has been submitted to the admin",
+      });
+
+      setTitle('');
+      setDescription('');
+      setPriority('medium');
+      setImages([]);
+      setShowCreateTicket(false);
+      fetchTickets();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create ticket",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setImages(prev => [...prev, ...files]);
+  };
+
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateStatus = async (ticketId: string, newStatus: string) => {
+    try {
+      const updateData: any = { status: newStatus };
+      if (newStatus === 'resolved') {
+        updateData.resolved_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('maintenance_tickets')
+        .update(updateData)
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Status Updated",
+        description: `Ticket status changed to ${newStatus}`,
+      });
+      fetchTickets();
+      setViewingTicket(null);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadImage = async (filePath: string, fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(filePath);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download image",
+        variant: "destructive",
+      });
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -98,106 +251,120 @@ export default function Maintenance() {
     switch (status) {
       case 'pending': return 'text-warning';
       case 'in_progress': return 'text-primary';
-      case 'resolved': return 'text-success';
+      case 'resolved': return 'text-green-600';
       default: return 'text-muted-foreground';
     }
   };
+
+  const filteredTickets = tickets.filter(ticket =>
+    ticket.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const canCreateTicket = user?.role === 'manager' || user?.role === 'hr';
+  const canUpdateStatus = user?.role === 'super_admin';
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Maintenance</h1>
-          <p className="text-muted-foreground mt-1">Manage maintenance requests and tickets</p>
+          <p className="text-muted-foreground mt-1">
+            {canCreateTicket ? 'Create and track maintenance requests' : 'View and manage all maintenance tickets'}
+          </p>
         </div>
-        <Dialog open={showCreateTicket} onOpenChange={setShowCreateTicket}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Raise Ticket
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create Maintenance Ticket</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  placeholder="Brief description of the issue"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
+        {canCreateTicket && (
+          <Dialog open={showCreateTicket} onOpenChange={setShowCreateTicket}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Raise Ticket
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create Maintenance Ticket</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Issue Title *</Label>
+                  <Input
+                    id="title"
+                    placeholder="Brief description of the issue"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="priority">Priority *</Label>
-                <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority *</Label>
+                  <Select value={priority} onValueChange={setPriority}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="explanation">Explanation *</Label>
-                <Textarea
-                  id="explanation"
-                  placeholder="Detailed explanation of the maintenance issue..."
-                  value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
-                  rows={4}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Detailed Description *</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Provide detailed explanation of the maintenance issue..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="images">Attach Images</Label>
-                <div className="flex items-center gap-4">
-                  <label htmlFor="images" className="cursor-pointer">
-                    <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
-                      <Upload className="h-4 w-4" />
-                      <span className="text-sm">Upload Images</span>
-                    </div>
-                    <input
-                      id="images"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
+                <div className="space-y-2">
+                  <Label htmlFor="images">Supporting Documents/Images</Label>
+                  <div className="flex items-center gap-4">
+                    <label htmlFor="images" className="cursor-pointer">
+                      <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+                        <Upload className="h-4 w-4" />
+                        <span className="text-sm">Upload Files</span>
+                      </div>
+                      <input
+                        id="images"
+                        type="file"
+                        multiple
+                        accept="image/*,.pdf,.doc,.docx"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {images.length > 0 && (
+                      <span className="text-sm text-muted-foreground">
+                        {images.length} file(s) selected
+                      </span>
+                    )}
+                  </div>
                   {images.length > 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      {images.length} image(s) selected
-                    </span>
+                    <div className="flex gap-2 flex-wrap mt-2">
+                      {images.map((img, idx) => (
+                        <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">
+                          <ImageIcon className="h-3 w-3" />
+                          <span className="max-w-[100px] truncate">{img.name}</span>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => removeImage(idx)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {images.length > 0 && (
-                  <div className="flex gap-2 flex-wrap mt-2">
-                    {images.map((img, idx) => (
-                      <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">
-                        <ImageIcon className="h-3 w-3" />
-                        <span>{img.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              <Button onClick={handleSubmit} className="w-full">
-                Submit Ticket
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                <Button onClick={handleSubmit} className="w-full" disabled={submitting}>
+                  {submitting ? 'Submitting...' : 'Submit Ticket'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Search */}
@@ -212,43 +379,159 @@ export default function Maintenance() {
       </div>
 
       {/* Tickets Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tickets.map((ticket) => (
-          <Card key={ticket.id} className="p-6 hover:shadow-lg transition-shadow">
-            <div className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-lg text-foreground">{ticket.title}</h3>
-                  <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                </div>
-                <Badge className={getPriorityColor(ticket.priority)}>
-                  {ticket.priority}
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className={getStatusColor(ticket.status)}>
-                    {getStatusIcon(ticket.status)}
-                  </span>
-                  <span className="text-muted-foreground capitalize">
-                    {ticket.status.replace('_', ' ')}
-                  </span>
-                </div>
-                <span className="text-muted-foreground">{ticket.branch}</span>
-              </div>
-
-              <div className="text-xs text-muted-foreground">
-                Created: {new Date(ticket.date).toLocaleDateString('en-GB')}
-              </div>
-
-              <Button variant="outline" size="sm" className="w-full">
-                View Details
-              </Button>
+      {loading ? (
+        <div className="flex items-center justify-center h-40">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : filteredTickets.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-primary" />
             </div>
-          </Card>
-        ))}
-      </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No maintenance tickets</h3>
+              <p className="text-muted-foreground mb-4">
+                {canCreateTicket ? 'Create your first maintenance ticket' : 'No tickets have been submitted yet'}
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTickets.map((ticket) => (
+            <Card key={ticket.id} className="p-6 hover:shadow-lg transition-shadow">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1 flex-1">
+                    <h3 className="font-semibold text-lg text-foreground">{ticket.title}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{ticket.description}</p>
+                  </div>
+                  <Badge className={getPriorityColor(ticket.priority || 'medium')}>
+                    {ticket.priority}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className={getStatusColor(ticket.status || 'pending')}>
+                      {getStatusIcon(ticket.status || 'pending')}
+                    </span>
+                    <span className="text-muted-foreground capitalize">
+                      {(ticket.status || 'pending').replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {ticket.reporter?.display_name || ticket.reporter?.name || 'Unknown'}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {ticket.branch?.name || 'N/A'}
+                  </div>
+                  <div>
+                    Created: {ticket.created_at ? format(new Date(ticket.created_at), 'dd/MM/yyyy') : 'N/A'}
+                  </div>
+                </div>
+
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setViewingTicket(ticket)}>
+                  <Eye className="h-4 w-4 mr-1" />
+                  View Details
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* View Ticket Dialog */}
+      <Dialog open={!!viewingTicket} onOpenChange={() => setViewingTicket(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{viewingTicket?.title}</DialogTitle>
+          </DialogHeader>
+          {viewingTicket && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <Label className="text-muted-foreground">Priority</Label>
+                  <Badge className={getPriorityColor(viewingTicket.priority || 'medium')}>
+                    {viewingTicket.priority}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Status</Label>
+                  <div className="flex items-center gap-2">
+                    <span className={getStatusColor(viewingTicket.status || 'pending')}>
+                      {getStatusIcon(viewingTicket.status || 'pending')}
+                    </span>
+                    <span className="capitalize">{(viewingTicket.status || 'pending').replace('_', ' ')}</span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Reported By</Label>
+                  <p>{viewingTicket.reporter?.display_name || viewingTicket.reporter?.name || 'Unknown'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Branch</Label>
+                  <p>{viewingTicket.branch?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Organization</Label>
+                  <p>{viewingTicket.organization?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Created</Label>
+                  <p>{viewingTicket.created_at ? format(new Date(viewingTicket.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-muted-foreground">Description</Label>
+                <p className="mt-1">{viewingTicket.description || 'No description'}</p>
+              </div>
+
+              <div>
+                <Label className="text-muted-foreground">Attached Files</Label>
+                <div className="mt-2 space-y-2">
+                  {Array.isArray(viewingTicket.images) && viewingTicket.images.length > 0 ? (
+                    viewingTicket.images.map((file: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="text-sm">{file.name}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDownloadImage(file.path, file.name)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No files attached</p>
+                  )}
+                </div>
+              </div>
+
+              {canUpdateStatus && viewingTicket.status !== 'resolved' && (
+                <div className="flex gap-2 pt-4 border-t">
+                  <Label className="text-muted-foreground self-center">Update Status:</Label>
+                  {viewingTicket.status === 'pending' && (
+                    <Button size="sm" onClick={() => handleUpdateStatus(viewingTicket.id, 'in_progress')}>
+                      Mark In Progress
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => handleUpdateStatus(viewingTicket.id, 'resolved')}>
+                    Mark Resolved
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -82,11 +82,21 @@ export default function Events() {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('events')
         .select('*')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
+
+      // Filter by scope for HR/Manager
+      if (user?.role === 'hr' || user?.role === 'manager') {
+        // Get events that are company-wide, OR match their organization, OR match their branch
+        query = query.or(
+          `visibility.eq.company,and(visibility.eq.organization,organization_id.eq.${user.organizationId}),and(visibility.eq.branch,branch_id.eq.${user.branchId})`
+        );
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setEvents(data || []);
