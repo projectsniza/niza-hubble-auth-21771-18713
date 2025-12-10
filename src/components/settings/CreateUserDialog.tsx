@@ -102,20 +102,20 @@ export default function CreateUserDialog({
     setIsSubmitting(true);
 
     try {
-      // Use admin API via edge function to create user without logging in
-      // For now, we'll use a workaround: create via signUp but immediately restore session
-      
-      // Store current session
+      // Store current session to restore after user creation
       const { data: currentSession } = await supabase.auth.getSession();
       
-      // Create user via Supabase Auth admin functions
-      // We'll use the service role key via edge function
+      // Create user with all data in metadata - the trigger will use these values
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name,
+            role: role,
+            organization_id: organizationId || '',
+            branch_id: branchId || '',
+            hr_access_level: role === 'hr' ? hrAccessLevel : '',
           },
           emailRedirectTo: `${window.location.origin}/`
         }
@@ -124,32 +124,6 @@ export default function CreateUserDialog({
       if (authError) throw authError;
 
       if (authData.user) {
-        // Update the user's role (the trigger creates profile and assigns super_admin by default)
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .update({ role })
-          .eq('user_id', authData.user.id);
-
-        if (roleError) throw roleError;
-
-        // Update profile with organization/branch assignments
-        const profileUpdates: any = {
-          name,
-          organization_id: organizationId || null,
-          branch_id: branchId || null,
-        };
-
-        if (role === 'hr') {
-          profileUpdates.hr_access_level = hrAccessLevel;
-        }
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update(profileUpdates)
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
-
         // CRITICAL: Restore the original session to prevent switching users
         if (currentSession?.session) {
           await supabase.auth.setSession({
