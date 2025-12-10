@@ -5,10 +5,113 @@ import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileT
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+
+interface DocumentFollowUp {
+  id: string;
+  title: string;
+  file_name: string;
+  follow_up_date: string;
+  employee: { first_name: string; last_name: string } | null;
+}
+
+interface PendingApproval {
+  id: string;
+  employee_id: string;
+  submitted_at: string;
+  employee: {
+    first_name: string;
+    last_name: string;
+    job_title: string | null;
+    join_date: string | null;
+  } | null;
+}
 
 export default function Overview() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  const [overdueFollowUps, setOverdueFollowUps] = useState<DocumentFollowUp[]>([]);
+  const [upcomingFollowUps, setUpcomingFollowUps] = useState<DocumentFollowUp[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'super_admin') {
+      fetchDocumentFollowUps();
+      fetchPendingApprovals();
+
+      // Real-time subscription for documents
+      const documentsChannel = supabase
+        .channel('documents-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents' },
+          () => fetchDocumentFollowUps()
+        )
+        .subscribe();
+
+      // Real-time subscription for contract approvals
+      const approvalsChannel = supabase
+        .channel('approvals-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'contract_approvals' },
+          () => fetchPendingApprovals()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(documentsChannel);
+        supabase.removeChannel(approvalsChannel);
+      };
+    }
+  }, [user?.role]);
+
+  const fetchDocumentFollowUps = async () => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+    // Fetch overdue documents
+    const { data: overdue } = await supabase
+      .from('documents')
+      .select('id, title, file_name, follow_up_date, employee:employees(first_name, last_name)')
+      .not('follow_up_date', 'is', null)
+      .lt('follow_up_date', today.toISOString().split('T')[0])
+      .order('follow_up_date', { ascending: true })
+      .limit(10);
+
+    // Fetch upcoming documents (within 30 days)
+    const { data: upcoming } = await supabase
+      .from('documents')
+      .select('id, title, file_name, follow_up_date, employee:employees(first_name, last_name)')
+      .not('follow_up_date', 'is', null)
+      .gte('follow_up_date', today.toISOString().split('T')[0])
+      .lte('follow_up_date', thirtyDaysFromNow.toISOString().split('T')[0])
+      .order('follow_up_date', { ascending: true })
+      .limit(10);
+
+    setOverdueFollowUps(overdue || []);
+    setUpcomingFollowUps(upcoming || []);
+  };
+
+  const fetchPendingApprovals = async () => {
+    const { data } = await supabase
+      .from('contract_approvals')
+      .select(`
+        id,
+        employee_id,
+        submitted_at,
+        employee:employees(first_name, last_name, job_title, join_date)
+      `)
+      .eq('status', 'pending')
+      .order('submitted_at', { ascending: false })
+      .limit(10);
+
+    setPendingApprovals(data || []);
+  };
 
   // Employee View
   if (user?.role === 'employee') {
@@ -251,43 +354,55 @@ export default function Overview() {
                   onClick={() => navigate('/dashboard/documents/todo')}
                   className="text-primary hover:text-primary"
                 >
-                  View all (4)
+                  View all ({overdueFollowUps.length + upcomingFollowUps.length})
                 </Button>
               </div>
               <ScrollArea className="h-[300px] pr-4">
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-orange-500" />
-                      <span className="text-orange-500">Overdue follow ups (2)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">RAJ BALAJI JAGAJEEVANRAM - (14-10-2025)</p>
-                        <p className="text-xs text-muted-foreground">right_to_work_check.pdf</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">SAIKUMAR MARTHA - (14-10-2025)</p>
-                        <p className="text-xs text-muted-foreground">right_to_work_check.pdf</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span className="text-blue-500">Follow ups due within 30 days (2)</span>
-                    </h4>
-                    <div className="space-y-2 ml-4">
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">RAJESWARAN VELU</p>
-                        <p className="text-xs text-muted-foreground">right_to_work_check.pdf</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-colors cursor-pointer">
-                        <p className="text-sm font-medium">PRANESH MUTHU KUMARASWAMY - (30-11-2025)</p>
-                        <p className="text-xs text-muted-foreground">right_to_work_check.pdf</p>
+                  {overdueFollowUps.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500" />
+                        <span className="text-orange-500">Overdue follow ups ({overdueFollowUps.length})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {overdueFollowUps.map((doc) => (
+                          <div key={doc.id} className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/15 transition-colors cursor-pointer">
+                            <p className="text-sm font-medium">
+                              {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unknown'} 
+                              {doc.follow_up_date && ` - (${format(new Date(doc.follow_up_date), 'dd-MM-yyyy')})`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{doc.file_name}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )}
+                  {upcomingFollowUps.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-blue-500">Follow ups due within 30 days ({upcomingFollowUps.length})</span>
+                      </h4>
+                      <div className="space-y-2 ml-4">
+                        {upcomingFollowUps.map((doc) => (
+                          <div key={doc.id} className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-colors cursor-pointer">
+                            <p className="text-sm font-medium">
+                              {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unknown'}
+                              {doc.follow_up_date && ` - (${format(new Date(doc.follow_up_date), 'dd-MM-yyyy')})`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{doc.file_name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No pending follow-ups</p>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -429,46 +544,52 @@ export default function Overview() {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  onClick={() => navigate('/dashboard/onboarding')}
+                  onClick={() => navigate('/dashboard/employees?tab=contract-approvals')}
                   className="text-primary hover:text-primary"
                 >
-                  View all (2)
+                  View all ({pendingApprovals.length})
                 </Button>
               </div>
               <ScrollArea className="h-[300px] pr-4">
                 <div className="space-y-3">
-                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-medium">Sarah Thompson</p>
-                        <p className="text-xs text-muted-foreground">Sales Associate</p>
+                  {pendingApprovals.length > 0 ? (
+                    pendingApprovals.map((approval) => (
+                      <div key={approval.id} className="p-4 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="text-sm font-medium">
+                              {approval.employee?.first_name} {approval.employee?.last_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {approval.employee?.job_title || 'No title'}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                            Pending
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {approval.employee?.join_date 
+                            ? `Start Date: ${format(new Date(approval.employee.join_date), 'dd MMM yyyy')}`
+                            : 'Start Date: Not set'}
+                        </p>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => navigate('/dashboard/employees?tab=contract-approvals')}
+                          >
+                            Review
+                          </Button>
+                        </div>
                       </div>
-                      <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                        Pending
-                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No pending approvals</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-3">Start Date: 15 Nov 2024</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" className="flex-1">Approve</Button>
-                      <Button size="sm" variant="outline" className="flex-1">Review</Button>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-medium">Michael Chen</p>
-                        <p className="text-xs text-muted-foreground">IT Support Specialist</p>
-                      </div>
-                      <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                        Pending
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">Start Date: 20 Nov 2024</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" className="flex-1">Approve</Button>
-                      <Button size="sm" variant="outline" className="flex-1">Review</Button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
