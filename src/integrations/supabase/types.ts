@@ -1205,6 +1205,56 @@ export type Database = {
           },
         ]
       }
+      leave_settings: {
+        Row: {
+          accrual_days_per_month: number | null
+          accrual_enabled: boolean | null
+          approval_required: boolean | null
+          auto_approve_days: number | null
+          carry_forward_enabled: boolean | null
+          carry_forward_max_days: number | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          accrual_days_per_month?: number | null
+          accrual_enabled?: boolean | null
+          approval_required?: boolean | null
+          auto_approve_days?: number | null
+          carry_forward_enabled?: boolean | null
+          carry_forward_max_days?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          accrual_days_per_month?: number | null
+          accrual_enabled?: boolean | null
+          approval_required?: boolean | null
+          auto_approve_days?: number | null
+          carry_forward_enabled?: boolean | null
+          carry_forward_max_days?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_types: {
         Row: {
           created_at: string | null
@@ -1361,6 +1411,73 @@ export type Database = {
           },
           {
             foreignKeyName: "maintenance_tickets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mandatory_leave: {
+        Row: {
+          branch_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string
+          id: string
+          is_paid: boolean | null
+          leave_type_id: string | null
+          organization_id: string | null
+          start_date: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          is_paid?: boolean | null
+          leave_type_id?: string | null
+          organization_id?: string | null
+          start_date: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          is_paid?: boolean | null
+          leave_type_id?: string | null
+          organization_id?: string | null
+          start_date?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mandatory_leave_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mandatory_leave_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mandatory_leave_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1984,11 +2101,56 @@ export type Database = {
           },
         ]
       }
+      rota_settings: {
+        Row: {
+          accept_decline_enabled: boolean | null
+          created_at: string | null
+          default_view: string | null
+          hide_shift_labels: boolean | null
+          id: string
+          open_shifts_enabled: boolean | null
+          organization_id: string | null
+          restricted_permissions: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          accept_decline_enabled?: boolean | null
+          created_at?: string | null
+          default_view?: string | null
+          hide_shift_labels?: boolean | null
+          id?: string
+          open_shifts_enabled?: boolean | null
+          organization_id?: string | null
+          restricted_permissions?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          accept_decline_enabled?: boolean | null
+          created_at?: string | null
+          default_view?: string | null
+          hide_shift_labels?: boolean | null
+          id?: string
+          open_shifts_enabled?: boolean | null
+          organization_id?: string | null
+          restricted_permissions?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rota_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rota_shifts: {
         Row: {
           break_duration: number | null
           created_at: string | null
           employee_id: string
+          employee_response: string | null
           end_time: string
           id: string
           notes: string | null
@@ -2002,6 +2164,7 @@ export type Database = {
           break_duration?: number | null
           created_at?: string | null
           employee_id: string
+          employee_response?: string | null
           end_time: string
           id?: string
           notes?: string | null
@@ -2015,6 +2178,7 @@ export type Database = {
           break_duration?: number | null
           created_at?: string | null
           employee_id?: string
+          employee_response?: string | null
           end_time?: string
           id?: string
           notes?: string | null
