@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Briefcase
+  User, Briefcase, Wrench, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,8 @@ const getMenuItems = (role: string) => {
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+      { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
@@ -51,6 +53,8 @@ const getMenuItems = (role: string) => {
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+      { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
       { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
@@ -68,6 +72,8 @@ const getMenuItems = (role: string) => {
     { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+    { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+    { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
     { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
     { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
     { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },

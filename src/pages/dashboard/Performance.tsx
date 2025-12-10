@@ -64,8 +64,25 @@ export default function Performance() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      let employeesQuery = supabase
+        .from('employees')
+        .select('*, branch:branches(id, name, organization_id), organization:organizations(id, name)')
+        .eq('status', 'active');
+
+      // Filter employees by scope for HR/Manager
+      if (user?.role === 'hr') {
+        if (user.hrAccessLevel === 'branch') {
+          employeesQuery = employeesQuery.eq('branch_id', user.branchId);
+        } else if (user.hrAccessLevel === 'organization') {
+          employeesQuery = employeesQuery.eq('organization_id', user.organizationId);
+        }
+        // 'full' access level sees all employees
+      } else if (user?.role === 'manager') {
+        employeesQuery = employeesQuery.eq('branch_id', user.branchId);
+      }
+
       const [employeesRes, reviewsRes, criteriaRes, orgsRes] = await Promise.all([
-        supabase.from('employees').select('*, branch:branches(id, name, organization_id), organization:organizations(id, name)').eq('status', 'active'),
+        employeesQuery,
         supabase.from('performance_reviews').select('*').order('created_at', { ascending: false }),
         supabase.from('performance_criteria').select('*').eq('is_active', true),
         supabase.from('organizations').select('*').order('name')

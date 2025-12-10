@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,10 +6,27 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FileText, Calendar, User, Upload, Paperclip } from 'lucide-react';
+import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+
+interface DailyReport {
+  id: string;
+  title: string;
+  report_type: string | null;
+  files: any;
+  submitted_by: string;
+  submitted_at: string | null;
+  created_at: string | null;
+  branch_id: string;
+  organization_id: string;
+  branch?: { name: string } | null;
+  organization?: { name: string } | null;
+  submitter?: { name: string; display_name: string | null } | null;
+}
 
 export default function DailyReports() {
   const { user } = useAuth();
@@ -19,13 +36,68 @@ export default function DailyReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
   const [files, setFiles] = useState<File[]>([]);
+  const [reports, setReports] = useState<DailyReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [viewingReport, setViewingReport] = useState<DailyReport | null>(null);
   
+  useEffect(() => {
+    fetchReports();
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('daily-reports-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_reports' },
+        () => fetchReports()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const fetchReports = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('daily_reports')
+        .select(`
+          *,
+          branch:branches(name),
+          organization:organizations(name)
+        `)
+        .order('submitted_at', { ascending: false });
+
+      // If manager/hr, only show their own reports
+      if (user.role === 'manager' || user.role === 'hr') {
+        query = query.eq('submitted_by', user.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setReports(data || []);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(e.target.files || []);
     setFiles(prev => [...prev, ...uploadedFiles]);
   };
 
-  const handleSubmitReport = () => {
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitReport = async () => {
     if (!reportTitle || files.length === 0) {
       toast({
         title: "Missing Information",
@@ -35,23 +107,99 @@ export default function DailyReports() {
       return;
     }
 
-    toast({
-      title: "Report Submitted",
-      description: `Your ${reportType} has been sent to the admin`,
-    });
+    if (!user?.organizationId || !user?.branchId) {
+      toast({
+        title: "Error",
+        description: "You must be assigned to a branch to submit reports",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    setReportTitle('');
-    setReportType('report');
-    setFiles([]);
-    setShowUploadDialog(false);
+    setSubmitting(true);
+    try {
+      // Upload files to storage
+      const uploadedFiles: any[] = [];
+      for (const file of files) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `daily-reports/${user.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        uploadedFiles.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type
+        });
+      }
+
+      // Insert report record
+      const { error } = await supabase.from('daily_reports').insert({
+        title: reportTitle,
+        report_type: reportType,
+        files: uploadedFiles,
+        submitted_by: user.id,
+        submitted_at: new Date().toISOString(),
+        organization_id: user.organizationId,
+        branch_id: user.branchId
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Report Submitted",
+        description: `Your ${reportType} has been sent to the admin`,
+      });
+
+      setReportTitle('');
+      setReportType('report');
+      setFiles([]);
+      setShowUploadDialog(false);
+      fetchReports();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit report",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const reports = [
-    { id: 1, date: '2024-11-03', author: 'John Smith', department: 'Operations', status: 'completed', summary: 'Daily operations report - all systems running smoothly' },
-    { id: 2, date: '2024-11-02', author: 'Sarah Johnson', department: 'Sales', status: 'completed', summary: 'Sales meeting notes and customer feedback' },
-    { id: 3, date: '2024-11-02', author: 'Mike Wilson', department: 'HR', status: 'pending', summary: 'Employee onboarding progress update' },
-    { id: 4, date: '2024-11-01', author: 'Emma Brown', department: 'Finance', status: 'completed', summary: 'Weekly financial summary and forecasts' },
-  ];
+  const handleDownloadFile = async (filePath: string, fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(filePath);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to download file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const filteredReports = reports.filter(report =>
+    report.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const canCreateReport = user?.role === 'manager' || user?.role === 'hr';
 
   return (
     <div className="p-8 space-y-6">
@@ -59,13 +207,13 @@ export default function DailyReports() {
         <div>
           <h2 className="text-3xl font-bold text-foreground">Daily Reports</h2>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'manager' 
+            {canCreateReport 
               ? 'Upload and submit reports and invoices to admin' 
-              : 'Submit and track daily activity reports'}
+              : 'View all submitted reports and invoices'}
           </p>
         </div>
         
-        {user?.role === 'manager' ? (
+        {canCreateReport && (
           <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -82,7 +230,7 @@ export default function DailyReports() {
                   <Label htmlFor="reportTitle">Title *</Label>
                   <Input 
                     id="reportTitle" 
-                    placeholder="Report/Invoice title..." 
+                    placeholder="Enter custom report name..." 
                     value={reportTitle}
                     onChange={(e) => setReportTitle(e.target.value)}
                   />
@@ -96,11 +244,13 @@ export default function DailyReports() {
                     <SelectContent>
                       <SelectItem value="report">Report</SelectItem>
                       <SelectItem value="invoice">Invoice</SelectItem>
+                      <SelectItem value="receipt">Receipt</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="files">Attach Files *</Label>
+                  <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
                   <div className="flex items-center gap-4">
                     <label htmlFor="files" className="cursor-pointer">
                       <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
@@ -124,53 +274,22 @@ export default function DailyReports() {
                   {files.length > 0 && (
                     <div className="space-y-1 mt-2">
                       {files.map((file, idx) => (
-                        <div key={idx} className="text-sm text-muted-foreground flex items-center gap-2">
-                          <FileText className="h-3 w-3" />
-                          {file.name}
+                        <div key={idx} className="text-sm text-muted-foreground flex items-center gap-2 justify-between bg-muted p-2 rounded">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-3 w-3" />
+                            {file.name}
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => removeFile(idx)}>
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                <Button onClick={handleSubmitReport} className="w-full">
-                  Submit to Admin
+                <Button onClick={handleSubmitReport} className="w-full" disabled={submitting}>
+                  {submitting ? 'Submitting...' : 'Submit to Admin'}
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        ) : (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                New Report
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Daily Report</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Report Date</label>
-                  <Input type="date" defaultValue={new Date().toISOString().split('T')[0]} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Department</label>
-                  <Input placeholder="Enter department" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Summary</label>
-                  <Input placeholder="Brief summary of the report" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Details</label>
-                  <Textarea 
-                    placeholder="Enter detailed report information..." 
-                    rows={6}
-                  />
-                </div>
-                <Button className="w-full">Submit Report</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -189,41 +308,133 @@ export default function DailyReports() {
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {reports.map((report) => (
-          <Card key={report.id} className="p-6 hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-start">
-              <div className="flex gap-4 flex-1">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-white" />
+      {loading ? (
+        <div className="flex items-center justify-center h-40">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : filteredReports.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <FileText className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No reports found</h3>
+              <p className="text-muted-foreground mb-4">
+                {canCreateReport ? 'Upload your first report or invoice' : 'No reports have been submitted yet'}
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {filteredReports.map((report) => (
+            <Card key={report.id} className="p-6 hover:shadow-lg transition-shadow">
+              <div className="flex justify-between items-start">
+                <div className="flex gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <FileText className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-foreground">{report.title}</h3>
+                      <Badge variant="secondary" className="capitalize">
+                        {report.report_type || 'report'}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        {report.submitted_at ? format(new Date(report.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        {report.submitter?.display_name || report.submitter?.name || 'Unknown'}
+                      </div>
+                      {report.organization?.name && (
+                        <div className="flex items-center gap-1">
+                          <Building2 className="h-4 w-4" />
+                          {report.organization.name}
+                        </div>
+                      )}
+                      {report.branch?.name && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-4 w-4" />
+                          {report.branch.name}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <Paperclip className="h-4 w-4" />
+                        {Array.isArray(report.files) ? report.files.length : 0} file(s)
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold text-foreground">{report.summary}</h3>
-                    <Badge variant={report.status === 'completed' ? 'default' : 'secondary'}>
-                      {report.status}
-                    </Badge>
-                  </div>
-                  <div className="flex gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {report.date}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <User className="h-4 w-4" />
-                      {report.author}
-                    </div>
-                    <div>
-                      {report.department}
-                    </div>
-                  </div>
+                <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}>
+                  <Eye className="h-4 w-4 mr-1" />
+                  View Details
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* View Report Dialog */}
+      <Dialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{viewingReport?.title}</DialogTitle>
+          </DialogHeader>
+          {viewingReport && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <Label className="text-muted-foreground">Type</Label>
+                  <p className="capitalize">{viewingReport.report_type || 'Report'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Submitted By</Label>
+                  <p>{viewingReport.submitter?.display_name || viewingReport.submitter?.name || 'Unknown'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Organization</Label>
+                  <p>{viewingReport.organization?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Branch</Label>
+                  <p>{viewingReport.branch?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Submitted At</Label>
+                  <p>{viewingReport.submitted_at ? format(new Date(viewingReport.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm">View Details</Button>
+              
+              <div>
+                <Label className="text-muted-foreground">Attached Files</Label>
+                <div className="mt-2 space-y-2">
+                  {Array.isArray(viewingReport.files) && viewingReport.files.length > 0 ? (
+                    viewingReport.files.map((file: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          <span className="text-sm">{file.name}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(file.path, file.name)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No files attached</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </Card>
-        ))}
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
