@@ -24,6 +24,7 @@ const getMenuItems = (role: string) => {
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
     ];
   }
 
@@ -94,18 +95,25 @@ const getMenuItems = (role: string) => {
 interface DashboardSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
-export default function DashboardSidebar({ collapsed, onToggle }: DashboardSidebarProps) {
+export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: DashboardSidebarProps) {
   const { user, logout } = useAuth();
 
   if (!user) return null;
 
   const menuItems = getMenuItems(user.role);
 
+  const handleNavClick = () => {
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden`}
+      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen`}
       style={{ background: 'var(--gradient-panel)' }}
     >
       {/* Decorative SVG Background */}
@@ -118,12 +126,12 @@ export default function DashboardSidebar({ collapsed, onToggle }: DashboardSideb
           </linearGradient>
         </defs>
       </svg>
-      {/* Toggle Button */}
+      {/* Toggle Button - Hidden on mobile */}
       <Button
         variant="ghost"
         size="icon"
         onClick={onToggle}
-        className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-card border border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground z-20"
+        className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-card border border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex"
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </Button>
@@ -155,6 +163,7 @@ export default function DashboardSidebar({ collapsed, onToggle }: DashboardSideb
             key={item.path}
             to={item.path}
             end={item.path === '/dashboard'}
+            onClick={handleNavClick}
             className={({ isActive }) => `
               flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group
               ${collapsed ? 'justify-center' : ''}

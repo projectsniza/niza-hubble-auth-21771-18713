@@ -3,11 +3,17 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Menu } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!user) {
@@ -19,12 +25,42 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex w-full bg-background">
-      <DashboardSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <DashboardSidebar 
+          collapsed={sidebarCollapsed} 
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+        />
+      )}
+      
+      {/* Mobile Sidebar Sheet */}
+      {isMobile && (
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetContent side="left" className="p-0 w-[280px]">
+            <DashboardSidebar 
+              collapsed={false} 
+              onToggle={() => setMobileMenuOpen(false)} 
+              onNavigate={() => setMobileMenuOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+      )}
       
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b border-primary/20 backdrop-blur-xl flex items-center justify-between px-6 sticky top-0 z-50" 
+        <header className="h-14 border-b border-primary/20 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 sticky top-0 z-50" 
                 style={{ background: 'var(--gradient-panel)' }}>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* Mobile Menu Button */}
+            {isMobile && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setMobileMenuOpen(true)}
+                className="md:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
             <AppsDialog />
           </div>
         </header>
