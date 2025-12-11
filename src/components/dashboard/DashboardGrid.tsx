@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { 
-  Home, Users, UserPlus, FileText, Clock, Calendar, 
-  MapPin, DollarSign, Receipt, TrendingUp, MessageSquare,
-  CalendarDays, Megaphone, GraduationCap, LucideIcon, ArrowRight, Settings
+  Home, Users, FileText, Clock, Calendar, 
+  MapPin, DollarSign, TrendingUp,
+  CalendarDays, GraduationCap, LucideIcon, ArrowRight, Settings, ClipboardList, Wrench
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,13 +19,14 @@ const gridItems: GridItem[] = [
   { title: 'Employee Hub', icon: Users, path: '/dashboard/employees', gradient: 'from-accent to-primary' },
   { title: 'Documents', icon: FileText, path: '/dashboard/documents', gradient: 'from-primary to-accent' },
   { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning', gradient: 'from-accent to-primary' },
-  { title: 'Daily reports', icon: MessageSquare, path: '/dashboard/daily-reports', gradient: 'from-primary to-accent' },
-  { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-accent to-primary' },
-  { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-primary to-accent' },
-  { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins', gradient: 'from-accent to-primary' },
-  { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-primary to-accent' },
-  { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll', gradient: 'from-accent to-primary' },
-  { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance', gradient: 'from-primary to-accent' },
+  { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports', gradient: 'from-primary to-accent' },
+  { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance', gradient: 'from-accent to-primary' },
+  { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-primary to-accent' },
+  { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-accent to-primary' },
+  { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins', gradient: 'from-primary to-accent' },
+  { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-accent to-primary' },
+  { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll', gradient: 'from-primary to-accent' },
+  { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance', gradient: 'from-accent to-primary' },
 ];
 
 export default function DashboardGrid() {
@@ -33,11 +34,11 @@ export default function DashboardGrid() {
   
   // Add Settings card only for super_admin
   const displayItems = user?.role === 'super_admin' 
-    ? [...gridItems, { title: 'Settings', icon: Settings, path: '/dashboard/settings', gradient: 'from-accent to-primary' }]
+    ? [...gridItems, { title: 'Settings', icon: Settings, path: '/dashboard/settings', gradient: 'from-primary to-accent' }]
     : gridItems;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
       {/* Decorative SVG Background */}
       <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
         <path d="M8.44398 0.617329H592.052V469.547C592.052 48.6499 274.052 498.547 366.552 250.047C459.052 1.5472 419.436 102.82 419.436 102.82C419.436 102.82 343.17 209.048 201.552 208.547C124.426 208.274 104.783 140.619 188.052 102.82C319.337 43.2233 149.498 31.3712 120.052 23.0472C56.1705 4.98889 22.6081 1.25634 8.44398 0.617329H0.0516663C0.0516663 0.617329 2.59244 0.353338 8.44398 0.617329Z" fill="url(#paint0_linear)" stroke="hsl(var(--border))"/>
@@ -49,33 +50,33 @@ export default function DashboardGrid() {
         </defs>
       </svg>
 
-      <div className="mb-8 relative z-10">
-        <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Dashboard</h2>
-        <p className="text-muted-foreground">Select a module to get started</p>
+      <div className="mb-6 md:mb-8 relative z-10">
+        <h2 className="text-2xl md:text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Dashboard</h2>
+        <p className="text-sm md:text-base text-muted-foreground">Select a module to get started</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 relative z-10">
         {displayItems.map((item) => (
           <Link key={item.path} to={item.path} className="group">
-            <Card className="relative h-48 overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+            <Card className="relative h-32 md:h-48 overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:hover:-translate-y-2">
               {/* Gradient Overlay */}
               <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
               
               {/* Content */}
-              <div className="relative h-full flex flex-col items-center justify-center p-6 text-center">
+              <div className="relative h-full flex flex-col items-center justify-center p-3 md:p-6 text-center">
                 {/* Icon Container */}
-                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-all duration-300 shadow-lg`}>
-                  <item.icon className="h-8 w-8 text-white" />
+                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-2 md:mb-4 group-hover:scale-110 transition-all duration-300 shadow-lg`}>
+                  <item.icon className="h-6 w-6 md:h-8 md:w-8 text-white" />
                 </div>
                 
                 {/* Title */}
-                <h3 className="font-bold text-lg text-foreground mb-2 group-hover:text-primary transition-colors">
+                <h3 className="font-semibold md:font-bold text-sm md:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2">
                   {item.title}
                 </h3>
                 
-                {/* Arrow Icon */}
-                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ArrowRight className="h-5 w-5 text-primary" />
+                {/* Arrow Icon - Hidden on mobile */}
+                <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
+                  <ArrowRight className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                 </div>
               </div>
               
