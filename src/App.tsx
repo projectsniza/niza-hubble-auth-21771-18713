@@ -30,7 +30,6 @@ import IncidentManagement from "./pages/niza-safe/IncidentManagement";
 import SafeDocuments from "./pages/niza-safe/SafeDocuments";
 import SafeEmployees from "./pages/niza-safe/SafeEmployees";
 import Tasks from "./pages/niza-safe/Tasks";
-import SafeELearning from "./pages/niza-safe/ELearning";
 import NizaFinance from "./pages/NizaFinance";
 import NizaTemplates from "./pages/NizaTemplates";
 import TemplatesHome from "./pages/niza-templates/Home";
@@ -66,7 +65,7 @@ const App = () => (
               <Route path="onboarding/:id" element={<AddEmployee />} />
               <Route path="add-employee" element={<AddEmployee />} />
               <Route path="documents" element={<Documents />} />
-            <Route path="documents/todo" element={<DocumentsTodo />} />
+              <Route path="documents/todo" element={<DocumentsTodo />} />
               <Route path="attendance" element={<Attendance />} />
               <Route path="scheduling" element={<Scheduling />} />
               <Route path="clock-ins" element={<ClockIns />} />
@@ -86,7 +85,6 @@ const App = () => (
               <Route path="documents" element={<SafeDocuments />} />
               <Route path="employees" element={<SafeEmployees />} />
               <Route path="tasks" element={<Tasks />} />
-              <Route path="e-learning" element={<SafeELearning />} />
             </Route>
             <Route path="/niza-finance" element={<NizaFinance />} />
             <Route path="/niza-templates" element={<NizaTemplates />}>

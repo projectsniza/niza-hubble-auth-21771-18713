@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { 
   Home, AlertTriangle, AlertCircle, FileText, Users, 
-  CheckSquare, GraduationCap, ChevronLeft, ChevronRight, LogOut
+  CheckSquare, ChevronLeft, ChevronRight, LogOut
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ const menuItems = [
   { title: 'Documents', icon: FileText, path: '/niza-safe/documents' },
   { title: 'Employees', icon: Users, path: '/niza-safe/employees' },
   { title: 'Tasks', icon: CheckSquare, path: '/niza-safe/tasks' },
-  { title: 'Training', icon: GraduationCap, path: '/niza-safe/e-learning' },
 ];
 
 interface NizaSafeSidebarProps {
