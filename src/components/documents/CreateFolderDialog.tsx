@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -27,7 +28,11 @@ export default function CreateFolderDialog({ open, onOpenChange, parentFolderId,
   const { toast } = useToast();
   const [folderName, setFolderName] = useState('');
   const [selectedColor, setSelectedColor] = useState(FOLDER_COLORS[0].value);
+  const [showInSafety, setShowInSafety] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check if this is a root-level folder (no parent or parent is Company Documents root)
+  const isRootLevel = !parentFolderId;
 
   const handleCreate = async () => {
     if (!folderName.trim()) {
@@ -63,17 +68,20 @@ export default function CreateFolderDialog({ open, onOpenChange, parentFolderId,
           parent_id: parentFolderId || null,
           folder_type: 'general',
           color: selectedColor,
+          // Only allow show_in_safety for root-level folders
+          show_in_safety: isRootLevel ? showInSafety : false,
         });
 
       if (error) throw error;
 
       toast({
         title: "Folder Created",
-        description: `Created folder: ${folderName}`,
+        description: `Created folder: ${folderName}${showInSafety && isRootLevel ? ' (visible in Niza Safe)' : ''}`,
       });
       
       setFolderName('');
       setSelectedColor(FOLDER_COLORS[0].value);
+      setShowInSafety(false);
       onOpenChange(false);
       onSuccess?.();
     } catch (error: any) {
@@ -124,6 +132,23 @@ export default function CreateFolderDialog({ open, onOpenChange, parentFolderId,
               ))}
             </div>
           </div>
+
+          {/* Show in Niza Safe option - only for root-level folders */}
+          {isRootLevel && (
+            <div className="flex items-center space-x-2 pt-2 border-t">
+              <Checkbox
+                id="showInSafety"
+                checked={showInSafety}
+                onCheckedChange={(checked) => setShowInSafety(checked as boolean)}
+              />
+              <Label 
+                htmlFor="showInSafety" 
+                className="text-sm font-normal cursor-pointer"
+              >
+                Show this folder in Niza Safe Documents
+              </Label>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">

@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -19,11 +20,18 @@ import { cn } from '@/lib/utils';
 
 export default function IncidentManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [incidents, setIncidents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('accidents');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Organizations and branches for Super Admin
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<string>('');
+  const [selectedBranch, setSelectedBranch] = useState<string>('');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -37,7 +45,26 @@ export default function IncidentManagement() {
 
   useEffect(() => {
     fetchIncidents();
-  }, []);
+    if (user?.role === 'super_admin') {
+      fetchOrganizations();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (selectedOrg) {
+      fetchBranches(selectedOrg);
+    }
+  }, [selectedOrg]);
+
+  const fetchOrganizations = async () => {
+    const { data } = await supabase.from('organizations').select('*').order('name');
+    setOrganizations(data || []);
+  };
+
+  const fetchBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    setBranches(data || []);
+  };
 
   const fetchIncidents = async () => {
     setIsLoading(true);
@@ -58,20 +85,41 @@ export default function IncidentManagement() {
 
   const handleCreate = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id, branch_id')
-        .eq('id', user?.id)
-        .single();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      let orgId: string | null = null;
+      let branchId: string | null = null;
 
-      if (!profile?.organization_id || !profile?.branch_id) {
-        toast({
-          title: "Error",
-          description: "Organization or branch not configured",
-          variant: "destructive",
-        });
-        return;
+      // For Super Admin, use selected values
+      if (user?.role === 'super_admin') {
+        if (!selectedOrg || !selectedBranch) {
+          toast({
+            title: "Error",
+            description: "Please select organization and branch",
+            variant: "destructive",
+          });
+          return;
+        }
+        orgId = selectedOrg;
+        branchId = selectedBranch;
+      } else {
+        // For other roles, get from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('organization_id, branch_id')
+          .eq('id', authUser?.id)
+          .single();
+
+        if (!profile?.organization_id || !profile?.branch_id) {
+          toast({
+            title: "Error",
+            description: "Organization or branch not configured for your profile",
+            variant: "destructive",
+          });
+          return;
+        }
+        orgId = profile.organization_id;
+        branchId = profile.branch_id;
       }
 
       const { error } = await supabase.from('incidents').insert({
@@ -82,9 +130,9 @@ export default function IncidentManagement() {
         location_details: formData.location_details,
         victim_name: formData.victim_name,
         injury_type: formData.injury_type,
-        organization_id: profile.organization_id,
-        branch_id: profile.branch_id,
-        reported_by: user?.id,
+        organization_id: orgId,
+        branch_id: branchId,
+        reported_by: authUser?.id,
       });
 
       if (error) throw error;
@@ -99,6 +147,21 @@ export default function IncidentManagement() {
         variant: "destructive",
       });
     }
+  };
+
+  const openCreateDialog = () => {
+    setFormData({
+      title: '',
+      description: '',
+      incident_type: activeTab === 'accidents' ? 'accident' : 'near_miss',
+      incident_date: new Date(),
+      location_details: '',
+      victim_name: '',
+      injury_type: '',
+    });
+    setSelectedOrg('');
+    setSelectedBranch('');
+    setShowCreateDialog(true);
   };
 
   const accidents = incidents.filter(i => i.incident_type === 'accident');
@@ -179,13 +242,7 @@ export default function IncidentManagement() {
           />
         </div>
         <Button 
-          onClick={() => {
-            setFormData({
-              ...formData,
-              incident_type: activeTab === 'accidents' ? 'accident' : 'near_miss'
-            });
-            setShowCreateDialog(true);
-          }}
+          onClick={openCreateDialog}
           className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -289,7 +346,35 @@ export default function IncidentManagement() {
           <DialogHeader>
             <DialogTitle>Report {formData.incident_type === 'accident' ? 'Accident' : 'Near Miss'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {/* Organization and Branch selection for Super Admin */}
+            {user?.role === 'super_admin' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Organization</Label>
+                  <Select value={selectedOrg} onValueChange={setSelectedOrg}>
+                    <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!selectedOrg}>
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
             <div className="space-y-2">
               <Label>Incident Type</Label>
               <Select value={formData.incident_type} onValueChange={(v) => setFormData({ ...formData, incident_type: v })}>

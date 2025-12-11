@@ -912,6 +912,7 @@ export type Database = {
           organization_id: string | null
           parent_id: string | null
           path: string
+          show_in_safety: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -929,6 +930,7 @@ export type Database = {
           organization_id?: string | null
           parent_id?: string | null
           path: string
+          show_in_safety?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -946,6 +948,7 @@ export type Database = {
           organization_id?: string | null
           parent_id?: string | null
           path?: string
+          show_in_safety?: boolean | null
           updated_at?: string | null
         }
         Relationships: [

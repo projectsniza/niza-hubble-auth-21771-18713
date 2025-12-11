@@ -12,10 +12,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 
 export default function RiskManagement() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('risk-assessments');
   const [riskAssessments, setRiskAssessments] = useState<any[]>([]);
   const [coshhAssessments, setCoshhAssessments] = useState<any[]>([]);
@@ -25,6 +27,12 @@ export default function RiskManagement() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [dialogType, setDialogType] = useState<'risk' | 'coshh' | 'hazard' | 'method'>('risk');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Organizations and branches for Super Admin
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<string>('');
+  const [selectedBranch, setSelectedBranch] = useState<string>('');
 
   // Form states
   const [formData, setFormData] = useState({
@@ -43,7 +51,26 @@ export default function RiskManagement() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    if (user?.role === 'super_admin') {
+      fetchOrganizations();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (selectedOrg) {
+      fetchBranches(selectedOrg);
+    }
+  }, [selectedOrg]);
+
+  const fetchOrganizations = async () => {
+    const { data } = await supabase.from('organizations').select('*').order('name');
+    setOrganizations(data || []);
+  };
+
+  const fetchBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    setBranches(data || []);
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -81,25 +108,48 @@ export default function RiskManagement() {
       priority: 'medium',
       responsibilities: '',
     });
+    setSelectedOrg('');
+    setSelectedBranch('');
     setShowCreateDialog(true);
   };
 
   const handleCreate = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id, branch_id')
-        .eq('id', user?.id)
-        .single();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      let orgId: string | null = null;
+      let branchId: string | null = null;
 
-      if (!profile?.organization_id || !profile?.branch_id) {
-        toast({
-          title: "Error",
-          description: "Organization or branch not configured",
-          variant: "destructive",
-        });
-        return;
+      // For Super Admin, use selected values
+      if (user?.role === 'super_admin') {
+        if (!selectedOrg || !selectedBranch) {
+          toast({
+            title: "Error",
+            description: "Please select organization and branch",
+            variant: "destructive",
+          });
+          return;
+        }
+        orgId = selectedOrg;
+        branchId = selectedBranch;
+      } else {
+        // For other roles, get from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('organization_id, branch_id')
+          .eq('id', authUser?.id)
+          .single();
+
+        if (!profile?.organization_id || !profile?.branch_id) {
+          toast({
+            title: "Error",
+            description: "Organization or branch not configured for your profile",
+            variant: "destructive",
+          });
+          return;
+        }
+        orgId = profile.organization_id;
+        branchId = profile.branch_id;
       }
 
       let error;
@@ -111,9 +161,9 @@ export default function RiskManagement() {
             hazard_description: formData.hazard_description,
             control_measures: formData.control_measures,
             risk_level: formData.risk_level,
-            organization_id: profile.organization_id,
-            branch_id: profile.branch_id,
-            created_by: user?.id,
+            organization_id: orgId,
+            branch_id: branchId,
+            created_by: authUser?.id,
           }));
           break;
         case 'coshh':
@@ -121,9 +171,9 @@ export default function RiskManagement() {
             chemical_name: formData.chemical_name,
             storage_requirements: formData.storage_requirements,
             exposure_limits: formData.exposure_limits,
-            organization_id: profile.organization_id,
-            branch_id: profile.branch_id,
-            created_by: user?.id,
+            organization_id: orgId,
+            branch_id: branchId,
+            created_by: authUser?.id,
           }));
           break;
         case 'hazard':
@@ -132,18 +182,18 @@ export default function RiskManagement() {
             description: formData.description,
             location_details: formData.location_details,
             priority: formData.priority,
-            organization_id: profile.organization_id,
-            branch_id: profile.branch_id,
-            reported_by: user?.id,
+            organization_id: orgId,
+            branch_id: branchId,
+            reported_by: authUser?.id,
           }));
           break;
         case 'method':
           ({ error } = await supabase.from('method_statements').insert({
             title: formData.title,
             responsibilities: formData.responsibilities,
-            organization_id: profile.organization_id,
-            branch_id: profile.branch_id,
-            created_by: user?.id,
+            organization_id: orgId,
+            branch_id: branchId,
+            created_by: authUser?.id,
           }));
           break;
       }
@@ -419,7 +469,35 @@ export default function RiskManagement() {
               Create {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {/* Organization and Branch selection for Super Admin */}
+            {user?.role === 'super_admin' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Organization</Label>
+                  <Select value={selectedOrg} onValueChange={setSelectedOrg}>
+                    <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!selectedOrg}>
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
             {dialogType === 'coshh' ? (
               <>
                 <div className="space-y-2">
@@ -447,6 +525,63 @@ export default function RiskManagement() {
                   />
                 </div>
               </>
+            ) : dialogType === 'hazard' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Enter hazard title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Describe the hazard"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Location Details</Label>
+                  <Input
+                    value={formData.location_details}
+                    onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
+                    placeholder="Where is the hazard?"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Priority</Label>
+                  <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : dialogType === 'method' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Enter method statement title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Responsibilities</Label>
+                  <Textarea
+                    value={formData.responsibilities}
+                    onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
+                    placeholder="Enter responsibilities"
+                  />
+                </div>
+              </>
             ) : (
               <>
                 <div className="space-y-2">
@@ -454,7 +589,7 @@ export default function RiskManagement() {
                   <Input
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter title"
+                    placeholder="Enter risk assessment title"
                   />
                 </div>
                 <div className="space-y-2">
@@ -465,70 +600,33 @@ export default function RiskManagement() {
                     placeholder="Enter description"
                   />
                 </div>
-                {dialogType === 'risk' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Hazard Description</Label>
-                      <Textarea
-                        value={formData.hazard_description}
-                        onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
-                        placeholder="Describe the hazard"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Control Measures</Label>
-                      <Textarea
-                        value={formData.control_measures}
-                        onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
-                        placeholder="Enter control measures"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Risk Level</Label>
-                      <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-                {dialogType === 'hazard' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Location Details</Label>
-                      <Input
-                        value={formData.location_details}
-                        onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
-                        placeholder="Enter location details"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Priority</Label>
-                      <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-                {dialogType === 'method' && (
-                  <div className="space-y-2">
-                    <Label>Responsibilities</Label>
-                    <Textarea
-                      value={formData.responsibilities}
-                      onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
-                      placeholder="Enter responsibilities"
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>Hazard Description</Label>
+                  <Textarea
+                    value={formData.hazard_description}
+                    onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
+                    placeholder="Describe the hazards"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Control Measures</Label>
+                  <Textarea
+                    value={formData.control_measures}
+                    onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
+                    placeholder="Enter control measures"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Risk Level</Label>
+                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </>
             )}
           </div>
