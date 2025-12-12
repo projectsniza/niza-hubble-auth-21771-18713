@@ -5,15 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
+import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2, X } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function RiskManagement() {
   const { toast } = useToast();
@@ -25,6 +26,10 @@ export default function RiskManagement() {
   const [methodStatements, setMethodStatements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
   const [dialogType, setDialogType] = useState<'risk' | 'coshh' | 'hazard' | 'method'>('risk');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -48,6 +53,8 @@ export default function RiskManagement() {
     priority: 'medium',
     responsibilities: '',
   });
+
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
   useEffect(() => {
     fetchData();
@@ -111,6 +118,111 @@ export default function RiskManagement() {
     setSelectedOrg('');
     setSelectedBranch('');
     setShowCreateDialog(true);
+  };
+
+  const openViewDialog = (item: any, type: 'risk' | 'coshh' | 'hazard' | 'method') => {
+    setDialogType(type);
+    setSelectedItem(item);
+    setShowViewDialog(true);
+  };
+
+  const openEditDialog = (item: any, type: 'risk' | 'coshh' | 'hazard' | 'method') => {
+    setDialogType(type);
+    setSelectedItem(item);
+    setFormData({
+      title: item.title || '',
+      description: item.description || '',
+      hazard_description: item.hazard_description || '',
+      control_measures: item.control_measures || '',
+      risk_level: item.risk_level || 'medium',
+      chemical_name: item.chemical_name || '',
+      storage_requirements: item.storage_requirements || '',
+      exposure_limits: item.exposure_limits || '',
+      location_details: item.location_details || '',
+      priority: item.priority || 'medium',
+      responsibilities: item.responsibilities || '',
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedItem) return;
+    try {
+      let error;
+      switch (dialogType) {
+        case 'risk':
+          ({ error } = await supabase.from('risk_assessments').update({
+            title: formData.title,
+            description: formData.description,
+            hazard_description: formData.hazard_description,
+            control_measures: formData.control_measures,
+            risk_level: formData.risk_level,
+          }).eq('id', selectedItem.id));
+          break;
+        case 'coshh':
+          ({ error } = await supabase.from('coshh_assessments').update({
+            chemical_name: formData.chemical_name,
+            storage_requirements: formData.storage_requirements,
+            exposure_limits: formData.exposure_limits,
+          }).eq('id', selectedItem.id));
+          break;
+        case 'hazard':
+          ({ error } = await supabase.from('hazard_reports').update({
+            title: formData.title,
+            description: formData.description,
+            location_details: formData.location_details,
+            priority: formData.priority,
+          }).eq('id', selectedItem.id));
+          break;
+        case 'method':
+          ({ error } = await supabase.from('method_statements').update({
+            title: formData.title,
+            responsibilities: formData.responsibilities,
+          }).eq('id', selectedItem.id));
+          break;
+      }
+      if (error) throw error;
+      toast({ title: "Success", description: "Updated successfully" });
+      setShowEditDialog(false);
+      setSelectedItem(null);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      const tableName = deleteConfirm.type === 'risk' ? 'risk_assessments' 
+        : deleteConfirm.type === 'coshh' ? 'coshh_assessments'
+        : deleteConfirm.type === 'hazard' ? 'hazard_reports'
+        : 'method_statements';
+      
+      const { error } = await supabase.from(tableName).delete().eq('id', deleteConfirm.id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Deleted successfully" });
+      setDeleteConfirm(null);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const updateStatus = async (id: string, type: string, newStatus: string) => {
+    try {
+      const tableName = type === 'risk' ? 'risk_assessments' 
+        : type === 'coshh' ? 'coshh_assessments'
+        : type === 'hazard' ? 'hazard_reports'
+        : 'method_statements';
+      
+      const { error } = await supabase.from(tableName).update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Status updated" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
   const handleCreate = async () => {
@@ -324,9 +436,10 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>{item.review_date ? format(new Date(item.review_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'risk')}><Eye className="h-4 w-4" /></Button>
+                          {isAdmin && <Button variant="ghost" size="icon" onClick={() => openEditDialog(item, 'risk')}><Edit className="h-4 w-4" /></Button>}
+                          {isAdmin && <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteConfirm({ type: 'risk', id: item.id })}><Trash2 className="h-4 w-4" /></Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -364,9 +477,10 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>{item.sds_expiry_date ? format(new Date(item.sds_expiry_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'coshh')}><Eye className="h-4 w-4" /></Button>
+                          {isAdmin && <Button variant="ghost" size="icon" onClick={() => openEditDialog(item, 'coshh')}><Edit className="h-4 w-4" /></Button>}
+                          {isAdmin && <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteConfirm({ type: 'coshh', id: item.id })}><Trash2 className="h-4 w-4" /></Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -408,9 +522,10 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'hazard')}><Eye className="h-4 w-4" /></Button>
+                          {isAdmin && <Button variant="ghost" size="icon" onClick={() => openEditDialog(item, 'hazard')}><Edit className="h-4 w-4" /></Button>}
+                          {isAdmin && <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteConfirm({ type: 'hazard', id: item.id })}><Trash2 className="h-4 w-4" /></Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -448,9 +563,10 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'method')}><Eye className="h-4 w-4" /></Button>
+                          {isAdmin && <Button variant="ghost" size="icon" onClick={() => openEditDialog(item, 'method')}><Edit className="h-4 w-4" /></Button>}
+                          {isAdmin && <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteConfirm({ type: 'method', id: item.id })}><Trash2 className="h-4 w-4" /></Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -636,6 +752,195 @@ export default function RiskManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
+              <Button variant="ghost" size="icon" onClick={() => setShowViewDialog(false)}><X className="h-4 w-4" /></Button>
+            </DialogTitle>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="space-y-4 py-4">
+              {dialogType === 'risk' && (
+                <>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p>{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Hazard Description</Label><p>{selectedItem.hazard_description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Control Measures</Label><p>{selectedItem.control_measures || '-'}</p></div>
+                  <div className="flex gap-4">
+                    <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={getRiskBadgeColor(selectedItem.risk_level)}>{selectedItem.risk_level}</Badge></div>
+                    <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  </div>
+                  {isAdmin && selectedItem.status !== 'approved' && (
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'risk', 'approved'); setShowViewDialog(false); }}>Approve</Button>
+                    </div>
+                  )}
+                </>
+              )}
+              {dialogType === 'coshh' && (
+                <>
+                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="font-medium">{selectedItem.chemical_name}</p></div>
+                  <div><Label className="text-muted-foreground">Storage Requirements</Label><p>{selectedItem.storage_requirements || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p>{selectedItem.exposure_limits || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  {isAdmin && selectedItem.status !== 'approved' && (
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'coshh', 'approved'); setShowViewDialog(false); }}>Approve</Button>
+                    </div>
+                  )}
+                </>
+              )}
+              {dialogType === 'hazard' && (
+                <>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p>{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Location</Label><p>{selectedItem.location_details || '-'}</p></div>
+                  <div className="flex gap-4">
+                    <div><Label className="text-muted-foreground">Priority</Label><Badge className={getRiskBadgeColor(selectedItem.priority)}>{selectedItem.priority}</Badge></div>
+                    <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  </div>
+                  {isAdmin && selectedItem.status !== 'resolved' && (
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button size="sm" variant="outline" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'investigating'); setShowViewDialog(false); }}>Investigating</Button>
+                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'resolved'); setShowViewDialog(false); }}>Resolve</Button>
+                    </div>
+                  )}
+                </>
+              )}
+              {dialogType === 'method' && (
+                <>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Responsibilities</Label><p>{selectedItem.responsibilities || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  {isAdmin && selectedItem.status !== 'approved' && (
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'method', 'approved'); setShowViewDialog(false); }}>Approve</Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {dialogType === 'coshh' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Chemical Name</Label>
+                  <Input value={formData.chemical_name} onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Storage Requirements</Label>
+                  <Textarea value={formData.storage_requirements} onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Exposure Limits</Label>
+                  <Input value={formData.exposure_limits} onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })} />
+                </div>
+              </>
+            ) : dialogType === 'hazard' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input value={formData.location_details} onChange={(e) => setFormData({ ...formData, location_details: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Priority</Label>
+                  <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : dialogType === 'method' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Responsibilities</Label>
+                  <Textarea value={formData.responsibilities} onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hazard Description</Label>
+                  <Textarea value={formData.hazard_description} onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Control Measures</Label>
+                  <Textarea value={formData.control_measures} onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Risk Level</Label>
+                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button onClick={handleUpdate}>Save Changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this item? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
