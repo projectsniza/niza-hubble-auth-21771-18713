@@ -102,8 +102,8 @@ export default function SafeDocuments() {
 
     if (rootFolder) {
       setSafetyRootId(rootFolder.id);
-      // Start at null to show the root folder initially
-      setCurrentFolderId(null);
+      // Start inside the Safety Documents folder
+      setCurrentFolderId(rootFolder.id);
     } else {
       // Create it if it doesn't exist
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -123,6 +123,7 @@ export default function SafeDocuments() {
 
       if (newRoot) {
         setSafetyRootId(newRoot.id);
+        setCurrentFolderId(newRoot.id);
       }
     }
   };
@@ -130,28 +131,21 @@ export default function SafeDocuments() {
   const fetchFoldersAndDocuments = async () => {
     setIsLoading(true);
     try {
-      if (currentFolderId === null) {
-        // Show the Safety Documents root folder + folders marked as show_in_safety
-        const { data: safetyFolders } = await supabase
-          .from('folders')
-          .select('*')
-          .or(`id.eq.${safetyRootId},and(show_in_safety.eq.true,parent_id.is.null)`)
-          .order('name');
+      // Fetch subfolders of current folder (or folders with show_in_safety at root level)
+      let foldersQuery = supabase.from('folders').select('*').order('name');
+      
+      if (currentFolderId === safetyRootId) {
+        // At Safety Documents root - show children and folders marked as show_in_safety
+        foldersQuery = foldersQuery.or(`parent_id.eq.${safetyRootId},and(show_in_safety.eq.true,parent_id.is.null,id.neq.${safetyRootId})`);
+      } else if (currentFolderId) {
+        foldersQuery = foldersQuery.eq('parent_id', currentFolderId);
+      }
+      
+      const { data: foldersData } = await foldersQuery;
+      setFolders(foldersData || []);
 
-        setFolders(safetyFolders || []);
-        setDocuments([]);
-        setBreadcrumbs([]);
-      } else {
-        // Fetch subfolders of current folder
-        const { data: foldersData } = await supabase
-          .from('folders')
-          .select('*')
-          .eq('parent_id', currentFolderId)
-          .order('name');
-        
-        setFolders(foldersData || []);
-
-        // Fetch documents in current folder
+      // Fetch documents in current folder
+      if (currentFolderId) {
         const { data: docsData } = await supabase
           .from('documents')
           .select('*')
@@ -159,9 +153,15 @@ export default function SafeDocuments() {
           .order('created_at', { ascending: false });
         
         setDocuments(docsData || []);
+      } else {
+        setDocuments([]);
+      }
 
-        // Build breadcrumbs
+      // Build breadcrumbs
+      if (currentFolderId) {
         await buildBreadcrumbs(currentFolderId);
+      } else {
+        setBreadcrumbs([]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -362,7 +362,6 @@ export default function SafeDocuments() {
             <Button 
               onClick={() => setShowUploadDialog(true)}
               className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white shadow-lg"
-              disabled={currentFolderId === null}
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload
@@ -384,7 +383,7 @@ export default function SafeDocuments() {
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={() => setCurrentFolderId(null)}
+          onClick={() => setCurrentFolderId(safetyRootId)}
           title="Go to root"
         >
           <Home className="h-4 w-4" />
