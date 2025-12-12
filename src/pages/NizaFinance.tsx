@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, FileText, Download, Eye, Grid3x3 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Trash2, FileText, Download, Eye, Grid3x3, Loader2 } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,10 +9,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PLCalculatorDialog from '@/components/finance/PLCalculatorDialog';
 import ComparisonView from '@/components/finance/ComparisonView';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 interface FinancialData {
+  id?: string;
   name: string;
   quarter: string;
   storeName: string;
@@ -77,99 +79,129 @@ interface FinancialData {
   };
 }
 
-const initialData: FinancialData = {
-  name: '',
-  quarter: 'Q1 2024',
-  storeName: 'Addlestone',
-  revenue: {
-    alcohol: 0,
-    domesticItems: 0,
-    drinks: 0,
-    grocery: 0,
-    groceryZero: 0,
-    newspapers: 0,
-    tobacco: 0,
-  },
-  costOfSales: {
-    inventoryChange: 0,
-    inventoryTransfer: 0,
-    purchases0: 0,
-    purchases20: 0,
-    purchases5: 0,
-  },
-  adminCosts: {
-    auditFees: 0,
-    bankFees: 0,
-    cleaning: 0,
-    clockRite: 0,
-    compliance: 0,
-    creditCardAmex: 0,
-    creditCardCommission: 0,
-    employersNI: 0,
-    insuranceBuilding: 0,
-    insuranceShop: 0,
-    interestPaid: 0,
-    itSoftware: 0,
-    licence: 0,
-    lightPower: 0,
-    otherExpenses: 0,
-    payPoint: 0,
-    pensions: 0,
-    pestControl: 0,
-    professionalHR: 0,
-    professionalStockTaking: 0,
-    rates: 0,
-    rent: 0,
-    repairs: 0,
-    salaries: 0,
-    sanitary: 0,
-    security: 0,
-    shopMaintain: 0,
-    staffTraining: 0,
-    staffWelfare: 0,
-    sundry: 0,
-    telephone: 0,
-    travel: 0,
-    wasteDisposal: 0,
-    water: 0,
-    writeOff: 0,
-  },
-  otherIncome: {
-    lotteryCommission: 0,
-    parcelCommission: 0,
-    payPointCommission: 0,
-    atmRental: 0,
-  },
-};
-
 export default function NizaFinance() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [savedReports, setSavedReports] = useState<FinancialData[]>([]);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
-  const [selectedReports, setSelectedReports] = useState<number[]>([]);
+  const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('reports');
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = (data: FinancialData) => {
-    setSavedReports([...savedReports, data]);
-    toast({
-      title: "Report Saved",
-      description: `${data.name} has been saved successfully.`,
-    });
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('financial_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const reports: FinancialData[] = (data || []).map((report: any) => ({
+        id: report.id,
+        name: report.name,
+        quarter: report.quarter,
+        storeName: report.store_name,
+        revenue: report.revenue as FinancialData['revenue'],
+        costOfSales: report.cost_of_sales as FinancialData['costOfSales'],
+        adminCosts: report.admin_costs as FinancialData['adminCosts'],
+        otherIncome: report.other_income as FinancialData['otherIncome'],
+      }));
+
+      setSavedReports(reports);
+    } catch (error: any) {
+      console.error('Error fetching reports:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load reports.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (index: number) => {
-    setSavedReports(savedReports.filter((_, i) => i !== index));
-    setSelectedReports(selectedReports.filter(i => i !== index));
-    toast({
-      title: "Report Deleted",
-      description: "The report has been removed.",
-    });
+  const handleSave = async (data: FinancialData) => {
+    try {
+      const { data: insertedData, error } = await supabase
+        .from('financial_reports')
+        .insert({
+          name: data.name,
+          quarter: data.quarter,
+          store_name: data.storeName,
+          revenue: data.revenue,
+          cost_of_sales: data.costOfSales,
+          admin_costs: data.adminCosts,
+          other_income: data.otherIncome,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newReport: FinancialData = {
+        id: insertedData.id,
+        name: insertedData.name,
+        quarter: insertedData.quarter,
+        storeName: insertedData.store_name,
+        revenue: insertedData.revenue as FinancialData['revenue'],
+        costOfSales: insertedData.cost_of_sales as FinancialData['costOfSales'],
+        adminCosts: insertedData.admin_costs as FinancialData['adminCosts'],
+        otherIncome: insertedData.other_income as FinancialData['otherIncome'],
+      };
+
+      setSavedReports([newReport, ...savedReports]);
+      toast({
+        title: "Report Saved",
+        description: `${data.name} has been saved successfully.`,
+      });
+    } catch (error: any) {
+      console.error('Error saving report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save report.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const toggleReportSelection = (index: number) => {
+  const handleDelete = async (report: FinancialData) => {
+    if (!report.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('financial_reports')
+        .delete()
+        .eq('id', report.id);
+
+      if (error) throw error;
+
+      setSavedReports(savedReports.filter(r => r.id !== report.id));
+      setSelectedReports(selectedReports.filter(id => id !== report.id));
+      toast({
+        title: "Report Deleted",
+        description: "The report has been removed.",
+      });
+    } catch (error: any) {
+      console.error('Error deleting report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete report.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleReportSelection = (reportId: string) => {
     setSelectedReports(prev =>
-      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+      prev.includes(reportId) ? prev.filter(id => id !== reportId) : [...prev, reportId]
     );
   };
 
@@ -177,7 +209,6 @@ export default function NizaFinance() {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     
-    // Header
     pdf.setFontSize(20);
     pdf.setTextColor(34, 197, 94);
     pdf.text('Profit & Loss Report', pageWidth / 2, 20, { align: 'center' });
@@ -189,7 +220,6 @@ export default function NizaFinance() {
     
     let yPos = 50;
     
-    // Calculate totals
     const totalTurnover = Object.values(report.revenue).reduce((a, b) => a + b, 0);
     const totalCostOfSales = Object.values(report.costOfSales).reduce((a, b) => a + b, 0);
     const grossProfit = totalTurnover - totalCostOfSales;
@@ -198,11 +228,6 @@ export default function NizaFinance() {
     const totalOtherIncome = Object.values(report.otherIncome).reduce((a, b) => a + b, 0);
     const profitBeforeTax = operatingProfit + totalOtherIncome;
     
-    const formatCurrency = (value: number) => {
-      return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(value);
-    };
-    
-    // Summary
     pdf.setFontSize(14);
     pdf.setTextColor(34, 197, 94);
     pdf.text('Financial Summary', 15, yPos);
@@ -242,7 +267,7 @@ export default function NizaFinance() {
     }).format(value);
   };
 
-  const selectedReportData = selectedReports.map(idx => savedReports[idx]);
+  const selectedReportData = savedReports.filter(r => r.id && selectedReports.includes(r.id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -292,21 +317,25 @@ export default function NizaFinance() {
                   </Button>
                 )}
               </div>
-              {savedReports.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : savedReports.length === 0 ? (
                 <div className="text-center py-8">
                   <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No reports yet</p>
                 </div>
               ) : (
-                savedReports.map((report, index) => (
+                savedReports.map((report) => (
                   <Card
-                    key={index}
+                    key={report.id}
                     className="p-3 hover:bg-accent/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start gap-2">
                       <Checkbox
-                        checked={selectedReports.includes(index)}
-                        onCheckedChange={() => toggleReportSelection(index)}
+                        checked={report.id ? selectedReports.includes(report.id) : false}
+                        onCheckedChange={() => report.id && toggleReportSelection(report.id)}
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
@@ -327,7 +356,7 @@ export default function NizaFinance() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(index)}
+                          onClick={() => handleDelete(report)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -353,7 +382,11 @@ export default function NizaFinance() {
             </div>
 
             <TabsContent value="reports" className="p-6 m-0">
-              {savedReports.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : savedReports.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <FileText className="h-8 w-8 text-primary" />
@@ -369,7 +402,7 @@ export default function NizaFinance() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {savedReports.map((report, index) => {
+                  {savedReports.map((report) => {
                     const totalTurnover = Object.values(report.revenue).reduce((a, b) => a + b, 0);
                     const totalCostOfSales = Object.values(report.costOfSales).reduce((a, b) => a + b, 0);
                     const grossProfit = totalTurnover - totalCostOfSales;
@@ -379,7 +412,7 @@ export default function NizaFinance() {
                     const profitBeforeTax = operatingProfit + totalOtherIncome;
 
                     return (
-                      <Card key={index} className="p-4 hover:shadow-lg transition-shadow">
+                      <Card key={report.id} className="p-4 hover:shadow-lg transition-shadow">
                         <div className="space-y-3">
                           <div>
                             <h3 className="font-bold text-lg">{report.name}</h3>
@@ -415,7 +448,7 @@ export default function NizaFinance() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDelete(index)}
+                              onClick={() => handleDelete(report)}
                               className="text-destructive hover:text-destructive"
                             >
                               <Trash2 className="h-3 w-3" />

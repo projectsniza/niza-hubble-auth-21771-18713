@@ -896,6 +896,69 @@ export type Database = {
           },
         ]
       }
+      financial_reports: {
+        Row: {
+          admin_costs: Json
+          branch_id: string | null
+          cost_of_sales: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string | null
+          other_income: Json
+          quarter: string
+          revenue: Json
+          store_name: string
+          updated_at: string
+        }
+        Insert: {
+          admin_costs?: Json
+          branch_id?: string | null
+          cost_of_sales?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id?: string | null
+          other_income?: Json
+          quarter: string
+          revenue?: Json
+          store_name: string
+          updated_at?: string
+        }
+        Update: {
+          admin_costs?: Json
+          branch_id?: string | null
+          cost_of_sales?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string | null
+          other_income?: Json
+          quarter?: string
+          revenue?: Json
+          store_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_reports_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folders: {
         Row: {
           access_level: string | null
