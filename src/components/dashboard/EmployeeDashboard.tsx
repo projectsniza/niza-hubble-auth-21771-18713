@@ -82,6 +82,40 @@ export default function EmployeeDashboard() {
             .single();
           if (manager) setManagerName(manager.name);
         }
+      } else {
+        // Fallback: fetch from profile if no employee record linked
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select(`
+            name,
+            organization_id,
+            branch_id
+          `)
+          .eq('id', user?.id)
+          .maybeSingle();
+
+        if (profile) {
+          // Fetch org and branch names separately
+          const [orgRes, branchRes] = await Promise.all([
+            profile.organization_id 
+              ? supabase.from('organizations').select('name').eq('id', profile.organization_id).single()
+              : Promise.resolve({ data: null }),
+            profile.branch_id 
+              ? supabase.from('branches').select('name').eq('id', profile.branch_id).single()
+              : Promise.resolve({ data: null })
+          ]);
+
+          setEmployeeData({
+            first_name: profile.name?.split(' ')[0] || '',
+            last_name: profile.name?.split(' ').slice(1).join(' ') || '',
+            job_title: '',
+            department: '',
+            manager_id: null,
+            branch: branchRes.data ? { name: branchRes.data.name } : null,
+            organization: orgRes.data ? { name: orgRes.data.name } : null,
+            team: null
+          });
+        }
       }
 
       // Fetch today's clock-in
