@@ -84,7 +84,7 @@ export default function EmployeeDashboard() {
         }
       } else {
         // Fallback: fetch from profile if no employee record linked
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select(`
             name,
@@ -94,16 +94,32 @@ export default function EmployeeDashboard() {
           .eq('id', user?.id)
           .maybeSingle();
 
+        console.log('Profile fallback data:', profile, profileError);
+
         if (profile) {
-          // Fetch org and branch names separately
-          const [orgRes, branchRes] = await Promise.all([
-            profile.organization_id 
-              ? supabase.from('organizations').select('name').eq('id', profile.organization_id).single()
-              : Promise.resolve({ data: null }),
-            profile.branch_id 
-              ? supabase.from('branches').select('name').eq('id', profile.branch_id).single()
-              : Promise.resolve({ data: null })
-          ]);
+          // Fetch org and branch names separately - use service role or adjust RLS
+          let orgName = null;
+          let branchName = null;
+
+          if (profile.organization_id) {
+            const { data: orgData, error: orgError } = await supabase
+              .from('organizations')
+              .select('name')
+              .eq('id', profile.organization_id)
+              .maybeSingle();
+            console.log('Org fetch:', orgData, orgError);
+            orgName = orgData?.name || null;
+          }
+
+          if (profile.branch_id) {
+            const { data: branchData, error: branchError } = await supabase
+              .from('branches')
+              .select('name')
+              .eq('id', profile.branch_id)
+              .maybeSingle();
+            console.log('Branch fetch:', branchData, branchError);
+            branchName = branchData?.name || null;
+          }
 
           setEmployeeData({
             first_name: profile.name?.split(' ')[0] || '',
@@ -111,8 +127,8 @@ export default function EmployeeDashboard() {
             job_title: '',
             department: '',
             manager_id: null,
-            branch: branchRes.data ? { name: branchRes.data.name } : null,
-            organization: orgRes.data ? { name: orgRes.data.name } : null,
+            branch: branchName ? { name: branchName } : null,
+            organization: orgName ? { name: orgName } : null,
             team: null
           });
         }
