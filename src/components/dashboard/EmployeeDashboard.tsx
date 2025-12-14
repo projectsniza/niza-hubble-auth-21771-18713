@@ -84,40 +84,32 @@ export default function EmployeeDashboard() {
         }
       } else {
         // Fallback: fetch from profile if no employee record linked
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
-          .select(`
-            name,
-            organization_id,
-            branch_id
-          `)
+          .select('name, organization_id, branch_id')
           .eq('id', user?.id)
           .maybeSingle();
 
-        console.log('Profile fallback data:', profile, profileError);
-
         if (profile) {
-          // Fetch org and branch names separately - use service role or adjust RLS
+          // Fetch org and branch names separately
           let orgName = null;
           let branchName = null;
 
           if (profile.organization_id) {
-            const { data: orgData, error: orgError } = await supabase
+            const { data: orgData } = await supabase
               .from('organizations')
               .select('name')
               .eq('id', profile.organization_id)
               .maybeSingle();
-            console.log('Org fetch:', orgData, orgError);
             orgName = orgData?.name || null;
           }
 
           if (profile.branch_id) {
-            const { data: branchData, error: branchError } = await supabase
+            const { data: branchData } = await supabase
               .from('branches')
               .select('name')
               .eq('id', profile.branch_id)
               .maybeSingle();
-            console.log('Branch fetch:', branchData, branchError);
             branchName = branchData?.name || null;
           }
 

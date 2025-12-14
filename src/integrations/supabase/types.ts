@@ -2704,6 +2704,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_profile_data: {
+        Args: never
+        Returns: {
+          branch_id: string
+          hr_access_level: string
+          organization_id: string
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
