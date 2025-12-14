@@ -106,72 +106,96 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 xl:p-12 bg-background relative overflow-hidden">
-        <div className="w-full max-w-[500px] relative z-10">
-          {/* Mobile Logo */}
-          <div className="lg:hidden mb-8 flex justify-center">
-            <img src={nizaCloudLogo} alt="Niza Cloud" className="w-48" />
+      {/* Right Panel - Form (Mobile Optimized) */}
+      <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 bg-background">
+        {/* Mobile Header with Gradient */}
+        <div 
+          className="lg:hidden pt-8 pb-12 px-6 text-center"
+          style={{
+            background: 'linear-gradient(180deg, hsl(155 60% 93%) 0%, hsl(0 0% 100%) 100%)'
+          }}
+        >
+          <img src={nizaCloudLogo} alt="Niza Cloud" className="w-40 mx-auto mb-4" />
+          <div className="flex justify-center gap-2 mt-4">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md">
+              <img src={hrEmployee1} alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+              <img src={hrEmployee2} alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+              <img src={hrEmployee3} alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+              <img src={hrEmployee4} alt="" className="w-full h-full object-cover" />
+            </div>
           </div>
+        </div>
 
-          <div className="mb-8 lg:mb-12">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 text-foreground">Welcome Back</h2>
-            <p className="text-base lg:text-lg font-medium text-primary/80">
-              Sign in to access your HR dashboard
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6 lg:space-y-8">
-            <div>
-              <label className="block text-lg sm:text-xl font-semibold mb-2 lg:mb-3 text-foreground">
-                Email
-              </label>
-              <Input 
-                type="email" 
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 lg:h-14 text-base lg:text-lg px-4 lg:px-6 rounded-xl border-primary bg-background"
-                disabled={isLoading}
-              />
+        {/* Form Container */}
+        <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0">
+          <div className="w-full max-w-[400px] lg:max-w-[500px] bg-background lg:bg-transparent rounded-2xl lg:rounded-none shadow-xl lg:shadow-none p-6 lg:p-0">
+            <div className="mb-6 lg:mb-12">
+              <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold mb-2 lg:mb-3 text-foreground">
+                Welcome Back
+              </h2>
+              <p className="text-sm lg:text-lg font-medium text-primary/80">
+                Sign in to access your HR dashboard
+              </p>
             </div>
 
-            <div>
-              <label className="block text-lg sm:text-xl font-semibold mb-2 lg:mb-3 text-foreground">
-                Password
-              </label>
-              <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-8">
+              <div>
+                <label className="block text-sm lg:text-xl font-semibold mb-1.5 lg:mb-3 text-foreground">
+                  Email
+                </label>
                 <Input 
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 lg:h-14 text-base lg:text-lg px-4 lg:px-6 pr-12 rounded-xl border-primary bg-background"
+                  type="email" 
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 lg:h-14 text-base px-4 lg:px-6 rounded-xl border-primary/30 focus:border-primary bg-background"
                   disabled={isLoading}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
               </div>
+
+              <div>
+                <label className="block text-sm lg:text-xl font-semibold mb-1.5 lg:mb-3 text-foreground">
+                  Password
+                </label>
+                <div className="relative">
+                  <Input 
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 lg:h-14 text-base px-4 lg:px-6 pr-12 rounded-xl border-primary/30 focus:border-primary bg-background"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button 
+                type="submit" 
+                className="w-full h-12 lg:h-14 text-base lg:text-lg font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground mt-2"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </Button>
+            </form>
+
+            <div className="mt-6 lg:mt-8 text-center">
+              <p className="text-xs lg:text-sm text-muted-foreground">
+                Contact your administrator if you need access
+              </p>
             </div>
-
-            <Button 
-              type="submit" 
-              className="w-full h-12 lg:h-14 text-base lg:text-lg font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <div className="mt-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              Contact your administrator if you need access
-            </p>
           </div>
         </div>
       </div>
