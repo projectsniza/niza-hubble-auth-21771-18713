@@ -273,19 +273,58 @@ export default function ContractTemplate({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
     const contentWidth = pageWidth - 2 * margin;
-    let y = 25;
+    const headerHeight = 25;
+    let y = headerHeight + 10;
     const lineHeight = 5;
     const sectionGap = 8;
 
+    // Load logo image
+    const loadLogoImage = (): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = nizaLogo;
+      });
+    };
+
+    const logoDataUrl = await loadLogoImage();
+
+    // Add header with logo to current page
+    const addHeader = () => {
+      if (logoDataUrl) {
+        // Add logo - positioned at top right, professional size
+        const logoWidth = 40;
+        const logoHeight = 12;
+        doc.addImage(logoDataUrl, 'PNG', pageWidth - margin - logoWidth, 10, logoWidth, logoHeight);
+      }
+      // Add subtle line under header
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margin, headerHeight, pageWidth - margin, headerHeight);
+    };
+
+    // Add header to first page
+    addHeader();
+
     const addPage = () => {
       doc.addPage();
-      y = 20;
+      addHeader();
+      y = headerHeight + 10;
     };
 
     const checkPageBreak = (height: number) => {
