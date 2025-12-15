@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Briefcase, Wrench, ClipboardList
+  User, Briefcase, Wrench, ClipboardList, Shield
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -62,6 +62,7 @@ const getMenuItems = (role: string) => {
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'UK Compliance', icon: Shield, path: '/dashboard/uk-compliance' },
       { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
     ];
   }
@@ -81,6 +82,7 @@ const getMenuItems = (role: string) => {
     { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
     { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
     { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+    { title: 'UK Compliance', icon: Shield, path: '/dashboard/uk-compliance' },
   ];
 
   // Add Settings only for super_admin
