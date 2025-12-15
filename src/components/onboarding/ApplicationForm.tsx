@@ -164,20 +164,55 @@ export default function ApplicationForm({
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
     const contentWidth = pageWidth - 2 * margin;
-    let y = 15;
+    const headerHeight = 25;
+    let y = headerHeight + 5;
     const lineHeight = 6;
     const sectionGap = 8;
+
+    // Load logo image
+    const loadLogoImage = (): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = nizaLogo;
+      });
+    };
+
+    const logoDataUrl = await loadLogoImage();
+
+    // Add header with logo
+    const addHeader = () => {
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, 'PNG', pageWidth - margin - 40, 8, 40, 12);
+      }
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margin, headerHeight, pageWidth - margin, headerHeight);
+    };
+
+    // Add header to first page
+    addHeader();
 
     const checkNewPage = (requiredSpace: number) => {
       if (y + requiredSpace > pageHeight - 20) {
         doc.addPage();
-        y = 20;
+        addHeader();
+        y = headerHeight + 5;
         return true;
       }
       return false;
