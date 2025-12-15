@@ -102,12 +102,36 @@ export default function BankDetailsForm({
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const doc = new jsPDF();
     let y = 20;
     const lineHeight = 8;
     const margin = 20;
     const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Load and add logo
+    const loadLogoImage = (): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = nizaLogo;
+      });
+    };
+
+    const logoDataUrl = await loadLogoImage();
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 20, y - 10, 40, 12);
+      y += 15;
+    }
     
     // Header
     doc.setFontSize(16);

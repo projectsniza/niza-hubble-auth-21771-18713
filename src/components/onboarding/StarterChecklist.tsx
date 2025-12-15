@@ -9,6 +9,7 @@ import { Download, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
+import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface StarterChecklistProps {
   employeeId: string;
@@ -113,13 +114,36 @@ export default function StarterChecklist({
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
     const contentWidth = pageWidth - 2 * margin;
     let y = 15;
     const lineHeight = 6;
+
+    // Load and add logo
+    const loadLogoImage = (): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = nizaLogo;
+      });
+    };
+
+    const logoDataUrl = await loadLogoImage();
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', pageWidth - margin - 40, 10, 40, 12);
+    }
 
     // Header
     doc.setFontSize(16);
@@ -399,8 +423,9 @@ export default function StarterChecklist({
     <div className="space-y-6">
       <Card className="p-8 print:shadow-none bg-card">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 flex items-start justify-between">
           <h1 className="text-2xl font-bold">Starter checklist</h1>
+          <img src={nizaLogo} alt="Niza Group" className="h-12" />
         </div>
 
         {/* Instructions for employers */}
