@@ -93,12 +93,14 @@ export default function ClockIns() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [clockIns, setClockIns] = useState<ClockIn[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('locations');
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [showEditLocation, setShowEditLocation] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [coordinateFormat, setCoordinateFormat] = useState<'decimal' | 'dms'>('decimal');
   
   const [newLocation, setNewLocation] = useState({
@@ -107,6 +109,7 @@ export default function ClockIns() {
     latitude: '',
     longitude: '',
     radius: '100',
+    organizationId: '',
     branchId: '',
     qrEnabled: true
   });
@@ -118,20 +121,47 @@ export default function ClockIns() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [locationsRes, clockInsRes, branchesRes] = await Promise.all([
+      const [locationsRes, clockInsRes, branchesRes, orgsRes] = await Promise.all([
         supabase.from('locations').select('*').order('name'),
         supabase.from('clock_ins').select('*').order('clock_in_time', { ascending: false }).limit(50),
-        supabase.from('branches').select('*').order('name')
+        supabase.from('branches').select('*, organizations(name)').order('name'),
+        supabase.from('organizations').select('*').order('name')
       ]);
 
       setLocations(locationsRes.data || []);
       setClockIns(clockInsRes.data || []);
       setBranches(branchesRes.data || []);
+      setOrganizations(orgsRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const filteredBranches = newLocation.organizationId 
+    ? branches.filter(b => b.organization_id === newLocation.organizationId)
+    : branches;
+
+  const getCurrentLocation = () => {
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setNewLocation(prev => ({
+          ...prev,
+          latitude: latitude.toFixed(8),
+          longitude: longitude.toFixed(8)
+        }));
+        toast.success('Location captured successfully');
+        setGettingLocation(false);
+      },
+      (error) => {
+        toast.error('Unable to get your location. Please enable GPS or enter manually.');
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true }
+    );
   };
 
   const handleCreateLocation = async () => {
@@ -166,7 +196,7 @@ export default function ClockIns() {
 
       toast.success('Location created successfully');
       setShowAddLocation(false);
-      setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100', branchId: '', qrEnabled: true });
+      setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100', organizationId: '', branchId: '', qrEnabled: true });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create location');
@@ -212,12 +242,14 @@ export default function ClockIns() {
 
   const openEditDialog = (location: Location) => {
     setSelectedLocation(location);
+    const branch = branches.find(b => b.id === location.branch_id);
     setNewLocation({
       name: location.name,
       address: location.address || '',
       latitude: location.latitude.toString(),
       longitude: location.longitude.toString(),
       radius: (location.radius || 100).toString(),
+      organizationId: branch?.organization_id || '',
       branchId: location.branch_id,
       qrEnabled: location.qr_enabled ?? true
     });
@@ -314,22 +346,49 @@ export default function ClockIns() {
           placeholder="e.g., Main Office - London" 
         />
       </div>
+      
       {!isEdit && (
-        <div className="space-y-2">
-          <Label>Branch *</Label>
-          <Select 
-            value={newLocation.branchId}
-            onValueChange={(v) => setNewLocation({ ...newLocation, branchId: v })}
-          >
-            <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-            <SelectContent>
-              {branches.map(branch => (
-                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <>
+          <div className="space-y-2">
+            <Label>Organization *</Label>
+            <Select 
+              value={newLocation.organizationId}
+              onValueChange={(v) => setNewLocation({ ...newLocation, organizationId: v, branchId: '' })}
+            >
+              <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+              <SelectContent>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Branch *</Label>
+            <Select 
+              value={newLocation.branchId}
+              onValueChange={(v) => setNewLocation({ ...newLocation, branchId: v })}
+              disabled={!newLocation.organizationId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={newLocation.organizationId ? "Select branch" : "Select organization first"} />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredBranches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filteredBranches.length === 0 && newLocation.organizationId && (
+              <p className="text-xs text-amber-600">No branches found for this organization</p>
+            )}
+          </div>
+        </>
       )}
+      
       <div className="space-y-2">
         <Label>Address</Label>
         <Input 
@@ -338,6 +397,18 @@ export default function ClockIns() {
           placeholder="Full address" 
         />
       </div>
+      
+      {/* Get Current Location Button */}
+      <Button 
+        type="button" 
+        variant="outline" 
+        onClick={getCurrentLocation}
+        disabled={gettingLocation}
+        className="w-full"
+      >
+        <MapPin className="h-4 w-4 mr-2" />
+        {gettingLocation ? 'Getting Location...' : 'Get My Current Location'}
+      </Button>
       
       {/* Coordinate Format Selector */}
       <div className="space-y-2">
