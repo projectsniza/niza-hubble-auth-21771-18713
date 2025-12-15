@@ -14,6 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      absence_records: {
+        Row: {
+          absence_type: string
+          created_at: string | null
+          created_by: string | null
+          days_count: number
+          employee_id: string | null
+          end_date: string
+          id: string
+          is_ssp_applicable: boolean | null
+          notes: string | null
+          reason: string | null
+          return_to_work_by: string | null
+          return_to_work_completed: boolean | null
+          return_to_work_date: string | null
+          ssp_record_id: string | null
+          start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          absence_type: string
+          created_at?: string | null
+          created_by?: string | null
+          days_count: number
+          employee_id?: string | null
+          end_date: string
+          id?: string
+          is_ssp_applicable?: boolean | null
+          notes?: string | null
+          reason?: string | null
+          return_to_work_by?: string | null
+          return_to_work_completed?: boolean | null
+          return_to_work_date?: string | null
+          ssp_record_id?: string | null
+          start_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          absence_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          days_count?: number
+          employee_id?: string | null
+          end_date?: string
+          id?: string
+          is_ssp_applicable?: boolean | null
+          notes?: string | null
+          reason?: string | null
+          return_to_work_by?: string | null
+          return_to_work_completed?: boolean | null
+          return_to_work_date?: string | null
+          ssp_record_id?: string | null
+          start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "absence_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "absence_records_ssp_record_id_fkey"
+            columns: ["ssp_record_id"]
+            isOneToOne: false
+            referencedRelation: "ssp_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bradford_thresholds: {
+        Row: {
+          action_required: string
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          organization_id: string | null
+          threshold_score: number
+          updated_at: string | null
+        }
+        Insert: {
+          action_required: string
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          threshold_score: number
+          updated_at?: string | null
+        }
+        Update: {
+          action_required?: string
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          threshold_score?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bradford_thresholds_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null
@@ -1094,6 +1213,166 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gdpr_consent_records: {
+        Row: {
+          consent_date: string | null
+          consent_given: boolean
+          consent_type: string
+          created_at: string | null
+          employee_id: string | null
+          id: string
+          ip_address: string | null
+          notes: string | null
+          updated_at: string | null
+          withdrawal_date: string | null
+        }
+        Insert: {
+          consent_date?: string | null
+          consent_given?: boolean
+          consent_type: string
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string
+          ip_address?: string | null
+          notes?: string | null
+          updated_at?: string | null
+          withdrawal_date?: string | null
+        }
+        Update: {
+          consent_date?: string | null
+          consent_given?: boolean
+          consent_type?: string
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string
+          ip_address?: string | null
+          notes?: string | null
+          updated_at?: string | null
+          withdrawal_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gdpr_consent_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gdpr_data_requests: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          due_date: string | null
+          employee_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string | null
+          rejection_reason: string | null
+          request_type: string
+          requester_email: string
+          requester_name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          rejection_reason?: string | null
+          request_type: string
+          requester_email: string
+          requester_name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          rejection_reason?: string | null
+          request_type?: string
+          requester_email?: string
+          requester_name?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gdpr_data_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gdpr_data_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gdpr_retention_policies: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          data_category: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          legal_basis: string | null
+          organization_id: string | null
+          retention_period_months: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          data_category: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legal_basis?: string | null
+          organization_id?: string | null
+          retention_period_months?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          data_category?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legal_basis?: string | null
+          organization_id?: string | null
+          retention_period_months?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gdpr_retention_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2589,6 +2868,158 @@ export type Database = {
           },
         ]
       }
+      ssp_records: {
+        Row: {
+          absence_end_date: string | null
+          absence_start_date: string
+          created_at: string | null
+          days_paid: number | null
+          employee_id: string | null
+          exclusion_reason: string | null
+          fit_note_path: string | null
+          fit_note_received: boolean | null
+          id: string
+          linked_period: boolean | null
+          notes: string | null
+          previous_ssp_id: string | null
+          qualifying_days: number | null
+          status: string | null
+          total_ssp_paid: number | null
+          updated_at: string | null
+          waiting_days: number | null
+          weekly_rate: number | null
+        }
+        Insert: {
+          absence_end_date?: string | null
+          absence_start_date: string
+          created_at?: string | null
+          days_paid?: number | null
+          employee_id?: string | null
+          exclusion_reason?: string | null
+          fit_note_path?: string | null
+          fit_note_received?: boolean | null
+          id?: string
+          linked_period?: boolean | null
+          notes?: string | null
+          previous_ssp_id?: string | null
+          qualifying_days?: number | null
+          status?: string | null
+          total_ssp_paid?: number | null
+          updated_at?: string | null
+          waiting_days?: number | null
+          weekly_rate?: number | null
+        }
+        Update: {
+          absence_end_date?: string | null
+          absence_start_date?: string
+          created_at?: string | null
+          days_paid?: number | null
+          employee_id?: string | null
+          exclusion_reason?: string | null
+          fit_note_path?: string | null
+          fit_note_received?: boolean | null
+          id?: string
+          linked_period?: boolean | null
+          notes?: string | null
+          previous_ssp_id?: string | null
+          qualifying_days?: number | null
+          status?: string | null
+          total_ssp_paid?: number | null
+          updated_at?: string | null
+          waiting_days?: number | null
+          weekly_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssp_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssp_records_previous_ssp_id_fkey"
+            columns: ["previous_ssp_id"]
+            isOneToOne: false
+            referencedRelation: "ssp_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      statutory_leave_entitlements: {
+        Row: {
+          actual_end_date: string | null
+          approved_at: string | null
+          approved_by: string | null
+          baby_birth_date: string | null
+          baby_due_date: string | null
+          created_at: string | null
+          employee_id: string | null
+          expected_end_date: string | null
+          id: string
+          kit_days_used: number | null
+          leave_type: string
+          notes: string | null
+          pay_type: string | null
+          split_days_used: number | null
+          start_date: string | null
+          status: string | null
+          updated_at: string | null
+          weeks_entitled: number | null
+          weeks_taken: number | null
+        }
+        Insert: {
+          actual_end_date?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          baby_birth_date?: string | null
+          baby_due_date?: string | null
+          created_at?: string | null
+          employee_id?: string | null
+          expected_end_date?: string | null
+          id?: string
+          kit_days_used?: number | null
+          leave_type: string
+          notes?: string | null
+          pay_type?: string | null
+          split_days_used?: number | null
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          weeks_entitled?: number | null
+          weeks_taken?: number | null
+        }
+        Update: {
+          actual_end_date?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          baby_birth_date?: string | null
+          baby_due_date?: string | null
+          created_at?: string | null
+          employee_id?: string | null
+          expected_end_date?: string | null
+          id?: string
+          kit_days_used?: number | null
+          leave_type?: string
+          notes?: string | null
+          pay_type?: string | null
+          split_days_used?: number | null
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          weeks_entitled?: number | null
+          weeks_taken?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "statutory_leave_entitlements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           branch_id: string
@@ -2897,6 +3328,231 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uk_employee_pension: {
+        Row: {
+          contribution_percent_override: number | null
+          created_at: string | null
+          employee_id: string | null
+          enrolled: boolean | null
+          enrolment_date: string | null
+          id: string
+          opt_out_date: string | null
+          opt_out_reason: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contribution_percent_override?: number | null
+          created_at?: string | null
+          employee_id?: string | null
+          enrolled?: boolean | null
+          enrolment_date?: string | null
+          id?: string
+          opt_out_date?: string | null
+          opt_out_reason?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contribution_percent_override?: number | null
+          created_at?: string | null
+          employee_id?: string | null
+          enrolled?: boolean | null
+          enrolment_date?: string | null
+          id?: string
+          opt_out_date?: string | null
+          opt_out_reason?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uk_employee_pension_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uk_ni_bands: {
+        Row: {
+          band_name: string
+          created_at: string | null
+          employee_rate_percent: number
+          employer_rate_percent: number
+          id: string
+          is_active: boolean | null
+          ni_category: string
+          tax_year: string
+          weekly_threshold: number
+        }
+        Insert: {
+          band_name: string
+          created_at?: string | null
+          employee_rate_percent: number
+          employer_rate_percent: number
+          id?: string
+          is_active?: boolean | null
+          ni_category?: string
+          tax_year: string
+          weekly_threshold: number
+        }
+        Update: {
+          band_name?: string
+          created_at?: string | null
+          employee_rate_percent?: number
+          employer_rate_percent?: number
+          id?: string
+          is_active?: boolean | null
+          ni_category?: string
+          tax_year?: string
+          weekly_threshold?: number
+        }
+        Relationships: []
+      }
+      uk_pension_settings: {
+        Row: {
+          auto_enrolment_enabled: boolean | null
+          created_at: string | null
+          created_by: string | null
+          employee_contribution_percent: number | null
+          employer_contribution_percent: number | null
+          id: string
+          organization_id: string | null
+          pension_provider: string | null
+          postponement_period_months: number | null
+          qualifying_earnings_lower: number | null
+          qualifying_earnings_upper: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_enrolment_enabled?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          employee_contribution_percent?: number | null
+          employer_contribution_percent?: number | null
+          id?: string
+          organization_id?: string | null
+          pension_provider?: string | null
+          postponement_period_months?: number | null
+          qualifying_earnings_lower?: number | null
+          qualifying_earnings_upper?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_enrolment_enabled?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          employee_contribution_percent?: number | null
+          employer_contribution_percent?: number | null
+          id?: string
+          organization_id?: string | null
+          pension_provider?: string | null
+          postponement_period_months?: number | null
+          qualifying_earnings_lower?: number | null
+          qualifying_earnings_upper?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uk_pension_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      uk_tax_bands: {
+        Row: {
+          band_name: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          lower_limit: number
+          rate_percent: number
+          tax_year: string
+          upper_limit: number | null
+        }
+        Insert: {
+          band_name: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          lower_limit: number
+          rate_percent: number
+          tax_year: string
+          upper_limit?: number | null
+        }
+        Update: {
+          band_name?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          lower_limit?: number
+          rate_percent?: number
+          tax_year?: string
+          upper_limit?: number | null
+        }
+        Relationships: []
+      }
+      uk_tax_codes: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          director_ni_method: string | null
+          effective_from: string
+          employee_id: string | null
+          id: string
+          is_director: boolean | null
+          ni_category: string | null
+          p45_received: boolean | null
+          starter_declaration: string | null
+          student_loan_plan: string | null
+          tax_code: string
+          tax_code_basis: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          director_ni_method?: string | null
+          effective_from?: string
+          employee_id?: string | null
+          id?: string
+          is_director?: boolean | null
+          ni_category?: string | null
+          p45_received?: boolean | null
+          starter_declaration?: string | null
+          student_loan_plan?: string | null
+          tax_code?: string
+          tax_code_basis?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          director_ni_method?: string | null
+          effective_from?: string
+          employee_id?: string | null
+          id?: string
+          is_director?: boolean | null
+          ni_category?: string | null
+          p45_received?: boolean | null
+          starter_declaration?: string | null
+          student_loan_plan?: string | null
+          tax_code?: string
+          tax_code_basis?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uk_tax_codes_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
