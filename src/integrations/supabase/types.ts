@@ -64,6 +64,59 @@ export type Database = {
           },
         ]
       }
+      brand_settings: {
+        Row: {
+          accent_color: string | null
+          brand_colors: Json | null
+          created_at: string | null
+          created_by: string | null
+          fonts: Json | null
+          id: string
+          organization_id: string | null
+          primary_color: string | null
+          primary_logo_path: string | null
+          secondary_color: string | null
+          secondary_logo_path: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          accent_color?: string | null
+          brand_colors?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          fonts?: Json | null
+          id?: string
+          organization_id?: string | null
+          primary_color?: string | null
+          primary_logo_path?: string | null
+          secondary_color?: string | null
+          secondary_logo_path?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          accent_color?: string | null
+          brand_colors?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          fonts?: Json | null
+          id?: string
+          organization_id?: string | null
+          primary_color?: string | null
+          primary_logo_path?: string | null
+          secondary_color?: string | null
+          secondary_logo_path?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_uploads: {
         Row: {
           branch_id: string | null
@@ -1041,6 +1094,62 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gift_cards: {
+        Row: {
+          card_type: string
+          code: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          design_template: Json | null
+          discount: string
+          id: string
+          is_active: boolean | null
+          organization_id: string | null
+          title: string
+          updated_at: string | null
+          valid_date: string | null
+        }
+        Insert: {
+          card_type?: string
+          code: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          design_template?: Json | null
+          discount: string
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          title: string
+          updated_at?: string | null
+          valid_date?: string | null
+        }
+        Update: {
+          card_type?: string
+          code?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          design_template?: Json | null
+          discount?: string
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          title?: string
+          updated_at?: string | null
+          valid_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gift_cards_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2518,6 +2627,120 @@ export type Database = {
           },
         ]
       }
+      template_folders: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          organization_id: string | null
+          parent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          organization_id?: string | null
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string | null
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "template_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      templates: {
+        Row: {
+          content: Json | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          folder_id: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          organization_id: string | null
+          template_type: Database["public"]["Enums"]["template_type"]
+          thumbnail_path: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          organization_id?: string | null
+          template_type?: Database["public"]["Enums"]["template_type"]
+          thumbnail_path?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          organization_id?: string | null
+          template_type?: Database["public"]["Enums"]["template_type"]
+          thumbnail_path?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "template_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_assignments: {
         Row: {
           assigned_by: string | null
@@ -2727,6 +2950,14 @@ export type Database = {
     Enums: {
       app_role: "super_admin" | "hr" | "manager" | "employee"
       hr_access_level: "full" | "organization" | "branch"
+      template_type:
+        | "visiting_card"
+        | "email_signature"
+        | "id_card"
+        | "visitor_pass"
+        | "invoice"
+        | "gift_card"
+        | "custom"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2856,6 +3087,15 @@ export const Constants = {
     Enums: {
       app_role: ["super_admin", "hr", "manager", "employee"],
       hr_access_level: ["full", "organization", "branch"],
+      template_type: [
+        "visiting_card",
+        "email_signature",
+        "id_card",
+        "visitor_pass",
+        "invoice",
+        "gift_card",
+        "custom",
+      ],
     },
   },
 } as const
