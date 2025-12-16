@@ -339,25 +339,63 @@ export default function ClockIns() {
 
   const handleClockIn = async (locationId: string) => {
     try {
+      // Fetch fresh location data directly from database to ensure we have correct coordinates
+      const { data: locationData, error: locationError } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('id', locationId)
+        .maybeSingle();
+
+      if (locationError) {
+        console.error('Error fetching location:', locationError);
+        toast.error('Failed to fetch location data');
+        return;
+      }
+
+      if (!locationData) {
+        toast.error('Location not found. Please refresh the page.');
+        return;
+      }
+
+      console.log('Fresh location from DB:', locationData);
+
+      // Validate location coordinates
+      if (locationData.latitude == null || locationData.longitude == null || 
+          isNaN(Number(locationData.latitude)) || isNaN(Number(locationData.longitude))) {
+        console.error('Invalid location coordinates:', locationData);
+        toast.error('Location coordinates are not configured properly. Please contact admin.');
+        return;
+      }
+
       // Get current position
       navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
         
-        // Check if within geofence
-        const location = locations.find(l => l.id === locationId);
-        if (location) {
-          const distance = calculateDistance(latitude, longitude, location.latitude, location.longitude);
-          const radius = location.radius || 100;
-          
-          if (distance > radius) {
-            toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
-            return;
-          }
+        console.log('User GPS coordinates:', { latitude, longitude });
+        console.log('Location coordinates:', { 
+          lat: locationData.latitude, 
+          lng: locationData.longitude,
+          radius: locationData.radius 
+        });
+        
+        const distance = calculateDistance(
+          latitude, 
+          longitude, 
+          Number(locationData.latitude), 
+          Number(locationData.longitude)
+        );
+        const radius = locationData.radius || 100;
+        
+        console.log('Distance calculation:', { distance, radius, withinRange: distance <= radius });
+        
+        if (distance > radius) {
+          toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
+          return;
         }
 
         const { error } = await supabase.from('clock_ins').insert({
           user_id: user?.id,
-          branch_id: location?.branch_id,
+          branch_id: locationData.branch_id,
           location_id: locationId,
           clock_in_time: new Date().toISOString(),
           clock_in_latitude: latitude,
@@ -384,6 +422,7 @@ export default function ClockIns() {
         toast.error(errorMessage);
       }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     } catch (error: any) {
+      console.error('Clock in error:', error);
       toast.error(error.message || 'Failed to clock in');
     }
   };
