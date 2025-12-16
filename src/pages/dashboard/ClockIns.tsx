@@ -334,9 +334,21 @@ export default function ClockIns() {
         if (error) throw error;
         toast.success('Clocked in successfully');
         fetchData();
-      }, (error) => {
-        toast.error('Unable to get your location. Please enable GPS.');
-      });
+      }, (geoError) => {
+        let errorMessage = 'Unable to get your location.';
+        switch (geoError.code) {
+          case geoError.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
+            break;
+          case geoError.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
+            break;
+          case geoError.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+        }
+        toast.error(errorMessage);
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     } catch (error: any) {
       toast.error(error.message || 'Failed to clock in');
     }
