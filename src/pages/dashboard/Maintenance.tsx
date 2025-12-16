@@ -77,9 +77,17 @@ export default function Maintenance() {
         `)
         .order('created_at', { ascending: false });
 
-      // If manager/hr, only show their own tickets
-      if (user.role === 'manager' || user.role === 'hr') {
+      // Filter based on role and access level
+      if (user.role === 'manager') {
         query = query.eq('reported_by', user.id);
+      } else if (user.role === 'hr') {
+        // HR access depends on their access level
+        if (user.hrAccessLevel === 'organization' && user.organizationId) {
+          query = query.eq('organization_id', user.organizationId);
+        } else if (user.hrAccessLevel === 'branch' && user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        }
+        // full_workspace HR sees all tickets (no filter)
       }
 
       const { data, error } = await query;
