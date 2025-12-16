@@ -84,7 +84,24 @@ export default function Maintenance() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setTickets(data || []);
+      
+      // Fetch reporter profiles
+      if (data && data.length > 0) {
+        const reporterIds = [...new Set(data.map(t => t.reported_by))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, display_name')
+          .in('id', reporterIds);
+        
+        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        const ticketsWithReporters = data.map(ticket => ({
+          ...ticket,
+          reporter: profileMap.get(ticket.reported_by) || null
+        }));
+        setTickets(ticketsWithReporters);
+      } else {
+        setTickets([]);
+      }
     } catch (error) {
       console.error('Error fetching tickets:', error);
     } finally {

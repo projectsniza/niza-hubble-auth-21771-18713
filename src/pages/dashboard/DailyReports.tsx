@@ -80,7 +80,24 @@ export default function DailyReports() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setReports(data || []);
+      
+      // Fetch submitter profiles
+      if (data && data.length > 0) {
+        const submitterIds = [...new Set(data.map(r => r.submitted_by))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, display_name')
+          .in('id', submitterIds);
+        
+        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        const reportsWithSubmitters = data.map(report => ({
+          ...report,
+          submitter: profileMap.get(report.submitted_by) || null
+        }));
+        setReports(reportsWithSubmitters);
+      } else {
+        setReports([]);
+      }
     } catch (error) {
       console.error('Error fetching reports:', error);
     } finally {

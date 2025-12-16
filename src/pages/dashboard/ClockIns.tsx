@@ -145,6 +145,13 @@ export default function ClockIns() {
 
   const getCurrentLocation = () => {
     setGettingLocation(true);
+    
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      setGettingLocation(false);
+      return;
+    }
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -157,10 +164,22 @@ export default function ClockIns() {
         setGettingLocation(false);
       },
       (error) => {
-        toast.error('Unable to get your location. Please enable GPS or enter manually.');
+        let errorMessage = 'Unable to get your location.';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+        }
+        toast.error(errorMessage);
         setGettingLocation(false);
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
