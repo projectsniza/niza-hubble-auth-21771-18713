@@ -53,59 +53,12 @@ export function useOrganizations() {
 
   const deleteOrganization = async (id: string) => {
     try {
-      // Get all branches for this organization
-      const { data: orgBranches } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('organization_id', id);
-
-      const branchIds = orgBranches?.map(b => b.id) || [];
-
-      if (branchIds.length > 0) {
-        // Delete ALL clock_ins for these branches first
-        const { error: clockInsError } = await supabase
-          .from('clock_ins')
-          .delete()
-          .in('branch_id', branchIds);
-
-        if (clockInsError) {
-          console.error('Error deleting clock_ins:', clockInsError);
-        }
-
-        // Now delete all locations for these branches
-        const { error: locationsError } = await supabase
-          .from('locations')
-          .delete()
-          .in('branch_id', branchIds);
-
-        if (locationsError) {
-          console.error('Error deleting locations:', locationsError);
-        }
-
-        // Delete branches
-        const { error: branchesError } = await supabase
-          .from('branches')
-          .delete()
-          .eq('organization_id', id);
-
-        if (branchesError) throw branchesError;
-      }
-
-      // Delete only deletable folders (skip system folders)
-      await supabase
-        .from('folders')
-        .delete()
-        .eq('organization_id', id)
-        .eq('is_deletable', true);
-
-      // Now delete the organization
-      const { error } = await supabase
-        .from('organizations')
-        .delete()
-        .eq('id', id);
+      const { error } = await (supabase as any).rpc('delete_organization_cascade', {
+        p_organization_id: id,
+      });
 
       if (error) throw error;
-      
+
       setOrganizations(prev => prev.filter(org => org.id !== id));
       toast.success('Organization deleted');
       return { error: null };
@@ -197,42 +150,12 @@ export function useBranches(organizationId?: string) {
 
   const deleteBranch = async (id: string) => {
     try {
-      // First, delete ALL clock_ins for this branch (regardless of location)
-      const { error: clockInsError } = await supabase
-        .from('clock_ins')
-        .delete()
-        .eq('branch_id', id);
-
-      if (clockInsError) {
-        console.error('Error deleting clock_ins:', clockInsError);
-      }
-
-      // Now delete all locations for this branch
-      const { error: locationsError } = await supabase
-        .from('locations')
-        .delete()
-        .eq('branch_id', id);
-
-      if (locationsError) {
-        console.error('Error deleting locations:', locationsError);
-        throw locationsError;
-      }
-
-      // Delete only deletable folders (skip system folders)
-      await supabase
-        .from('folders')
-        .delete()
-        .eq('branch_id', id)
-        .eq('is_deletable', true);
-
-      // Now delete the branch
-      const { error } = await supabase
-        .from('branches')
-        .delete()
-        .eq('id', id);
+      const { error } = await (supabase as any).rpc('delete_branch_cascade', {
+        p_branch_id: id,
+      });
 
       if (error) throw error;
-      
+
       setBranches(prev => prev.filter(branch => branch.id !== id));
       toast.success('Branch deleted');
       return { error: null };
