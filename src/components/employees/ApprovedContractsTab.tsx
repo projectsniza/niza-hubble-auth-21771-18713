@@ -292,64 +292,123 @@ export default function ApprovedContractsTab() {
 
     // 6. Holiday
     addSectionTitle('6. Holiday');
-    addText(`6.1. You will be entitled to ${contractData.holiday_days || '…….'} days' paid holiday in each holiday year, which runs from 1st of April to 31st of March, excluding bank and public holidays which you normally work.`);
+    addText(`6.1. You will be entitled to ${contractData.holiday_days || '…….'} days' paid holiday in each holiday year, which runs from 1st of April to 31st of March, excluding bank and public holidays which you normally work. Your holiday entitlement includes your statutory basic entitlement.`);
     addText('6.2. You acknowledge that the Employer trades on the usual bank holidays in England and Wales and that you may be scheduled to work in accordance with availability unless on Annual Leave.');
     addText('6.3. You must take all of your entitlement in the holiday year in which it accrues and carrying forward holiday is not permitted.');
-    addText('6.4. You must give your Manager not less than 6 weeks\' written notice of your proposed holiday dates.');
+    addText('6.4. You must give your Manager not less than 6 weeks\' written notice of your proposed holiday dates. Holidays are to be taken at such time or times as your Manager agrees.');
     addText('6.5. The Employer reserves the right to require you to take holidays on particular dates including during any notice period or garden leave.');
     addText('6.6. On termination of your employment, you will be paid in lieu of accrued but untaken holiday entitlement.');
 
     // 7. Sickness
     addSectionTitle('7. Sickness');
-    addText('7.1. If you are absent from work for any reason, you must inform your Manager by no later than 9.30 am on the first day of absence.');
+    addText('7.1. If you are absent from work for any reason, you must inform your Manager by no later than 9.30 am on the first day of absence. The reason for absence and the expected duration of the absence should be given.');
     addText('7.2. There is no pay for any absence due to illness or injury, other than statutory sick pay if you are eligible.');
     addText('7.3. At any time during your employment, you will, at the Employer\'s request, submit yourself to a medical examination by a medical practitioner nominated by the Employer.');
 
     // 8. Disciplinary and grievance matters
     addSectionTitle('8. Disciplinary and grievance matters');
-    addText('8.1. You are subject to the Employer\'s disciplinary and grievance rules and procedures.');
+    addText('8.1. You are subject to the Employer\'s disciplinary and grievance rules and procedures. Such rules and procedures do not form part of this contract.');
     addText('8.2. The Employer may, in its absolute discretion, suspend you in order to investigate any claim or allegation which it considers could constitute serious misconduct.');
     addText('8.3. If you wish to appeal against any disciplinary decision, your appeal must be made in writing.');
     addText('8.4. If you wish to raise a grievance, you may do so by writing.');
+    addText('8.5. The following acts or omissions may result in disciplinary action being taken against you:');
+    
+    const disciplinaryItems = [
+      '8.5.1. Failure or refusal to comply with a reasonable and lawful instruction given to you by a manager or supervisor.',
+      '8.5.2. Unauthorised absence for a reason other than illness or injury.',
+      '8.5.3. Poor time keeping',
+      '8.5.4. Any act of theft or dishonesty',
+      '8.5.5. Fighting',
+      '8.5.6. Drinking or being under the influence of drink or drugs',
+      '8.5.7. Smoking in or near the shop floor, forecourt, or stockroom',
+      '8.5.8. Being impolite or discourteous to members of the public',
+      '8.5.9. Being inappropriately dressed whilst on duty.',
+      '8.5.10. Failure to follow the appropriate procedure in relation staff purchases from the store.'
+    ];
+    disciplinaryItems.forEach(item => {
+      addText(item, 10, false, 5);
+    });
+    addText('This list is not exhaustive.', 10, false, 5);
 
-    // 9-12: Additional sections
+    // 9. Grievance Procedure
     addSectionTitle('9. Grievance Procedure');
-    addText('9.1. The object of the grievance procedure is to enable employees who consider they have a grievance to have it dealt with at the nearest appropriate level.');
+    addText('9.1. The object of the grievance procedure is to enable employees who consider they have a grievance or complaint arising from their employment with the Employer to have it dealt with at the nearest appropriate level within as short a time as possible.');
     addText('9.2. At all stages of the grievance procedure, you may be accompanied by a fellow worker or a trade union official of your choice.');
+    
+    addSubTitle('Informal Resolution');
+    addText('In many cases grievances can be resolved informally without activating the formal procedure. Employees should aim to resolve grievances informally by either writing to or speaking with their line manager.');
+    
+    addSubTitle('Formal Procedure');
+    addText('STEP 1: In the first instance all grievances must be submitted in writing to your Manager who will attempt to deal with the matter.');
+    addText('STEP 2: Every opportunity will be given for your grievance to be stated and thoroughly discussed. You will be invited to attend a meeting.');
+    addText('STEP 3: If you wish to appeal, you will be invited to a further meeting. This will be heard by a more senior manager. The decision is final.');
 
+    // 10. Disciplinary Action
     addSectionTitle('10. Disciplinary Action');
-    addText('10.1. The Employer requires good standards of discipline from its employees, together with satisfactory standards of work.');
+    addText('10.1. If your grievance concerns the imposition of an oral or written disciplinary warning, you may use the grievance procedure to seek redress.');
+    addText('10.5. The Employer requires good standards of discipline from its employees, together with satisfactory standards of work.');
+    addText('10.6. The purpose of this procedure is to be corrective rather than punitive.');
+    addText('10.7. If your standard of work or conduct falls, and, after warnings, remains below the level which is acceptable, you may be dismissed.');
+    addText('10.8. Summary dismissal without notice will take place if an act of gross misconduct is committed.');
 
+    // 11. Disciplinary Procedure
     addSectionTitle('11. Disciplinary Procedure');
-    addText('11.1. The following stages in the disciplinary procedure are outlined: Improvement Notice, First Written Warning, Second Written Warning, Final Written Warning, and Dismissal.');
+    addText('11.1. The following stages in the disciplinary procedure are outlined below. The Employer reserves the right to activate any stage of the procedure where appropriate.');
+    
+    addSubTitle('STAGE 1 – Improvement Notice: Unsatisfactory Performance');
+    addText('If your performance does not meet the acceptable standards expected by the Employer, you may normally be given an improvement notice.');
+    
+    addSubTitle('STAGE 2 – First Written Warning');
+    addText('If your conduct does not meet acceptable standards you will normally be given a written warning.');
+    
+    addSubTitle('STAGE 3 – Second Written Warning');
+    addText('If your conduct continues to fall below acceptable standards you may be given a second written warning.');
+    
+    addSubTitle('STAGE 4 – Final Written Warning');
+    addText('If the offence is sufficiently serious, or there is a failure to improve during the currency of a prior warning, a final written warning may be given.');
+    
+    addSubTitle('STAGE 5 – Dismissal or Other Sanction');
+    addText('If there is still a failure to improve, or where the conduct or performance is sufficiently serious, the final step in the procedure may be dismissal.');
 
+    // 12. Appeals Procedure
     addSectionTitle('12. Appeals Procedure');
-    addText('12.1. If you are dissatisfied with any disciplinary decision, you may appeal within five working days.');
+    addText('12.1. If you are dissatisfied with any disciplinary decision affecting you, you may appeal to your Manager within five working days of the disciplinary decision.');
+    addText('12.2. Any appeal must be put in writing, stating the grounds for the appeal.');
+    addText('12.3. You will be invited to attend an appeal meeting. A more senior manager will hear this where this is reasonably practicable.');
+    addText('12.4. Within a reasonable period of time after the appeal meeting, you will be informed of the decision. The decision is final.');
 
     // 13. Pension
     addSectionTitle('13. Pension');
-    addText('The Employer will comply with the employer pension duties concerning pension auto-enrolment in accordance with Part 1 of the Pensions Act 2008.');
+    addText('The Employer will comply with the employer pension duties concerning pension auto-enrolment in accordance with Part 1 of the Pensions Act 2008. Subject to your age and earnings level, you will be automatically enrolled into either a qualifying pension scheme or NEST.');
 
     // 14. Termination
     addSectionTitle('14. Termination of employment');
     addText('14.1. You may terminate your employment at any time on giving to the Employer not less than three weeks prior written notice.');
     addText('14.2. Nothing in this contract will prevent the Employer from terminating your employment, without notice, in a case of gross misconduct.');
+    addText('14.3. The Employer may in its sole and absolute discretion terminate your employment at any time with immediate effect by making a payment to you in lieu of notice.');
 
-    // 15-19: Additional sections
+    // 15. Data protection
     addSectionTitle('15. Data protection and monitoring');
-    addText('You consent to the Employer processing personal data and sensitive personal data concerning you.');
+    addText('15.1. You consent to the Employer processing personal data and sensitive personal data concerning you in its manual and computerised/automated filing systems internally and, so far as is reasonably necessary, externally.');
+    addText('15.2. You consent to your personal data and sensitive personal data being transferred to and processed by: any Group Employer; professional advisors; any third-party providing services; HM Revenue and Customs or other authorities; and prospective purchasers.');
+    addText('15.3. You consent to the Employer monitoring, intercepting, reading, and recording your telephone, email, and other electronic communications for monitoring purposes.');
 
+    // 16. Variation
     addSectionTitle('16. Variation');
-    addText('The Employer reserves the right to make reasonable changes to any of your terms and conditions of employment.');
+    addText('The Employer reserves the right to make reasonable changes to any of your terms and conditions of employment. Changes will be notified to you in writing before they come into force.');
 
+    // 17. Policies
     addSectionTitle('17. Policies and Procedures');
-    addText('You agree to comply with the rules, policies, and procedures of the Employer from time to time in force.');
+    addText('You agree to comply with the rules, policies, and procedures of the Employer from time to time in force, although these do not form part of your contract of employment.');
 
+    // 18. Collective Agreement
     addSectionTitle('18. Collective Agreement');
     addText('There is no collective agreement which directly affects your employment.');
 
+    // 19. Entire agreement
     addSectionTitle('19. Entire agreement');
-    addText('19.1. This contract is the entire agreement between you and the Employer in relation to its subject matter.');
+    addText('19.1. This contract is the entire agreement between you and the Employer in relation to its subject matter and replaces all previous agreements and arrangements.');
+    addText('19.2. The information contained in this contract contains the particulars required for a written statement under Section 1 of the Employment Rights Act 1996.');
 
     // Signatures
     checkPageBreak(60);
