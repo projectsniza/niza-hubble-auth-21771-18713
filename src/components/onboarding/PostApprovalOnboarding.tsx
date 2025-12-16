@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Shield, File, Check, Upload, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, File, Check, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,6 @@ interface DocumentRequirement {
 }
 
 const STEPS = [
-  { id: 'rtw', name: 'Right to Work', icon: Shield },
   { id: 'documents', name: 'Document Upload', icon: File },
   { id: 'complete', name: 'Complete', icon: Check }
 ];
@@ -34,12 +33,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const [employee, setEmployee] = useState<any>(null);
   const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
   
-  const [rtwData, setRtwData] = useState({
-    shareCode: '',
-    govPortalLink: '',
-    document: null as File | null
-  });
-
   const [additionalDocuments, setAdditionalDocuments] = useState<{
     requirementId: string;
     file: File | null;
@@ -86,9 +79,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const handleNext = async () => {
     const currentStepId = STEPS[currentStep]?.id;
     
-    if (currentStepId === 'rtw') {
-      await saveRightToWork();
-    } else if (currentStepId === 'documents') {
+    if (currentStepId === 'documents') {
       await saveDocuments();
     }
 
@@ -100,45 +91,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const handlePrevious = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
-    }
-  };
-
-  const saveRightToWork = async () => {
-    setLoading(true);
-    try {
-      let documentPath = null;
-
-      if (rtwData.document) {
-        const fileName = `rtw_${employeeId}_${Date.now()}.${rtwData.document.name.split('.').pop()}`;
-        const { error: uploadError } = await supabase.storage
-          .from('documents')
-          .upload(`employees/${employeeId}/rtw/${fileName}`, rtwData.document);
-        
-        if (uploadError) throw uploadError;
-        documentPath = `employees/${employeeId}/rtw/${fileName}`;
-      }
-
-      await supabase.from('right_to_work_checks').upsert({
-        employee_id: employeeId,
-        share_code: rtwData.shareCode,
-        gov_portal_link: rtwData.govPortalLink,
-        document_path: documentPath,
-        document_name: rtwData.document?.name,
-        checked_by: user?.id,
-        check_date: new Date().toISOString(),
-        status: 'verified'
-      }, { onConflict: 'employee_id' });
-
-      await supabase
-        .from('employee_onboarding')
-        .update({ right_to_work_completed: true })
-        .eq('employee_id', employeeId);
-
-      toast.success('Right to Work saved');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -241,7 +193,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       <div className="space-y-4">
         <Progress value={progress} className="h-2" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {STEPS.map((step, index) => (
             <div key={step.id} className={`flex flex-col items-center gap-2 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
@@ -254,56 +206,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       </div>
 
       <Card className="p-6">
-        {/* Right to Work Step */}
-        {currentStepId === 'rtw' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Right to Work Check</h2>
-            <p className="text-muted-foreground">Enter the Right to Work details for this employee.</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Share Code</Label>
-                <Input 
-                  value={rtwData.shareCode} 
-                  onChange={(e) => setRtwData(prev => ({ ...prev, shareCode: e.target.value }))} 
-                  placeholder="Enter share code" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Gov.uk Portal Link</Label>
-                <Input 
-                  value={rtwData.govPortalLink} 
-                  onChange={(e) => setRtwData(prev => ({ ...prev, govPortalLink: e.target.value }))} 
-                  placeholder="https://..." 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Right to Work Document</Label>
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                <input
-                  type="file"
-                  id="rtw-upload"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => setRtwData(prev => ({ ...prev, document: e.target.files?.[0] || null }))}
-                />
-                <label htmlFor="rtw-upload" className="cursor-pointer">
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="h-8 w-8 text-muted-foreground" />
-                    {rtwData.document ? (
-                      <span className="text-primary">{rtwData.document.name}</span>
-                    ) : (
-                      <span className="text-muted-foreground">Click to upload document</span>
-                    )}
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Document Upload Step */}
         {currentStepId === 'documents' && (
           <div className="space-y-6">
