@@ -65,6 +65,7 @@ export default function Documents() {
   const { user } = useAuth();
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([]);
@@ -101,6 +102,17 @@ export default function Documents() {
       }
     };
     initializeRoot();
+  }, []);
+
+  // Fetch all documents for global stats
+  useEffect(() => {
+    const fetchAllDocuments = async () => {
+      const { data } = await supabase
+        .from('documents')
+        .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id');
+      setAllDocuments(data || []);
+    };
+    fetchAllDocuments();
   }, []);
 
   useEffect(() => {
@@ -196,6 +208,7 @@ export default function Documents() {
       if (error) throw error;
 
       setDocuments(prev => prev.filter(d => d.id !== deleteDocId));
+      setAllDocuments(prev => prev.filter(d => d.id !== deleteDocId));
       toast.success('Document deleted');
     } catch (err: any) {
       toast.error(err.message);
@@ -251,6 +264,11 @@ export default function Documents() {
     if (activeTab === 'upcoming') return getDocumentStatus(doc) === 'upcoming';
     return true;
   });
+
+  // Use allDocuments for global stats
+  const globalOverdueCount = allDocuments.filter(d => getDocumentStatus(d) === 'overdue').length;
+  const globalUpcomingCount = allDocuments.filter(d => getDocumentStatus(d) === 'upcoming').length;
+  const globalTotalCount = allDocuments.length;
 
   const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
@@ -353,7 +371,7 @@ export default function Documents() {
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{overdueCount}</p>
+                <p className="text-2xl font-bold text-foreground">{globalOverdueCount}</p>
                 <p className="text-xs text-muted-foreground">Overdue Documents</p>
               </div>
             </div>
@@ -364,7 +382,7 @@ export default function Documents() {
                 <Clock className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{upcomingCount}</p>
+                <p className="text-2xl font-bold text-foreground">{globalUpcomingCount}</p>
                 <p className="text-xs text-muted-foreground">Upcoming Follow-ups</p>
               </div>
             </div>
@@ -375,7 +393,7 @@ export default function Documents() {
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{documents.length}</p>
+                <p className="text-2xl font-bold text-foreground">{globalTotalCount}</p>
                 <p className="text-xs text-muted-foreground">Total Documents</p>
               </div>
             </div>
