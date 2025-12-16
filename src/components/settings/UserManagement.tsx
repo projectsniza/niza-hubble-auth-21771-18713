@@ -114,6 +114,10 @@ export default function UserManagement() {
 
     setIsSubmitting(true);
     try {
+      // Save current admin session before creating new user
+      const { data: currentSession } = await supabase.auth.getSession();
+      const adminSession = currentSession?.session;
+
       // Create auth user with role in metadata for the trigger
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: selectedEmployee.email,
@@ -180,6 +184,14 @@ export default function UserManagement() {
         .eq('id', selectedEmployee.id);
 
       if (employeeError) throw employeeError;
+
+      // Restore admin session after creating the new user
+      if (adminSession) {
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token
+        });
+      }
 
       toast.success(`Account created for ${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
       setActivateDialogOpen(false);
