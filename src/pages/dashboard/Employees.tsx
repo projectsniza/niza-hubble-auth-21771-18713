@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, Calendar, 
-  UserCog, Settings, Briefcase, FileCheck 
+  UserCog, Settings, Briefcase, FileCheck, FileUp 
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
@@ -14,6 +14,7 @@ import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
+import BulkUploadedEmployees from '@/components/employees/BulkUploadedEmployees';
 import UserManagement from '@/components/settings/UserManagement';
 import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,12 +47,13 @@ export default function Employees() {
 
   const handleBulkUploadSuccess = () => {
     setShowBulkUpload(false);
-    setActiveTab('employees');
+    setActiveTab('bulk-uploads');
   };
 
   // Determine which tabs to show based on role
   const showContractApprovals = user?.role === 'super_admin';
   const showApprovedContracts = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
+  const showBulkUploads = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
   const showUserManagement = user?.role === 'super_admin';
   const showOnboardingSettings = user?.role === 'super_admin';
 
@@ -117,6 +119,12 @@ export default function Employees() {
               Approved Contracts
             </TabsTrigger>
           )}
+          {showBulkUploads && (
+            <TabsTrigger value="bulk-uploads" className="gap-2">
+              <FileUp className="h-4 w-4" />
+              Bulk Uploads
+            </TabsTrigger>
+          )}
           <TabsTrigger value="teams" className="gap-2">
             <Users className="h-4 w-4" />
             Teams
@@ -156,6 +164,12 @@ export default function Employees() {
         {showApprovedContracts && (
           <TabsContent value="approved-contracts" className="mt-6">
             <ApprovedContractsTab />
+          </TabsContent>
+        )}
+
+        {showBulkUploads && (
+          <TabsContent value="bulk-uploads" className="mt-6">
+            <BulkUploadedEmployees />
           </TabsContent>
         )}
 
