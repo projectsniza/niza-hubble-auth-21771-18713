@@ -366,15 +366,27 @@ export default function Overview() {
             
             {overdueFollowUps.length > 0 && (
               <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
+                <div 
+                  className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80"
+                  onClick={() => navigate('/dashboard/documents?filter=overdue')}
+                >
                   <Badge variant="destructive" className="text-xs">Overdue</Badge>
                   <span className="text-xs text-muted-foreground">{overdueFollowUps.length} documents</span>
                 </div>
                 <ScrollArea className="h-24">
                   {overdueFollowUps.slice(0, 3).map(doc => (
-                    <div key={doc.id} className="flex items-center justify-between p-2 rounded-lg bg-destructive/5 mb-1">
-                      <span className="text-sm font-medium truncate flex-1">{doc.title}</span>
-                      <span className="text-xs text-destructive ml-2">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
+                    <div 
+                      key={doc.id} 
+                      className="flex items-center justify-between p-2 rounded-lg bg-destructive/5 mb-1 cursor-pointer hover:bg-destructive/10"
+                      onClick={() => navigate('/dashboard/documents?filter=overdue')}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate block">{doc.title}</span>
+                        {doc.employee && (
+                          <span className="text-xs text-muted-foreground">{doc.employee.first_name} {doc.employee.last_name}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-destructive ml-2 whitespace-nowrap">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
                     </div>
                   ))}
                 </ScrollArea>
@@ -383,15 +395,27 @@ export default function Overview() {
 
             {upcomingFollowUps.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div 
+                  className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80"
+                  onClick={() => navigate('/dashboard/documents?filter=upcoming')}
+                >
                   <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700">Upcoming</Badge>
                   <span className="text-xs text-muted-foreground">{upcomingFollowUps.length} documents</span>
                 </div>
                 <ScrollArea className="h-24">
                   {upcomingFollowUps.slice(0, 3).map(doc => (
-                    <div key={doc.id} className="flex items-center justify-between p-2 rounded-lg bg-amber-50 mb-1">
-                      <span className="text-sm font-medium truncate flex-1">{doc.title}</span>
-                      <span className="text-xs text-amber-700 ml-2">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
+                    <div 
+                      key={doc.id} 
+                      className="flex items-center justify-between p-2 rounded-lg bg-amber-50 mb-1 cursor-pointer hover:bg-amber-100"
+                      onClick={() => navigate('/dashboard/documents?filter=upcoming')}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate block">{doc.title}</span>
+                        {doc.employee && (
+                          <span className="text-xs text-muted-foreground">{doc.employee.first_name} {doc.employee.last_name}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-amber-700 ml-2 whitespace-nowrap">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
                     </div>
                   ))}
                 </ScrollArea>

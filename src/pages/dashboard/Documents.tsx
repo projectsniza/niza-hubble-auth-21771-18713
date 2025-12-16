@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
@@ -59,10 +60,12 @@ interface DocumentItem {
   follow_up_date: string | null;
   created_at: string;
   folder_id: string | null;
+  employee?: { first_name: string; last_name: string } | null;
 }
 
 export default function Documents() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
@@ -72,7 +75,10 @@ export default function Documents() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState(() => {
+    const filter = searchParams.get('filter');
+    return filter === 'overdue' || filter === 'upcoming' ? filter : 'all';
+  });
   const [loading, setLoading] = useState(true);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
@@ -109,11 +115,19 @@ export default function Documents() {
     const fetchAllDocuments = async () => {
       const { data } = await supabase
         .from('documents')
-        .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id');
+        .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)');
       setAllDocuments(data || []);
     };
     fetchAllDocuments();
   }, []);
+
+  // Update activeTab when URL filter changes
+  useEffect(() => {
+    const filter = searchParams.get('filter');
+    if (filter === 'overdue' || filter === 'upcoming') {
+      setActiveTab(filter);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchFoldersAndDocuments();
@@ -146,7 +160,7 @@ export default function Documents() {
         // Fetch documents in current folder
         const { data: docsData } = await supabase
           .from('documents')
-          .select('*')
+          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)')
           .eq('folder_id', currentFolderId)
           .order('created_at', { ascending: false });
         setDocuments(docsData || []);
@@ -259,7 +273,11 @@ export default function Documents() {
     return 'normal';
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  // When filtering by overdue/upcoming from URL, use all documents globally
+  const isGlobalFilter = searchParams.get('filter') === 'overdue' || searchParams.get('filter') === 'upcoming';
+  const docsToFilter = isGlobalFilter ? allDocuments : documents;
+  
+  const filteredDocuments = docsToFilter.filter(doc => {
     if (activeTab === 'overdue') return getDocumentStatus(doc) === 'overdue';
     if (activeTab === 'upcoming') return getDocumentStatus(doc) === 'upcoming';
     return true;
@@ -514,7 +532,12 @@ export default function Documents() {
                             <File className="h-8 w-8 text-muted-foreground" />
                             <div>
                               <p className="font-medium text-foreground">{doc.title}</p>
-                              <p className="text-sm text-muted-foreground">{doc.file_name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-muted-foreground">{doc.file_name}</p>
+                                {doc.employee && (
+                                  <span className="text-sm text-primary">• {doc.employee.first_name} {doc.employee.last_name}</span>
+                                )}
+                              </div>
                               <div className="flex gap-2 mt-1">
                                 {doc.follow_up_date && (
                                   <Badge variant={status === 'overdue' ? 'destructive' : status === 'upcoming' ? 'secondary' : 'outline'}>
