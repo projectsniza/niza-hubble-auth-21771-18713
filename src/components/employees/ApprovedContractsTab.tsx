@@ -7,6 +7,7 @@ import { FileCheck, Loader2, Upload, CheckCircle2, Clock, Eye, Download } from '
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
@@ -108,22 +109,91 @@ export default function ApprovedContractsTab() {
 
   const handleDownloadFile = async (contract: ApprovedContract) => {
     const filePath = contract.signed_contract_path || contract.contract_file_path;
-    if (!filePath) {
-      toast.error('No contract file available');
-      return;
-    }
+    
+    // Try to download from storage first
+    if (filePath) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(filePath, 60);
 
-    try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(filePath, 60);
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
+        if (!error && data?.signedUrl) {
+          window.open(data.signedUrl, '_blank');
+          return;
+        }
+      } catch (error) {
+        console.log('Storage file not found, generating PDF...');
       }
-    } catch (error: any) {
-      toast.error('Failed to download contract');
+    }
+    
+    // Generate PDF if no file in storage
+    if (contract.employee) {
+      try {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 20;
+        let y = 30;
+
+        // Header
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Employment Contract', pageWidth / 2, y, { align: 'center' });
+        y += 15;
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        
+        // Employee details
+        doc.text(`Employee: ${contract.employee.first_name} ${contract.employee.last_name}`, margin, y);
+        y += 8;
+        doc.text(`Organization: ${contract.employee.organization?.name || '-'}`, margin, y);
+        y += 8;
+        doc.text(`Branch: ${contract.employee.branch?.name || '-'}`, margin, y);
+        y += 8;
+        doc.text(`Job Title: ${contract.employee.job_title || '-'}`, margin, y);
+        y += 8;
+        doc.text(`Join Date: ${contract.employee.join_date || '-'}`, margin, y);
+        y += 8;
+        doc.text(`Address: ${contract.employee.address || '-'}`, margin, y);
+        y += 15;
+
+        // Approval info
+        doc.setFont('helvetica', 'bold');
+        doc.text('Contract Approval', margin, y);
+        y += 8;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Approved Date: ${contract.approved_at ? format(new Date(contract.approved_at), 'dd MMM yyyy') : '-'}`, margin, y);
+        y += 8;
+        
+        if (contract.employer_signature) {
+          doc.text(`Employer Signed: ${contract.employer_signed_date ? format(new Date(contract.employer_signed_date), 'dd MMM yyyy') : 'Yes'}`, margin, y);
+          y += 15;
+          
+          // Add signature
+          if (contract.employer_signature_type === 'drawn' || contract.employer_signature_type === 'uploaded') {
+            try {
+              doc.addImage(contract.employer_signature, 'PNG', margin, y, 60, 20);
+              y += 25;
+            } catch {
+              doc.setFont('helvetica', 'italic');
+              doc.text(contract.employer_signature, margin, y);
+              y += 8;
+            }
+          } else {
+            doc.setFont('times', 'italic');
+            doc.setFontSize(16);
+            doc.text(contract.employer_signature, margin, y);
+          }
+        }
+
+        // Save the PDF
+        doc.save(`contract-${contract.employee.first_name}-${contract.employee.last_name}.pdf`);
+        toast.success('Contract downloaded');
+      } catch (error: any) {
+        toast.error('Failed to generate contract PDF');
+      }
+    } else {
+      toast.error('No contract data available');
     }
   };
 

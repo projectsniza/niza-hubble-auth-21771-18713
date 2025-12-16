@@ -34,6 +34,7 @@ interface ApplicationFormProps {
 interface FormData {
   organization_id: string;
   branch_id: string;
+  branch_address: string;
   position: string;
   closing_date: string;
   title: string;
@@ -79,9 +80,11 @@ export default function ApplicationForm({
 }: ApplicationFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  const selectedBranchForInit = branches.find(b => b.id === employeeData.branch_id);
   const [formData, setFormData] = useState<FormData>({
     organization_id: employeeData.organization_id,
     branch_id: employeeData.branch_id,
+    branch_address: selectedBranchForInit?.address || '',
     position: '',
     closing_date: '',
     title: '',
@@ -139,7 +142,14 @@ export default function ApplicationForm({
 
   const selectedOrg = organizations.find(o => o.id === formData.organization_id);
   const selectedBranch = branches.find(b => b.id === formData.branch_id);
-  const branchAddress = selectedBranch?.address || '';
+  const branchAddress = formData.branch_address || selectedBranch?.address || '';
+  
+  // Update branch_address when branch changes
+  useEffect(() => {
+    if (selectedBranch?.address && !formData.branch_address) {
+      updateField('branch_address', selectedBranch.address);
+    }
+  }, [formData.branch_id, selectedBranch]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -571,10 +581,16 @@ export default function ApplicationForm({
                 disabled={readOnly}
               />
             </div>
+          <div className="space-y-2 md:col-span-2">
+              <Label>Branch Address</Label>
+              <Input
+                value={formData.branch_address}
+                onChange={(e) => updateField('branch_address', e.target.value)}
+                placeholder="Enter branch address"
+                disabled={readOnly}
+              />
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground mt-4">
-            at {branchAddress || '[Branch Address]'}
-          </p>
         </div>
 
         {/* Section 2: Personal Information */}
