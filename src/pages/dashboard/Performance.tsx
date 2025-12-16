@@ -240,13 +240,14 @@ export default function Performance() {
 
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Dialog open={showAddReview} onOpenChange={setShowAddReview}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Review
-                </Button>
-              </DialogTrigger>
+            {(user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager') && (
+              <Dialog open={showAddReview} onOpenChange={setShowAddReview}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Review
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Add Performance Review</DialogTitle>
@@ -325,6 +326,7 @@ export default function Performance() {
                 </div>
               </DialogContent>
             </Dialog>
+            )}
             
             {user?.role === 'super_admin' && (
               <Dialog open={showAddCriteria} onOpenChange={setShowAddCriteria}>
