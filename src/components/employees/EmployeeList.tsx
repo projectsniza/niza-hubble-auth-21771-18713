@@ -222,7 +222,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/dashboard/employee/${employee.id}`)}>
+                        <DropdownMenuItem onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
                           <Eye className="h-4 w-4 mr-2" />
                           View Profile
                         </DropdownMenuItem>
