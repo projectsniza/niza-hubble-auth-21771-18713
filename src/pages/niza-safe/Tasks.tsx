@@ -111,14 +111,21 @@ export default function Tasks() {
   const handleCreate = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id, branch_id')
-        .eq('id', authUser?.id)
+      
+      if (!formData.branch_id) {
+        toast({ title: "Error", description: "Please select a branch", variant: "destructive" });
+        return;
+      }
+
+      // Get organization_id from selected branch
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('organization_id')
+        .eq('id', formData.branch_id)
         .single();
 
-      if (!profile?.organization_id) {
-        toast({ title: "Error", description: "Organization not configured", variant: "destructive" });
+      if (!branchData?.organization_id) {
+        toast({ title: "Error", description: "Branch organization not found", variant: "destructive" });
         return;
       }
 
@@ -130,8 +137,8 @@ export default function Tasks() {
         due_date: formData.due_date.toISOString(),
         assigned_to: formData.assigned_to || null,
         assigned_by: authUser?.id,
-        organization_id: profile.organization_id,
-        branch_id: formData.branch_id || profile.branch_id,
+        organization_id: branchData.organization_id,
+        branch_id: formData.branch_id,
       });
 
       if (error) throw error;
