@@ -69,6 +69,7 @@ export default function ELearning() {
 
   const isAdminOrHR = user?.role === 'super_admin' || user?.role === 'hr';
   const isManager = user?.role === 'manager';
+  const isEmployee = user?.role === 'employee';
 
   useEffect(() => {
     fetchTrainings();
@@ -80,10 +81,17 @@ export default function ELearning() {
   const fetchTrainings = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('trainings')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // For employees, fetch trainings assigned to their branch (via manager's branch)
+      if (isEmployee && user?.branchId) {
+        query = query.eq('branch_id', user.branchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTrainings(data || []);
@@ -246,8 +254,34 @@ export default function ELearning() {
     }
   };
 
+  const handleStartTraining = async () => {
+    if (!selectedTraining || !isManager) return;
+
+    try {
+      const { error } = await supabase
+        .from('trainings')
+        .update({ status: 'in_progress' })
+        .eq('id', selectedTraining.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Training Started',
+        description: 'Training is now in progress',
+      });
+      setSelectedTraining({ ...selectedTraining, status: 'in_progress' });
+      fetchTrainings();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to start training',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const handleCompleteTraining = async () => {
-    if (!selectedTraining) return;
+    if (!selectedTraining || !isManager) return;
 
     try {
       // Upload completion files
@@ -367,7 +401,7 @@ export default function ELearning() {
         <div>
           <h2 className="text-3xl font-bold text-foreground">Training Management</h2>
           <p className="text-muted-foreground mt-1">
-            {isAdminOrHR ? 'Create and manage training assignments' : 'View and complete assigned trainings'}
+            {isAdminOrHR ? 'Create and manage training assignments' : isManager ? 'View and complete assigned trainings' : 'View training assignments for your branch'}
           </p>
         </div>
         {isAdminOrHR && (
@@ -378,15 +412,15 @@ export default function ELearning() {
         )}
       </div>
 
-      <Tabs defaultValue={isManager ? 'assigned' : 'all'} className="w-full">
-        <TabsList className={isManager ? 'grid w-full grid-cols-2' : 'grid w-full grid-cols-4'}>
-          {!isManager && <TabsTrigger value="all">All Trainings</TabsTrigger>}
-          <TabsTrigger value="assigned">{isManager ? 'My Trainings' : 'Pending'}</TabsTrigger>
+      <Tabs defaultValue={(isManager || isEmployee) ? 'assigned' : 'all'} className="w-full">
+        <TabsList className={(isManager || isEmployee) ? 'grid w-full grid-cols-3' : 'grid w-full grid-cols-4'}>
+          {!(isManager || isEmployee) && <TabsTrigger value="all">All Trainings</TabsTrigger>}
+          <TabsTrigger value="assigned">{(isManager || isEmployee) ? 'Pending' : 'Pending'}</TabsTrigger>
           <TabsTrigger value="progress">In Progress</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
         </TabsList>
 
-        {!isManager && (
+        {!(isManager || isEmployee) && (
           <TabsContent value="all" className="space-y-4">
             {filteredTrainings().length === 0 ? (
               <Card className="p-8 text-center">
@@ -404,6 +438,7 @@ export default function ELearning() {
                     setShowDetailsDialog(true);
                   }}
                   isManager={false}
+                  isEmployee={false}
                 />
               ))
             )}
@@ -427,6 +462,7 @@ export default function ELearning() {
                   setShowDetailsDialog(true);
                 }}
                 isManager={isManager}
+                isEmployee={isEmployee}
               />
             ))
           )}
@@ -449,6 +485,7 @@ export default function ELearning() {
                   setShowDetailsDialog(true);
                 }}
                 isManager={isManager}
+                isEmployee={isEmployee}
               />
             ))
           )}
@@ -471,6 +508,7 @@ export default function ELearning() {
                   setShowDetailsDialog(true);
                 }}
                 isManager={isManager}
+                isEmployee={isEmployee}
               />
             ))
           )}
@@ -699,7 +737,16 @@ export default function ELearning() {
                 </div>
               )}
 
-              {isManager && selectedTraining.status !== 'completed' && (
+              {isManager && selectedTraining.status === 'pending' && (
+                <div className="space-y-4 pt-4 border-t">
+                  <h4 className="font-semibold">Start Training</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Click the button below to start this training. The status will change to "In Progress".
+                  </p>
+                </div>
+              )}
+
+              {isManager && selectedTraining.status === 'in_progress' && (
                 <div className="space-y-4 pt-4 border-t">
                   <h4 className="font-semibold">Complete Training</h4>
                   <div>
@@ -744,6 +791,14 @@ export default function ELearning() {
                 </div>
               )}
 
+              {isEmployee && (
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground italic">
+                    This training is managed by your branch manager. You can view the training details but cannot start or complete it.
+                  </p>
+                </div>
+              )}
+
               {selectedTraining.status === 'completed' && (
                 <div className="space-y-2 pt-4 border-t">
                   <p className="text-sm text-muted-foreground">Completion Documents</p>
@@ -780,10 +835,16 @@ export default function ELearning() {
               <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
                 Close
               </Button>
-              {isManager && selectedTraining.status !== 'completed' && (
+              {isManager && selectedTraining.status === 'pending' && (
+                <Button onClick={handleStartTraining}>
+                  <Clock className="h-4 w-4 mr-2" />
+                  Start Training
+                </Button>
+              )}
+              {isManager && selectedTraining.status === 'in_progress' && (
                 <Button onClick={handleCompleteTraining} disabled={closingFiles.length === 0}>
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  Complete Training
+                  Mark as Completed
                 </Button>
               )}
             </DialogFooter>
@@ -798,12 +859,14 @@ function TrainingCard({
   training, 
   managerName,
   onView, 
-  isManager 
+  isManager,
+  isEmployee
 }: { 
   training: Training; 
   managerName: string;
   onView: () => void; 
   isManager: boolean;
+  isEmployee: boolean;
 }) {
   const getStatusBadge = (status: string | null) => {
     const variants = {
@@ -814,6 +877,15 @@ function TrainingCard({
     return variants[status as keyof typeof variants] || variants.pending;
   };
 
+  const getStatusLabel = (status: string | null) => {
+    const labels = {
+      pending: 'PENDING',
+      in_progress: 'IN PROGRESS',
+      completed: 'COMPLETED',
+    };
+    return labels[status as keyof typeof labels] || 'PENDING';
+  };
+
   return (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader>
@@ -821,10 +893,16 @@ function TrainingCard({
           <div className="space-y-1">
             <CardTitle className="text-xl">{training.title}</CardTitle>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              {!isManager && (
+              {!(isManager || isEmployee) && (
                 <span className="flex items-center gap-1">
                   <User className="h-4 w-4" />
                   {managerName}
+                </span>
+              )}
+              {isEmployee && (
+                <span className="flex items-center gap-1">
+                  <User className="h-4 w-4" />
+                  Assigned to: {managerName}
                 </span>
               )}
               {training.deadline && (
@@ -837,10 +915,10 @@ function TrainingCard({
           </div>
           <div className="flex items-center gap-3">
             <Badge className={getStatusBadge(training.status)}>
-              {(training.status || 'pending').replace('_', ' ').toUpperCase()}
+              {getStatusLabel(training.status)}
             </Badge>
             <Button variant="outline" size="sm" onClick={onView}>
-              View Details
+              {isEmployee ? 'View' : 'View Details'}
             </Button>
           </div>
         </div>
