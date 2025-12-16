@@ -2727,6 +2727,7 @@ export type Database = {
           due_date: string | null
           id: string
           organization_id: string
+          priority: string | null
           related_hazard_id: string | null
           related_incident_id: string | null
           related_risk_assessment_id: string | null
@@ -2747,6 +2748,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           organization_id: string
+          priority?: string | null
           related_hazard_id?: string | null
           related_incident_id?: string | null
           related_risk_assessment_id?: string | null
@@ -2767,6 +2769,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           organization_id?: string
+          priority?: string | null
           related_hazard_id?: string | null
           related_incident_id?: string | null
           related_risk_assessment_id?: string | null

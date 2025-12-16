@@ -98,9 +98,22 @@ export default function Tasks() {
   const fetchEmployees = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, name, email')
+      .select('id, name, email, branch_id')
       .order('name');
     setEmployees(data || []);
+  };
+
+  const handleEmployeeSelect = (employeeId: string) => {
+    const employee = employees.find(emp => emp.id === employeeId);
+    if (employee && employee.branch_id) {
+      setFormData({ 
+        ...formData, 
+        assigned_to: employeeId,
+        branch_id: employee.branch_id 
+      });
+    } else {
+      setFormData({ ...formData, assigned_to: employeeId });
+    }
   };
 
   const fetchBranches = async () => {
@@ -454,7 +467,7 @@ export default function Tasks() {
             </div>
             <div className="space-y-2">
               <Label>Assign To</Label>
-              <Select value={formData.assigned_to} onValueChange={(v) => setFormData({ ...formData, assigned_to: v })}>
+              <Select value={formData.assigned_to} onValueChange={handleEmployeeSelect}>
                 <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                 <SelectContent>
                   {employees.map((emp) => (
