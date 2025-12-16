@@ -176,7 +176,8 @@ export default function ELearning() {
     try {
       const selectedManager = managers.find(m => m.id === formData.assignedTo);
 
-      const { data: training, error: trainingError } = await supabase
+      // First insert training without .select().single() to avoid RLS read issues
+      const { data: trainingData, error: trainingError } = await supabase
         .from('trainings')
         .insert({
           title: formData.title,
@@ -189,23 +190,29 @@ export default function ELearning() {
           created_by: user?.id,
           status: 'pending'
         })
-        .select()
+        .select('id')
         .single();
 
-      if (trainingError) throw trainingError;
+      if (trainingError) {
+        console.error('Training insert error:', trainingError);
+        throw trainingError;
+      }
 
-      // Upload files
-      if (uploadedFiles.length > 0 && training) {
+      // Upload files if training was created successfully
+      if (uploadedFiles.length > 0 && trainingData?.id) {
         for (const file of uploadedFiles) {
-          const filePath = `${training.id}/${Date.now()}-${file.name}`;
+          const filePath = `${trainingData.id}/${Date.now()}-${file.name}`;
           const { error: uploadError } = await supabase.storage
             .from('training-documents')
             .upload(filePath, file);
 
-          if (uploadError) throw uploadError;
+          if (uploadError) {
+            console.error('File upload error:', uploadError);
+            throw uploadError;
+          }
 
-          await supabase.from('training_documents').insert({
-            training_id: training.id,
+          const { error: docError } = await supabase.from('training_documents').insert({
+            training_id: trainingData.id,
             file_name: file.name,
             file_path: filePath,
             file_type: file.type,
@@ -213,6 +220,11 @@ export default function ELearning() {
             document_type: 'training',
             uploaded_by: user?.id
           });
+
+          if (docError) {
+            console.error('Training document insert error:', docError);
+            throw docError;
+          }
         }
       }
 
@@ -225,6 +237,7 @@ export default function ELearning() {
       setUploadedFiles([]);
       fetchTrainings();
     } catch (error: any) {
+      console.error('Create training error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to create training',
