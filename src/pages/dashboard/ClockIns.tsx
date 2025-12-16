@@ -262,6 +262,14 @@ export default function ClockIns() {
     }
 
     try {
+      // Delete dependent clock-ins first to satisfy FK clock_ins_location_id_fkey
+      const { error: clockInsError } = await supabase
+        .from('clock_ins')
+        .delete()
+        .eq('location_id', locationId);
+
+      if (clockInsError) throw clockInsError;
+
       const { error } = await supabase
         .from('locations')
         .delete()
