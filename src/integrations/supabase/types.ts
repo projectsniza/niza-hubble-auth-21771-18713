@@ -3583,6 +3583,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_branch_cascade: {
+        Args: { p_branch_id: string }
+        Returns: undefined
+      }
+      delete_organization_cascade: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
       get_my_profile_data: {
         Args: never
         Returns: {
