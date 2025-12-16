@@ -62,33 +62,33 @@ export function useOrganizations() {
       const branchIds = orgBranches?.map(b => b.id) || [];
 
       if (branchIds.length > 0) {
-        // Get all locations for these branches
-        const { data: branchLocations } = await supabase
-          .from('locations')
-          .select('id')
-          .in('branch_id', branchIds);
-
-        const locationIds = branchLocations?.map(l => l.id) || [];
-
-        if (locationIds.length > 0) {
-          // Delete clock_ins referencing these locations
-          await supabase
-            .from('clock_ins')
-            .delete()
-            .in('location_id', locationIds);
-
-          // Delete locations
-          await supabase
-            .from('locations')
-            .delete()
-            .in('branch_id', branchIds);
-        }
-
-        // Delete clock_ins referencing these branches directly
-        await supabase
+        // Delete ALL clock_ins for these branches first
+        const { error: clockInsError } = await supabase
           .from('clock_ins')
           .delete()
           .in('branch_id', branchIds);
+
+        if (clockInsError) {
+          console.error('Error deleting clock_ins:', clockInsError);
+        }
+
+        // Now delete all locations for these branches
+        const { error: locationsError } = await supabase
+          .from('locations')
+          .delete()
+          .in('branch_id', branchIds);
+
+        if (locationsError) {
+          console.error('Error deleting locations:', locationsError);
+        }
+
+        // Delete branches
+        const { error: branchesError } = await supabase
+          .from('branches')
+          .delete()
+          .eq('organization_id', id);
+
+        if (branchesError) throw branchesError;
       }
 
       // Delete only deletable folders (skip system folders)
@@ -97,16 +97,6 @@ export function useOrganizations() {
         .delete()
         .eq('organization_id', id)
         .eq('is_deletable', true);
-
-      // Delete branches
-      if (branchIds.length > 0) {
-        const { error: branchesError } = await supabase
-          .from('branches')
-          .delete()
-          .eq('organization_id', id);
-
-        if (branchesError) throw branchesError;
-      }
 
       // Now delete the organization
       const { error } = await supabase
@@ -207,33 +197,26 @@ export function useBranches(organizationId?: string) {
 
   const deleteBranch = async (id: string) => {
     try {
-      // Get all locations for this branch
-      const { data: branchLocations } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('branch_id', id);
-
-      const locationIds = branchLocations?.map(l => l.id) || [];
-
-      if (locationIds.length > 0) {
-        // Delete clock_ins referencing these locations
-        await supabase
-          .from('clock_ins')
-          .delete()
-          .in('location_id', locationIds);
-
-        // Delete locations
-        await supabase
-          .from('locations')
-          .delete()
-          .eq('branch_id', id);
-      }
-
-      // Delete clock_ins referencing this branch directly
-      await supabase
+      // First, delete ALL clock_ins for this branch (regardless of location)
+      const { error: clockInsError } = await supabase
         .from('clock_ins')
         .delete()
         .eq('branch_id', id);
+
+      if (clockInsError) {
+        console.error('Error deleting clock_ins:', clockInsError);
+      }
+
+      // Now delete all locations for this branch
+      const { error: locationsError } = await supabase
+        .from('locations')
+        .delete()
+        .eq('branch_id', id);
+
+      if (locationsError) {
+        console.error('Error deleting locations:', locationsError);
+        throw locationsError;
+      }
 
       // Delete only deletable folders (skip system folders)
       await supabase
