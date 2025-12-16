@@ -114,13 +114,17 @@ export default function UserManagement() {
 
     setIsSubmitting(true);
     try {
-      // Create auth user
+      // Create auth user with role in metadata for the trigger
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: selectedEmployee.email,
         password: password,
         options: {
           data: {
-            name: displayName || `${selectedEmployee.first_name} ${selectedEmployee.last_name}`
+            name: displayName || `${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
+            role: selectedRole,
+            organization_id: selectedEmployee.organization_id || '',
+            branch_id: selectedEmployee.branch_id || '',
+            hr_access_level: selectedRole === 'hr' ? hrAccessLevel : ''
           },
           emailRedirectTo: `${window.location.origin}/`
         }
@@ -148,25 +152,22 @@ export default function UserManagement() {
         console.error('Profile update error:', profileError);
       }
 
-      // Update the user role if not employee
-      if (selectedRole !== 'employee') {
-        // Check if role exists first
-        const { data: existingRole } = await supabase
-          .from('user_roles')
-          .select('*')
-          .eq('user_id', authData.user.id)
-          .maybeSingle();
+      // Update the user role to ensure it's correct
+      const { data: existingRole } = await supabase
+        .from('user_roles')
+        .select('*')
+        .eq('user_id', authData.user.id)
+        .maybeSingle();
 
-        if (existingRole) {
-          await supabase
-            .from('user_roles')
-            .update({ role: selectedRole })
-            .eq('user_id', authData.user.id);
-        } else {
-          await supabase
-            .from('user_roles')
-            .insert({ user_id: authData.user.id, role: selectedRole });
-        }
+      if (existingRole) {
+        await supabase
+          .from('user_roles')
+          .update({ role: selectedRole })
+          .eq('user_id', authData.user.id);
+      } else {
+        await supabase
+          .from('user_roles')
+          .insert({ user_id: authData.user.id, role: selectedRole });
       }
 
       // Link employee to user and activate
