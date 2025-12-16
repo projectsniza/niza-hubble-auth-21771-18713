@@ -50,6 +50,8 @@ interface UploadedDoc {
   file: File | null;
   uploaded: boolean;
   document_id?: string;
+  expiry_date: string;
+  follow_up_date: string;
 }
 
 export default function BulkUploadedEmployees() {
@@ -119,7 +121,9 @@ export default function BulkUploadedEmployees() {
         requirement_id: req.id,
         file: null,
         uploaded: !!existing,
-        document_id: existing?.id
+        document_id: existing?.id,
+        expiry_date: existing?.expiry_date || '',
+        follow_up_date: existing?.follow_up_date || ''
       };
     }));
     
@@ -129,6 +133,12 @@ export default function BulkUploadedEmployees() {
   const handleFileSelect = (requirementId: string, file: File | null) => {
     setUploadedDocs(prev => prev.map(doc => 
       doc.requirement_id === requirementId ? { ...doc, file } : doc
+    ));
+  };
+
+  const handleDateChange = (requirementId: string, field: 'expiry_date' | 'follow_up_date', value: string) => {
+    setUploadedDocs(prev => prev.map(doc => 
+      doc.requirement_id === requirementId ? { ...doc, [field]: value } : doc
     ));
   };
 
@@ -168,7 +178,9 @@ export default function BulkUploadedEmployees() {
             file_path: filePath,
             file_type: doc.file.type,
             file_size: doc.file.size,
-            employee_id: selectedEmployee.id
+            employee_id: selectedEmployee.id,
+            expiry_date: doc.expiry_date || null,
+            follow_up_date: doc.follow_up_date || null
           });
 
         if (docError) throw docError;
@@ -358,26 +370,54 @@ export default function BulkUploadedEmployees() {
                               Done
                             </Button>
                           ) : (
-                            <div className="flex flex-col items-end gap-2">
-                              <Input
-                                type="file"
-                                id={`file-${requirement.id}`}
-                                className="hidden"
-                                onChange={(e) => handleFileSelect(requirement.id, e.target.files?.[0] || null)}
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                              />
-                              <Label 
-                                htmlFor={`file-${requirement.id}`}
-                                className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
-                              >
-                                <Upload className="h-4 w-4 mr-2" />
-                                Select File
-                              </Label>
+                            <div className="flex flex-col gap-3 w-full">
+                              <div className="flex items-center gap-2 justify-end">
+                                <Input
+                                  type="file"
+                                  id={`file-${requirement.id}`}
+                                  className="hidden"
+                                  onChange={(e) => handleFileSelect(requirement.id, e.target.files?.[0] || null)}
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                />
+                                <Label 
+                                  htmlFor={`file-${requirement.id}`}
+                                  className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+                                >
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Select File
+                                </Label>
+                              </div>
                               {docState?.file && (
-                                <span className="text-xs text-muted-foreground max-w-[150px] truncate">
+                                <span className="text-xs text-muted-foreground text-right truncate">
                                   {docState.file.name}
                                 </span>
                               )}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`expiry-${requirement.id}`} className="text-xs text-muted-foreground">
+                                    Expiry Date
+                                  </Label>
+                                  <Input
+                                    id={`expiry-${requirement.id}`}
+                                    type="date"
+                                    value={docState?.expiry_date || ''}
+                                    onChange={(e) => handleDateChange(requirement.id, 'expiry_date', e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor={`followup-${requirement.id}`} className="text-xs text-muted-foreground">
+                                    Follow-up Date
+                                  </Label>
+                                  <Input
+                                    id={`followup-${requirement.id}`}
+                                    type="date"
+                                    value={docState?.follow_up_date || ''}
+                                    onChange={(e) => handleDateChange(requirement.id, 'follow_up_date', e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
