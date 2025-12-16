@@ -42,6 +42,7 @@ import Settings from "./pages/dashboard/Settings";
 import Maintenance from "./pages/dashboard/Maintenance";
 import AddEmployee from "./pages/dashboard/AddEmployee";
 import UKCompliance from "./pages/dashboard/UKCompliance";
+import SafetyTasks from "./pages/dashboard/SafetyTasks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="settings" element={<Settings />} />
               <Route path="maintenance" element={<Maintenance />} />
               <Route path="uk-compliance" element={<UKCompliance />} />
+              <Route path="safety-tasks" element={<SafetyTasks />} />
             </Route>
             <Route path="/niza-safe" element={<NizaSafe />}>
               <Route index element={<NizaSafeHome />} />

@@ -1,4 +1,4 @@
-import { Grid3x3, Shield, FileText, BarChart3, ArrowRight, Calculator } from "lucide-react";
+import { Grid3x3, Shield, FileText, Calculator, ArrowRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AppItem {
   name: string;
@@ -43,6 +44,15 @@ const apps: AppItem[] = [
 
 export default function AppsDialog() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Only show apps for super_admin or full workspace HR
+  const canAccessApps = user?.role === 'super_admin' || 
+    (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+
+  if (!canAccessApps) {
+    return null;
+  }
 
   return (
     <Dialog>

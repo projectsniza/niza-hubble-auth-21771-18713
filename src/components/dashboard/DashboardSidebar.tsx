@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Briefcase, Wrench, ClipboardList, Shield
+  User, Briefcase, Wrench, ClipboardList, Shield, ClipboardCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const getMenuItems = (role: string) => {
       { title: 'Clock In/Out', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'My Schedule', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Attendance & Leave', icon: Clock, path: '/dashboard/attendance' },
-      { title: 'My Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Safety Tasks', icon: ClipboardCheck, path: '/dashboard/safety-tasks' },
       { title: 'Pay Slips', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
@@ -33,9 +33,9 @@ const getMenuItems = (role: string) => {
       { title: 'Home', icon: Home, path: '/dashboard' },
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
-      { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
+      { title: 'Safety Tasks', icon: ClipboardCheck, path: '/dashboard/safety-tasks' },
       { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
