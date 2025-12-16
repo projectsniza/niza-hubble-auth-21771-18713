@@ -102,6 +102,8 @@ export default function ClockIns() {
   const [loading, setLoading] = useState(true);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [coordinateFormat, setCoordinateFormat] = useState<'decimal' | 'dms'>('decimal');
+  const [activeClockIn, setActiveClockIn] = useState<ClockIn | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   
   const [newLocation, setNewLocation] = useState({
     name: '',
@@ -118,6 +120,32 @@ export default function ClockIns() {
     fetchData();
   }, []);
 
+  // Timer effect for active clock-in
+  useEffect(() => {
+    if (!activeClockIn) {
+      setElapsedTime('00:00:00');
+      return;
+    }
+
+    const updateTimer = () => {
+      const start = new Date(activeClockIn.clock_in_time).getTime();
+      const now = Date.now();
+      const diff = now - start;
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setElapsedTime(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeClockIn]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -132,6 +160,12 @@ export default function ClockIns() {
       setClockIns(clockInsRes.data || []);
       setBranches(branchesRes.data || []);
       setOrganizations(orgsRes.data || []);
+
+      // Find active clock-in for current user (clocked in but not clocked out)
+      const activeSession = (clockInsRes.data || []).find(
+        (c: ClockIn) => c.user_id === user?.id && !c.clock_out_time
+      );
+      setActiveClockIn(activeSession || null);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -354,6 +388,49 @@ export default function ClockIns() {
     }
   };
 
+  const handleClockOut = async () => {
+    if (!activeClockIn) {
+      toast.error('No active clock-in session found');
+      return;
+    }
+
+    try {
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+
+        const { error } = await supabase
+          .from('clock_ins')
+          .update({
+            clock_out_time: new Date().toISOString(),
+            clock_out_latitude: latitude,
+            clock_out_longitude: longitude
+          })
+          .eq('id', activeClockIn.id);
+
+        if (error) throw error;
+        toast.success('Clocked out successfully');
+        setActiveClockIn(null);
+        fetchData();
+      }, (geoError) => {
+        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
+        switch (geoError.code) {
+          case geoError.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
+            break;
+          case geoError.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
+            break;
+          case geoError.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+        }
+        toast.error(errorMessage);
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to clock out');
+    }
+  };
+
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Earth's radius in meters
     const φ1 = lat1 * Math.PI / 180;
@@ -558,6 +635,35 @@ export default function ClockIns() {
         </DialogContent>
       </Dialog>
 
+      {/* Active Session Card */}
+      {activeClockIn && (
+        <Card className="p-6 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center animate-pulse">
+                <Clock className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Currently Working</p>
+                <p className="text-3xl font-bold text-foreground font-mono">{elapsedTime}</p>
+                <p className="text-xs text-muted-foreground">
+                  Started at {format(new Date(activeClockIn.clock_in_time), 'HH:mm')}
+                </p>
+              </div>
+            </div>
+            <Button 
+              size="lg" 
+              variant="destructive" 
+              onClick={handleClockOut}
+              className="gap-2"
+            >
+              <Clock className="h-5 w-5" />
+              Clock Out
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
@@ -682,10 +788,26 @@ export default function ClockIns() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => handleClockIn(location.id)}>
-                      <Clock className="h-4 w-4 mr-2" />
-                      Clock In
-                    </Button>
+                    {activeClockIn ? (
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        className="flex-1" 
+                        onClick={handleClockOut}
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Clock Out
+                      </Button>
+                    ) : (
+                      <Button 
+                        size="sm" 
+                        className="flex-1" 
+                        onClick={() => handleClockIn(location.id)}
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Clock In
+                      </Button>
+                    )}
                     {user?.role === 'super_admin' && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
