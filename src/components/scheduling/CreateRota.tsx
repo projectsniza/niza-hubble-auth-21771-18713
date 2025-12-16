@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Copy, Table, CalendarDays, Layers, Info, Plus, X } from 'lucide-react';
+import { Calendar, Copy, Plus, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,13 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 
-type RotaView = 'table' | 'timeline' | 'drag-drop';
 type CreateMode = 'new' | 'copy' | null;
 
 interface Employee {
@@ -35,7 +33,6 @@ interface Shift {
 export function CreateRota() {
   const { user } = useAuth();
   const [createMode, setCreateMode] = useState<CreateMode>(null);
-  const [selectedView, setSelectedView] = useState<RotaView>('table');
   const [branches, setBranches] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [existingRotas, setExistingRotas] = useState<any[]>([]);
@@ -146,7 +143,7 @@ export function CreateRota() {
           end_time: shift.endTime,
           break_duration: shift.breakDuration,
           notes: shift.notes || null,
-          status: 'scheduled'
+          status: 'assigned'
         }));
 
         const { error: shiftsError } = await supabase
@@ -340,86 +337,6 @@ export function CreateRota() {
           />
         </div>
 
-        <div className="space-y-4">
-          <Label>Select your rota view</Label>
-          <div className="grid md:grid-cols-3 gap-4">
-            <Card
-              className={cn(
-                'p-6 cursor-pointer transition-all',
-                selectedView === 'table' && 'border-primary bg-primary/5'
-              )}
-              onClick={() => setSelectedView('table')}
-            >
-              <div className="text-center space-y-4">
-                <div className="flex justify-center">
-                  <div className={cn(
-                    'w-16 h-16 rounded-lg flex items-center justify-center',
-                    selectedView === 'table' ? 'bg-primary text-primary-foreground' : 'bg-primary/10'
-                  )}>
-                    <Table className="w-8 h-8" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Table view</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Set your shift times and easily assign this across employees and dates at once.
-                  </p>
-                </div>
-              </div>
-            </Card>
-
-            <Card
-              className={cn(
-                'p-6 cursor-pointer transition-all',
-                selectedView === 'timeline' && 'border-primary bg-primary/5'
-              )}
-              onClick={() => setSelectedView('timeline')}
-            >
-              <div className="text-center space-y-4">
-                <div className="flex justify-center">
-                  <div className={cn(
-                    'w-16 h-16 rounded-lg flex items-center justify-center',
-                    selectedView === 'timeline' ? 'bg-primary text-primary-foreground' : 'bg-primary/10'
-                  )}>
-                    <CalendarDays className="w-8 h-8" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Timeline view</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Add your shift times and assign this to as many employees as you need.
-                  </p>
-                </div>
-              </div>
-            </Card>
-
-            <Card
-              className={cn(
-                'p-6 cursor-pointer transition-all',
-                selectedView === 'drag-drop' && 'border-primary bg-primary/5'
-              )}
-              onClick={() => setSelectedView('drag-drop')}
-            >
-              <div className="text-center space-y-4">
-                <div className="flex justify-center">
-                  <div className={cn(
-                    'w-16 h-16 rounded-lg flex items-center justify-center',
-                    selectedView === 'drag-drop' ? 'bg-primary text-primary-foreground' : 'bg-primary/10'
-                  )}>
-                    <Layers className="w-8 h-8" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Drag and drop view</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Drag and drop each employee onto the shift you'd like them to work.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
-
         {/* Employee Selection */}
         {rotaForm.branchId && (
           <div className="space-y-4">
@@ -440,7 +357,7 @@ export function CreateRota() {
         )}
 
         {/* Shift Assignment (Table View) */}
-        {selectedEmployees.length > 0 && selectedView === 'table' && (
+        {selectedEmployees.length > 0 && (
           <div className="space-y-4">
             <Label>Assign Shifts</Label>
             <div className="overflow-x-auto">
