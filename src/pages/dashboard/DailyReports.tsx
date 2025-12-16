@@ -73,9 +73,17 @@ export default function DailyReports() {
         `)
         .order('submitted_at', { ascending: false });
 
-      // If manager/hr, only show their own reports
-      if (user.role === 'manager' || user.role === 'hr') {
+      // Filter based on role and access level
+      if (user.role === 'manager') {
         query = query.eq('submitted_by', user.id);
+      } else if (user.role === 'hr') {
+        // HR access depends on their access level
+        if (user.hrAccessLevel === 'organization' && user.organizationId) {
+          query = query.eq('organization_id', user.organizationId);
+        } else if (user.hrAccessLevel === 'branch' && user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        }
+        // full_workspace HR sees all reports (no filter)
       }
 
       const { data, error } = await query;
