@@ -164,7 +164,7 @@ export default function ClockIns() {
         setGettingLocation(false);
       },
       (error) => {
-        let errorMessage = 'Unable to get your location.';
+        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
         switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
@@ -335,7 +335,7 @@ export default function ClockIns() {
         toast.success('Clocked in successfully');
         fetchData();
       }, (geoError) => {
-        let errorMessage = 'Unable to get your location.';
+        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
         switch (geoError.code) {
           case geoError.PERMISSION_DENIED:
             errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
