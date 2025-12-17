@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Bell, Briefcase, GraduationCap, Cake, Users, Megaphone, Eye, Calendar, Pin } from "lucide-react";
+import { Plus, Search, Bell, Briefcase, GraduationCap, Cake, Users, Megaphone, Eye, Calendar, Pin, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface Event {
   id: string;
@@ -37,6 +38,7 @@ export default function Events() {
   const [loading, setLoading] = useState(true);
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -144,6 +146,25 @@ export default function Events() {
       fetchEvents();
     } catch (error: any) {
       toast.error(error.message || 'Failed to create event');
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!deleteEventId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', deleteEventId);
+
+      if (error) throw error;
+
+      toast.success('Event deleted successfully');
+      setDeleteEventId(null);
+      fetchEvents();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete event');
     }
   };
 
@@ -384,11 +405,21 @@ export default function Events() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <Badge variant="outline" className="capitalize">{event.visibility}</Badge>
                       <Badge className={`bg-gradient-to-r ${config.color} text-white border-0`}>
                         {config.label}
                       </Badge>
+                      {(user?.role === 'super_admin' || user?.role === 'hr') && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteEventId(event.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -397,6 +428,24 @@ export default function Events() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteEventId} onOpenChange={(open) => !open && setDeleteEventId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this event? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
