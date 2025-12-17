@@ -737,7 +737,7 @@ export default function ELearning() {
                 </div>
               )}
 
-              {isManager && selectedTraining.status === 'pending' && (
+              {isManager && selectedTraining.status === 'pending' && selectedTraining.assigned_to === user?.id && (
                 <div className="space-y-4 pt-4 border-t">
                   <h4 className="font-semibold">Start Training</h4>
                   <p className="text-sm text-muted-foreground">
@@ -746,11 +746,11 @@ export default function ELearning() {
                 </div>
               )}
 
-              {isManager && selectedTraining.status === 'in_progress' && (
+              {isManager && selectedTraining.status === 'in_progress' && selectedTraining.assigned_to === user?.id && (
                 <div className="space-y-4 pt-4 border-t">
                   <h4 className="font-semibold">Complete Training</h4>
                   <div>
-                    <Label>Upload Completed Checklist / Evidence</Label>
+                    <Label>Upload Completed Checklist / Evidence (Optional)</Label>
                     <div className="mt-2">
                       <label className="flex items-center justify-center w-full h-24 px-4 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50">
                         <div className="flex flex-col items-center">
@@ -835,14 +835,14 @@ export default function ELearning() {
               <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
                 Close
               </Button>
-              {isManager && selectedTraining.status === 'pending' && (
+              {isManager && selectedTraining.status === 'pending' && selectedTraining.assigned_to === user?.id && (
                 <Button onClick={handleStartTraining}>
                   <Clock className="h-4 w-4 mr-2" />
                   Start Training
                 </Button>
               )}
-              {isManager && selectedTraining.status === 'in_progress' && (
-                <Button onClick={handleCompleteTraining} disabled={closingFiles.length === 0}>
+              {isManager && selectedTraining.status === 'in_progress' && selectedTraining.assigned_to === user?.id && (
+                <Button onClick={handleCompleteTraining}>
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Mark as Completed
                 </Button>
