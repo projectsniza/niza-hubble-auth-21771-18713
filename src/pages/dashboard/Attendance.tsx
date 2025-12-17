@@ -262,74 +262,316 @@ export default function Attendance() {
     setDate(new Date());
   };
 
+  const [showEmployeeLeaveRequest, setShowEmployeeLeaveRequest] = useState(false);
+  const [employeeLeaveForm, setEmployeeLeaveForm] = useState({
+    leaveTypeId: '',
+    startDate: '',
+    endDate: '',
+    reason: ''
+  });
+
+  const handleEmployeeLeaveRequest = async () => {
+    if (!employeeLeaveForm.leaveTypeId || !employeeLeaveForm.startDate || !employeeLeaveForm.endDate) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    try {
+      // Get employee record for current user
+      const { data: empData, error: empError } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (empError || !empData) {
+        toast.error('Employee record not found');
+        return;
+      }
+
+      const { error } = await supabase.from('leave_requests').insert({
+        employee_id: empData.id,
+        leave_type_id: employeeLeaveForm.leaveTypeId,
+        start_date: employeeLeaveForm.startDate,
+        end_date: employeeLeaveForm.endDate,
+        reason: employeeLeaveForm.reason || null,
+        status: 'pending'
+      });
+
+      if (error) throw error;
+      toast.success('Leave request submitted successfully');
+      setShowEmployeeLeaveRequest(false);
+      setEmployeeLeaveForm({ leaveTypeId: '', startDate: '', endDate: '', reason: '' });
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit leave request');
+    }
+  };
+
   // Employee View
   if (user?.role === 'employee') {
-    return (
-      <div className="p-8">
-        <h1 className="text-3xl font-bold text-foreground mb-6">My Attendance</h1>
-        
-        <div className="grid gap-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">My Leave Requests</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>To</TableHead>
-                  <TableHead>Days</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leaveRequests.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No leave requests found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  leaveRequests.map(req => (
-                    <TableRow key={req.id}>
-                      <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
-                      <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
-                      <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
-                      <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
-                      <TableCell>
-                        <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
-                          {req.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
+    const pendingCount = leaveRequests.filter(r => r.status === 'pending').length;
 
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Public Holidays & Mandatory Leave</h3>
-            {mandatoryLeave.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No mandatory leave periods set</p>
-            ) : (
-              <div className="space-y-2">
-                {mandatoryLeave.map(ml => (
-                  <div key={ml.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div>
-                      <p className="font-medium">{ml.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(ml.start_date), 'dd MMM')} - {format(new Date(ml.end_date), 'dd MMM yyyy')}
-                      </p>
-                    </div>
-                    <Badge variant={ml.is_paid ? 'default' : 'secondary'}>
-                      {ml.is_paid ? 'Paid' : 'Unpaid'}
-                    </Badge>
+    return (
+      <div className="p-8 animate-fade-in">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Calendar & Leave Management</h1>
+          <Button onClick={() => setShowEmployeeLeaveRequest(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Request Leave
+          </Button>
+        </div>
+        
+        <Tabs defaultValue="calendar" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending requests
+              <Badge variant="secondary" className="ml-2">{pendingCount}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="mandatory">Mandatory leave</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="calendar">
+            <Card className="p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-4">
+                  <Select 
+                    value={currentMonth.getMonth().toString()}
+                    onValueChange={(v) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(v)))}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <SelectItem key={i} value={i.toString()}>
+                          {new Date(2025, i).toLocaleString('default', { month: 'long' })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select 
+                    value={currentMonth.getFullYear().toString()}
+                    onValueChange={(v) => setCurrentMonth(new Date(parseInt(v), currentMonth.getMonth()))}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 5 }, (_, i) => {
+                        const year = new Date().getFullYear() + i - 2;
+                        return <SelectItem key={year} value={year.toString()}>{year}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+
+                  <Button variant="outline" size="sm" onClick={goToToday}>
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    Today
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4 mb-6">
+                {absenceTypes.map((type) => (
+                  <div key={type.name} className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${type.color}`}></div>
+                    <span className="text-sm text-muted-foreground">{type.name}</span>
                   </div>
                 ))}
               </div>
-            )}
-          </Card>
-        </div>
+
+              <div className="flex items-center justify-between mb-4">
+                <Button variant="ghost" size="sm" onClick={goToPreviousMonth}>
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Previous month
+                </Button>
+                <h3 className="text-lg font-semibold">
+                  {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </h3>
+                <Button variant="ghost" size="sm" onClick={goToNextMonth}>
+                  Next month
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  month={currentMonth}
+                  onMonthChange={setCurrentMonth}
+                  className="w-full"
+                />
+              </div>
+
+              {/* My Leave Requests List */}
+              <div className="mt-6">
+                <h3 className="font-semibold mb-4">My Leave Requests ({leaveRequests.length})</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>From</TableHead>
+                      <TableHead>To</TableHead>
+                      <TableHead>Days</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {leaveRequests.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No leave requests found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      leaveRequests.map(req => (
+                        <TableRow key={req.id}>
+                          <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
+                          <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                          <TableCell>
+                            <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
+                              {req.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">My Pending Requests</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead>To</TableHead>
+                    <TableHead>Days</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leaveRequests.filter(r => r.status === 'pending').length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No pending requests
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    leaveRequests.filter(r => r.status === 'pending').map(req => (
+                      <TableRow key={req.id}>
+                        <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
+                        <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
+                        <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
+                        <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{req.reason || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Pending</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="mandatory">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Public Holidays & Mandatory Leave</h3>
+              {mandatoryLeave.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No mandatory leave periods set</p>
+              ) : (
+                <div className="space-y-3">
+                  {mandatoryLeave.map(ml => (
+                    <div key={ml.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div>
+                        <p className="font-medium">{ml.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(ml.start_date), 'dd MMM')} - {format(new Date(ml.end_date), 'dd MMM yyyy')}
+                        </p>
+                        {ml.description && <p className="text-sm text-muted-foreground mt-1">{ml.description}</p>}
+                      </div>
+                      <Badge variant={ml.is_paid ? 'default' : 'secondary'}>
+                        {ml.is_paid ? 'Paid' : 'Unpaid'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Employee Leave Request Dialog */}
+        <Dialog open={showEmployeeLeaveRequest} onOpenChange={setShowEmployeeLeaveRequest}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Request Leave</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Leave Type *</Label>
+                <Select value={employeeLeaveForm.leaveTypeId} onValueChange={(v) => setEmployeeLeaveForm(prev => ({ ...prev, leaveTypeId: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select leave type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leaveTypes.map(type => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name} {type.days_allowed && `(${type.days_allowed} days)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Date *</Label>
+                  <Input
+                    type="date"
+                    value={employeeLeaveForm.startDate}
+                    onChange={(e) => setEmployeeLeaveForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>End Date *</Label>
+                  <Input
+                    type="date"
+                    value={employeeLeaveForm.endDate}
+                    onChange={(e) => setEmployeeLeaveForm(prev => ({ ...prev, endDate: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Reason</Label>
+                <Textarea
+                  value={employeeLeaveForm.reason}
+                  onChange={(e) => setEmployeeLeaveForm(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Optional reason for leave"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEmployeeLeaveRequest(false)}>Cancel</Button>
+              <Button onClick={handleEmployeeLeaveRequest}>Submit Request</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
