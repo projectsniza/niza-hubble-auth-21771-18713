@@ -136,7 +136,14 @@ export function ActiveRotas() {
     }
   };
 
-  const handleDownload = (rota: Rota) => {
+  const handleDownload = async (rota: Rota) => {
+    // Fetch shifts for this rota
+    const { data: shifts } = await supabase
+      .from('rota_shifts')
+      .select('*, employee:employees(first_name, last_name)')
+      .eq('rota_id', rota.id)
+      .order('shift_date', { ascending: true });
+
     const doc = new jsPDF();
     
     doc.setFontSize(18);
@@ -147,8 +154,42 @@ export function ActiveRotas() {
     doc.text(`Period: ${format(new Date(rota.start_date), 'dd MMM yyyy')} - ${format(new Date(rota.end_date), 'dd MMM yyyy')}`, 20, 45);
     doc.text(`Status: ${rota.status || 'draft'}`, 20, 55);
     
+    let yPos = 65;
     if (rota.notes) {
-      doc.text(`Notes: ${rota.notes}`, 20, 65);
+      doc.text(`Notes: ${rota.notes}`, 20, yPos);
+      yPos += 15;
+    }
+
+    // Add shifts table
+    if (shifts && shifts.length > 0) {
+      doc.setFontSize(14);
+      doc.text('Shifts', 20, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(10);
+      // Table headers
+      doc.setFont('helvetica', 'bold');
+      doc.text('Employee', 20, yPos);
+      doc.text('Date', 80, yPos);
+      doc.text('Time', 130, yPos);
+      doc.text('Status', 170, yPos);
+      yPos += 7;
+      
+      doc.setFont('helvetica', 'normal');
+      shifts.forEach((shift: any) => {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+        const empName = shift.employee ? `${shift.employee.first_name} ${shift.employee.last_name}` : 'N/A';
+        doc.text(empName, 20, yPos);
+        doc.text(format(new Date(shift.shift_date), 'EEE dd MMM'), 80, yPos);
+        doc.text(`${shift.start_time} - ${shift.end_time}`, 130, yPos);
+        doc.text(shift.status || 'assigned', 170, yPos);
+        yPos += 6;
+      });
+    } else {
+      doc.text('No shifts assigned', 20, yPos);
     }
 
     doc.save(`${rota.name.replace(/\s+/g, '_')}_rota.pdf`);
