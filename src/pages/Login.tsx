@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
@@ -11,14 +12,32 @@ import hrEmployee2 from '@/assets/hr-employee-2.jpg';
 import hrEmployee3 from '@/assets/hr-employee-3.jpg';
 import hrEmployee4 from '@/assets/hr-employee-4.jpg';
 
+const REMEMBER_ME_KEY = 'niza_remember_credentials';
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(REMEMBER_ME_KEY);
+    if (saved) {
+      try {
+        const { email: savedEmail, password: savedPassword } = JSON.parse(atob(saved));
+        setEmail(savedEmail || '');
+        setPassword(savedPassword || '');
+        setRememberMe(true);
+      } catch (e) {
+        localStorage.removeItem(REMEMBER_ME_KEY);
+      }
+    }
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -45,6 +64,12 @@ export default function Login() {
     setIsLoading(false);
     
     if (!error) {
+      // Save or clear credentials based on remember me
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
+      } else {
+        localStorage.removeItem(REMEMBER_ME_KEY);
+      }
       toast({ title: 'Welcome back!', description: 'Login successful' });
       navigate('/dashboard');
     } else {
@@ -180,6 +205,20 @@ export default function Login() {
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="remember-me" 
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked === true)}
+                />
+                <label 
+                  htmlFor="remember-me" 
+                  className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                >
+                  Remember me
+                </label>
               </div>
 
               <Button 
