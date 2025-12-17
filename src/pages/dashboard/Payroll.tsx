@@ -13,6 +13,255 @@ import { Download, FileText, DollarSign, Users, Clock, Settings, Search, AlertCi
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { jsPDF } from 'jspdf';
+import nizaLogo from '@/assets/niza-group-logo.png';
+
+const loadLogoAsBase64 = (): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        reject(new Error('Failed to get canvas context'));
+      }
+    };
+    img.onerror = reject;
+    img.src = nizaLogo;
+  });
+};
+
+const generatePayslipPDF = async (
+  record: any, 
+  employee: any, 
+  salary: any
+) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Colors
+  const primaryColor: [number, number, number] = [0, 87, 217];
+  const darkColor: [number, number, number] = [30, 41, 59];
+  const grayColor: [number, number, number] = [100, 116, 139];
+  const lightGray: [number, number, number] = [241, 245, 249];
+  
+  // Load and add logo
+  try {
+    const logoBase64 = await loadLogoAsBase64();
+    doc.addImage(logoBase64, 'PNG', 15, 10, 45, 15);
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+  }
+  
+  // Header - Company Info (right side)
+  doc.setFontSize(10);
+  doc.setTextColor(...grayColor);
+  doc.text('Niza Group', pageWidth - 15, 15, { align: 'right' });
+  doc.text('United Kingdom', pageWidth - 15, 21, { align: 'right' });
+  
+  // Title
+  doc.setFontSize(22);
+  doc.setTextColor(...darkColor);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PAYSLIP', pageWidth / 2, 45, { align: 'center' });
+  
+  // Month/Period
+  doc.setFontSize(12);
+  doc.setTextColor(...primaryColor);
+  doc.setFont('helvetica', 'normal');
+  const monthYear = format(new Date(record.month), 'MMMM yyyy');
+  doc.text(`Pay Period: ${monthYear}`, pageWidth / 2, 53, { align: 'center' });
+  
+  // Divider line
+  doc.setDrawColor(...primaryColor);
+  doc.setLineWidth(0.5);
+  doc.line(15, 60, pageWidth - 15, 60);
+  
+  // Employee Details Section
+  let y = 70;
+  
+  // Employee info box
+  doc.setFillColor(...lightGray);
+  doc.roundedRect(15, y, pageWidth - 30, 35, 3, 3, 'F');
+  
+  doc.setFontSize(11);
+  doc.setTextColor(...darkColor);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Employee Details', 20, y + 10);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...grayColor);
+  
+  // Left column
+  doc.text('Name:', 20, y + 20);
+  doc.text('Job Title:', 20, y + 28);
+  
+  doc.setTextColor(...darkColor);
+  doc.text(`${employee?.first_name || ''} ${employee?.last_name || ''}`, 55, y + 20);
+  doc.text(employee?.job_title || 'N/A', 55, y + 28);
+  
+  // Right column
+  doc.setTextColor(...grayColor);
+  doc.text('Employee ID:', pageWidth / 2 + 10, y + 20);
+  doc.text('Department:', pageWidth / 2 + 10, y + 28);
+  
+  doc.setTextColor(...darkColor);
+  doc.text(employee?.id?.slice(0, 8) || 'N/A', pageWidth / 2 + 50, y + 20);
+  doc.text(employee?.department || 'N/A', pageWidth / 2 + 50, y + 28);
+  
+  y += 45;
+  
+  // Earnings Section
+  doc.setFillColor(...primaryColor);
+  doc.roundedRect(15, y, (pageWidth - 35) / 2, 8, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('EARNINGS', 20, y + 5.5);
+  
+  // Deductions Section Header
+  doc.setFillColor(220, 38, 38);
+  doc.roundedRect(pageWidth / 2 + 2.5, y, (pageWidth - 35) / 2, 8, 2, 2, 'F');
+  doc.text('DEDUCTIONS', pageWidth / 2 + 7.5, y + 5.5);
+  
+  y += 15;
+  
+  // Earnings details
+  const basicSalary = record.basic_salary || 0;
+  const hra = salary?.hra || 0;
+  const travel = salary?.travel_allowance || 0;
+  const other = salary?.other_allowances || 0;
+  const totalEarnings = basicSalary + hra + travel + other;
+  
+  doc.setTextColor(...grayColor);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  
+  const earningsLeft = 20;
+  const earningsValueLeft = 75;
+  
+  doc.text('Basic Salary', earningsLeft, y);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${basicSalary.toFixed(2)}`, earningsValueLeft, y, { align: 'right' });
+  
+  y += 7;
+  doc.setTextColor(...grayColor);
+  doc.text('HRA', earningsLeft, y);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${hra.toFixed(2)}`, earningsValueLeft, y, { align: 'right' });
+  
+  y += 7;
+  doc.setTextColor(...grayColor);
+  doc.text('Travel Allowance', earningsLeft, y);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${travel.toFixed(2)}`, earningsValueLeft, y, { align: 'right' });
+  
+  y += 7;
+  doc.setTextColor(...grayColor);
+  doc.text('Other Allowances', earningsLeft, y);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${other.toFixed(2)}`, earningsValueLeft, y, { align: 'right' });
+  
+  // Deductions details
+  const advance = salary?.salary_advance || 0;
+  const lateFine = salary?.late_fine || 0;
+  const totalDeductions = record.total_deductions || 0;
+  
+  let yDed = y - 21;
+  const dedLeft = pageWidth / 2 + 7.5;
+  const dedValueRight = pageWidth - 25;
+  
+  doc.setTextColor(...grayColor);
+  doc.text('Salary Advance', dedLeft, yDed);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${advance.toFixed(2)}`, dedValueRight, yDed, { align: 'right' });
+  
+  yDed += 7;
+  doc.setTextColor(...grayColor);
+  doc.text('Late Fine', dedLeft, yDed);
+  doc.setTextColor(...darkColor);
+  doc.text(`£${lateFine.toFixed(2)}`, dedValueRight, yDed, { align: 'right' });
+  
+  y += 15;
+  
+  // Totals line
+  doc.setDrawColor(...grayColor);
+  doc.setLineWidth(0.2);
+  doc.line(15, y, pageWidth - 15, y);
+  
+  y += 8;
+  
+  // Total Earnings
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(22, 163, 74); // Green
+  doc.text('Total Earnings:', earningsLeft, y);
+  doc.text(`£${totalEarnings.toFixed(2)}`, earningsValueLeft, y, { align: 'right' });
+  
+  // Total Deductions
+  doc.setTextColor(220, 38, 38); // Red
+  doc.text('Total Deductions:', dedLeft, y);
+  doc.text(`£${totalDeductions.toFixed(2)}`, dedValueRight, y, { align: 'right' });
+  
+  y += 20;
+  
+  // Net Salary Box
+  doc.setFillColor(...primaryColor);
+  doc.roundedRect(15, y, pageWidth - 30, 25, 4, 4, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('NET SALARY', pageWidth / 2, y + 9, { align: 'center' });
+  
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`£${record.net_salary?.toFixed(2) || '0.00'}`, pageWidth / 2, y + 20, { align: 'center' });
+  
+  y += 35;
+  
+  // Payment Info
+  doc.setFillColor(...lightGray);
+  doc.roundedRect(15, y, pageWidth - 30, 20, 3, 3, 'F');
+  
+  doc.setTextColor(...grayColor);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Payment Date:', 20, y + 8);
+  doc.text('Payment Method:', 20, y + 15);
+  
+  doc.setTextColor(...darkColor);
+  const payDate = format(new Date(record.month), 'dd MMMM yyyy');
+  doc.text(payDate, 55, y + 8);
+  doc.text('Bank Transfer', 55, y + 15);
+  
+  doc.setTextColor(...grayColor);
+  doc.text('Reference:', pageWidth / 2 + 10, y + 8);
+  doc.setTextColor(...darkColor);
+  doc.text(`PAY-${format(new Date(record.month), 'yyyyMM')}-${employee?.id?.slice(0, 4) || '0000'}`, pageWidth / 2 + 35, y + 8);
+  
+  // Footer
+  const footerY = doc.internal.pageSize.getHeight() - 20;
+  doc.setDrawColor(...lightGray);
+  doc.setLineWidth(0.5);
+  doc.line(15, footerY - 5, pageWidth - 15, footerY - 5);
+  
+  doc.setFontSize(8);
+  doc.setTextColor(...grayColor);
+  doc.text('This is a computer-generated payslip and does not require a signature.', pageWidth / 2, footerY, { align: 'center' });
+  doc.text(`Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, pageWidth / 2, footerY + 5, { align: 'center' });
+  
+  // Save the PDF
+  const fileName = `Payslip_${employee?.first_name || 'Employee'}_${employee?.last_name || ''}_${format(new Date(record.month), 'MMM_yyyy')}.pdf`;
+  doc.save(fileName);
+};
 
 export default function Payroll() {
   const { user } = useAuth();
@@ -192,20 +441,29 @@ export default function Payroll() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {payrollRecords.map(record => (
-              <Card key={record.id} className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold">{format(new Date(record.month), 'MMMM yyyy')}</h3>
-                    <p className="text-sm text-muted-foreground">Net Salary: £{record.net_salary?.toFixed(2)}</p>
+            {payrollRecords.map(record => {
+              const empForRecord = employees.find(e => e.id === record.employee_id);
+              const salaryForRecord = salaryStructures.find(s => s.employee_id === record.employee_id);
+              return (
+                <Card key={record.id} className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold">{format(new Date(record.month), 'MMMM yyyy')}</h3>
+                      <p className="text-sm text-muted-foreground">Net Salary: £{record.net_salary?.toFixed(2)}</p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-2"
+                      onClick={() => generatePayslipPDF(record, empForRecord, salaryForRecord)}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -494,6 +752,7 @@ export default function Payroll() {
                 <TableBody>
                   {payrollRecords.filter(p => p.month === selectedMonth + '-01').map(record => {
                     const employee = employees.find(e => e.id === record.employee_id);
+                    const salaryForRecord = salaryStructures.find(s => s.employee_id === record.employee_id);
                     return (
                       <TableRow key={record.id}>
                         <TableCell>
@@ -507,7 +766,12 @@ export default function Payroll() {
                         <TableCell className="text-red-600">-£{record.total_deductions?.toFixed(2)}</TableCell>
                         <TableCell className="font-semibold">£{record.net_salary?.toFixed(2)}</TableCell>
                         <TableCell>
-                          <Button variant="outline" size="sm" className="gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={() => generatePayslipPDF(record, employee, salaryForRecord)}
+                          >
                             <Download className="h-4 w-4" />
                             PDF
                           </Button>
