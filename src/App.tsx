@@ -33,9 +33,11 @@ import Tasks from "./pages/niza-safe/Tasks";
 import NizaFinance from "./pages/NizaFinance";
 import NizaTemplates from "./pages/NizaTemplates";
 import TemplatesHome from "./pages/niza-templates/Home";
-import Templates from "./pages/niza-templates/Templates";
+import IDCards from "./pages/niza-templates/IDCards";
+import BusinessCards from "./pages/niza-templates/BusinessCards";
+import Invoices from "./pages/niza-templates/Invoices";
 import GiftCards from "./pages/niza-templates/GiftCards";
-import Folders from "./pages/niza-templates/Folders";
+import EmailSignature from "./pages/niza-templates/EmailSignature";
 import BrandSettings from "./pages/niza-templates/BrandSettings";
 import DashboardTemplates from "./pages/dashboard/Templates";
 import Settings from "./pages/dashboard/Settings";
@@ -93,9 +95,11 @@ const App = () => (
             <Route path="/niza-finance" element={<NizaFinance />} />
             <Route path="/niza-templates" element={<NizaTemplates />}>
               <Route index element={<TemplatesHome />} />
-              <Route path="templates" element={<Templates />} />
+              <Route path="id-cards" element={<IDCards />} />
+              <Route path="business-cards" element={<BusinessCards />} />
+              <Route path="invoices" element={<Invoices />} />
               <Route path="gift-cards" element={<GiftCards />} />
-              <Route path="folders" element={<Folders />} />
+              <Route path="email-signature" element={<EmailSignature />} />
               <Route path="brand-settings" element={<BrandSettings />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

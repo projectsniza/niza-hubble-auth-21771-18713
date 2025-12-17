@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, FileText, Folder, Palette, ChevronLeft, ChevronRight, Gift } from 'lucide-react';
+import { Home, Palette, ChevronLeft, ChevronRight, BadgeCheck, CreditCard, Receipt, Gift, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 
@@ -10,9 +10,11 @@ interface NizaTemplatesSidebarProps {
 
 const menuItems = [
   { name: 'Home', path: '/niza-templates', icon: Home, end: true },
-  { name: 'Templates', path: '/niza-templates/templates', icon: FileText },
+  { name: 'ID Card & Visitor Pass', path: '/niza-templates/id-cards', icon: BadgeCheck },
+  { name: 'Business Cards', path: '/niza-templates/business-cards', icon: CreditCard },
+  { name: 'Invoices', path: '/niza-templates/invoices', icon: Receipt },
   { name: 'Gift Cards', path: '/niza-templates/gift-cards', icon: Gift },
-  { name: 'Folders', path: '/niza-templates/folders', icon: Folder },
+  { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
   { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
 ];
 
@@ -41,7 +43,7 @@ export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTempla
             }
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span className="font-medium">{item.name}</span>}
+            {!collapsed && <span className="font-medium text-sm">{item.name}</span>}
           </NavLink>
         ))}
       </nav>
