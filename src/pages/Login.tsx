@@ -115,16 +115,18 @@ export default function Login() {
 
           {/* Floating Images */}
           <div className="relative h-72 mb-8">
-            <div className="absolute top-4 left-6 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '3px solid white' }}>
+            {/* Top pair */}
+            <div className="absolute top-0 left-1 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '3px solid white' }}>
               <img src={hrEmployee1} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute top-2 left-2 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '3px solid white' }}>
+            <div className="absolute top-12 left-8 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '3px solid white' }}>
               <img src={hrEmployee2} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-8 left-12 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '3px solid white' }}>
+            {/* Bottom pair - with ~1cm (10px) gap */}
+            <div className="absolute bottom-12 left-1 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '3px solid white' }}>
               <img src={hrEmployee3} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-4 left-1 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
+            <div className="absolute bottom-0 left-12 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
               <img src={hrEmployee4} alt="Team member" className="w-full h-full object-cover" />
             </div>
           </div>
