@@ -36,11 +36,23 @@ export default function Scheduling() {
   const fetchEmployeeShifts = async () => {
     setLoading(true);
     try {
+      // First get the employee record ID from the user ID
+      const { data: empRecord } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      if (!empRecord) {
+        setEmployeeShifts([]);
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const { data } = await supabase
         .from('rota_shifts')
         .select('id, shift_date, start_time, end_time, status, rota:rotas(name)')
-        .eq('employee_id', user?.id)
+        .eq('employee_id', empRecord.id)
         .gte('shift_date', today)
         .order('shift_date', { ascending: true })
         .limit(20);
