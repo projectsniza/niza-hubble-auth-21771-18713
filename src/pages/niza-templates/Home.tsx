@@ -1,61 +1,55 @@
-import { FileText, Folder, Palette, Gift, CreditCard, Mail, BadgeCheck, Receipt, Users } from 'lucide-react';
+import { BadgeCheck, CreditCard, Mail, Gift, Receipt, Palette } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useTemplateStats } from '@/hooks/useTemplates';
+import { useTemplateStats, useBrandSettings } from '@/hooks/useTemplates';
 import { useNavigate } from 'react-router-dom';
 
 export default function TemplatesHome() {
   const { stats, isLoading } = useTemplateStats();
+  const { brandSettings } = useBrandSettings();
   const navigate = useNavigate();
-
-  const statsCards = [
-    { label: 'Total Templates', value: stats.totalTemplates, icon: FileText, color: 'text-purple-500' },
-    { label: 'Folders', value: stats.totalFolders, icon: Folder, color: 'text-pink-500' },
-    { label: 'Gift Cards', value: stats.totalGiftCards, icon: Gift, color: 'text-amber-500' },
-    { label: 'Brand Colors', value: stats.brandColorsCount, icon: Palette, color: 'text-blue-500' },
-  ];
 
   const templateTypes = [
     { 
-      name: 'Visiting Cards', 
-      description: 'Professional business cards for employees',
-      icon: CreditCard, 
-      color: 'bg-blue-500/10 text-blue-500',
-      type: 'visiting_card'
-    },
-    { 
-      name: 'Email Signatures', 
-      description: 'Branded email signatures for company emails',
-      icon: Mail, 
-      color: 'bg-green-500/10 text-green-500',
-      type: 'email_signature'
-    },
-    { 
-      name: 'ID Cards', 
-      description: 'Employee identification cards with photos',
+      name: 'ID Cards & Visitor Passes', 
+      description: 'Create employee ID cards and visitor passes with photo',
       icon: BadgeCheck, 
       color: 'bg-purple-500/10 text-purple-500',
-      type: 'id_card'
+      path: '/niza-templates/id-cards'
     },
     { 
-      name: 'Visitor Passes', 
-      description: 'Temporary visitor identification passes',
-      icon: Users, 
-      color: 'bg-amber-500/10 text-amber-500',
-      type: 'visitor_pass'
+      name: 'Business Cards', 
+      description: 'Professional business cards with organization details',
+      icon: CreditCard, 
+      color: 'bg-blue-500/10 text-blue-500',
+      path: '/niza-templates/business-cards'
     },
     { 
-      name: 'Invoice Templates', 
-      description: 'Invoice headers, footers, and body templates',
+      name: 'Invoices', 
+      description: 'Customize invoice header, footer, and body templates',
       icon: Receipt, 
       color: 'bg-pink-500/10 text-pink-500',
-      type: 'invoice'
+      path: '/niza-templates/invoices'
     },
     { 
-      name: 'Gift Cards', 
-      description: 'Digital gift cards for employees',
+      name: 'Gift Cards & Coupons', 
+      description: 'Create personalized gift cards for employees',
       icon: Gift, 
+      color: 'bg-amber-500/10 text-amber-500',
+      path: '/niza-templates/gift-cards'
+    },
+    { 
+      name: 'Email Signature', 
+      description: 'Generate branded email signatures with HTML code',
+      icon: Mail, 
+      color: 'bg-green-500/10 text-green-500',
+      path: '/niza-templates/email-signature'
+    },
+    { 
+      name: 'Brand Settings', 
+      description: 'Manage logos, colors, and brand assets',
+      icon: Palette, 
       color: 'bg-red-500/10 text-red-500',
-      type: 'gift_card'
+      path: '/niza-templates/brand-settings'
     },
   ];
 
@@ -66,34 +60,46 @@ export default function TemplatesHome() {
           Niza Templates
         </h1>
         <p className="text-muted-foreground mt-2">
-          Manage brand assets, templates, and design resources
+          Create professional templates for your organization
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statsCards.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {isLoading ? '...' : stat.value}
+      {/* Brand Status */}
+      <Card className="border-primary/20">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            {brandSettings?.primary_logo_path ? (
+              <img src={brandSettings.primary_logo_path} alt="Logo" className="h-12 object-contain" />
+            ) : (
+              <div className="h-12 w-24 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                No Logo
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            )}
+            <div className="flex-1">
+              <p className="font-medium">Brand Settings</p>
+              <p className="text-sm text-muted-foreground">
+                {brandSettings?.primary_logo_path ? 'Logo configured' : 'Upload your logo to get started'}
+              </p>
+            </div>
+            <button 
+              onClick={() => navigate('/niza-templates/brand-settings')}
+              className="text-sm text-primary hover:underline"
+            >
+              Configure →
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Template Categories */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Template Types</h2>
+        <h2 className="text-xl font-semibold mb-4">Template Categories</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templateTypes.map((type) => (
             <Card 
-              key={type.type} 
+              key={type.path} 
               className="cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => navigate(`/niza-templates/templates?type=${type.type}`)}
+              onClick={() => navigate(type.path)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
@@ -113,38 +119,28 @@ export default function TemplatesHome() {
         </div>
       </div>
 
+      {/* Stats */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Start Guide</CardTitle>
+          <CardTitle>Overview</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">1</div>
-              <div>
-                <h3 className="font-semibold">Set Up Brand Settings</h3>
-                <p className="text-sm text-muted-foreground">
-                  Upload your logos, define brand colors, and set up fonts
-                </p>
-              </div>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold">{isLoading ? '...' : stats.totalGiftCards}</p>
+              <p className="text-sm text-muted-foreground">Gift Cards</p>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">2</div>
-              <div>
-                <h3 className="font-semibold">Create Template Folders</h3>
-                <p className="text-sm text-muted-foreground">
-                  Organize your templates into folders for easy access
-                </p>
-              </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold">{isLoading ? '...' : stats.brandColorsCount}</p>
+              <p className="text-sm text-muted-foreground">Brand Colors</p>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">3</div>
-              <div>
-                <h3 className="font-semibold">Create Templates</h3>
-                <p className="text-sm text-muted-foreground">
-                  Design ID cards, visiting cards, email signatures and more
-                </p>
-              </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold">{brandSettings?.primary_logo_path ? '✓' : '—'}</p>
+              <p className="text-sm text-muted-foreground">Primary Logo</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold">{brandSettings?.secondary_logo_path ? '✓' : '—'}</p>
+              <p className="text-sm text-muted-foreground">Secondary Logo</p>
             </div>
           </div>
         </CardContent>
