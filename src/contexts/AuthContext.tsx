@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -78,41 +79,71 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
+    let mounted = true;
+
+    // Check for existing session FIRST before setting up listener
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
         
-        if (session?.user) {
-          // Defer Supabase calls with setTimeout to prevent deadlock
-          setTimeout(async () => {
-            const appUser = await fetchUserProfile(session.user.id);
+        if (!mounted) return;
+
+        if (existingSession?.user) {
+          setSession(existingSession);
+          const appUser = await fetchUserProfile(existingSession.user.id);
+          if (mounted) {
             setUser(appUser);
             setIsLoading(false);
-          }, 0);
+            setIsInitialized(true);
+          }
         } else {
+          setSession(null);
           setUser(null);
           setIsLoading(false);
+          setIsInitialized(true);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        if (mounted) {
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Set up auth state listener AFTER initial check
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        if (!mounted || !isInitialized) return;
+        
+        // Only process if session actually changed
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setSession(newSession);
+          if (newSession?.user) {
+            // Defer profile fetch to avoid deadlock
+            setTimeout(async () => {
+              if (mounted) {
+                const appUser = await fetchUserProfile(newSession.user.id);
+                if (mounted) {
+                  setUser(appUser);
+                }
+              }
+            }, 0);
+          }
         }
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      
-      if (session?.user) {
-        fetchUserProfile(session.user.id).then((appUser) => {
-          setUser(appUser);
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [isInitialized]);
 
   const login = async (email: string, password: string): Promise<{ error: string | null }> => {
     const { error } = await supabase.auth.signInWithPassword({
