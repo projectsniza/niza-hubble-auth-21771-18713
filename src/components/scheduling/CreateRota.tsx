@@ -70,12 +70,34 @@ export function CreateRota() {
     ? employees.filter(e => e.branch_id === rotaForm.branchId)
     : employees;
 
+  const getDatesArray = () => {
+    const dates = [];
+    const startDate = new Date(rotaForm.startDate);
+    for (let i = 0; i < parseInt(rotaForm.duration); i++) {
+      dates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
+    }
+    return dates;
+  };
+
   const handleEmployeeToggle = (empId: string) => {
-    setSelectedEmployees(prev => 
-      prev.includes(empId) 
-        ? prev.filter(id => id !== empId)
-        : [...prev, empId]
-    );
+    if (selectedEmployees.includes(empId)) {
+      // Remove employee and their shifts
+      setSelectedEmployees(prev => prev.filter(id => id !== empId));
+      setShifts(prev => prev.filter(s => s.employeeId !== empId));
+    } else {
+      // Add employee and auto-create shifts for all dates
+      setSelectedEmployees(prev => [...prev, empId]);
+      const dates = getDatesArray();
+      const newShifts = dates.map(date => ({
+        employeeId: empId,
+        date,
+        startTime: '09:00',
+        endTime: '17:00',
+        breakDuration: 60,
+        notes: ''
+      }));
+      setShifts(prev => [...prev, ...newShifts]);
+    }
   };
 
   const addShift = (employeeId: string, date: string) => {
@@ -176,14 +198,6 @@ export function CreateRota() {
     setSelectedEmployees([]);
   };
 
-  const getDatesArray = () => {
-    const dates = [];
-    const startDate = new Date(rotaForm.startDate);
-    for (let i = 0; i < parseInt(rotaForm.duration); i++) {
-      dates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
-    }
-    return dates;
-  };
 
   if (!createMode) {
     return (
