@@ -108,23 +108,23 @@ export default function Login() {
           </defs>
         </svg>
         
-        <div className="relative z-[2] p-8 pl-12 flex flex-col h-full">
+        <div className="relative z-[2] p-8 pl-4 flex flex-col h-full">
           <img src={nizaCloudLogo} alt="Niza Cloud" className="w-56 xl:w-64" />
           
           <div className="flex-1"></div>
 
           {/* Floating Images */}
-          <div className="relative h-96 mb-8">
-            <div className="absolute top-8 left-12 w-[102px] h-[102px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '4px solid white' }}>
+          <div className="relative h-72 mb-8">
+            <div className="absolute top-4 left-6 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '3px solid white' }}>
               <img src={hrEmployee1} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute top-4 right-16 w-[115px] h-[115px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '4px solid white' }}>
+            <div className="absolute top-2 right-8 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '3px solid white' }}>
               <img src={hrEmployee2} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-16 left-24 w-32 h-32 rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '4px solid white' }}>
+            <div className="absolute bottom-8 left-12 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '3px solid white' }}>
               <img src={hrEmployee3} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-8 right-12 w-[115px] h-[115px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '4px solid white' }}>
+            <div className="absolute bottom-4 right-6 w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
               <img src={hrEmployee4} alt="Team member" className="w-full h-full object-cover" />
             </div>
           </div>
