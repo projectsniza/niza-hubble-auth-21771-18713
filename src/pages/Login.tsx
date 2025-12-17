@@ -131,47 +131,98 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Panel - Form (Mobile Optimized) */}
-      <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 bg-background">
-        {/* Mobile Header with Gradient */}
+      {/* Right Panel - Premium Design */}
+      <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 relative overflow-hidden">
+        {/* Premium Background */}
         <div 
-          className="lg:hidden pt-8 pb-12 px-6 text-center"
+          className="absolute inset-0"
           style={{
-            background: 'linear-gradient(180deg, hsl(155 60% 93%) 0%, hsl(0 0% 100%) 100%)'
+            background: 'linear-gradient(135deg, hsl(220 20% 10%) 0%, hsl(220 25% 8%) 50%, hsl(220 30% 6%) 100%)'
           }}
+        />
+        
+        {/* Ambient Glow Effects */}
+        <div 
+          className="absolute top-0 right-0 w-[600px] h-[600px] opacity-30"
+          style={{
+            background: 'radial-gradient(circle, hsl(162 57% 43% / 0.4) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+            transform: 'translate(20%, -30%)'
+          }}
+        />
+        <div 
+          className="absolute bottom-0 left-0 w-[500px] h-[500px] opacity-20"
+          style={{
+            background: 'radial-gradient(circle, hsl(48 90% 62% / 0.3) 0%, transparent 70%)',
+            filter: 'blur(60px)',
+            transform: 'translate(-30%, 30%)'
+          }}
+        />
+
+        {/* Mobile Header with Premium Dark Theme */}
+        <div 
+          className="lg:hidden pt-8 pb-12 px-6 text-center relative z-10"
         >
-          <img src={nizaCloudLogo} alt="Niza Cloud" className="w-40 mx-auto mb-4" />
+          <img src={nizaCloudLogo} alt="Niza Cloud" className="w-40 mx-auto mb-4 drop-shadow-2xl" />
           <div className="flex justify-center gap-2 mt-4">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/20 shadow-lg ring-2 ring-primary/30">
               <img src={hrEmployee1} alt="" className="w-full h-full object-cover" />
             </div>
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/20 shadow-lg ring-2 ring-primary/30 -ml-3">
               <img src={hrEmployee2} alt="" className="w-full h-full object-cover" />
             </div>
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/20 shadow-lg ring-2 ring-primary/30 -ml-3">
               <img src={hrEmployee3} alt="" className="w-full h-full object-cover" />
             </div>
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-background shadow-md -ml-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/20 shadow-lg ring-2 ring-primary/30 -ml-3">
               <img src={hrEmployee4} alt="" className="w-full h-full object-cover" />
             </div>
           </div>
         </div>
 
         {/* Form Container */}
-        <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0">
-          <div className="w-full max-w-[400px] lg:max-w-[500px] bg-background lg:bg-transparent rounded-2xl lg:rounded-none shadow-xl lg:shadow-none p-6 lg:p-0">
-            <div className="mb-6 lg:mb-12">
-              <h2 className="text-2xl sm:text-3xl lg:text-5xl font-bold mb-2 lg:mb-3 text-foreground">
+        <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0 relative z-10">
+          <div 
+            className="w-full max-w-[420px] lg:max-w-[480px] rounded-3xl p-8 lg:p-10"
+            style={{
+              background: 'linear-gradient(145deg, hsl(220 20% 14% / 0.8) 0%, hsl(220 25% 10% / 0.9) 100%)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid hsl(220 20% 20% / 0.5)',
+              boxShadow: '0 25px 50px -12px hsl(0 0% 0% / 0.5), 0 0 0 1px hsl(220 20% 25% / 0.1) inset'
+            }}
+          >
+            {/* Premium Badge */}
+            <div className="flex items-center gap-2 mb-8">
+              <div 
+                className="h-1 w-12 rounded-full"
+                style={{ background: 'linear-gradient(90deg, hsl(162 57% 43%), hsl(48 90% 62%))' }}
+              />
+              <span className="text-xs font-medium tracking-[0.2em] uppercase" style={{ color: 'hsl(162 57% 50%)' }}>
+                Secure Access
+              </span>
+            </div>
+
+            <div className="mb-8 lg:mb-10">
+              <h2 
+                className="text-3xl lg:text-4xl font-bold mb-3 tracking-tight"
+                style={{ color: 'hsl(0 0% 98%)' }}
+              >
                 Welcome Back
               </h2>
-              <p className="text-sm lg:text-lg font-medium text-primary/80">
+              <p 
+                className="text-base lg:text-lg font-medium"
+                style={{ color: 'hsl(220 10% 60%)' }}
+              >
                 Sign in to access your HR dashboard
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm lg:text-xl font-semibold mb-1.5 lg:mb-3 text-foreground">
+                <label 
+                  className="block text-sm font-semibold mb-2 tracking-wide"
+                  style={{ color: 'hsl(220 10% 70%)' }}
+                >
                   Email
                 </label>
                 <Input 
@@ -179,13 +230,21 @@ export default function Login() {
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 lg:h-14 text-base px-4 lg:px-6 rounded-xl border-primary/30 focus:border-primary bg-background"
+                  className="h-13 lg:h-14 text-base px-5 rounded-xl border-0 transition-all duration-300 placeholder:text-white/30"
+                  style={{
+                    background: 'hsl(220 25% 12%)',
+                    color: 'hsl(0 0% 95%)',
+                    boxShadow: '0 0 0 1px hsl(220 20% 20%) inset, 0 2px 4px hsl(0 0% 0% / 0.1) inset'
+                  }}
                   disabled={isLoading}
                 />
               </div>
 
               <div>
-                <label className="block text-sm lg:text-xl font-semibold mb-1.5 lg:mb-3 text-foreground">
+                <label 
+                  className="block text-sm font-semibold mb-2 tracking-wide"
+                  style={{ color: 'hsl(220 10% 70%)' }}
+                >
                   Password
                 </label>
                 <div className="relative">
@@ -194,28 +253,36 @@ export default function Login() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 lg:h-14 text-base px-4 lg:px-6 pr-12 rounded-xl border-primary/30 focus:border-primary bg-background"
+                    className="h-13 lg:h-14 text-base px-5 pr-12 rounded-xl border-0 transition-all duration-300 placeholder:text-white/30"
+                    style={{
+                      background: 'hsl(220 25% 12%)',
+                      color: 'hsl(0 0% 95%)',
+                      boxShadow: '0 0 0 1px hsl(220 20% 20%) inset, 0 2px 4px hsl(0 0% 0% / 0.1) inset'
+                    }}
                     disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors p-1"
+                    style={{ color: 'hsl(220 10% 50%)' }}
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Checkbox 
                   id="remember-me" 
                   checked={rememberMe}
                   onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 />
                 <label 
                   htmlFor="remember-me" 
-                  className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                  className="text-sm font-medium cursor-pointer select-none"
+                  style={{ color: 'hsl(220 10% 60%)' }}
                 >
                   Remember me
                 </label>
@@ -223,20 +290,37 @@ export default function Login() {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 lg:h-14 text-base lg:text-lg font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground mt-2"
+                className="w-full h-13 lg:h-14 text-base lg:text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-lg mt-4"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(162 57% 43%) 0%, hsl(162 57% 38%) 100%)',
+                  color: 'white',
+                  boxShadow: '0 10px 30px -10px hsl(162 57% 43% / 0.5)'
+                }}
                 disabled={isLoading}
               >
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
 
-            <div className="mt-6 lg:mt-8 text-center">
-              <p className="text-xs lg:text-sm text-muted-foreground">
+            <div className="mt-8 pt-6" style={{ borderTop: '1px solid hsl(220 20% 18%)' }}>
+              <p 
+                className="text-xs text-center"
+                style={{ color: 'hsl(220 10% 45%)' }}
+              >
                 Contact your administrator if you need access
               </p>
             </div>
           </div>
         </div>
+
+        {/* Decorative Grid Pattern */}
+        <div 
+          className="absolute inset-0 opacity-[0.02] pointer-events-none"
+          style={{
+            backgroundImage: `linear-gradient(hsl(0 0% 100%) 1px, transparent 1px), linear-gradient(90deg, hsl(0 0% 100%) 1px, transparent 1px)`,
+            backgroundSize: '60px 60px'
+          }}
+        />
       </div>
     </div>
   );
