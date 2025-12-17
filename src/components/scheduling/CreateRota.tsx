@@ -395,17 +395,31 @@ export function CreateRota() {
                           {emp?.first_name} {emp?.last_name}
                         </td>
                         {getDatesArray().map(date => {
-                          const shift = shifts.find(s => s.employeeId === empId && s.date === date);
+                          const shiftIndex = shifts.findIndex(s => s.employeeId === empId && s.date === date);
+                          const shift = shiftIndex !== -1 ? shifts[shiftIndex] : null;
                           return (
-                            <td key={date} className="border p-1 text-center">
+                            <td key={date} className="border p-1 text-center min-w-[140px]">
                               {shift ? (
-                                <div className="bg-primary/10 rounded p-1 text-xs">
-                                  {shift.startTime}-{shift.endTime}
+                                <div className="bg-primary/10 rounded p-1 space-y-1">
+                                  <div className="flex gap-1">
+                                    <Input
+                                      type="time"
+                                      value={shift.startTime}
+                                      onChange={(e) => updateShift(shiftIndex, 'startTime', e.target.value)}
+                                      className="h-6 text-xs p-1"
+                                    />
+                                    <Input
+                                      type="time"
+                                      value={shift.endTime}
+                                      onChange={(e) => updateShift(shiftIndex, 'endTime', e.target.value)}
+                                      className="h-6 text-xs p-1"
+                                    />
+                                  </div>
                                   <Button 
                                     size="sm" 
                                     variant="ghost" 
-                                    className="h-4 w-4 p-0 ml-1"
-                                    onClick={() => removeShift(shifts.indexOf(shift))}
+                                    className="h-5 w-full p-0 text-destructive hover:text-destructive"
+                                    onClick={() => removeShift(shiftIndex)}
                                   >
                                     <X className="h-3 w-3" />
                                   </Button>

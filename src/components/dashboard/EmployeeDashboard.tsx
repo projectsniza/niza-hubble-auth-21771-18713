@@ -140,20 +140,29 @@ export default function EmployeeDashboard() {
 
       setTodayClockIn(clockIn);
 
-      // Fetch today's and upcoming shifts
-      const { data: shifts } = await supabase
-        .from('rota_shifts')
-        .select('shift_date, start_time, end_time, status')
-        .eq('employee_id', user?.id)
-        .gte('shift_date', today)
-        .order('shift_date', { ascending: true })
-        .limit(10);
+      // Fetch employee record to get employee_id for shifts query
+      const { data: empRecord } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user?.id)
+        .maybeSingle();
 
-      if (shifts) {
-        const todayShifts = shifts.filter(s => s.shift_date === today);
-        const futureShifts = shifts.filter(s => s.shift_date !== today);
-        setTodaysShifts(todayShifts);
-        setUpcomingShifts(futureShifts.slice(0, 5));
+      if (empRecord) {
+        // Fetch today's and upcoming shifts using employee record id
+        const { data: shifts } = await supabase
+          .from('rota_shifts')
+          .select('shift_date, start_time, end_time, status')
+          .eq('employee_id', empRecord.id)
+          .gte('shift_date', today)
+          .order('shift_date', { ascending: true })
+          .limit(10);
+
+        if (shifts) {
+          const todayShifts = shifts.filter(s => s.shift_date === today);
+          const futureShifts = shifts.filter(s => s.shift_date !== today);
+          setTodaysShifts(todayShifts);
+          setUpcomingShifts(futureShifts.slice(0, 5));
+        }
       }
     } catch (error) {
       console.error('Error fetching employee data:', error);
