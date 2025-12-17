@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface PendingEmployee {
   id: string;
@@ -45,6 +46,7 @@ export default function UserManagement() {
   // Dialog states
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<PendingEmployee | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   
@@ -278,6 +280,39 @@ export default function UserManagement() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deleteUserId) return;
+    
+    // Don't allow deleting yourself
+    if (deleteUserId === currentUser?.id) {
+      toast.error("You cannot delete your own account");
+      setDeleteUserId(null);
+      return;
+    }
+    
+    try {
+      // First delete from user_roles
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', deleteUserId);
+      
+      // Then delete from profiles
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', deleteUserId);
+      
+      if (error) throw error;
+      
+      toast.success('User deleted successfully');
+      setDeleteUserId(null);
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete user');
+    }
+  };
+
   const openActivateDialog = (employee: PendingEmployee) => {
     setSelectedEmployee(employee);
     setDisplayName(`${employee.first_name} ${employee.last_name}`);
@@ -399,6 +434,7 @@ export default function UserManagement() {
               size="sm" 
               className="text-destructive"
               onClick={() => handleDeactivateUser(user.id)}
+              title="Deactivate user"
             >
               <Power className="h-4 w-4" />
             </Button>
@@ -408,10 +444,21 @@ export default function UserManagement() {
               size="sm" 
               className="text-green-600"
               onClick={() => handleActivateUser(user.id)}
+              title="Activate user"
             >
               <CheckCircle className="h-4 w-4" />
             </Button>
           )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-destructive hover:bg-destructive/10"
+            onClick={() => setDeleteUserId(user.id)}
+            title="Delete user"
+            disabled={user.id === currentUser?.id}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </Card>
@@ -865,6 +912,25 @@ export default function UserManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={!!deleteUserId} onOpenChange={(open) => !open && setDeleteUserId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this user? This will remove their profile and role from the system. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
