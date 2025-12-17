@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
 import { useToast } from '@/hooks/use-toast';
@@ -13,22 +12,24 @@ import html2canvas from 'html2canvas';
 interface SignatureData {
   name: string;
   designation: string;
-  email: string;
-  phone: string;
-  website: string;
-  tagline: string;
+  companyName: string;
   photo: string | null;
 }
 
 const defaultData: SignatureData = {
   name: '',
   designation: '',
-  email: '',
-  phone: '',
-  website: '',
-  tagline: '',
+  companyName: '',
   photo: null,
 };
+
+const templates = [
+  { id: 1, name: 'Classic Professional', hasPhoto: false },
+  { id: 2, name: 'Modern Minimal', hasPhoto: false },
+  { id: 3, name: 'Executive Portrait', hasPhoto: true },
+  { id: 4, name: 'Corporate Banner', hasPhoto: false },
+  { id: 5, name: 'Elegant Sidebar', hasPhoto: false },
+];
 
 export default function EmailSignature() {
   const [selectedTemplate, setSelectedTemplate] = useState(1);
@@ -55,105 +56,85 @@ export default function EmailSignature() {
   const generateHTMLCode = (template: number): string => {
     const name = signatureData.name || 'Your Name';
     const designation = signatureData.designation || 'Designation';
-    const email = signatureData.email || 'email@company.com';
-    const phone = signatureData.phone || '+44 123 456 7890';
-    const website = signatureData.website || 'www.company.com';
-    const tagline = signatureData.tagline || 'Company Tagline';
-    const photoSrc = signatureData.photo || 'https://via.placeholder.com/100';
-    const logoSrc = logoUrl || 'https://via.placeholder.com/150x50';
+    const companyName = signatureData.companyName || 'Company Name';
+    const photoSrc = signatureData.photo || 'https://via.placeholder.com/80';
+    const logoSrc = logoUrl || 'https://via.placeholder.com/120x40';
 
     if (template === 1) {
-      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; line-height: 1.4; border-left: 4px solid ${primaryColor}; background: #ffffff; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 100%; max-width: 600px;">
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 400px;">
   <tr>
-    <td>
-      <table cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
-        <tr>
-          <td style="padding-right:20px; vertical-align: top; width: 120px;">
-            <img src="${photoSrc}" style="display: block; border: 2px solid ${primaryColor}; border-radius: 12px; height: 140px; width: auto;">
-          </td>
-          <td style="vertical-align: top;">
-            <div style="font-size: 18px; font-weight: bold; color: #000; margin-bottom: 2px;">${name}</div>
-            <div style="font-size: 14px; font-weight: bold; color: ${primaryColor}; margin-bottom: 12px;">${designation}</div>
-            <img src="${logoSrc}" width="120" style="display: block; margin-bottom: 8px;">
-            <hr style="border: 0; border-top: 1px solid #ddd; margin: 8px 0;">
-            <div style="font-size: 12px; color: #444; line-height: 1.6;">
-              <div>📧 ${email}</div>
-              <div>📞 ${phone}</div>
-              <div>🌐 ${website}</div>
-            </div>
-            <div style="font-size: 11px; color: #666; margin-top: 8px; font-style: italic;">${tagline}</div>
-          </td>
-        </tr>
-      </table>
+    <td style="border-left: 3px solid ${primaryColor}; padding-left: 16px;">
+      <div style="font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 2px;">${name}</div>
+      <div style="font-size: 13px; color: ${primaryColor}; margin-bottom: 12px;">${designation}</div>
+      <img src="${logoSrc}" height="32" style="display: block; margin-bottom: 8px;">
+      <div style="font-size: 12px; color: #666;">${companyName}</div>
     </td>
   </tr>
 </table>`;
     }
 
     if (template === 2) {
-      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 20px; border-radius: 12px; max-width: 500px;">
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 350px;">
   <tr>
-    <td style="text-align: center; padding-bottom: 15px;">
-      <img src="${logoSrc}" width="140" style="display: inline-block;">
+    <td style="text-align: center; padding: 16px 0;">
+      <img src="${logoSrc}" height="36" style="display: inline-block; margin-bottom: 12px;">
+      <div style="height: 1px; background: #e5e5e5; margin: 12px 0;"></div>
+      <div style="font-size: 15px; font-weight: 600; color: #1a1a1a;">${name}</div>
+      <div style="font-size: 12px; color: ${primaryColor}; margin-top: 2px;">${designation}</div>
+      <div style="font-size: 11px; color: #888; margin-top: 8px;">${companyName}</div>
     </td>
-  </tr>
-  <tr>
-    <td style="text-align: center;">
-      <img src="${photoSrc}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid ${primaryColor}; object-fit: cover;">
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding-top: 12px;">
-      <div style="font-size: 20px; font-weight: bold;">${name}</div>
-      <div style="font-size: 14px; color: ${primaryColor}; margin-top: 4px;">${designation}</div>
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding-top: 15px;">
-      <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
-        <tr>
-          <td style="padding: 0 10px; font-size: 12px; color: #aaa;">${phone}</td>
-          <td style="padding: 0 10px; font-size: 12px; color: #aaa; border-left: 1px solid #444;">${email}</td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding-top: 10px; font-size: 11px; color: #666;">${tagline}</td>
   </tr>
 </table>`;
     }
 
-    // Template 3
-    return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 550px;">
+    if (template === 3) {
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 420px;">
   <tr>
-    <td style="background: ${primaryColor}; height: 4px; border-radius: 4px 4px 0 0;"></td>
+    <td style="padding-right: 16px; vertical-align: top;">
+      <img src="${photoSrc}" width="70" height="70" style="border-radius: 8px; object-fit: cover; border: 2px solid ${primaryColor};">
+    </td>
+    <td style="vertical-align: top;">
+      <div style="font-size: 16px; font-weight: 600; color: #1a1a1a;">${name}</div>
+      <div style="font-size: 13px; color: ${primaryColor}; margin: 2px 0 10px;">${designation}</div>
+      <img src="${logoSrc}" height="28" style="display: block;">
+      <div style="font-size: 11px; color: #666; margin-top: 6px;">${companyName}</div>
+    </td>
+  </tr>
+</table>`;
+    }
+
+    if (template === 4) {
+      return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 450px;">
+  <tr>
+    <td style="background: ${primaryColor}; padding: 12px 20px; border-radius: 6px 6px 0 0;">
+      <img src="${logoSrc}" height="28" style="display: block; filter: brightness(0) invert(1);">
+    </td>
   </tr>
   <tr>
-    <td style="background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px;">
-      <table cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
+    <td style="background: #f8f9fa; padding: 14px 20px; border-radius: 0 0 6px 6px;">
+      <div style="font-size: 15px; font-weight: 600; color: #1a1a1a;">${name}</div>
+      <div style="font-size: 12px; color: ${primaryColor};">${designation}</div>
+      <div style="font-size: 11px; color: #888; margin-top: 4px;">${companyName}</div>
+    </td>
+  </tr>
+</table>`;
+    }
+
+    // Template 5
+    return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; max-width: 380px;">
+  <tr>
+    <td style="width: 4px; background: linear-gradient(180deg, ${primaryColor} 0%, #1a1a1a 100%); border-radius: 2px;"></td>
+    <td style="padding: 12px 0 12px 16px;">
+      <table cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td style="vertical-align: top; width: 80px;">
-            <img src="${photoSrc}" style="width: 70px; height: 70px; border-radius: 8px; object-fit: cover;">
-          </td>
-          <td style="vertical-align: top; padding-left: 15px;">
-            <div style="font-size: 18px; font-weight: bold; color: #333;">${name}</div>
-            <div style="font-size: 13px; color: ${primaryColor}; font-weight: 500;">${designation}</div>
-            <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 10px;">
-              <tr>
-                <td style="font-size: 12px; color: #666; padding-right: 15px;">📧 ${email}</td>
-                <td style="font-size: 12px; color: #666;">📞 ${phone}</td>
-              </tr>
-            </table>
-          </td>
-          <td style="vertical-align: top; text-align: right;">
-            <img src="${logoSrc}" width="100" style="display: inline-block;">
+          <td>
+            <img src="${logoSrc}" height="30" style="display: block; margin-bottom: 10px;">
+            <div style="font-size: 15px; font-weight: 600; color: #1a1a1a;">${name}</div>
+            <div style="font-size: 12px; color: ${primaryColor}; margin-top: 2px;">${designation}</div>
+            <div style="font-size: 11px; color: #666; margin-top: 6px;">${companyName}</div>
           </td>
         </tr>
       </table>
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888; text-align: center;">
-        ${tagline} | ${website}
-      </div>
     </td>
   </tr>
 </table>`;
@@ -162,70 +143,34 @@ export default function EmailSignature() {
   const handleCopyCode = () => {
     const code = generateHTMLCode(selectedTemplate);
     navigator.clipboard.writeText(code);
-    toast({ title: 'HTML code copied to clipboard!' });
+    toast({ title: 'HTML code copied to clipboard' });
   };
 
   const handleDownloadImage = async () => {
     if (!signatureRef.current) return;
     
-    const canvas = await html2canvas(signatureRef.current, { scale: 2, backgroundColor: null });
+    const canvas = await html2canvas(signatureRef.current, { scale: 3, backgroundColor: '#ffffff' });
     const link = document.createElement('a');
     link.download = `email-signature-${signatureData.name || 'template'}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
 
+  const currentTemplate = templates.find(t => t.id === selectedTemplate);
+
   const renderSignaturePreview = (template: number) => {
     const name = signatureData.name || 'Your Name';
     const designation = signatureData.designation || 'Designation';
-    const email = signatureData.email || 'email@company.com';
-    const phone = signatureData.phone || '+44 123 456 7890';
-    const website = signatureData.website || 'www.company.com';
-    const tagline = signatureData.tagline || 'Company Tagline';
+    const companyName = signatureData.companyName || 'Company Name';
 
     if (template === 1) {
       return (
-        <div 
-          ref={signatureRef}
-          className="bg-white p-3 rounded-lg shadow-md border-l-4"
-          style={{ borderLeftColor: primaryColor, maxWidth: '500px' }}
-        >
-          <div className="flex gap-4">
-            {/* Photo */}
-            <div className="flex-shrink-0">
-              {signatureData.photo ? (
-                <img 
-                  src={signatureData.photo} 
-                  alt="Profile" 
-                  className="w-[100px] h-[130px] object-cover rounded-xl"
-                  style={{ border: `2px solid ${primaryColor}` }}
-                />
-              ) : (
-                <div 
-                  className="w-[100px] h-[130px] bg-muted rounded-xl flex items-center justify-center text-muted-foreground text-xs"
-                  style={{ border: `2px solid ${primaryColor}` }}
-                >
-                  Photo
-                </div>
-              )}
-            </div>
-            {/* Details */}
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-foreground">{name}</h3>
-              <p className="text-sm font-semibold" style={{ color: primaryColor }}>{designation}</p>
-              
-              {logoUrl && <img src={logoUrl} alt="Logo" className="h-8 my-2" />}
-              
-              <hr className="my-2 border-border" />
-              
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>📧 {email}</p>
-                <p>📞 {phone}</p>
-                <p>🌐 {website}</p>
-              </div>
-              
-              <p className="text-xs text-muted-foreground mt-2 italic">{tagline}</p>
-            </div>
+        <div ref={signatureRef} className="bg-white p-4" style={{ maxWidth: '400px' }}>
+          <div className="border-l-[3px] pl-4" style={{ borderColor: primaryColor }}>
+            <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+            <p className="text-sm" style={{ color: primaryColor }}>{designation}</p>
+            {logoUrl && <img src={logoUrl} alt="Logo" className="h-8 mt-3 object-contain" />}
+            <p className="text-xs text-gray-600 mt-2">{companyName}</p>
           </div>
         </div>
       );
@@ -233,75 +178,77 @@ export default function EmailSignature() {
 
     if (template === 2) {
       return (
-        <div 
-          ref={signatureRef}
-          className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-5 rounded-xl text-center"
-          style={{ maxWidth: '400px' }}
-        >
-          {logoUrl && <img src={logoUrl} alt="Logo" className="h-8 mx-auto mb-3 brightness-0 invert" />}
-          
-          {signatureData.photo ? (
-            <img 
-              src={signatureData.photo} 
-              alt="Profile" 
-              className="w-16 h-16 rounded-full mx-auto object-cover"
-              style={{ border: `3px solid ${primaryColor}` }}
-            />
-          ) : (
-            <div 
-              className="w-16 h-16 rounded-full mx-auto bg-gray-700 flex items-center justify-center text-xs"
-              style={{ border: `3px solid ${primaryColor}` }}
-            >
-              Photo
-            </div>
-          )}
-          
-          <h3 className="text-lg font-bold mt-3">{name}</h3>
-          <p className="text-sm" style={{ color: primaryColor }}>{designation}</p>
-          
-          <div className="flex justify-center gap-4 mt-3 text-xs text-gray-400">
-            <span>{phone}</span>
-            <span className="border-l border-gray-600 pl-4">{email}</span>
-          </div>
-          
-          <p className="text-xs text-gray-500 mt-2">{tagline}</p>
+        <div ref={signatureRef} className="bg-white p-4 text-center" style={{ maxWidth: '350px' }}>
+          {logoUrl && <img src={logoUrl} alt="Logo" className="h-9 mx-auto mb-3 object-contain" />}
+          <div className="h-px bg-gray-200 my-3" />
+          <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+          <p className="text-sm mt-0.5" style={{ color: primaryColor }}>{designation}</p>
+          <p className="text-xs text-gray-500 mt-2">{companyName}</p>
         </div>
       );
     }
 
-    // Template 3
-    return (
-      <div ref={signatureRef} style={{ maxWidth: '450px' }}>
-        <div className="h-1 rounded-t" style={{ backgroundColor: primaryColor }} />
-        <div className="bg-gray-50 p-4 rounded-b-lg">
-          <div className="flex gap-4">
+    if (template === 3) {
+      return (
+        <div ref={signatureRef} className="bg-white p-4 flex gap-4" style={{ maxWidth: '420px' }}>
+          <div className="flex-shrink-0">
             {signatureData.photo ? (
               <img 
                 src={signatureData.photo} 
                 alt="Profile" 
-                className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                className="w-[70px] h-[70px] rounded-lg object-cover"
+                style={{ border: `2px solid ${primaryColor}` }}
               />
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
+              <div 
+                className="w-[70px] h-[70px] rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400"
+                style={{ border: `2px solid ${primaryColor}` }}
+              >
                 Photo
               </div>
             )}
-            
-            <div className="flex-1">
-              <h3 className="font-bold text-gray-900">{name}</h3>
-              <p className="text-sm font-medium" style={{ color: primaryColor }}>{designation}</p>
-              <div className="flex gap-4 mt-2 text-xs text-gray-600">
-                <span>📧 {email}</span>
-                <span>📞 {phone}</span>
-              </div>
-            </div>
-            
-            {logoUrl && <img src={logoUrl} alt="Logo" className="h-8 flex-shrink-0" />}
           </div>
-          
-          <div className="mt-3 pt-3 border-t text-center text-xs text-gray-500">
-            {tagline} | {website}
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+            <p className="text-sm mb-2" style={{ color: primaryColor }}>{designation}</p>
+            {logoUrl && <img src={logoUrl} alt="Logo" className="h-7 object-contain" />}
+            <p className="text-xs text-gray-600 mt-1.5">{companyName}</p>
           </div>
+        </div>
+      );
+    }
+
+    if (template === 4) {
+      return (
+        <div ref={signatureRef} className="bg-white" style={{ maxWidth: '450px' }}>
+          <div className="px-5 py-3 rounded-t-md" style={{ backgroundColor: primaryColor }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-7 object-contain brightness-0 invert" />
+            ) : (
+              <div className="h-7 w-24 bg-white/20 rounded" />
+            )}
+          </div>
+          <div className="bg-gray-50 px-5 py-3.5 rounded-b-md">
+            <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+            <p className="text-sm" style={{ color: primaryColor }}>{designation}</p>
+            <p className="text-xs text-gray-500 mt-1">{companyName}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Template 5
+    return (
+      <div ref={signatureRef} className="bg-white p-4 flex" style={{ maxWidth: '380px' }}>
+        <div 
+          className="w-1 rounded-sm mr-4" 
+          style={{ background: `linear-gradient(180deg, ${primaryColor} 0%, #1a1a1a 100%)` }}
+        />
+        <div>
+          {logoUrl && <img src={logoUrl} alt="Logo" className="h-7 mb-2.5 object-contain" />}
+          <h3 className="text-base font-semibold text-gray-900">{name}</h3>
+          <p className="text-sm mt-0.5" style={{ color: primaryColor }}>{designation}</p>
+          <p className="text-xs text-gray-600 mt-1.5">{companyName}</p>
         </div>
       </div>
     );
@@ -322,91 +269,66 @@ export default function EmailSignature() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Template</Label>
+              <Label>Template Style</Label>
               <Select value={selectedTemplate.toString()} onValueChange={(v) => setSelectedTemplate(parseInt(v))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">Professional Card</SelectItem>
-                  <SelectItem value="2">Dark Centered</SelectItem>
-                  <SelectItem value="3">Minimal Header</SelectItem>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id.toString()}>
+                      {t.name} {t.hasPhoto && '(with photo)'}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Photo</Label>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
-              <Button 
-                variant="outline" 
-                className="w-full gap-2"
-                onClick={() => photoInputRef.current?.click()}
-              >
-                <Upload className="h-4 w-4" />
-                Upload Photo
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+            {currentTemplate?.hasPhoto && (
               <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input 
-                  value={signatureData.name}
-                  onChange={(e) => setSignatureData({ ...signatureData, name: e.target.value })}
-                  placeholder="John Doe"
+                <Label>Profile Photo</Label>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
                 />
+                <Button 
+                  variant="outline" 
+                  className="w-full gap-2"
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  {signatureData.photo ? 'Change Photo' : 'Upload Photo'}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>Designation</Label>
-                <Input 
-                  value={signatureData.designation}
-                  onChange={(e) => setSignatureData({ ...signatureData, designation: e.target.value })}
-                  placeholder="Director"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>Full Name</Label>
               <Input 
-                value={signatureData.email}
-                onChange={(e) => setSignatureData({ ...signatureData, email: e.target.value })}
-                placeholder="john@company.com"
+                value={signatureData.name}
+                onChange={(e) => setSignatureData({ ...signatureData, name: e.target.value })}
+                placeholder="John Doe"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input 
-                  value={signatureData.phone}
-                  onChange={(e) => setSignatureData({ ...signatureData, phone: e.target.value })}
-                  placeholder="+44 123 456 7890"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Website</Label>
-                <Input 
-                  value={signatureData.website}
-                  onChange={(e) => setSignatureData({ ...signatureData, website: e.target.value })}
-                  placeholder="www.company.com"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Designation</Label>
+              <Input 
+                value={signatureData.designation}
+                onChange={(e) => setSignatureData({ ...signatureData, designation: e.target.value })}
+                placeholder="Director"
+              />
             </div>
 
             <div className="space-y-2">
-              <Label>Tagline</Label>
+              <Label>Company Name</Label>
               <Input 
-                value={signatureData.tagline}
-                onChange={(e) => setSignatureData({ ...signatureData, tagline: e.target.value })}
-                placeholder="Your company tagline"
+                value={signatureData.companyName}
+                onChange={(e) => setSignatureData({ ...signatureData, companyName: e.target.value })}
+                placeholder="Your Company Ltd"
               />
             </div>
           </CardContent>
@@ -418,7 +340,7 @@ export default function EmailSignature() {
             <CardHeader>
               <CardTitle>Preview</CardTitle>
             </CardHeader>
-            <CardContent className="flex justify-center py-6">
+            <CardContent className="flex justify-center py-6 bg-gray-50 rounded-b-lg">
               {renderSignaturePreview(selectedTemplate)}
             </CardContent>
           </Card>
@@ -430,7 +352,7 @@ export default function EmailSignature() {
             </Button>
             <Button variant="outline" onClick={handleDownloadImage} className="gap-2 flex-1">
               <Image className="h-4 w-4" />
-              Download as Image
+              Download as PNG
             </Button>
           </div>
 

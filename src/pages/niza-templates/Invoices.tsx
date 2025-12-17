@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Download, Settings } from 'lucide-react';
+import { Download, Settings, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,12 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  price: number;
+}
+
 interface InvoiceSettings {
-  // Header
   companyName: string;
   address: string;
   phone: string;
@@ -20,12 +26,17 @@ interface InvoiceSettings {
   website: string;
   registrationNumber: string;
   vatNumber: string;
-  // Footer
   bankName: string;
   accountNumber: string;
   sortCode: string;
   paymentTerms: string;
   footerNote: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  customerName: string;
+  customerAddress: string;
+  vatRate: number;
 }
 
 const defaultSettings: InvoiceSettings = {
@@ -40,21 +51,60 @@ const defaultSettings: InvoiceSettings = {
   accountNumber: '',
   sortCode: '',
   paymentTerms: 'Payment due within 30 days',
-  footerNote: 'Thank you for your business!',
+  footerNote: 'Thank you for your business',
+  invoiceNumber: 'INV-0001',
+  invoiceDate: new Date().toISOString().split('T')[0],
+  dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+  customerName: '',
+  customerAddress: '',
+  vatRate: 20,
 };
+
+const defaultItems: InvoiceItem[] = [
+  { description: 'Product or Service', quantity: 1, price: 100 },
+];
+
+const templateStyles = [
+  { id: 1, name: 'Professional Blue', accent: '#0057D9' },
+  { id: 2, name: 'Modern Teal', accent: '#0D9488' },
+  { id: 3, name: 'Classic Navy', accent: '#1E3A5F' },
+  { id: 4, name: 'Elegant Charcoal', accent: '#374151' },
+  { id: 5, name: 'Corporate Green', accent: '#059669' },
+];
 
 export default function Invoices() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(1);
   const [settings, setSettings] = useState<InvoiceSettings>(defaultSettings);
+  const [items, setItems] = useState<InvoiceItem[]>(defaultItems);
   const { brandSettings } = useBrandSettings();
   const previewRef = useRef<HTMLDivElement>(null);
 
   const logoUrl = brandSettings?.primary_logo_path;
+  const currentStyle = templateStyles.find(t => t.id === selectedTemplate) || templateStyles[0];
+
+  const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const vatAmount = subtotal * (settings.vatRate / 100);
+  const total = subtotal + vatAmount;
+
+  const addItem = () => {
+    setItems([...items, { description: '', quantity: 1, price: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const updateItem = (index: number, field: keyof InvoiceItem, value: string | number) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
 
   const handleDownload = async (format: 'png' | 'pdf') => {
     if (!previewRef.current) return;
     
-    const canvas = await html2canvas(previewRef.current, { scale: 2 });
+    const canvas = await html2canvas(previewRef.current, { scale: 2, backgroundColor: '#ffffff' });
     
     if (format === 'pdf') {
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -62,141 +112,161 @@ export default function Invoices() {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save('invoice-template.pdf');
+      pdf.save(`invoice-${settings.invoiceNumber}.pdf`);
     } else {
       const link = document.createElement('a');
-      link.download = 'invoice-template.png';
+      link.download = `invoice-${settings.invoiceNumber}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     }
   };
 
-  const renderInvoicePreview = () => (
-    <div 
-      ref={previewRef}
-      className="bg-white shadow-lg rounded-lg overflow-hidden"
-      style={{ width: '600px' }}
-    >
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
-        <div className="flex justify-between items-start">
-          <div>
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-12 mb-3 brightness-0 invert" />
-            ) : (
-              <div className="h-12 w-32 bg-white/20 rounded mb-3 flex items-center justify-center text-sm">
-                Your Logo
-              </div>
-            )}
-            <h1 className="text-xl font-bold">{settings.companyName || 'Your Company Name'}</h1>
-            <p className="text-sm text-white/80 whitespace-pre-line">{settings.address || '123 Business Street\nCity, Country'}</p>
+  const renderInvoicePreview = () => {
+    const accent = currentStyle.accent;
+
+    return (
+      <div 
+        ref={previewRef}
+        className="bg-white shadow-lg rounded-lg overflow-hidden"
+        style={{ width: '600px', minHeight: '800px' }}
+      >
+        {/* Header */}
+        <div className="p-6 border-b-4" style={{ borderColor: accent }}>
+          <div className="flex justify-between items-start">
+            <div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-12 mb-3 object-contain" />
+              ) : (
+                <div className="h-12 w-32 bg-gray-100 rounded mb-3 flex items-center justify-center text-sm text-gray-400">
+                  Your Logo
+                </div>
+              )}
+              <h1 className="text-xl font-bold text-gray-900">{settings.companyName || 'Your Company Name'}</h1>
+              <p className="text-sm text-gray-600 whitespace-pre-line mt-1">{settings.address || '123 Business Street\nCity, Country'}</p>
+            </div>
+            <div className="text-right text-sm text-gray-600">
+              <p>{settings.phone || '+44 123 456 7890'}</p>
+              <p>{settings.email || 'info@company.com'}</p>
+              <p>{settings.website || 'www.company.com'}</p>
+              {settings.registrationNumber && <p className="mt-2 text-gray-500">Reg: {settings.registrationNumber}</p>}
+              {settings.vatNumber && <p className="text-gray-500">VAT: {settings.vatNumber}</p>}
+            </div>
           </div>
+        </div>
+
+        {/* Invoice Title & Details */}
+        <div className="px-6 py-4 flex justify-between items-center" style={{ backgroundColor: `${accent}10` }}>
+          <h2 className="text-2xl font-bold" style={{ color: accent }}>INVOICE</h2>
           <div className="text-right text-sm">
-            <p>{settings.phone || '+44 123 456 7890'}</p>
-            <p>{settings.email || 'info@company.com'}</p>
-            <p>{settings.website || 'www.company.com'}</p>
-            {settings.registrationNumber && <p className="mt-2 text-white/70">Reg: {settings.registrationNumber}</p>}
-            {settings.vatNumber && <p className="text-white/70">VAT: {settings.vatNumber}</p>}
+            <p><span className="font-medium text-gray-700">Invoice #:</span> {settings.invoiceNumber}</p>
+            <p><span className="font-medium text-gray-700">Date:</span> {settings.invoiceDate}</p>
+            <p><span className="font-medium text-gray-700">Due:</span> {settings.dueDate}</p>
           </div>
         </div>
-      </div>
 
-      {/* Invoice Title */}
-      <div className="px-6 py-4 border-b flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">INVOICE</h2>
-        <div className="text-right text-sm text-gray-600">
-          <p><span className="font-medium">Invoice #:</span> INV-0001</p>
-          <p><span className="font-medium">Date:</span> {new Date().toLocaleDateString()}</p>
-          <p><span className="font-medium">Due:</span> {new Date(Date.now() + 30*24*60*60*1000).toLocaleDateString()}</p>
+        {/* Bill To */}
+        <div className="px-6 py-4 border-b">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Bill To</h3>
+          <p className="font-medium text-gray-900">{settings.customerName || 'Customer Name'}</p>
+          <p className="text-sm text-gray-600 whitespace-pre-line">{settings.customerAddress || 'Customer Address'}</p>
         </div>
-      </div>
 
-      {/* Bill To */}
-      <div className="px-6 py-4 bg-gray-50">
-        <h3 className="text-sm font-medium text-gray-500 mb-2">BILL TO</h3>
-        <p className="font-medium text-gray-800">Customer Name</p>
-        <p className="text-sm text-gray-600">Customer Address</p>
-        <p className="text-sm text-gray-600">City, Country</p>
-      </div>
+        {/* Items Table */}
+        <div className="px-6 py-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${accent}` }}>
+                <th className="py-2 text-left font-semibold text-gray-700">Description</th>
+                <th className="py-2 text-center font-semibold text-gray-700 w-20">Qty</th>
+                <th className="py-2 text-right font-semibold text-gray-700 w-24">Price</th>
+                <th className="py-2 text-right font-semibold text-gray-700 w-24">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={index} className="border-b border-gray-100">
+                  <td className="py-3 text-gray-800">{item.description || 'Item description'}</td>
+                  <td className="py-3 text-center text-gray-600">{item.quantity}</td>
+                  <td className="py-3 text-right text-gray-600">£{item.price.toFixed(2)}</td>
+                  <td className="py-3 text-right text-gray-800">£{(item.quantity * item.price).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-      {/* Items Table */}
-      <div className="px-6 py-4">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2 text-left font-medium text-gray-600">Description</th>
-              <th className="py-2 text-center font-medium text-gray-600">Qty</th>
-              <th className="py-2 text-right font-medium text-gray-600">Price</th>
-              <th className="py-2 text-right font-medium text-gray-600">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b">
-              <td className="py-3">Sample Product/Service</td>
-              <td className="py-3 text-center">1</td>
-              <td className="py-3 text-right">£100.00</td>
-              <td className="py-3 text-right">£100.00</td>
-            </tr>
-            <tr className="border-b">
-              <td className="py-3">Another Item</td>
-              <td className="py-3 text-center">2</td>
-              <td className="py-3 text-right">£50.00</td>
-              <td className="py-3 text-right">£100.00</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Totals */}
-        <div className="flex justify-end mt-4">
-          <div className="w-48 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal:</span>
-              <span>£200.00</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">VAT (20%):</span>
-              <span>£40.00</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg border-t pt-2">
-              <span>Total:</span>
-              <span className="text-blue-600">£240.00</span>
+          {/* Totals */}
+          <div className="flex justify-end mt-6">
+            <div className="w-56 space-y-2 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal:</span>
+                <span>£{subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>VAT ({settings.vatRate}%):</span>
+                <span>£{vatAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg pt-2 border-t-2" style={{ borderColor: accent }}>
+                <span>Total:</span>
+                <span style={{ color: accent }}>£{total.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Footer */}
-      <div className="bg-gray-100 px-6 py-4 mt-4">
-        <div className="grid grid-cols-2 gap-6 text-sm">
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">Payment Details</h4>
-            <p className="text-gray-600">Bank: {settings.bankName || 'Your Bank Name'}</p>
-            <p className="text-gray-600">Account: {settings.accountNumber || '12345678'}</p>
-            <p className="text-gray-600">Sort Code: {settings.sortCode || '12-34-56'}</p>
+        {/* Footer */}
+        <div className="mt-auto bg-gray-50 px-6 py-4">
+          <div className="grid grid-cols-2 gap-6 text-sm">
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Payment Details</h4>
+              <p className="text-gray-600">Bank: {settings.bankName || 'Bank Name'}</p>
+              <p className="text-gray-600">Account: {settings.accountNumber || '12345678'}</p>
+              <p className="text-gray-600">Sort Code: {settings.sortCode || '12-34-56'}</p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Payment Terms</h4>
+              <p className="text-gray-600">{settings.paymentTerms}</p>
+            </div>
           </div>
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">Payment Terms</h4>
-            <p className="text-gray-600">{settings.paymentTerms}</p>
-          </div>
+          {settings.footerNote && (
+            <p className="text-center text-gray-500 text-sm mt-4 pt-4 border-t border-gray-200">
+              {settings.footerNote}
+            </p>
+          )}
         </div>
-        <p className="text-center text-gray-500 text-sm mt-4 pt-4 border-t border-gray-200">
-          {settings.footerNote}
-        </p>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Invoice Templates</h1>
-          <p className="text-muted-foreground mt-1">Customize your invoice header, body, and footer</p>
+          <p className="text-muted-foreground mt-1">Create and customize professional invoices</p>
         </div>
         <Button onClick={() => setDialogOpen(true)} className="gap-2">
           <Settings className="h-4 w-4" />
-          Configure Invoice
+          Create Invoice
         </Button>
+      </div>
+
+      {/* Templates Grid */}
+      <div className="grid gap-4 md:grid-cols-5">
+        {templateStyles.map((template) => (
+          <Card 
+            key={template.id} 
+            className={`cursor-pointer transition-all ${selectedTemplate === template.id ? 'ring-2 ring-primary' : 'hover:border-primary/50'}`}
+            onClick={() => setSelectedTemplate(template.id)}
+          >
+            <CardContent className="p-4 text-center">
+              <div 
+                className="w-full h-3 rounded-full mb-3"
+                style={{ backgroundColor: template.accent }}
+              />
+              <p className="text-sm font-medium">{template.name}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Preview Card */}
@@ -204,8 +274,8 @@ export default function Invoices() {
         <CardHeader>
           <CardTitle>Invoice Preview</CardTitle>
         </CardHeader>
-        <CardContent className="flex justify-center overflow-x-auto py-6">
-          <div className="transform scale-[0.8] origin-top">
+        <CardContent className="flex justify-center overflow-x-auto py-6 bg-gray-100">
+          <div className="transform scale-[0.7] origin-top">
             {renderInvoicePreview()}
           </div>
         </CardContent>
@@ -213,151 +283,265 @@ export default function Invoices() {
 
       {/* Settings Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Configure Invoice Template</DialogTitle>
+            <DialogTitle>Configure Invoice</DialogTitle>
           </DialogHeader>
           
-          <Tabs defaultValue="header" className="py-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="header">Header</TabsTrigger>
-              <TabsTrigger value="body">Body Settings</TabsTrigger>
-              <TabsTrigger value="footer">Footer</TabsTrigger>
-            </TabsList>
+          <div className="grid lg:grid-cols-2 gap-6 py-4">
+            {/* Form Section */}
+            <div>
+              <Tabs defaultValue="header" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="header">Header</TabsTrigger>
+                  <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="items">Items</TabsTrigger>
+                  <TabsTrigger value="footer">Footer</TabsTrigger>
+                </TabsList>
 
-            <TabsContent value="header" className="space-y-4 mt-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Company Name</Label>
-                  <Input 
-                    value={settings.companyName}
-                    onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-                    placeholder="Your Company Ltd"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
-                  <Input 
-                    value={settings.phone}
-                    onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
-                    placeholder="+44 123 456 7890"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea 
-                  value={settings.address}
-                  onChange={(e) => setSettings({ ...settings, address: e.target.value })}
-                  placeholder="123 Business Street&#10;City, Postcode&#10;Country"
-                  rows={3}
-                />
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input 
-                    value={settings.email}
-                    onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                    placeholder="info@company.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Website</Label>
-                  <Input 
-                    value={settings.website}
-                    onChange={(e) => setSettings({ ...settings, website: e.target.value })}
-                    placeholder="www.company.com"
-                  />
-                </div>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Registration Number</Label>
-                  <Input 
-                    value={settings.registrationNumber}
-                    onChange={(e) => setSettings({ ...settings, registrationNumber: e.target.value })}
-                    placeholder="12345678"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>VAT Number</Label>
-                  <Input 
-                    value={settings.vatNumber}
-                    onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })}
-                    placeholder="GB123456789"
-                  />
-                </div>
-              </div>
-            </TabsContent>
+                <TabsContent value="header" className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label>Template Style</Label>
+                    <Select value={selectedTemplate.toString()} onValueChange={(v) => setSelectedTemplate(parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templateStyles.map((t) => (
+                          <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Company Name</Label>
+                      <Input 
+                        value={settings.companyName}
+                        onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
+                        placeholder="Your Company Ltd"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input 
+                        value={settings.phone}
+                        onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
+                        placeholder="+44 123 456 7890"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <Textarea 
+                      value={settings.address}
+                      onChange={(e) => setSettings({ ...settings, address: e.target.value })}
+                      placeholder="123 Business Street&#10;City, Postcode"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input 
+                        value={settings.email}
+                        onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                        placeholder="info@company.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Website</Label>
+                      <Input 
+                        value={settings.website}
+                        onChange={(e) => setSettings({ ...settings, website: e.target.value })}
+                        placeholder="www.company.com"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Registration Number</Label>
+                      <Input 
+                        value={settings.registrationNumber}
+                        onChange={(e) => setSettings({ ...settings, registrationNumber: e.target.value })}
+                        placeholder="12345678"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>VAT Number</Label>
+                      <Input 
+                        value={settings.vatNumber}
+                        onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })}
+                        placeholder="GB123456789"
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
 
-            <TabsContent value="body" className="space-y-4 mt-4">
-              <Card className="p-4">
-                <p className="text-sm text-muted-foreground">
-                  The invoice body structure is pre-designed with standard fields:
-                </p>
-                <ul className="list-disc list-inside mt-2 text-sm text-muted-foreground space-y-1">
-                  <li>Invoice number, date, and due date</li>
-                  <li>Bill to section with customer details</li>
-                  <li>Items table with description, quantity, price, and total</li>
-                  <li>Subtotal, VAT, and grand total calculations</li>
-                </ul>
-                <p className="text-sm text-muted-foreground mt-4">
-                  The actual invoice values are filled when generating invoices from the system.
-                </p>
-              </Card>
-            </TabsContent>
+                <TabsContent value="details" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Invoice Number</Label>
+                      <Input 
+                        value={settings.invoiceNumber}
+                        onChange={(e) => setSettings({ ...settings, invoiceNumber: e.target.value })}
+                        placeholder="INV-0001"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Invoice Date</Label>
+                      <Input 
+                        type="date"
+                        value={settings.invoiceDate}
+                        onChange={(e) => setSettings({ ...settings, invoiceDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Due Date</Label>
+                      <Input 
+                        type="date"
+                        value={settings.dueDate}
+                        onChange={(e) => setSettings({ ...settings, dueDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Customer Name</Label>
+                    <Input 
+                      value={settings.customerName}
+                      onChange={(e) => setSettings({ ...settings, customerName: e.target.value })}
+                      placeholder="Customer Name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Customer Address</Label>
+                    <Textarea 
+                      value={settings.customerAddress}
+                      onChange={(e) => setSettings({ ...settings, customerAddress: e.target.value })}
+                      placeholder="Customer Address&#10;City, Postcode"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>VAT Rate (%)</Label>
+                    <Input 
+                      type="number"
+                      value={settings.vatRate}
+                      onChange={(e) => setSettings({ ...settings, vatRate: parseFloat(e.target.value) || 0 })}
+                      placeholder="20"
+                    />
+                  </div>
+                </TabsContent>
 
-            <TabsContent value="footer" className="space-y-4 mt-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Bank Name</Label>
-                  <Input 
-                    value={settings.bankName}
-                    onChange={(e) => setSettings({ ...settings, bankName: e.target.value })}
-                    placeholder="Your Bank"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Account Number</Label>
-                  <Input 
-                    value={settings.accountNumber}
-                    onChange={(e) => setSettings({ ...settings, accountNumber: e.target.value })}
-                    placeholder="12345678"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Sort Code</Label>
-                  <Input 
-                    value={settings.sortCode}
-                    onChange={(e) => setSettings({ ...settings, sortCode: e.target.value })}
-                    placeholder="12-34-56"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Payment Terms</Label>
-                <Input 
-                  value={settings.paymentTerms}
-                  onChange={(e) => setSettings({ ...settings, paymentTerms: e.target.value })}
-                  placeholder="Payment due within 30 days"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Footer Note</Label>
-                <Input 
-                  value={settings.footerNote}
-                  onChange={(e) => setSettings({ ...settings, footerNote: e.target.value })}
-                  placeholder="Thank you for your business!"
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
+                <TabsContent value="items" className="space-y-4 mt-4">
+                  <div className="space-y-3">
+                    {items.map((item, index) => (
+                      <div key={index} className="flex gap-2 items-end">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs">Description</Label>
+                          <Input 
+                            value={item.description}
+                            onChange={(e) => updateItem(index, 'description', e.target.value)}
+                            placeholder="Item description"
+                          />
+                        </div>
+                        <div className="w-20 space-y-1">
+                          <Label className="text-xs">Qty</Label>
+                          <Input 
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="w-24 space-y-1">
+                          <Label className="text-xs">Price (£)</Label>
+                          <Input 
+                            type="number"
+                            value={item.price}
+                            onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => removeItem(index)}
+                          disabled={items.length <= 1}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button variant="outline" onClick={addItem} className="gap-2 w-full">
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </Button>
+                  <div className="pt-4 border-t space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Subtotal:</span>
+                      <span>£{subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>VAT ({settings.vatRate}%):</span>
+                      <span>£{vatAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span>£{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </TabsContent>
 
-          <div className="border-t pt-4 mt-4">
-            <h3 className="text-sm font-medium mb-4">Preview</h3>
-            <div className="overflow-x-auto">
-              <div className="transform scale-[0.5] origin-top-left">
+                <TabsContent value="footer" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Bank Name</Label>
+                      <Input 
+                        value={settings.bankName}
+                        onChange={(e) => setSettings({ ...settings, bankName: e.target.value })}
+                        placeholder="Your Bank"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Account Number</Label>
+                      <Input 
+                        value={settings.accountNumber}
+                        onChange={(e) => setSettings({ ...settings, accountNumber: e.target.value })}
+                        placeholder="12345678"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Sort Code</Label>
+                      <Input 
+                        value={settings.sortCode}
+                        onChange={(e) => setSettings({ ...settings, sortCode: e.target.value })}
+                        placeholder="12-34-56"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Payment Terms</Label>
+                    <Input 
+                      value={settings.paymentTerms}
+                      onChange={(e) => setSettings({ ...settings, paymentTerms: e.target.value })}
+                      placeholder="Payment due within 30 days"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Footer Note</Label>
+                    <Input 
+                      value={settings.footerNote}
+                      onChange={(e) => setSettings({ ...settings, footerNote: e.target.value })}
+                      placeholder="Thank you for your business"
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Preview Section */}
+            <div className="overflow-x-auto bg-gray-100 rounded-lg p-4">
+              <div className="transform scale-[0.55] origin-top-left">
                 {renderInvoicePreview()}
               </div>
             </div>
