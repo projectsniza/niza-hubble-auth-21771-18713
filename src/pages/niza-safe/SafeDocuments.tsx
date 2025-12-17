@@ -61,7 +61,6 @@ export default function SafeDocuments() {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [safetyRootId, setSafetyRootId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -82,62 +81,19 @@ export default function SafeDocuments() {
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
   useEffect(() => {
-    initializeSafetyRoot();
-  }, []);
-
-  useEffect(() => {
-    if (safetyRootId !== null) {
-      fetchFoldersAndDocuments();
-    }
-  }, [currentFolderId, safetyRootId]);
-
-  const initializeSafetyRoot = async () => {
-    // Find the Safety Documents root folder
-    const { data: rootFolder } = await supabase
-      .from('folders')
-      .select('*')
-      .eq('path', 'Safety Documents')
-      .eq('folder_type', 'root')
-      .single();
-
-    if (rootFolder) {
-      setSafetyRootId(rootFolder.id);
-      // Start inside the Safety Documents folder
-      setCurrentFolderId(rootFolder.id);
-    } else {
-      // Create it if it doesn't exist
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      const { data: newRoot, error } = await supabase
-        .from('folders')
-        .insert({
-          name: 'Safety Documents',
-          path: 'Safety Documents',
-          folder_type: 'root',
-          is_deletable: false,
-          is_system: true,
-          show_in_safety: true,
-          created_by: authUser?.id,
-        })
-        .select()
-        .single();
-
-      if (newRoot) {
-        setSafetyRootId(newRoot.id);
-        setCurrentFolderId(newRoot.id);
-      }
-    }
-  };
+    fetchFoldersAndDocuments();
+  }, [currentFolderId]);
 
   const fetchFoldersAndDocuments = async () => {
     setIsLoading(true);
     try {
-      // Fetch subfolders of current folder (or folders with show_in_safety at root level)
+      // Fetch folders - at root show folders with show_in_safety, otherwise show children
       let foldersQuery = supabase.from('folders').select('*').order('name');
       
-      if (currentFolderId === safetyRootId) {
-        // At Safety Documents root - show children and folders marked as show_in_safety
-        foldersQuery = foldersQuery.or(`parent_id.eq.${safetyRootId},and(show_in_safety.eq.true,parent_id.is.null,id.neq.${safetyRootId})`);
-      } else if (currentFolderId) {
+      if (currentFolderId === null) {
+        // At root level - show folders marked as show_in_safety with no parent
+        foldersQuery = foldersQuery.eq('show_in_safety', true).is('parent_id', null);
+      } else {
         foldersQuery = foldersQuery.eq('parent_id', currentFolderId);
       }
       
@@ -201,7 +157,7 @@ export default function SafeDocuments() {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
-      let parentId = currentFolderId || safetyRootId;
+      let parentId = currentFolderId;
       let path = newFolderName;
 
       if (parentId) {
@@ -264,7 +220,7 @@ export default function SafeDocuments() {
         file_path: filePath,
         file_type: uploadFile.type,
         file_size: uploadFile.size,
-        folder_id: currentFolderId || safetyRootId,
+        folder_id: currentFolderId,
         uploaded_by: authUser?.id,
       });
 
@@ -383,7 +339,7 @@ export default function SafeDocuments() {
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={() => setCurrentFolderId(safetyRootId)}
+          onClick={() => setCurrentFolderId(null)}
           title="Go to root"
         >
           <Home className="h-4 w-4" />
