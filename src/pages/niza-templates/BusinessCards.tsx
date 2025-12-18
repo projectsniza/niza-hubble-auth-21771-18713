@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 import jsPDF from 'jspdf';
 
 interface BusinessCardData {
@@ -71,22 +71,12 @@ export default function BusinessCards() {
 
   const handleDownload = async (format: 'png' | 'jpg' | 'pdf') => {
     if (!cardRef.current) return;
-    
-    // Standard business card dimensions: 3.5" x 2" at 300 DPI = 1050 x 600 pixels
-    const cardWidth = 350;
-    const cardHeight = 200;
-    const scale = 3; // 3x scale for high resolution
-    
-    const canvas = await html2canvas(cardRef.current, { 
-      scale: scale, 
+
+    const canvas = await captureElementToCanvas(cardRef.current, {
+      scale: 3,
       backgroundColor: '#ffffff',
-      width: cardWidth,
-      height: cardHeight,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
     });
-    
+
     if (format === 'pdf') {
       const pdf = new jsPDF({
         orientation: 'landscape',

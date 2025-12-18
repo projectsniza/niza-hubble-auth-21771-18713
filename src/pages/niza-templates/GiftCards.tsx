@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useGiftCards, useBrandSettings } from '@/hooks/useTemplates';
 import { useToast } from '@/hooks/use-toast';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 import jsPDF from 'jspdf';
 
 interface GiftCardFormData {
@@ -96,9 +96,12 @@ export default function GiftCards() {
 
   const handleDownload = async (format: 'png' | 'jpg' | 'pdf') => {
     if (!cardRef.current) return;
-    
-    const canvas = await html2canvas(cardRef.current, { scale: 2 });
-    
+
+    const canvas = await captureElementToCanvas(cardRef.current, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+    });
+
     if (format === 'pdf') {
       const pdf = new jsPDF({
         orientation: 'landscape',
@@ -111,7 +114,7 @@ export default function GiftCards() {
     } else {
       const link = document.createElement('a');
       link.download = `gift-card-${formData.employeeName || 'template'}.${format}`;
-      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`);
+      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`, 1.0);
       link.click();
     }
   };
