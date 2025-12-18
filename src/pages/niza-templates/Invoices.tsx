@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 import jsPDF from 'jspdf';
 
 interface InvoiceItem {
@@ -103,9 +103,12 @@ export default function Invoices() {
 
   const handleDownload = async (format: 'png' | 'pdf') => {
     if (!previewRef.current) return;
-    
-    const canvas = await html2canvas(previewRef.current, { scale: 2, backgroundColor: '#ffffff' });
-    
+
+    const canvas = await captureElementToCanvas(previewRef.current, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+    });
+
     if (format === 'pdf') {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgData = canvas.toDataURL('image/png');
@@ -116,7 +119,7 @@ export default function Invoices() {
     } else {
       const link = document.createElement('a');
       link.download = `invoice-${settings.invoiceNumber}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
     }
   };

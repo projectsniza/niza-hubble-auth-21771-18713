@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
 import { useToast } from '@/hooks/use-toast';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 
 interface SignatureData {
   name: string;
@@ -148,11 +148,14 @@ export default function EmailSignature() {
 
   const handleDownloadImage = async () => {
     if (!signatureRef.current) return;
-    
-    const canvas = await html2canvas(signatureRef.current, { scale: 3, backgroundColor: '#ffffff' });
+
+    const canvas = await captureElementToCanvas(signatureRef.current, {
+      scale: 3,
+      backgroundColor: '#ffffff',
+    });
     const link = document.createElement('a');
     link.download = `email-signature-${signatureData.name || 'template'}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = canvas.toDataURL('image/png', 1.0);
     link.click();
   };
 

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandSettings } from '@/hooks/useTemplates';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 import jsPDF from 'jspdf';
 
 interface CardData {
@@ -97,9 +97,12 @@ export default function IDCards() {
 
   const handleDownload = async (format: 'png' | 'jpg' | 'pdf') => {
     if (!cardRef.current) return;
-    
-    const canvas = await html2canvas(cardRef.current, { scale: 3, backgroundColor: '#ffffff' });
-    
+
+    const canvas = await captureElementToCanvas(cardRef.current, {
+      scale: 3,
+      backgroundColor: '#ffffff',
+    });
+
     if (format === 'pdf') {
       const pdf = new jsPDF({
         orientation: orientation === 'vertical' ? 'portrait' : 'landscape',
@@ -114,7 +117,7 @@ export default function IDCards() {
     } else {
       const link = document.createElement('a');
       link.download = `${cardType}-card-${cardData.name || 'template'}.${format}`;
-      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`);
+      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`, 1.0);
       link.click();
     }
   };
