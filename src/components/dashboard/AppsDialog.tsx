@@ -1,4 +1,4 @@
-import { Grid3x3, Shield, FileText, Calculator, ArrowRight } from "lucide-react";
+import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AppItem {
@@ -19,6 +19,13 @@ interface AppItem {
 }
 
 const apps: AppItem[] = [
+  {
+    name: "Niza HR",
+    description: "Human Resources Management",
+    icon: <Users className="h-7 w-7" />,
+    path: "/dashboard",
+    gradient: "from-blue-500 to-cyan-600",
+  },
   {
     name: "Niza Safe",
     description: "Safety & Compliance",
@@ -44,6 +51,7 @@ const apps: AppItem[] = [
 
 export default function AppsDialog() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   // Only show apps for super_admin or full workspace HR
@@ -53,6 +61,15 @@ export default function AppsDialog() {
   if (!canAccessApps) {
     return null;
   }
+
+  // Filter out current app based on location
+  const currentPath = location.pathname;
+  const filteredApps = apps.filter(app => {
+    if (app.path === '/dashboard') {
+      return !currentPath.startsWith('/dashboard');
+    }
+    return !currentPath.startsWith(app.path);
+  });
 
   return (
     <Dialog>
@@ -72,7 +89,7 @@ export default function AppsDialog() {
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 py-4">
-          {apps.map((app) => (
+          {filteredApps.map((app) => (
             <button
               key={app.name}
               onClick={() => navigate(app.path)}
