@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, FileText, Download, Eye, Grid3x3, Loader2 } from 'lucide-react';
+import { Plus, Trash2, FileText, Download, Eye, Loader2 } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import AppsDialog from '@/components/dashboard/AppsDialog';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -279,15 +280,7 @@ export default function NizaFinance() {
           </div>
           <div className="p-6 border-b">
             <div className="flex items-center gap-3 mb-6">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/dashboard')}
-                className="hover:bg-primary/10"
-                title="Back to Dashboard"
-              >
-                <Grid3x3 className="h-5 w-5" />
-              </Button>
+              <AppsDialog />
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
                   Niza Finance
