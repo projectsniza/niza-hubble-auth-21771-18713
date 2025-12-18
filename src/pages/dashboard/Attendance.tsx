@@ -11,10 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Clock, Plus, Check, X, Settings, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Clock, Plus, Check, X, Settings, Trash2, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, differenceInDays, isWithinInterval, parseISO } from "date-fns";
+import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
 
 interface LeaveRequest {
   id: string;
@@ -597,6 +598,12 @@ export default function Attendance() {
             <Badge variant="secondary" className="ml-2">{pendingRequests.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="mandatory">Mandatory leave</TabsTrigger>
+          {(user?.role === 'super_admin' || user?.role === 'hr') && (
+            <TabsTrigger value="overview" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="calendar">
@@ -855,6 +862,12 @@ export default function Attendance() {
             )}
           </Card>
         </TabsContent>
+
+        {(user?.role === 'super_admin' || user?.role === 'hr') && (
+          <TabsContent value="overview">
+            <LeaveAttendanceOverview />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Add Time Off Dialog */}

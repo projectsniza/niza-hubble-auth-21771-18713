@@ -654,7 +654,7 @@ export default function ClockIns() {
                 Add Location
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Location</DialogTitle>
               </DialogHeader>

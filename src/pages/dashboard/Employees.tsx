@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
-import AnnualLeaveBalance from '@/components/employees/AnnualLeaveBalance';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
@@ -129,10 +128,6 @@ export default function Employees() {
             <Users className="h-4 w-4" />
             Teams
           </TabsTrigger>
-          <TabsTrigger value="leave" className="gap-2">
-            <Calendar className="h-4 w-4" />
-            Annual Leave
-          </TabsTrigger>
           {showUserManagement && (
             <TabsTrigger value="users" className="gap-2">
               <UserCog className="h-4 w-4" />
@@ -175,10 +170,6 @@ export default function Employees() {
 
         <TabsContent value="teams" className="mt-6">
           <TeamManagement />
-        </TabsContent>
-
-        <TabsContent value="leave" className="mt-6">
-          <AnnualLeaveBalance searchQuery={searchQuery} />
         </TabsContent>
 
         {showUserManagement && (
