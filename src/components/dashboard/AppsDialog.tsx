@@ -74,13 +74,18 @@ export default function AppsDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9 relative group hover:bg-primary/10"
+        <button 
+          className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 group"
         >
-          <Grid3x3 className="h-5 w-5 text-foreground group-hover:text-primary transition-colors" />
-        </Button>
+          <div className="grid grid-cols-2 gap-[3px]">
+            <div className="w-[7px] h-[7px] rounded-[2px] border-[1.5px] border-white" />
+            <div className="w-[7px] h-[7px] rounded-[2px] border-[1.5px] border-white" />
+            <div className="w-[7px] h-[7px] rounded-[2px] border-[1.5px] border-white" />
+            <div className="w-[7px] h-[7px] rounded-[2px] border-[1.5px] border-white flex items-center justify-center">
+              <span className="text-[6px] font-bold text-white leading-none">+</span>
+            </div>
+          </div>
+        </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md border-primary/20 backdrop-blur-xl" style={{ background: 'var(--gradient-panel)' }}>
         <DialogHeader>
