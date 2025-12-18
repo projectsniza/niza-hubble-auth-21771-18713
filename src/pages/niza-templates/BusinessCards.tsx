@@ -72,7 +72,20 @@ export default function BusinessCards() {
   const handleDownload = async (format: 'png' | 'jpg' | 'pdf') => {
     if (!cardRef.current) return;
     
-    const canvas = await html2canvas(cardRef.current, { scale: 3, backgroundColor: '#ffffff' });
+    // Standard business card dimensions: 3.5" x 2" at 300 DPI = 1050 x 600 pixels
+    const cardWidth = 350;
+    const cardHeight = 200;
+    const scale = 3; // 3x scale for high resolution
+    
+    const canvas = await html2canvas(cardRef.current, { 
+      scale: scale, 
+      backgroundColor: '#ffffff',
+      width: cardWidth,
+      height: cardHeight,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+    });
     
     if (format === 'pdf') {
       const pdf = new jsPDF({
@@ -86,7 +99,7 @@ export default function BusinessCards() {
     } else {
       const link = document.createElement('a');
       link.download = `business-card-${cardData.name || 'template'}.${format}`;
-      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`);
+      link.href = canvas.toDataURL(`image/${format === 'jpg' ? 'jpeg' : 'png'}`, 1.0);
       link.click();
     }
   };
