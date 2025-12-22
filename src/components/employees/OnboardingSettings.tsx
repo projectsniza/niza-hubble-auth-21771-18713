@@ -72,6 +72,8 @@ interface DocumentRequirement {
   is_locked: boolean;
   enabled: boolean;
   doc_order: number;
+  requires_esignature?: boolean;
+  verification_message?: string | null;
 }
 
 export default function OnboardingSettings() {
@@ -106,6 +108,8 @@ export default function OnboardingSettings() {
   const [docName, setDocName] = useState('');
   const [docDescription, setDocDescription] = useState('');
   const [docMandatory, setDocMandatory] = useState(false);
+  const [docRequiresEsignature, setDocRequiresEsignature] = useState(false);
+  const [docVerificationMessage, setDocVerificationMessage] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -448,7 +452,13 @@ export default function OnboardingSettings() {
       if (editingDocument) {
         const { error } = await supabase
           .from('document_requirements')
-          .update({ name: docName, description: docDescription, is_mandatory: docMandatory })
+          .update({ 
+            name: docName, 
+            description: docDescription, 
+            is_mandatory: docMandatory,
+            requires_esignature: docRequiresEsignature,
+            verification_message: docRequiresEsignature ? docVerificationMessage : null
+          })
           .eq('id', editingDocument.id);
         
         if (error) throw error;
@@ -461,6 +471,8 @@ export default function OnboardingSettings() {
             name: docName, 
             description: docDescription, 
             is_mandatory: docMandatory,
+            requires_esignature: docRequiresEsignature,
+            verification_message: docRequiresEsignature ? docVerificationMessage : null,
             doc_order: maxOrder + 1
           });
         
@@ -472,6 +484,8 @@ export default function OnboardingSettings() {
       setDocName('');
       setDocDescription('');
       setDocMandatory(false);
+      setDocRequiresEsignature(false);
+      setDocVerificationMessage('');
       setEditingDocument(null);
       fetchData();
     } catch (error: any) {
@@ -853,7 +867,7 @@ export default function OnboardingSettings() {
             Configure required documents for employee onboarding
           </p>
         </div>
-        <Button onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setEditingDocument(null); setIsDocumentDialogOpen(true); }} className="gap-2">
+        <Button onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setDocRequiresEsignature(false); setDocVerificationMessage(''); setEditingDocument(null); setIsDocumentDialogOpen(true); }} className="gap-2">
           <Plus className="h-4 w-4" />
           Add Document
         </Button>
@@ -868,11 +882,14 @@ export default function OnboardingSettings() {
               </div>
               
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <FileCheck className="h-4 w-4 text-primary" />
                   <span className="font-medium">{doc.name}</span>
                   {doc.is_mandatory && (
                     <Badge variant="destructive" className="text-xs">Required</Badge>
+                  )}
+                  {doc.requires_esignature && (
+                    <Badge variant="default" className="text-xs bg-blue-500">E-Sign</Badge>
                   )}
                   {doc.is_locked && (
                     <Badge variant="secondary" className="text-xs">Locked</Badge>
@@ -903,6 +920,8 @@ export default function OnboardingSettings() {
                         setDocName(doc.name);
                         setDocDescription(doc.description || '');
                         setDocMandatory(doc.is_mandatory);
+                        setDocRequiresEsignature(doc.requires_esignature || false);
+                        setDocVerificationMessage(doc.verification_message || '');
                         setIsDocumentDialogOpen(true);
                       }}
                     >
@@ -931,7 +950,7 @@ export default function OnboardingSettings() {
             <Button 
               variant="outline" 
               className="mt-4"
-              onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setEditingDocument(null); setIsDocumentDialogOpen(true); }}
+              onClick={() => { setDocName(''); setDocDescription(''); setDocMandatory(false); setDocRequiresEsignature(false); setDocVerificationMessage(''); setEditingDocument(null); setIsDocumentDialogOpen(true); }}
             >
               Add your first document requirement
             </Button>
@@ -1116,7 +1135,7 @@ export default function OnboardingSettings() {
 
       {/* Document Dialog */}
       <Dialog open={isDocumentDialogOpen} onOpenChange={setIsDocumentDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingDocument ? 'Edit' : 'Add'} Document Requirement</DialogTitle>
           </DialogHeader>
@@ -1145,6 +1164,28 @@ export default function OnboardingSettings() {
               />
               <Label htmlFor="doc-mandatory">Mandatory document</Label>
             </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="doc-esignature"
+                checked={docRequiresEsignature}
+                onCheckedChange={(checked) => setDocRequiresEsignature(checked as boolean)}
+              />
+              <Label htmlFor="doc-esignature">Requires e-signature verification</Label>
+            </div>
+            {docRequiresEsignature && (
+              <div className="space-y-2 pl-6 border-l-2 border-primary/20">
+                <Label>Verification Message</Label>
+                <Textarea
+                  placeholder="e.g., I confirm that this document is authentic and the information provided is accurate."
+                  value={docVerificationMessage}
+                  onChange={(e) => setDocVerificationMessage(e.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The uploader will need to enter their name, role, and sign below this message.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDocumentDialogOpen(false)}>Cancel</Button>

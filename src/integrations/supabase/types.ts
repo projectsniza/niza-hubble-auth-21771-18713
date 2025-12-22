@@ -666,7 +666,9 @@ export type Database = {
           is_mandatory: boolean
           name: string
           organization_id: string | null
+          requires_esignature: boolean | null
           updated_at: string
+          verification_message: string | null
         }
         Insert: {
           branch_id?: string | null
@@ -680,7 +682,9 @@ export type Database = {
           is_mandatory?: boolean
           name: string
           organization_id?: string | null
+          requires_esignature?: boolean | null
           updated_at?: string
+          verification_message?: string | null
         }
         Update: {
           branch_id?: string | null
@@ -694,7 +698,9 @@ export type Database = {
           is_mandatory?: boolean
           name?: string
           organization_id?: string | null
+          requires_esignature?: boolean | null
           updated_at?: string
+          verification_message?: string | null
         }
         Relationships: [
           {
@@ -783,6 +789,11 @@ export type Database = {
           title: string
           updated_at: string | null
           uploaded_by: string | null
+          verification_message: string | null
+          verified_at: string | null
+          verified_by_name: string | null
+          verified_by_role: string | null
+          verified_by_signature: string | null
         }
         Insert: {
           created_at?: string | null
@@ -799,6 +810,11 @@ export type Database = {
           title: string
           updated_at?: string | null
           uploaded_by?: string | null
+          verification_message?: string | null
+          verified_at?: string | null
+          verified_by_name?: string | null
+          verified_by_role?: string | null
+          verified_by_signature?: string | null
         }
         Update: {
           created_at?: string | null
@@ -815,6 +831,11 @@ export type Database = {
           title?: string
           updated_at?: string | null
           uploaded_by?: string | null
+          verification_message?: string | null
+          verified_at?: string | null
+          verified_by_name?: string | null
+          verified_by_role?: string | null
+          verified_by_signature?: string | null
         }
         Relationships: [
           {
