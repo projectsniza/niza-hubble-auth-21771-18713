@@ -22,6 +22,11 @@ interface DocumentDetailsDialogProps {
     expiry_date?: string | null;
     follow_up_date?: string | null;
     uploaded_by?: string | null;
+    verified_by_name?: string | null;
+    verified_by_role?: string | null;
+    verified_by_signature?: string | null;
+    verified_at?: string | null;
+    verification_message?: string | null;
   } | null;
 }
 
@@ -32,7 +37,10 @@ export default function DocumentDetailsDialog({
 }: DocumentDetailsDialogProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploaderName, setUploaderName] = useState<string>('Unknown');
-  const [isVerified] = useState(true); // All uploaded documents are considered verified
+  
+  // Check if document has e-signature verification
+  const hasEsignature = !!(document?.verified_by_name && document?.verified_by_signature);
+  const isVerified = hasEsignature;
 
   useEffect(() => {
     if (document && open) {
@@ -240,15 +248,65 @@ export default function DocumentDetailsDialog({
                     </span>
                   </div>
 
-                  <Separator />
-
-                  <div className="flex justify-between items-center py-3">
-                    <span className="text-sm text-muted-foreground font-medium">Status</span>
-                    <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  </div>
+                  {/* E-Signature Verification Section */}
+                  {hasEsignature && (
+                    <>
+                      <Separator />
+                      <div className="py-4 space-y-4">
+                        <h4 className="text-sm font-semibold text-foreground">Verification Details</h4>
+                        
+                        {document?.verification_message && (
+                          <div className="bg-muted/50 rounded-lg p-3">
+                            <p className="text-xs text-muted-foreground mb-1">Verification Message</p>
+                            <p className="text-sm">{document.verification_message}</p>
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Verified By</p>
+                            <p className="text-sm font-medium">{document?.verified_by_name}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Role</p>
+                            <p className="text-sm font-medium">{document?.verified_by_role}</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Signature</p>
+                          <div className="bg-background border rounded-lg p-3 inline-block">
+                            <img 
+                              src={document?.verified_by_signature || ''} 
+                              alt="Verification signature"
+                              className="h-12 max-w-[200px] object-contain"
+                            />
+                          </div>
+                        </div>
+                        
+                        {document?.verified_at && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Verified At</p>
+                            <p className="text-sm font-medium">
+                              {format(new Date(document.verified_at), 'dd MMM yy, HH:mm')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  
+                  {!hasEsignature && (
+                    <>
+                      <Separator />
+                      <div className="flex justify-between items-center py-3">
+                        <span className="text-sm text-muted-foreground font-medium">Status</span>
+                        <Badge variant="secondary" className="text-muted-foreground">
+                          No verification required
+                        </Badge>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
