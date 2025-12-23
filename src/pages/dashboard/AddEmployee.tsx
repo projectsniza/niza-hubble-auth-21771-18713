@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet, File } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,6 +15,7 @@ import ApplicationForm from '@/components/onboarding/ApplicationForm';
 import StarterChecklist from '@/components/onboarding/StarterChecklist';
 import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
+import DocumentUploadStep, { DocumentUploadStepRef } from '@/components/onboarding/DocumentUploadStep';
 
 
 interface FormSettings {
@@ -28,6 +29,7 @@ const BASE_STEPS = [
   { id: 'application', name: 'Application Form', icon: ClipboardList },
   { id: 'checklist', name: 'Starter Checklist', icon: FileCheck },
   { id: 'bank_details', name: 'Bank Details', icon: Wallet },
+  { id: 'documents', name: 'Required Documents', icon: FileCheck },
   { id: 'contract', name: 'Contract', icon: Briefcase }
 ];
 
@@ -64,6 +66,7 @@ export default function AddEmployee() {
   const [branches, setBranches] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
   const [employeeRecord, setEmployeeRecord] = useState<any>(null);
+  const documentUploadRef = useRef<DocumentUploadStepRef>(null);
   
   // Form settings from database
   const [formSettings, setFormSettings] = useState<FormSettings>({
@@ -101,6 +104,7 @@ export default function AddEmployee() {
       if (step.id === 'application') return formSettings.application;
       if (step.id === 'checklist') return formSettings.checklist;
       if (step.id === 'bank_details') return formSettings.bank_details;
+      if (step.id === 'documents') return true; // Always show documents step
       return true;
     });
   };
@@ -224,6 +228,16 @@ export default function AddEmployee() {
       if (!employeeRecord) {
         await saveBasicDetails();
       }
+    }
+
+    // Save documents before moving to contract step
+    if (currentStepId === 'documents' && documentUploadRef.current) {
+      if (!documentUploadRef.current.hasAllMandatoryDocuments()) {
+        toast.error('Please upload all mandatory documents');
+        return;
+      }
+      const success = await documentUploadRef.current.saveDocuments();
+      if (!success) return;
     }
 
     if (currentStep < STEPS.length - 1) {
@@ -494,6 +508,17 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               onSave={() => {}}
               onNext={handleNext}
+            />
+          )}
+
+          {/* Step: Documents */}
+          {currentStepId === 'documents' && employeeRecord && (
+            <DocumentUploadStep
+              ref={documentUploadRef}
+              employeeId={employeeRecord.id}
+              additionalDocuments={formData.additionalDocuments}
+              onUpdateDocument={updateDocument}
+              onAddDocument={addDocument}
             />
           )}
 

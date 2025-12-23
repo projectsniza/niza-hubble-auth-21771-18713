@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
@@ -150,8 +152,9 @@ export default function ContractApprovalDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">Employee Details</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({approval.documents?.length || 0})</TabsTrigger>
             <TabsTrigger value="contract">Contract Preview</TabsTrigger>
             <TabsTrigger value="action">Sign / Reject</TabsTrigger>
           </TabsList>
@@ -205,6 +208,85 @@ export default function ContractApprovalDialog({
                 <p className="font-medium">{contractContent?.place_of_work || 'Not specified'}</p>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="documents" className="space-y-4 pt-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">Uploaded Documents</h3>
+              {approval.documents?.length > 0 ? (
+                <Badge className="bg-green-500">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  {approval.documents.length} document(s) uploaded
+                </Badge>
+              ) : (
+                <Badge variant="destructive">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  No documents uploaded
+                </Badge>
+              )}
+            </div>
+
+            {approval.documents?.length === 0 ? (
+              <Card className="p-8 text-center">
+                <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Documents Found</h3>
+                <p className="text-muted-foreground">
+                  No documents have been uploaded for this employee yet. 
+                  Consider requesting document uploads before approving.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {approval.documents?.map((doc: any) => (
+                  <Card key={doc.id} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <File className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{doc.title}</p>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>{doc.file_name}</span>
+                            {doc.expiry_date && (
+                              <>
+                                <span>•</span>
+                                <span>Expires: {new Date(doc.expiry_date).toLocaleDateString()}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const { data } = await supabase.storage
+                            .from('documents')
+                            .createSignedUrl(doc.file_path, 3600);
+                          if (data?.signedUrl) {
+                            window.open(data.signedUrl, '_blank');
+                          }
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        View
+                      </Button>
+                    </div>
+                    {doc.verified_by_name && (
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm text-green-600">
+                            Verified by {doc.verified_by_name} ({doc.verified_by_role})
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="contract" className="space-y-4 pt-4">

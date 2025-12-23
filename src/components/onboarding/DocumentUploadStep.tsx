@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { File, Plus, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import { File, Plus, Lock, AlertCircle, CheckCircle, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface DocumentRequirement {
   id: string;
@@ -14,6 +16,8 @@ interface DocumentRequirement {
   is_mandatory: boolean;
   is_locked: boolean;
   enabled: boolean;
+  requires_esignature: boolean;
+  verification_message: string | null;
 }
 
 interface AdditionalDocument {
@@ -24,23 +28,32 @@ interface AdditionalDocument {
 }
 
 interface DocumentUploadStepProps {
-  employeeId?: string;
+  employeeId: string;
   additionalDocuments: AdditionalDocument[];
   onUpdateDocument: (index: number, updates: Partial<AdditionalDocument>) => void;
   onAddDocument: () => void;
+  onDocumentsSaved?: () => void;
 }
 
-export default function DocumentUploadStep({
+export interface DocumentUploadStepRef {
+  saveDocuments: () => Promise<boolean>;
+  hasAllMandatoryDocuments: () => boolean;
+}
+
+const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepProps>(({
   employeeId,
   additionalDocuments,
   onUpdateDocument,
-  onAddDocument
-}: DocumentUploadStepProps) {
+  onAddDocument,
+  onDocumentsSaved
+}, ref) => {
+  const { user } = useAuth();
   const [requirements, setRequirements] = useState<DocumentRequirement[]>([]);
   const [requirementFiles, setRequirementFiles] = useState<Record<string, File | null>>({});
   const [requirementExpiry, setRequirementExpiry] = useState<Record<string, string>>({});
   const [requirementFollowUp, setRequirementFollowUp] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchDocumentRequirements();
@@ -76,13 +89,110 @@ export default function DocumentUploadStep({
     setRequirementFollowUp(prev => ({ ...prev, [reqId]: date }));
   };
 
+  const hasAllMandatoryDocuments = () => {
+    const mandatoryReqs = requirements.filter(r => r.is_mandatory);
+    return mandatoryReqs.every(req => !!requirementFiles[req.id]);
+  };
+
+  const saveDocuments = async (): Promise<boolean> => {
+    setSaving(true);
+    try {
+      // Get or create employee folder
+      let folderId: string | null = null;
+      const { data: existingFolder } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .single();
+
+      if (existingFolder) {
+        folderId = existingFolder.id;
+      }
+
+      // Upload requirement-based documents
+      for (const req of requirements) {
+        const file = requirementFiles[req.id];
+        if (file) {
+          const fileName = `${req.name}_${employeeId}_${Date.now()}.${file.name.split('.').pop()}`;
+          const filePath = `employees/${employeeId}/documents/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('documents')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          await supabase.from('documents').insert({
+            title: req.name,
+            file_name: file.name,
+            file_path: filePath,
+            file_type: file.type,
+            file_size: file.size,
+            employee_id: employeeId,
+            folder_id: folderId,
+            expiry_date: requirementExpiry[req.id] || null,
+            follow_up_date: requirementFollowUp[req.id] || null,
+            uploaded_by: user?.id
+          });
+        }
+      }
+
+      // Upload additional documents
+      for (const doc of additionalDocuments) {
+        if (doc.file && doc.title) {
+          const fileName = `${doc.title}_${employeeId}_${Date.now()}.${doc.file.name.split('.').pop()}`;
+          const filePath = `employees/${employeeId}/documents/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('documents')
+            .upload(filePath, doc.file);
+
+          if (uploadError) throw uploadError;
+
+          await supabase.from('documents').insert({
+            title: doc.title,
+            file_name: doc.file.name,
+            file_path: filePath,
+            file_type: doc.file.type,
+            file_size: doc.file.size,
+            employee_id: employeeId,
+            folder_id: folderId,
+            expiry_date: doc.expiryDate || null,
+            follow_up_date: doc.followUpDate || null,
+            uploaded_by: user?.id
+          });
+        }
+      }
+
+      // Update onboarding status
+      await supabase
+        .from('employee_onboarding')
+        .update({ documents_uploaded: true })
+        .eq('employee_id', employeeId);
+
+      toast.success('Documents uploaded successfully');
+      onDocumentsSaved?.();
+      return true;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload documents');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    saveDocuments,
+    hasAllMandatoryDocuments
+  }));
+
   const mandatoryRequirements = requirements.filter(r => r.is_mandatory);
   const optionalRequirements = requirements.filter(r => !r.is_mandatory);
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-xl font-semibold">Document Upload</h2>
+        <h2 className="text-xl font-semibold">Required Documents</h2>
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -93,8 +203,8 @@ export default function DocumentUploadStep({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Document Upload</h2>
-        <p className="text-muted-foreground">Upload required documents for the employee.</p>
+        <h2 className="text-xl font-semibold">Required Documents</h2>
+        <p className="text-muted-foreground">Upload required documents before submitting contract for approval.</p>
       </div>
 
       {/* Mandatory Documents Section */}
@@ -115,6 +225,9 @@ export default function DocumentUploadStep({
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{req.name}</span>
                         <Badge variant="destructive" className="text-xs">Required</Badge>
+                        {req.requires_esignature && (
+                          <Badge variant="outline" className="text-xs">E-Sign</Badge>
+                        )}
                       </div>
                       {req.description && (
                         <p className="text-sm text-muted-foreground mt-1">{req.description}</p>
@@ -129,10 +242,22 @@ export default function DocumentUploadStep({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Upload Document *</Label>
-                    <Input 
-                      type="file"
-                      onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
-                    />
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                      <input
+                        type="file"
+                        id={`req-${req.id}`}
+                        className="hidden"
+                        onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
+                      />
+                      <label htmlFor={`req-${req.id}`} className="cursor-pointer">
+                        <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                        {requirementFiles[req.id] ? (
+                          <p className="text-sm text-primary mt-1 truncate">{requirementFiles[req.id]?.name}</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-1">Click to upload</p>
+                        )}
+                      </label>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Expiry Date</Label>
@@ -185,10 +310,22 @@ export default function DocumentUploadStep({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Upload Document</Label>
-                    <Input 
-                      type="file"
-                      onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
-                    />
+                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                      <input
+                        type="file"
+                        id={`req-${req.id}`}
+                        className="hidden"
+                        onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
+                      />
+                      <label htmlFor={`req-${req.id}`} className="cursor-pointer">
+                        <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                        {requirementFiles[req.id] ? (
+                          <p className="text-sm text-primary mt-1 truncate">{requirementFiles[req.id]?.name}</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-1">Click to upload</p>
+                        )}
+                      </label>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Expiry Date</Label>
@@ -261,6 +398,17 @@ export default function DocumentUploadStep({
           Add Another Document
         </Button>
       </div>
+
+      {saving && (
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground mt-2">Uploading documents...</p>
+        </div>
+      )}
     </div>
   );
-}
+});
+
+DocumentUploadStep.displayName = 'DocumentUploadStep';
+
+export default DocumentUploadStep;

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, File, Check, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, File, Check, Upload, FileSignature, Download, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,15 +14,9 @@ interface PostApprovalOnboardingProps {
   onBack: () => void;
 }
 
-interface DocumentRequirement {
-  id: string;
-  name: string;
-  is_mandatory: boolean;
-  is_locked: boolean;
-}
-
 const STEPS = [
-  { id: 'documents', name: 'Document Upload', icon: File },
+  { id: 'print', name: 'Print & Sign', icon: Printer },
+  { id: 'upload', name: 'Upload Signed Contract', icon: Upload },
   { id: 'complete', name: 'Complete', icon: Check }
 ];
 
@@ -31,18 +25,12 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [employee, setEmployee] = useState<any>(null);
-  const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
-  
-  const [additionalDocuments, setAdditionalDocuments] = useState<{
-    requirementId: string;
-    file: File | null;
-    expiryDate: string;
-    followUpDate: string;
-  }[]>([]);
+  const [contractApproval, setContractApproval] = useState<any>(null);
+  const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchEmployee();
-    fetchDocumentRequirements();
+    fetchContractApproval();
   }, [employeeId]);
 
   const fetchEmployee = async () => {
@@ -55,90 +43,71 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     if (data) setEmployee(data);
   };
 
-  const fetchDocumentRequirements = async () => {
+  const fetchContractApproval = async () => {
     const { data } = await supabase
-      .from('document_requirements')
+      .from('contract_approvals')
       .select('*')
-      .eq('enabled', true)
-      .order('doc_order');
+      .eq('employee_id', employeeId)
+      .eq('status', 'approved')
+      .single();
     
-    if (data) {
-      setDocumentRequirements(data);
-      // Initialize document uploads for each requirement
-      setAdditionalDocuments(
-        data.map(req => ({
-          requirementId: req.id,
-          file: null,
-          expiryDate: '',
-          followUpDate: ''
-        }))
-      );
+    if (data) setContractApproval(data);
+  };
+
+  const handleDownloadContract = async () => {
+    if (contractApproval?.contract_file_path) {
+      const { data } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(contractApproval.contract_file_path, 3600);
+      
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } else {
+      toast.error('No contract file available');
     }
   };
 
-  const handleNext = async () => {
-    const currentStepId = STEPS[currentStep]?.id;
-    
-    if (currentStepId === 'documents') {
-      await saveDocuments();
+  const handleUploadSignedContract = async () => {
+    if (!signedContractFile) {
+      toast.error('Please select the signed contract file');
+      return;
     }
 
-    if (currentStep < STEPS.length - 1) {
-      setCurrentStep(prev => prev + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
-
-  const saveDocuments = async () => {
     setLoading(true);
     try {
-      // Get employee folder
-      const { data: folder } = await supabase
-        .from('folders')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .single();
+      const fileName = `signed_contract_${employeeId}_${Date.now()}.${signedContractFile.name.split('.').pop()}`;
+      const filePath = `employees/${employeeId}/contracts/${fileName}`;
 
-      for (const doc of additionalDocuments) {
-        if (doc.file) {
-          const requirement = documentRequirements.find(r => r.id === doc.requirementId);
-          const fileName = `${requirement?.name || 'document'}_${employeeId}_${Date.now()}.${doc.file.name.split('.').pop()}`;
-          const filePath = `employees/${employeeId}/documents/${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, signedContractFile);
 
-          const { error: uploadError } = await supabase.storage
-            .from('documents')
-            .upload(filePath, doc.file);
+      if (uploadError) throw uploadError;
 
-          if (uploadError) throw uploadError;
+      // Update contract approval with signed contract path
+      await supabase
+        .from('contract_approvals')
+        .update({
+          signed_contract_path: filePath,
+          signed_contract_uploaded_at: new Date().toISOString(),
+          signed_contract_uploaded_by: user?.id
+        })
+        .eq('id', contractApproval.id);
 
-          await supabase.from('documents').insert({
-            title: requirement?.name || doc.file.name,
-            file_name: doc.file.name,
-            file_path: filePath,
-            file_type: doc.file.type,
-            file_size: doc.file.size,
-            employee_id: employeeId,
-            folder_id: folder?.id,
-            expiry_date: doc.expiryDate || null,
-            follow_up_date: doc.followUpDate || null,
-            uploaded_by: user?.id
-          });
-        }
-      }
-
+      // Update onboarding status
       await supabase
         .from('employee_onboarding')
-        .update({ documents_uploaded: true })
+        .update({
+          contract_signed: true,
+          current_step: 5
+        })
         .eq('employee_id', employeeId);
 
-      toast.success('Documents saved');
+      toast.success('Signed contract uploaded successfully');
+      setCurrentStep(prev => prev + 1);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save documents');
+      toast.error(error.message || 'Failed to upload signed contract');
     } finally {
       setLoading(false);
     }
@@ -166,12 +135,23 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     }
   };
 
-  const updateDocument = (index: number, updates: Partial<typeof additionalDocuments[0]>) => {
-    setAdditionalDocuments(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], ...updates };
-      return updated;
-    });
+  const handleNext = async () => {
+    const currentStepId = STEPS[currentStep]?.id;
+    
+    if (currentStepId === 'upload') {
+      await handleUploadSignedContract();
+      return;
+    }
+
+    if (currentStep < STEPS.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
   };
 
   const progress = ((currentStep + 1) / STEPS.length) * 100;
@@ -184,7 +164,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">Post-Approval Onboarding</h1>
+          <h1 className="text-2xl font-bold">Final Contract Upload</h1>
           <p className="text-muted-foreground">
             {employee?.first_name} {employee?.last_name} - Step {currentStep + 1} of {STEPS.length}
           </p>
@@ -193,7 +173,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       <div className="space-y-4">
         <Progress value={progress} className="h-2" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           {STEPS.map((step, index) => (
             <div key={step.id} className={`flex flex-col items-center gap-2 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
@@ -206,77 +186,77 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       </div>
 
       <Card className="p-6">
-        {/* Document Upload Step */}
-        {currentStepId === 'documents' && (
+        {/* Print & Sign Step */}
+        {currentStepId === 'print' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Document Upload</h2>
-            <p className="text-muted-foreground">Upload required documents for this employee.</p>
-
-            {documentRequirements.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No document requirements configured. You can proceed to complete onboarding.
+            <div className="text-center py-8">
+              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <Printer className="h-10 w-10 text-primary" />
               </div>
-            ) : (
-              <div className="space-y-6">
-                {documentRequirements.map((req, index) => (
-                  <Card key={req.id} className="p-4 space-y-4">
-                    <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold mb-2">Print Contract for Signing</h2>
+              <p className="text-muted-foreground max-w-md mx-auto mb-6">
+                Download the approved contract, print it, and get the employee's physical signature.
+              </p>
+              
+              <div className="flex flex-col items-center gap-4">
+                <Button size="lg" onClick={handleDownloadContract} className="gap-2">
+                  <Download className="h-5 w-5" />
+                  Download Approved Contract
+                </Button>
+                
+                <div className="bg-muted/50 rounded-lg p-4 max-w-md">
+                  <h3 className="font-medium mb-2">Instructions:</h3>
+                  <ol className="text-sm text-muted-foreground text-left list-decimal list-inside space-y-1">
+                    <li>Download the contract using the button above</li>
+                    <li>Print the contract document</li>
+                    <li>Have the employee read and sign the contract</li>
+                    <li>Scan or photograph the signed contract</li>
+                    <li>Proceed to upload the signed copy</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Signed Contract Step */}
+        {currentStepId === 'upload' && (
+          <div className="space-y-6">
+            <div className="text-center py-8">
+              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <FileSignature className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2">Upload Signed Contract</h2>
+              <p className="text-muted-foreground max-w-md mx-auto mb-6">
+                Upload the scanned or photographed copy of the signed contract.
+              </p>
+              
+              <div className="max-w-md mx-auto">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <input
+                    type="file"
+                    id="signed-contract"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
+                  />
+                  <label htmlFor="signed-contract" className="cursor-pointer">
+                    <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    {signedContractFile ? (
                       <div>
-                        <h3 className="font-medium">{req.name}</h3>
-                        {req.is_mandatory && (
-                          <span className="text-xs text-destructive">Required</span>
-                        )}
+                        <p className="font-medium text-primary">{signedContractFile.name}</p>
+                        <p className="text-sm text-muted-foreground mt-1">Click to change file</p>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>Document</Label>
-                        <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
-                          <input
-                            type="file"
-                            id={`doc-${req.id}`}
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            className="hidden"
-                            onChange={(e) => updateDocument(index, { file: e.target.files?.[0] || null })}
-                          />
-                          <label htmlFor={`doc-${req.id}`} className="cursor-pointer">
-                            <div className="flex flex-col items-center gap-1">
-                              <Upload className="h-5 w-5 text-muted-foreground" />
-                              {additionalDocuments[index]?.file ? (
-                                <span className="text-xs text-primary truncate max-w-full">
-                                  {additionalDocuments[index].file.name}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">Upload</span>
-                              )}
-                            </div>
-                          </label>
-                        </div>
+                    ) : (
+                      <div>
+                        <p className="font-medium">Click to upload signed contract</p>
+                        <p className="text-sm text-muted-foreground mt-1">PDF, JPG, or PNG</p>
                       </div>
-
-                      <div className="space-y-2">
-                        <Label>Expiry Date</Label>
-                        <Input
-                          type="date"
-                          value={additionalDocuments[index]?.expiryDate || ''}
-                          onChange={(e) => updateDocument(index, { expiryDate: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Follow-up Date</Label>
-                        <Input
-                          type="date"
-                          value={additionalDocuments[index]?.followUpDate || ''}
-                          onChange={(e) => updateDocument(index, { followUpDate: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    )}
+                  </label>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -311,7 +291,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
               Previous
             </Button>
             
-            <Button onClick={handleNext} disabled={loading} className="gap-2">
+            <Button onClick={handleNext} disabled={loading || (currentStepId === 'upload' && !signedContractFile)} className="gap-2">
               {loading ? 'Saving...' : 'Next'}
               <ArrowRight className="h-4 w-4" />
             </Button>
