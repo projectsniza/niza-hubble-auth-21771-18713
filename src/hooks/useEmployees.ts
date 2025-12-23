@@ -186,7 +186,22 @@ export function usePendingApprovals() {
         .order('submitted_at', { ascending: false });
 
       if (error) throw error;
-      setPendingApprovals(data || []);
+      
+      // Fetch documents for each employee
+      const approvalsWithDocs = await Promise.all((data || []).map(async (approval) => {
+        if (approval.employee?.id) {
+          const { data: docs } = await supabase
+            .from('documents')
+            .select('*')
+            .eq('employee_id', approval.employee.id)
+            .order('created_at', { ascending: false });
+          
+          return { ...approval, documents: docs || [] };
+        }
+        return { ...approval, documents: [] };
+      }));
+      
+      setPendingApprovals(approvalsWithDocs);
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching pending approvals:', err);
