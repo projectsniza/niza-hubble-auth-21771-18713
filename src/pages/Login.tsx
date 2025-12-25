@@ -61,9 +61,12 @@ export default function Login() {
     setIsLoading(true);
     
     const { error } = await login(email, password);
-    setIsLoading(false);
     
     if (!error) {
+      // Check if user got deactivated (they will be signed out automatically)
+      // Small delay to allow auth context to process
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Save or clear credentials based on remember me
       if (rememberMe) {
         localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
@@ -73,12 +76,22 @@ export default function Login() {
       toast({ title: 'Welcome back!', description: 'Login successful' });
       navigate('/dashboard');
     } else {
-      toast({ 
-        title: 'Login failed', 
-        description: error,
-        variant: 'destructive' 
-      });
+      // Check if error indicates deactivated account
+      if (error.toLowerCase().includes('invalid') || error.toLowerCase().includes('credentials')) {
+        toast({ 
+          title: 'Login failed', 
+          description: error,
+          variant: 'destructive' 
+        });
+      } else {
+        toast({ 
+          title: 'Login failed', 
+          description: error,
+          variant: 'destructive' 
+        });
+      }
     }
+    setIsLoading(false);
   };
 
   // Show nothing while checking auth status

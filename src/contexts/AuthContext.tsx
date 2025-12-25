@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string): Promise<AppUser | null | 'deactivated'> => {
     try {
       // Fetch profile
       const { data: profile, error: profileError } = await supabase
@@ -45,6 +45,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (profileError) {
         console.error('Error fetching profile:', profileError);
         return null;
+      }
+
+      // Check if user is deactivated
+      if (profile.is_active === false) {
+        return 'deactivated';
       }
 
       // Fetch role
@@ -90,9 +95,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (existingSession?.user) {
           setSession(existingSession);
-          const appUser = await fetchUserProfile(existingSession.user.id);
+          const result = await fetchUserProfile(existingSession.user.id);
           if (mounted) {
-            setUser(appUser);
+            if (result === 'deactivated') {
+              // User is deactivated - sign them out
+              await supabase.auth.signOut();
+              setSession(null);
+              setUser(null);
+            } else {
+              setUser(result);
+            }
             setIsLoading(false);
             setIsInitialized(true);
           }
@@ -128,9 +140,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Defer profile fetch to avoid deadlock
             setTimeout(async () => {
               if (mounted) {
-                const appUser = await fetchUserProfile(newSession.user.id);
+                const result = await fetchUserProfile(newSession.user.id);
                 if (mounted) {
-                  setUser(appUser);
+                  if (result === 'deactivated') {
+                    // User is deactivated - sign them out
+                    await supabase.auth.signOut();
+                    setSession(null);
+                    setUser(null);
+                  } else {
+                    setUser(result);
+                  }
                 }
               }
             }, 0);
