@@ -49,6 +49,10 @@ export default function UserManagement() {
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<PendingEmployee | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   
   // Form states for activation
   const [password, setPassword] = useState('');
@@ -280,6 +284,51 @@ export default function UserManagement() {
     }
   };
 
+  const openResetPasswordDialog = (user: any) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser) return;
+    
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Use Supabase Admin API to update the user's password
+      // Note: This requires service role key or admin access
+      const { error } = await supabase.auth.admin.updateUserById(
+        resetPasswordUser.id,
+        { password: newPassword }
+      );
+
+      if (error) throw error;
+
+      toast.success(`Password reset successfully for ${resetPasswordUser.name}`);
+      setResetPasswordDialogOpen(false);
+      setResetPasswordUser(null);
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error: any) {
+      // If admin API fails, try alternative approach
+      toast.error('Password reset failed. Please contact system administrator.');
+      console.error('Password reset error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!deleteUserId) return;
     
@@ -386,22 +435,22 @@ export default function UserManagement() {
   }
 
   const UserCard = ({ user }: { user: any }) => (
-    <Card key={user.id} className="p-4">
+    <Card key={user.id} className={`p-4 ${user.is_active === false ? 'border-destructive/50 bg-destructive/5' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
           <Avatar className="h-10 w-10">
-            <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-white">
+            <AvatarFallback className={user.is_active === false ? "bg-destructive/20 text-destructive" : "bg-gradient-to-br from-primary to-accent text-white"}>
               {user.name?.charAt(0) || 'U'}
             </AvatarFallback>
           </Avatar>
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold">{user.name}</h3>
+              <h3 className={`font-semibold ${user.is_active === false ? 'text-destructive' : ''}`}>{user.name}</h3>
               <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
                 {getRoleLabel(user.role)}
               </Badge>
               {user.is_active === false && (
-                <Badge variant="destructive" className="text-xs">Inactive</Badge>
+                <Badge variant="destructive" className="text-xs">Deactivated</Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground">{user.email}</p>
@@ -424,15 +473,24 @@ export default function UserManagement() {
             )}
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => openEditDialog(user)}>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => openEditDialog(user)} title="Edit user">
             <Edit className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-amber-600 hover:bg-amber-50"
+            onClick={() => openResetPasswordDialog(user)}
+            title="Reset password"
+          >
+            <KeyRound className="h-4 w-4" />
           </Button>
           {user.is_active !== false ? (
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-destructive"
+              className="text-destructive hover:bg-destructive/10"
               onClick={() => handleDeactivateUser(user.id)}
               title="Deactivate user"
             >
@@ -442,9 +500,9 @@ export default function UserManagement() {
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-green-600"
+              className="text-green-600 hover:bg-green-50"
               onClick={() => handleActivateUser(user.id)}
-              title="Activate user"
+              title="Reactivate user"
             >
               <CheckCircle className="h-4 w-4" />
             </Button>
@@ -931,6 +989,49 @@ export default function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetPasswordUser?.name}. They will need to use this password to login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm Password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Confirm new password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Reset Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

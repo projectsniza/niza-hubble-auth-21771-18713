@@ -181,16 +181,15 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
         ))}
       </nav>
 
-      {/* Logout */}
+      {/* Logout - Always visible, especially important for mobile */}
       <div className="p-2 border-t border-primary/20 relative z-10">
         <Button 
           variant="ghost" 
-          className={`w-full ${collapsed ? 'justify-center px-0' : 'justify-start'} gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive`}
+          className="w-full justify-start gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
           onClick={logout}
-          title={collapsed ? 'Logout' : undefined}
         >
           <LogOut className="h-5 w-5" />
-          {!collapsed && <span className="font-medium">Logout</span>}
+          <span className="font-medium">Logout</span>
         </Button>
       </div>
     </aside>

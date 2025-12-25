@@ -341,12 +341,6 @@ export default function EmployeeProfile() {
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Right to Work</span>
-                  <Badge variant={onboarding?.right_to_work_completed ? 'default' : 'outline'}>
-                    {onboarding?.right_to_work_completed ? 'Complete' : 'Pending'}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Documents</span>
                   <Badge variant={onboarding?.documents_uploaded ? 'default' : 'outline'}>
                     {onboarding?.documents_uploaded ? 'Complete' : 'Pending'}
