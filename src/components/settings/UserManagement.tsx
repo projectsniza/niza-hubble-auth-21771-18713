@@ -306,14 +306,16 @@ export default function UserManagement() {
 
     setIsSubmitting(true);
     try {
-      // Use Supabase Admin API to update the user's password
-      // Note: This requires service role key or admin access
-      const { error } = await supabase.auth.admin.updateUserById(
-        resetPasswordUser.id,
-        { password: newPassword }
-      );
+      // Call edge function to reset password
+      const { data, error } = await supabase.functions.invoke('reset-password', {
+        body: {
+          userId: resetPasswordUser.id,
+          newPassword: newPassword
+        }
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success(`Password reset successfully for ${resetPasswordUser.name}`);
       setResetPasswordDialogOpen(false);
@@ -321,8 +323,7 @@ export default function UserManagement() {
       setNewPassword('');
       setConfirmNewPassword('');
     } catch (error: any) {
-      // If admin API fails, try alternative approach
-      toast.error('Password reset failed. Please contact system administrator.');
+      toast.error(error.message || 'Password reset failed. Please contact system administrator.');
       console.error('Password reset error:', error);
     } finally {
       setIsSubmitting(false);
@@ -340,19 +341,13 @@ export default function UserManagement() {
     }
     
     try {
-      // First delete from user_roles
-      await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', deleteUserId);
-      
-      // Then delete from profiles
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', deleteUserId);
-      
+      // Call edge function to delete user (uses admin API)
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: deleteUserId }
+      });
+
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       
       toast.success('User deleted successfully');
       setDeleteUserId(null);
