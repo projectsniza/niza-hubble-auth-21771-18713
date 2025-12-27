@@ -321,32 +321,42 @@ export default function EmployeeProfile() {
                 <Shield className="h-5 w-5 text-primary" />
                 Onboarding Status
               </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Basic Details</span>
-                  <Badge variant={onboarding?.basic_details_completed ? 'default' : 'outline'}>
-                    {onboarding?.basic_details_completed ? 'Complete' : 'Pending'}
-                  </Badge>
+              {!onboarding ? (
+                <p className="text-muted-foreground text-sm">No onboarding record found. This employee may have been added before onboarding tracking was enabled.</p>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Basic Details</span>
+                    <Badge variant={onboarding.basic_details_completed ? 'default' : 'outline'}>
+                      {onboarding.basic_details_completed ? 'Complete' : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Documents Uploaded</span>
+                    <Badge variant={onboarding.documents_uploaded ? 'default' : 'outline'}>
+                      {onboarding.documents_uploaded ? 'Complete' : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Contract Submitted</span>
+                    <Badge variant={onboarding.contract_submitted_for_approval ? 'default' : 'outline'}>
+                      {onboarding.contract_submitted_for_approval ? 'Submitted' : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Contract Approved</span>
+                    <Badge variant={onboarding.contract_approved ? 'default' : 'outline'}>
+                      {onboarding.contract_approved ? 'Approved' : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Signed Contract Uploaded</span>
+                    <Badge variant={onboarding.contract_signed ? 'default' : 'outline'}>
+                      {onboarding.contract_signed ? 'Complete' : 'Pending'}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Contract Uploaded</span>
-                  <Badge variant={onboarding?.contract_uploaded ? 'default' : 'outline'}>
-                    {onboarding?.contract_uploaded ? 'Complete' : 'Pending'}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Contract Approved</span>
-                  <Badge variant={onboarding?.contract_approved ? 'default' : 'outline'}>
-                    {onboarding?.contract_approved ? 'Approved' : 'Pending'}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Documents</span>
-                  <Badge variant={onboarding?.documents_uploaded ? 'default' : 'outline'}>
-                    {onboarding?.documents_uploaded ? 'Complete' : 'Pending'}
-                  </Badge>
-                </div>
-              </div>
+              )}
             </Card>
           </div>
         </TabsContent>
