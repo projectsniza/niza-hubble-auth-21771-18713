@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, MapPin, Trash2, FolderOpen, Loader2 } from 'lucide-react';
+import { Plus, Building2, MapPin, Trash2, FolderOpen, Loader2, Pencil } from 'lucide-react';
 import CreateOrganizationDialog from './CreateOrganizationDialog';
 import CreateBranchDialog from './CreateBranchDialog';
+import EditOrganizationDialog from './EditOrganizationDialog';
+import EditBranchDialog from './EditBranchDialog';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import {
   AlertDialog,
@@ -17,13 +19,15 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function OrganizationManagement() {
-  const { organizations, isLoading: orgsLoading, createOrganization, deleteOrganization } = useOrganizations();
-  const { branches, isLoading: branchesLoading, createBranch, deleteBranch } = useBranches();
+  const { organizations, isLoading: orgsLoading, createOrganization, updateOrganization, deleteOrganization } = useOrganizations();
+  const { branches, isLoading: branchesLoading, createBranch, updateBranch, deleteBranch } = useBranches();
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const [deleteOrgId, setDeleteOrgId] = useState<string | null>(null);
   const [deleteBranchId, setDeleteBranchId] = useState<string | null>(null);
+  const [editOrg, setEditOrg] = useState<{ id: string; name: string } | null>(null);
+  const [editBranch, setEditBranch] = useState<{ id: string; name: string; address?: string | null } | null>(null);
 
   const handleCreateOrganization = async (name: string, autoCreateFolder: boolean) => {
     await createOrganization(name, autoCreateFolder);
@@ -48,6 +52,16 @@ export default function OrganizationManagement() {
       await deleteBranch(deleteBranchId);
       setDeleteBranchId(null);
     }
+  };
+
+  const handleUpdateOrganization = async (id: string, name: string) => {
+    await updateOrganization(id, name);
+    setEditOrg(null);
+  };
+
+  const handleUpdateBranch = async (id: string, name: string, address?: string) => {
+    await updateBranch(id, name, address);
+    setEditBranch(null);
   };
 
   const getBranchesForOrg = (orgId: string) => {
@@ -102,6 +116,15 @@ export default function OrganizationManagement() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setEditOrg({ id: org.id, name: org.name })}
+                  className="gap-2"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setSelectedOrgId(org.id);
                     setCreateBranchOpen(true);
@@ -140,14 +163,23 @@ export default function OrganizationManagement() {
                         </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteBranchId(branch.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditBranch({ id: branch.id, name: branch.name, address: branch.address })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteBranchId(branch.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -178,6 +210,20 @@ export default function OrganizationManagement() {
         open={createBranchOpen}
         onOpenChange={setCreateBranchOpen}
         onSubmit={handleCreateBranch}
+      />
+
+      <EditOrganizationDialog
+        open={!!editOrg}
+        onOpenChange={(open) => !open && setEditOrg(null)}
+        organization={editOrg}
+        onSubmit={handleUpdateOrganization}
+      />
+
+      <EditBranchDialog
+        open={!!editBranch}
+        onOpenChange={(open) => !open && setEditBranch(null)}
+        branch={editBranch}
+        onSubmit={handleUpdateBranch}
       />
 
       <AlertDialog open={!!deleteOrgId} onOpenChange={() => setDeleteOrgId(null)}>

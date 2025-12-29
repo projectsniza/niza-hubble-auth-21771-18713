@@ -51,6 +51,26 @@ export function useOrganizations() {
     }
   };
 
+  const updateOrganization = async (id: string, name: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('organizations')
+        .update({ name })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setOrganizations(prev => prev.map(org => org.id === id ? { ...org, ...data } : org));
+      toast.success('Organization updated successfully');
+      return { data, error: null };
+    } catch (err: any) {
+      toast.error(err.message);
+      return { data: null, error: err.message };
+    }
+  };
+
   const deleteOrganization = async (id: string) => {
     try {
       const { error } = await (supabase as any).rpc('delete_organization_cascade', {
@@ -80,6 +100,7 @@ export function useOrganizations() {
     error,
     fetchOrganizations,
     createOrganization,
+    updateOrganization,
     deleteOrganization
   };
 }
@@ -148,6 +169,26 @@ export function useBranches(organizationId?: string) {
     }
   };
 
+  const updateBranch = async (id: string, name: string, address?: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('branches')
+        .update({ name, address })
+        .eq('id', id)
+        .select('*, organization:organizations(*)')
+        .single();
+
+      if (error) throw error;
+      
+      setBranches(prev => prev.map(branch => branch.id === id ? { ...branch, ...data } : branch));
+      toast.success('Branch updated successfully');
+      return { data, error: null };
+    } catch (err: any) {
+      toast.error(err.message);
+      return { data: null, error: err.message };
+    }
+  };
+
   const deleteBranch = async (id: string) => {
     try {
       const { error } = await (supabase as any).rpc('delete_branch_cascade', {
@@ -177,6 +218,7 @@ export function useBranches(organizationId?: string) {
     error,
     fetchBranches,
     createBranch,
+    updateBranch,
     deleteBranch
   };
 }
