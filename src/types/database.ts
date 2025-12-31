@@ -9,8 +9,38 @@ export type DocumentFollowUpStatus = 'overdue' | 'upcoming' | 'ok';
 export interface Organization {
   id: string;
   name: string;
+  vat_number?: string | null;
   created_by: string | null;
   auto_create_folder: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Reminder {
+  id: string;
+  title: string;
+  description?: string | null;
+  reminder_date: string;
+  reminder_type: string;
+  priority: string;
+  is_completed: boolean;
+  is_dismissed: boolean;
+  created_by?: string | null;
+  assigned_to?: string | null;
+  organization_id?: string | null;
+  branch_id?: string | null;
+  related_entity_type?: string | null;
+  related_entity_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReminderSettings {
+  id: string;
+  setting_key: string;
+  setting_value: any;
+  description?: string | null;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }
