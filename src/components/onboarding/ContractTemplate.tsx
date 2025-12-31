@@ -25,7 +25,7 @@ interface ContractTemplateProps {
     organization_id: string;
     branch_id: string;
   };
-  organizations: { id: string; name: string }[];
+  organizations: { id: string; name: string; vat_number?: string | null }[];
   onSave: () => void;
   onSubmit: () => void;
   readOnly?: boolean;
@@ -38,12 +38,14 @@ interface ContractData {
   organization_id: string;
   registered_number: string;
   registered_office: string;
+  vat_number: string;
   employee_name: string;
   employee_address: string;
   commencement_date: string;
   job_title: string;
   hours_per_week: string;
   salary_rate: string;
+  salary_type: 'hourly' | 'annual';
   place_of_work: string;
   holiday_days: string;
 }
@@ -72,17 +74,26 @@ export default function ContractTemplate({
     organization_id: employeeData.organization_id,
     registered_number: '',
     registered_office: '',
+    vat_number: '',
     employee_name: `${employeeData.first_name} ${employeeData.last_name}`,
     employee_address: employeeData.address || '',
     commencement_date: employeeData.join_date || '',
     job_title: employeeData.job_title || '',
     hours_per_week: '',
     salary_rate: '',
+    salary_type: 'hourly',
     place_of_work: '',
     holiday_days: ''
   });
 
   const selectedOrg = organizations.find(o => o.id === contractData.organization_id);
+
+  // Auto-fill VAT number when organization changes
+  useEffect(() => {
+    if (selectedOrg?.vat_number && !contractData.vat_number) {
+      setContractData(prev => ({ ...prev, vat_number: selectedOrg.vat_number || '' }));
+    }
+  }, [selectedOrg]);
 
   useEffect(() => {
     loadSavedData();
@@ -637,7 +648,7 @@ export default function ContractTemplate({
               )}
               {' '}a company incorporated in England and Wales (registered number{' '}
               <EditableField label="Registered Number" value={contractData.registered_number} field="registered_number" placeholder="04914942" />
-              ) whose registered office is at{' '}
+              ){contractData.vat_number && ` (VAT: ${contractData.vat_number})`} whose registered office is at{' '}
               {readOnly ? (
                 <span className="border-b border-dotted">{contractData.registered_office || '________________'}</span>
               ) : (
@@ -716,8 +727,25 @@ export default function ContractTemplate({
             <h3 className="font-bold mb-2">4. Salary</h3>
             <p className="mb-2">
               4.1. The Employer will pay you a salary at the rate of £
-              <EditableField label="Salary Rate" value={contractData.salary_rate} field="salary_rate" placeholder="12.50" />
-              {' '}per hour (Salary).
+              <EditableField label="Salary Rate" value={contractData.salary_rate} field="salary_rate" placeholder={contractData.salary_type === 'annual' ? '25000' : '12.50'} />
+              {' '}per{' '}
+              {readOnly ? (
+                <span>{contractData.salary_type === 'annual' ? 'annum' : 'hour'}</span>
+              ) : (
+                <Select
+                  value={contractData.salary_type}
+                  onValueChange={(v) => updateField('salary_type', v)}
+                >
+                  <SelectTrigger className="inline-flex w-auto min-w-[100px] h-7">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hourly">hour</SelectItem>
+                    <SelectItem value="annual">annum</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {' '}(Salary).
             </p>
             <p className="mb-2">4.2. All payments of Salary are subject to deductions for income tax and national insurance contributions and other authorised deductions or deductions required by law.</p>
             <p className="mb-2">4.3. You authorise the Employer at any time during your employment and/or on its termination to deduct any sums owed by you to the Employer at any time (to include, without limitation, the balance of salary, repayment of pay for holiday taken in excess of your accrued entitlement) from your Salary and/or from any other sums due to you under this contract.</p>

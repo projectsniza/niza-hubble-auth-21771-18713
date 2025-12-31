@@ -2223,6 +2223,7 @@ export type Database = {
           id: string
           name: string
           updated_at: string | null
+          vat_number: string | null
         }
         Insert: {
           auto_create_folder?: boolean | null
@@ -2231,6 +2232,7 @@ export type Database = {
           id?: string
           name: string
           updated_at?: string | null
+          vat_number?: string | null
         }
         Update: {
           auto_create_folder?: boolean | null
@@ -2239,6 +2241,7 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string | null
+          vat_number?: string | null
         }
         Relationships: []
       }
@@ -2438,6 +2441,108 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_profiles_organization"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminder_settings: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      reminders: {
+        Row: {
+          assigned_to: string | null
+          branch_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_completed: boolean | null
+          is_dismissed: boolean | null
+          organization_id: string | null
+          priority: string | null
+          related_entity_id: string | null
+          related_entity_type: string | null
+          reminder_date: string
+          reminder_type: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_completed?: boolean | null
+          is_dismissed?: boolean | null
+          organization_id?: string | null
+          priority?: string | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          reminder_date: string
+          reminder_type?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_completed?: boolean | null
+          is_dismissed?: boolean | null
+          organization_id?: string | null
+          priority?: string | null
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          reminder_date?: string
+          reminder_type?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

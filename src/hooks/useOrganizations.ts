@@ -28,13 +28,14 @@ export function useOrganizations() {
     }
   };
 
-  const createOrganization = async (name: string, autoCreateFolder: boolean = true) => {
+  const createOrganization = async (name: string, autoCreateFolder: boolean = true, vatNumber?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
         .insert({
           name,
           auto_create_folder: autoCreateFolder,
+          vat_number: vatNumber,
           created_by: user?.id
         })
         .select()
@@ -51,11 +52,11 @@ export function useOrganizations() {
     }
   };
 
-  const updateOrganization = async (id: string, name: string) => {
+  const updateOrganization = async (id: string, name: string, vatNumber?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
-        .update({ name })
+        .update({ name, vat_number: vatNumber })
         .eq('id', id)
         .select()
         .single();

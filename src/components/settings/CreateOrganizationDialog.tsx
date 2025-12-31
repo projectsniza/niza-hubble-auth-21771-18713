@@ -8,11 +8,12 @@ import { Switch } from '@/components/ui/switch';
 interface CreateOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (name: string, autoCreateFolder: boolean) => void;
+  onSubmit: (name: string, autoCreateFolder: boolean, vatNumber?: string) => void;
 }
 
 export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit }: CreateOrganizationDialogProps) {
   const [name, setName] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
   const [autoCreateFolder, setAutoCreateFolder] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,9 +22,10 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
     if (!name.trim()) return;
     
     setIsSubmitting(true);
-    await onSubmit(name.trim(), autoCreateFolder);
+    await onSubmit(name.trim(), autoCreateFolder, vatNumber.trim() || undefined);
     setIsSubmitting(false);
     setName('');
+    setVatNumber('');
     setAutoCreateFolder(true);
   };
 
@@ -44,6 +46,18 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
               required
               autoFocus
             />
+          </div>
+          <div>
+            <Label htmlFor="vat-number">VAT Number (Optional)</Label>
+            <Input
+              id="vat-number"
+              value={vatNumber}
+              onChange={(e) => setVatNumber(e.target.value)}
+              placeholder="e.g., GB123456789"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Will be auto-filled in employee contracts
+            </p>
           </div>
           <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
             <div className="space-y-0.5">

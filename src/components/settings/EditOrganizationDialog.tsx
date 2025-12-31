@@ -14,8 +14,8 @@ import { Label } from '@/components/ui/label';
 interface EditOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organization: { id: string; name: string } | null;
-  onSubmit: (id: string, name: string) => Promise<void>;
+  organization: { id: string; name: string; vat_number?: string | null } | null;
+  onSubmit: (id: string, name: string, vatNumber?: string) => Promise<void>;
 }
 
 export default function EditOrganizationDialog({
@@ -25,11 +25,13 @@ export default function EditOrganizationDialog({
   onSubmit,
 }: EditOrganizationDialogProps) {
   const [name, setName] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (organization) {
       setName(organization.name);
+      setVatNumber(organization.vat_number || '');
     }
   }, [organization]);
 
@@ -39,7 +41,7 @@ export default function EditOrganizationDialog({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(organization.id, name.trim());
+      await onSubmit(organization.id, name.trim(), vatNumber.trim() || undefined);
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
@@ -52,7 +54,7 @@ export default function EditOrganizationDialog({
         <DialogHeader>
           <DialogTitle>Edit Organization</DialogTitle>
           <DialogDescription>
-            Update the organization name. The associated document folder will also be renamed.
+            Update the organization details. The associated document folder will also be renamed.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -66,6 +68,18 @@ export default function EditOrganizationDialog({
                 placeholder="Enter organization name"
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vat-number">VAT Number</Label>
+              <Input
+                id="vat-number"
+                value={vatNumber}
+                onChange={(e) => setVatNumber(e.target.value)}
+                placeholder="e.g., GB123456789"
+              />
+              <p className="text-xs text-muted-foreground">
+                Will be auto-filled in employee contracts
+              </p>
             </div>
           </div>
           <DialogFooter>
