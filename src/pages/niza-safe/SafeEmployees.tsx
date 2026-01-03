@@ -96,7 +96,7 @@ export default function SafeEmployees() {
       case 'hr':
         return <Badge className="bg-accent text-accent-foreground">HR</Badge>;
       case 'manager':
-        return <Badge className="bg-blue-500 text-white">Manager</Badge>;
+        return <Badge className="bg-blue-500 text-white">Store Login</Badge>;
       case 'employee':
         return <Badge variant="outline">Employee</Badge>;
       default:

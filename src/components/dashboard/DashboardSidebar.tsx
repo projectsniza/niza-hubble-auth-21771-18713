@@ -27,7 +27,7 @@ const getMenuItems = (role: string) => {
     ];
   }
 
-  // Manager role - branch-restricted view
+  // Store Login role - branch-restricted view
   if (role === 'manager') {
     return [
       { title: 'Home', icon: Home, path: '/dashboard' },

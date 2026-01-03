@@ -275,7 +275,7 @@ export default function Onboarding() {
     );
   }
 
-  // HR and Managers see management interface with embedded approved contracts
+  // HR and Store Logins see management interface with embedded approved contracts
   if (user?.role === 'hr' || user?.role === 'manager') {
     return (
       <div className="p-8 space-y-6">

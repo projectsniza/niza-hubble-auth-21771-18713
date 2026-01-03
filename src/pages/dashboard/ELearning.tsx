@@ -566,13 +566,13 @@ export default function ELearning() {
             </div>
 
             <div>
-              <Label htmlFor="manager">Assign to Manager *</Label>
+              <Label htmlFor="manager">Assign to Store Login *</Label>
               <Select
                 value={formData.assignedTo}
                 onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select manager" />
+                  <SelectValue placeholder="Select store login" />
                 </SelectTrigger>
                 <SelectContent>
                   {managers.map((manager) => (
