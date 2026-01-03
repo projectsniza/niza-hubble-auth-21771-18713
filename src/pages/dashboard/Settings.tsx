@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import OrganizationManagement from '@/components/settings/OrganizationManagement';
 import UserManagement from '@/components/settings/UserManagement';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2 } from 'lucide-react';
+import ReminderSettingsPanel from '@/components/settings/ReminderSettingsPanel';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -88,6 +89,9 @@ export default function Settings() {
   // Check if user has access to organization/user management
   const canManageOrgs = user?.role === 'super_admin';
   const canManageUsers = user?.role === 'super_admin';
+  const canManageReminders = user?.role === 'super_admin';
+
+  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -97,7 +101,10 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl" style={{ gridTemplateColumns: canManageOrgs ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)' }}>
+        <TabsList
+          className="grid w-full max-w-3xl"
+          style={{ gridTemplateColumns: `repeat(${tabsCount}, 1fr)` }}
+        >
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Profile
@@ -116,6 +123,12 @@ export default function Settings() {
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
               Users
+            </TabsTrigger>
+          )}
+          {canManageReminders && (
+            <TabsTrigger value="reminders" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Reminders
             </TabsTrigger>
           )}
         </TabsList>
@@ -249,6 +262,12 @@ export default function Settings() {
         {canManageUsers && (
           <TabsContent value="users">
             <UserManagement />
+          </TabsContent>
+        )}
+
+        {canManageReminders && (
+          <TabsContent value="reminders">
+            <ReminderSettingsPanel />
           </TabsContent>
         )}
       </Tabs>
