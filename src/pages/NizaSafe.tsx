@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import NizaSafeSidebar from '@/components/dashboard/NizaSafeSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
+import TaskReminderListener from '@/components/reminders/TaskReminderListener';
 
 export default function NizaSafe() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen flex w-full bg-background">
+      <TaskReminderListener />
       <NizaSafeSidebar 
         collapsed={sidebarCollapsed} 
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 

@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
+import TaskReminderListener from '@/components/reminders/TaskReminderListener';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex w-full bg-background">
+      <TaskReminderListener />
       {/* Desktop Sidebar */}
       {!isMobile && (
         <DashboardSidebar 
