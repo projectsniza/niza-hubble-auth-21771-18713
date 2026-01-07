@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Briefcase, Wrench, ClipboardList, Shield, ClipboardCheck
+  User, Briefcase, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ const getMenuItems = (role: string) => {
     return [
       { title: 'My Dashboard', icon: Home, path: '/dashboard' },
       { title: 'My Profile', icon: User, path: '/dashboard/my-profile' },
+      { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Clock In/Out', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'My Schedule', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Attendance & Leave', icon: Clock, path: '/dashboard/attendance' },
@@ -32,6 +33,7 @@ const getMenuItems = (role: string) => {
     return [
       { title: 'Home', icon: Home, path: '/dashboard' },
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+      { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
@@ -51,6 +53,7 @@ const getMenuItems = (role: string) => {
     return [
       { title: 'Home', icon: Home, path: '/dashboard' },
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+      { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
@@ -71,6 +74,7 @@ const getMenuItems = (role: string) => {
   const items = [
     { title: 'Home', icon: Home, path: '/dashboard' },
     { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+    { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
     { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
