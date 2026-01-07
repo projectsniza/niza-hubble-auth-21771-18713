@@ -115,14 +115,22 @@ export default function Events() {
       return;
     }
 
-    // Validate visibility scope
-    if (newEvent.visibility === 'organization' && !newEvent.organizationId) {
-      toast.error('Please select an organization');
-      return;
-    }
-    if (newEvent.visibility === 'branch' && !newEvent.branchId) {
-      toast.error('Please select a branch');
-      return;
+    // For managers, force branch visibility and their own branch/org
+    const isManager = user?.role === 'manager';
+    const effectiveVisibility = isManager ? 'branch' : newEvent.visibility;
+    const effectiveOrgId = isManager ? user?.organizationId : (effectiveVisibility !== 'company' ? newEvent.organizationId : null);
+    const effectiveBranchId = isManager ? user?.branchId : (effectiveVisibility === 'branch' ? newEvent.branchId : null);
+
+    // Validate visibility scope for non-managers
+    if (!isManager) {
+      if (newEvent.visibility === 'organization' && !newEvent.organizationId) {
+        toast.error('Please select an organization');
+        return;
+      }
+      if (newEvent.visibility === 'branch' && !newEvent.branchId) {
+        toast.error('Please select a branch');
+        return;
+      }
     }
 
     try {
@@ -131,9 +139,9 @@ export default function Events() {
         description: newEvent.description || null,
         event_type: newEvent.eventType,
         event_date: newEvent.eventDate || null,
-        visibility: newEvent.visibility,
-        organization_id: newEvent.visibility !== 'company' ? newEvent.organizationId || null : null,
-        branch_id: newEvent.visibility === 'branch' ? newEvent.branchId || null : null,
+        visibility: effectiveVisibility,
+        organization_id: effectiveOrgId || null,
+        branch_id: effectiveBranchId || null,
         is_pinned: newEvent.isPinned,
         created_by: user?.id
       });
@@ -256,19 +264,25 @@ export default function Events() {
                   </div>
                   <div className="space-y-2">
                     <Label>Visibility</Label>
-                    <Select value={newEvent.visibility} onValueChange={(v) => setNewEvent({ ...newEvent, visibility: v, organizationId: '', branchId: '' })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="company">Entire Company</SelectItem>
-                        <SelectItem value="organization">Organization Only</SelectItem>
-                        <SelectItem value="branch">Branch Only</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {user?.role === 'manager' ? (
+                      <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
+                        Branch Only (Your branch: {user?.branchId ? 'Assigned' : 'None'})
+                      </div>
+                    ) : (
+                      <Select value={newEvent.visibility} onValueChange={(v) => setNewEvent({ ...newEvent, visibility: v, organizationId: '', branchId: '' })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="company">Entire Company</SelectItem>
+                          <SelectItem value="organization">Organization Only</SelectItem>
+                          <SelectItem value="branch">Branch Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
                 
-                {/* Show organization selector for org/branch visibility */}
-                {(newEvent.visibility === 'organization' || newEvent.visibility === 'branch') && (
+                {/* Show organization selector for org/branch visibility - not for managers */}
+                {user?.role !== 'manager' && (newEvent.visibility === 'organization' || newEvent.visibility === 'branch') && (
                   <div className="space-y-2">
                     <Label>Organization *</Label>
                     <Select value={newEvent.organizationId} onValueChange={(v) => setNewEvent({ ...newEvent, organizationId: v, branchId: '' })}>
@@ -282,8 +296,8 @@ export default function Events() {
                   </div>
                 )}
 
-                {/* Show branch selector for branch visibility */}
-                {newEvent.visibility === 'branch' && newEvent.organizationId && (
+                {/* Show branch selector for branch visibility - not for managers */}
+                {user?.role !== 'manager' && newEvent.visibility === 'branch' && newEvent.organizationId && (
                   <div className="space-y-2">
                     <Label>Branch *</Label>
                     <Select value={newEvent.branchId} onValueChange={(v) => setNewEvent({ ...newEvent, branchId: v })}>
