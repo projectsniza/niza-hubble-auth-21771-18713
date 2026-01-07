@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin } from 'lucide-react';
+import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin, Search, Eye, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
 
 interface Training {
   id: string;
@@ -57,7 +58,14 @@ export default function ELearning() {
   const [closingFiles, setClosingFiles] = useState<File[]>([]);
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filters
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -65,18 +73,40 @@ export default function ELearning() {
     deadline: '',
     tags: '',
     assignedTo: '',
+    description: '',
   });
 
   const isAdminOrHR = user?.role === 'super_admin' || user?.role === 'hr';
   const isManager = user?.role === 'manager';
   const isEmployee = user?.role === 'employee';
+  const canCreateTraining = isAdminOrHR || isManager;
 
   useEffect(() => {
     fetchTrainings();
+    fetchOrganizations();
     if (isAdminOrHR) {
       fetchManagers();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (filterOrg) {
+      fetchBranches(filterOrg);
+    } else {
+      setBranches([]);
+      setFilterBranch('');
+    }
+  }, [filterOrg]);
+
+  const fetchOrganizations = async () => {
+    const { data } = await supabase.from('organizations').select('*').order('name');
+    if (data) setOrganizations(data);
+  };
+
+  const fetchBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    if (data) setBranches(data);
+  };
 
   const fetchTrainings = async () => {
     setLoading(true);
@@ -88,6 +118,11 @@ export default function ELearning() {
 
       // For employees, fetch trainings assigned to their branch (via manager's branch)
       if (isEmployee && user?.branchId) {
+        query = query.eq('branch_id', user.branchId);
+      }
+      
+      // For managers, show trainings for their branch
+      if (isManager && user?.branchId) {
         query = query.eq('branch_id', user.branchId);
       }
 
@@ -172,32 +207,62 @@ export default function ELearning() {
   };
 
   const handleCreateTraining = async () => {
-    if (!formData.title || !formData.assignedTo) {
+    if (!formData.title) {
       toast({
         title: 'Validation Error',
-        description: 'Please fill in required fields',
+        description: 'Please enter a training title',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // For managers, they create for their own branch without selecting a manager
+    if (isManager && (!user?.branchId || !user?.organizationId)) {
+      toast({
+        title: 'Error',
+        description: 'You must be assigned to a branch to create trainings',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // For admin/HR, they need to select a manager
+    if (isAdminOrHR && !formData.assignedTo) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a Store Login to assign the training',
         variant: 'destructive'
       });
       return;
     }
 
     try {
-      const selectedManager = managers.find(m => m.id === formData.assignedTo);
+      let trainingData: any = {
+        title: formData.title,
+        description: formData.description || null,
+        training_date: formData.date || null,
+        deadline: formData.deadline || null,
+        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+        created_by: user?.id,
+        status: 'pending'
+      };
 
-      // First insert training without .select().single() to avoid RLS read issues
-      const { data: trainingData, error: trainingError } = await supabase
+      if (isManager) {
+        // Manager creates for their own branch, assigned to themselves
+        trainingData.assigned_to = user?.id;
+        trainingData.organization_id = user?.organizationId;
+        trainingData.branch_id = user?.branchId;
+      } else {
+        // Admin/HR assigns to selected manager
+        const selectedManager = managers.find(m => m.id === formData.assignedTo);
+        trainingData.assigned_to = formData.assignedTo;
+        trainingData.organization_id = selectedManager?.organization_id || null;
+        trainingData.branch_id = selectedManager?.branch_id || null;
+      }
+
+      const { data: insertedTraining, error: trainingError } = await supabase
         .from('trainings')
-        .insert({
-          title: formData.title,
-          training_date: formData.date || null,
-          deadline: formData.deadline || null,
-          tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-          assigned_to: formData.assignedTo,
-          organization_id: selectedManager?.organization_id || null,
-          branch_id: selectedManager?.branch_id || null,
-          created_by: user?.id,
-          status: 'pending'
-        })
+        .insert(trainingData)
         .select('id')
         .single();
 
@@ -207,9 +272,9 @@ export default function ELearning() {
       }
 
       // Upload files if training was created successfully
-      if (uploadedFiles.length > 0 && trainingData?.id) {
+      if (uploadedFiles.length > 0 && insertedTraining?.id) {
         for (const file of uploadedFiles) {
-          const filePath = `${trainingData.id}/${Date.now()}-${file.name}`;
+          const filePath = `${insertedTraining.id}/${Date.now()}-${file.name}`;
           const { error: uploadError } = await supabase.storage
             .from('training-documents')
             .upload(filePath, file);
@@ -220,7 +285,7 @@ export default function ELearning() {
           }
 
           const { error: docError } = await supabase.from('training_documents').insert({
-            training_id: trainingData.id,
+            training_id: insertedTraining.id,
             file_name: file.name,
             file_path: filePath,
             file_type: file.type,
@@ -238,10 +303,10 @@ export default function ELearning() {
 
       toast({
         title: 'Training Created',
-        description: `Training "${formData.title}" has been assigned successfully`,
+        description: `Training "${formData.title}" has been created successfully`,
       });
       setShowCreateDialog(false);
-      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: '' });
+      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: '', description: '' });
       setUploadedFiles([]);
       fetchTrainings();
     } catch (error: any) {
@@ -365,11 +430,49 @@ export default function ELearning() {
     return variants[status as keyof typeof variants] || variants.pending;
   };
 
+  const getStatusIcon = (status: string | null) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-4 w-4" />;
+      case 'in_progress': return <FileText className="h-4 w-4" />;
+      case 'completed': return <CheckCircle className="h-4 w-4" />;
+      default: return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'pending': return 'text-yellow-500';
+      case 'in_progress': return 'text-blue-500';
+      case 'completed': return 'text-green-500';
+      default: return 'text-muted-foreground';
+    }
+  };
+
   const filteredTrainings = (status?: string) => {
     let filtered = trainings;
+    
+    // Apply status filter
     if (status) {
       filtered = filtered.filter(t => t.status === status);
     }
+    
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(t => 
+        t.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply org filter
+    if (filterOrg) {
+      filtered = filtered.filter(t => t.organization_id === filterOrg);
+    }
+    
+    // Apply branch filter
+    if (filterBranch) {
+      filtered = filtered.filter(t => t.branch_id === filterBranch);
+    }
+    
     return filtered;
   };
 
@@ -387,6 +490,15 @@ export default function ELearning() {
     setClosingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const getCounts = () => ({
+    all: trainings.length,
+    pending: trainings.filter(t => t.status === 'pending').length,
+    in_progress: trainings.filter(t => t.status === 'in_progress').length,
+    completed: trainings.filter(t => t.status === 'completed').length,
+  });
+
+  const counts = getCounts();
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -395,16 +507,110 @@ export default function ELearning() {
     );
   }
 
+  const TrainingGrid = ({ trainings: displayTrainings }: { trainings: Training[] }) => (
+    displayTrainings.length === 0 ? (
+      <Card className="p-12 text-center border-dashed">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <FileText className="h-8 w-8 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-foreground mb-2">No trainings found</h3>
+            <p className="text-muted-foreground mb-4">
+              {canCreateTraining ? 'Create your first training to get started' : 'No trainings have been assigned yet'}
+            </p>
+          </div>
+        </div>
+      </Card>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {displayTrainings.map((training) => (
+          <Card key={training.id} className="p-6 hover:shadow-lg transition-shadow">
+            <div className="space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1 flex-1">
+                  <h3 className="font-semibold text-lg text-foreground">{training.title}</h3>
+                  {training.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{training.description}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className={getStatusColor(training.status)}>
+                    {getStatusIcon(training.status)}
+                  </span>
+                  <span className="text-muted-foreground capitalize">
+                    {(training.status || 'pending').replace('_', ' ')}
+                  </span>
+                </div>
+                <Badge className={getStatusBadge(training.status)}>
+                  {(training.status || 'pending').replace('_', ' ').toUpperCase()}
+                </Badge>
+              </div>
+
+              <div className="text-xs text-muted-foreground space-y-1">
+                {!(isManager || isEmployee) && (
+                  <div className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {getManagerName(training.assigned_to)}
+                  </div>
+                )}
+                {training.deadline && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Due: {format(new Date(training.deadline), 'dd/MM/yyyy')}
+                  </div>
+                )}
+                {training.created_at && (
+                  <div>
+                    Created: {format(new Date(training.created_at), 'dd/MM/yyyy')}
+                  </div>
+                )}
+              </div>
+
+              {training.tags && training.tags.length > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  {training.tags.slice(0, 3).map((tag, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">{tag}</Badge>
+                  ))}
+                  {training.tags.length > 3 && (
+                    <Badge variant="outline" className="text-xs">+{training.tags.length - 3}</Badge>
+                  )}
+                </div>
+              )}
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={async () => {
+                  setSelectedTraining(training);
+                  await fetchTrainingDocuments(training.id);
+                  setShowDetailsDialog(true);
+                }}
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                View Details
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    )
+  );
+
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-foreground">Training Management</h2>
           <p className="text-muted-foreground mt-1">
-            {isAdminOrHR ? 'Create and manage training assignments' : isManager ? 'View and complete assigned trainings' : 'View training assignments for your branch'}
+            {isAdminOrHR ? 'Create and manage training assignments' : isManager ? 'Create and complete trainings for your branch' : 'View training assignments for your branch'}
           </p>
         </div>
-        {isAdminOrHR && (
+        {canCreateTraining && (
           <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Create Training
@@ -412,106 +618,87 @@ export default function ELearning() {
         )}
       </div>
 
-      <Tabs defaultValue={(isManager || isEmployee) ? 'assigned' : 'all'} className="w-full">
-        <TabsList className={(isManager || isEmployee) ? 'grid w-full grid-cols-3' : 'grid w-full grid-cols-4'}>
-          {!(isManager || isEmployee) && <TabsTrigger value="all">All Trainings</TabsTrigger>}
-          <TabsTrigger value="assigned">{(isManager || isEmployee) ? 'Pending' : 'Pending'}</TabsTrigger>
-          <TabsTrigger value="progress">In Progress</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
+      {/* Search and Filters */}
+      <Card className="p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search trainings..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          
+          {isAdminOrHR && (
+            <>
+              <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setFilterBranch(''); }}>
+                <SelectTrigger className="w-48">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="All Organizations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Organizations</SelectItem>
+                  {organizations.map(org => (
+                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {filterOrg && (
+                <Select value={filterBranch} onValueChange={setFilterBranch}>
+                  <SelectTrigger className="w-48">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All Branches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Branches</SelectItem>
+                    {branches.map(branch => (
+                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      <Tabs defaultValue="all" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="all" className="gap-2">
+            All Trainings
+            <Badge variant="secondary">{counts.all}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="gap-2">
+            Pending
+            <Badge variant="secondary">{counts.pending}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="in_progress" className="gap-2">
+            In Progress
+            <Badge variant="secondary">{counts.in_progress}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-2">
+            Completed
+            <Badge variant="secondary">{counts.completed}</Badge>
+          </TabsTrigger>
         </TabsList>
 
-        {!(isManager || isEmployee) && (
-          <TabsContent value="all" className="space-y-4">
-            {filteredTrainings().length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">No trainings found</p>
-              </Card>
-            ) : (
-              filteredTrainings().map((training) => (
-                <TrainingCard
-                  key={training.id}
-                  training={training}
-                  managerName={getManagerName(training.assigned_to)}
-                  onView={async () => {
-                    setSelectedTraining(training);
-                    await fetchTrainingDocuments(training.id);
-                    setShowDetailsDialog(true);
-                  }}
-                  isManager={false}
-                  isEmployee={false}
-                />
-              ))
-            )}
-          </TabsContent>
-        )}
-
-        <TabsContent value="assigned" className="space-y-4">
-          {filteredTrainings('pending').length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground">No pending trainings</p>
-            </Card>
-          ) : (
-            filteredTrainings('pending').map((training) => (
-              <TrainingCard
-                key={training.id}
-                training={training}
-                managerName={getManagerName(training.assigned_to)}
-                onView={async () => {
-                  setSelectedTraining(training);
-                  await fetchTrainingDocuments(training.id);
-                  setShowDetailsDialog(true);
-                }}
-                isManager={isManager}
-                isEmployee={isEmployee}
-              />
-            ))
-          )}
+        <TabsContent value="all" className="mt-6">
+          <TrainingGrid trainings={filteredTrainings()} />
         </TabsContent>
 
-        <TabsContent value="progress" className="space-y-4">
-          {filteredTrainings('in_progress').length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground">No trainings in progress</p>
-            </Card>
-          ) : (
-            filteredTrainings('in_progress').map((training) => (
-              <TrainingCard
-                key={training.id}
-                training={training}
-                managerName={getManagerName(training.assigned_to)}
-                onView={async () => {
-                  setSelectedTraining(training);
-                  await fetchTrainingDocuments(training.id);
-                  setShowDetailsDialog(true);
-                }}
-                isManager={isManager}
-                isEmployee={isEmployee}
-              />
-            ))
-          )}
+        <TabsContent value="pending" className="mt-6">
+          <TrainingGrid trainings={filteredTrainings('pending')} />
         </TabsContent>
 
-        <TabsContent value="completed" className="space-y-4">
-          {filteredTrainings('completed').length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground">No completed trainings</p>
-            </Card>
-          ) : (
-            filteredTrainings('completed').map((training) => (
-              <TrainingCard
-                key={training.id}
-                training={training}
-                managerName={getManagerName(training.assigned_to)}
-                onView={async () => {
-                  setSelectedTraining(training);
-                  await fetchTrainingDocuments(training.id);
-                  setShowDetailsDialog(true);
-                }}
-                isManager={isManager}
-                isEmployee={isEmployee}
-              />
-            ))
-          )}
+        <TabsContent value="in_progress" className="mt-6">
+          <TrainingGrid trainings={filteredTrainings('in_progress')} />
+        </TabsContent>
+
+        <TabsContent value="completed" className="mt-6">
+          <TrainingGrid trainings={filteredTrainings('completed')} />
         </TabsContent>
       </Tabs>
 
@@ -520,7 +707,9 @@ export default function ELearning() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create New Training</DialogTitle>
-            <DialogDescription>Assign training to a branch manager</DialogDescription>
+            <DialogDescription>
+              {isManager ? 'Create a training for your branch' : 'Assign training to a Store Login'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -531,6 +720,16 @@ export default function ELearning() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder="e.g., Fire Safety Training"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Brief description of the training"
               />
             </div>
 
@@ -565,47 +764,59 @@ export default function ELearning() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="manager">Assign to Store Login *</Label>
-              <Select
-                value={formData.assignedTo}
-                onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select store login" />
-                </SelectTrigger>
-                <SelectContent>
-                  {managers.map((manager) => (
-                    <SelectItem key={manager.id} value={manager.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{manager.name}</span>
-                        {manager.branch_name && (
-                          <span className="text-muted-foreground text-xs">
-                            ({manager.branch_name})
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formData.assignedTo && (
-                <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-                  {managers.find(m => m.id === formData.assignedTo)?.organization_name && (
-                    <span className="flex items-center gap-1">
-                      <Building className="h-3 w-3" />
-                      {managers.find(m => m.id === formData.assignedTo)?.organization_name}
-                    </span>
-                  )}
-                  {managers.find(m => m.id === formData.assignedTo)?.branch_name && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {managers.find(m => m.id === formData.assignedTo)?.branch_name}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Only show manager selector for Admin/HR */}
+            {isAdminOrHR && (
+              <div>
+                <Label htmlFor="manager">Assign to Store Login *</Label>
+                <Select
+                  value={formData.assignedTo}
+                  onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select store login" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {managers.map((manager) => (
+                      <SelectItem key={manager.id} value={manager.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{manager.name}</span>
+                          {manager.branch_name && (
+                            <span className="text-muted-foreground text-xs">
+                              ({manager.branch_name})
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.assignedTo && (
+                  <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
+                    {managers.find(m => m.id === formData.assignedTo)?.organization_name && (
+                      <span className="flex items-center gap-1">
+                        <Building className="h-3 w-3" />
+                        {managers.find(m => m.id === formData.assignedTo)?.organization_name}
+                      </span>
+                    )}
+                    {managers.find(m => m.id === formData.assignedTo)?.branch_name && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {managers.find(m => m.id === formData.assignedTo)?.branch_name}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Show branch info for managers */}
+            {isManager && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  This training will be created for your branch and assigned to you.
+                </p>
+              </div>
+            )}
 
             <div>
               <Label>Upload Training Documents</Label>
@@ -652,9 +863,9 @@ export default function ELearning() {
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateTraining} disabled={!formData.title || !formData.assignedTo}>
+            <Button onClick={handleCreateTraining} disabled={!formData.title || (isAdminOrHR && !formData.assignedTo)}>
               <Send className="h-4 w-4 mr-2" />
-              Create & Send
+              Create Training
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -852,86 +1063,5 @@ export default function ELearning() {
         </Dialog>
       )}
     </div>
-  );
-}
-
-function TrainingCard({ 
-  training, 
-  managerName,
-  onView, 
-  isManager,
-  isEmployee
-}: { 
-  training: Training; 
-  managerName: string;
-  onView: () => void; 
-  isManager: boolean;
-  isEmployee: boolean;
-}) {
-  const getStatusBadge = (status: string | null) => {
-    const variants = {
-      pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-      in_progress: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      completed: 'bg-green-500/10 text-green-500 border-green-500/20',
-    };
-    return variants[status as keyof typeof variants] || variants.pending;
-  };
-
-  const getStatusLabel = (status: string | null) => {
-    const labels = {
-      pending: 'PENDING',
-      in_progress: 'IN PROGRESS',
-      completed: 'COMPLETED',
-    };
-    return labels[status as keyof typeof labels] || 'PENDING';
-  };
-
-  return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <CardTitle className="text-xl">{training.title}</CardTitle>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              {!(isManager || isEmployee) && (
-                <span className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  {managerName}
-                </span>
-              )}
-              {isEmployee && (
-                <span className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  Assigned to: {managerName}
-                </span>
-              )}
-              {training.deadline && (
-                <span className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  Due: {new Date(training.deadline).toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge className={getStatusBadge(training.status)}>
-              {getStatusLabel(training.status)}
-            </Badge>
-            <Button variant="outline" size="sm" onClick={onView}>
-              {isEmployee ? 'View' : 'View Details'}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      {training.tags && training.tags.length > 0 && (
-        <CardContent>
-          <div className="flex gap-2 flex-wrap">
-            {training.tags.map((tag, index) => (
-              <Badge key={index} variant="secondary">{tag}</Badge>
-            ))}
-          </div>
-        </CardContent>
-      )}
-    </Card>
   );
 }
