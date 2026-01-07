@@ -82,12 +82,16 @@ export default function ELearning() {
   const canCreateTraining = isAdminOrHR || isManager;
 
   useEffect(() => {
-    fetchTrainings();
-    fetchOrganizations();
-    if (isAdminOrHR) {
-      fetchManagers();
+    if (user) {
+      fetchTrainings();
+      fetchOrganizations();
+      if (isAdminOrHR) {
+        fetchManagers();
+      }
+    } else {
+      setLoading(false);
     }
-  }, [user]);
+  }, [user, isAdminOrHR]);
 
   useEffect(() => {
     if (filterOrg) {
@@ -109,6 +113,11 @@ export default function ELearning() {
   };
 
   const fetchTrainings = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       let query = supabase
@@ -128,10 +137,15 @@ export default function ELearning() {
 
       const { data, error } = await query;
 
-      if (error) throw error;
-      setTrainings(data || []);
+      if (error) {
+        console.error('Error fetching trainings:', error);
+        setTrainings([]);
+      } else {
+        setTrainings(data || []);
+      }
     } catch (error: any) {
       console.error('Error fetching trainings:', error);
+      setTrainings([]);
     } finally {
       setLoading(false);
     }
