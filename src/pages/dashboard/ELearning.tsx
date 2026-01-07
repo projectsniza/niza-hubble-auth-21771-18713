@@ -64,17 +64,19 @@ export default function ELearning() {
   const [searchQuery, setSearchQuery] = useState('');
   
   // Filters
-  const [filterOrg, setFilterOrg] = useState('');
-  const [filterBranch, setFilterBranch] = useState('');
+  // NOTE: Radix Select does not allow Select.Item with empty string values.
+  // We use "all" as a sentinel value instead of "".
+  const [filterOrg, setFilterOrg] = useState('all');
+  const [filterBranch, setFilterBranch] = useState('all');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     title: '',
     date: '',
     deadline: '',
     tags: '',
-    assignedTo: '',
+    assignedTo: undefined as string | undefined,
     description: '',
-  });
+  }));
 
   const isAdminOrHR = user?.role === 'super_admin' || user?.role === 'hr';
   const isManager = user?.role === 'manager';
@@ -94,11 +96,11 @@ export default function ELearning() {
   }, [user, isAdminOrHR]);
 
   useEffect(() => {
-    if (filterOrg) {
+    if (filterOrg && filterOrg !== 'all') {
       fetchBranches(filterOrg);
     } else {
       setBranches([]);
-      setFilterBranch('');
+      setFilterBranch('all');
     }
   }, [filterOrg]);
 
@@ -326,7 +328,7 @@ export default function ELearning() {
         description: `Training "${formData.title}" has been created successfully`,
       });
       setShowCreateDialog(false);
-      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: '', description: '' });
+      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: undefined, description: '' });
       setUploadedFiles([]);
       fetchTrainings();
     } catch (error: any) {
@@ -484,12 +486,12 @@ export default function ELearning() {
     }
     
     // Apply org filter
-    if (filterOrg) {
+    if (filterOrg && filterOrg !== 'all') {
       filtered = filtered.filter(t => t.organization_id === filterOrg);
     }
-    
+
     // Apply branch filter
-    if (filterBranch) {
+    if (filterBranch && filterBranch !== 'all') {
       filtered = filtered.filter(t => t.branch_id === filterBranch);
     }
     
@@ -653,29 +655,39 @@ export default function ELearning() {
           
           {isAdminOrHR && (
             <>
-              <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setFilterBranch(''); }}>
+              <Select
+                value={filterOrg}
+                onValueChange={(v) => {
+                  setFilterOrg(v);
+                  setFilterBranch('all');
+                }}
+              >
                 <SelectTrigger className="w-48">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="All Organizations" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Organizations</SelectItem>
-                  {organizations.map(org => (
-                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                  <SelectItem value="all">All Organizations</SelectItem>
+                  {organizations.map((org) => (
+                    <SelectItem key={org.id} value={org.id}>
+                      {org.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              
-              {filterOrg && (
+
+              {filterOrg !== 'all' && (
                 <Select value={filterBranch} onValueChange={setFilterBranch}>
                   <SelectTrigger className="w-48">
                     <MapPin className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Branches</SelectItem>
-                    {branches.map(branch => (
-                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
