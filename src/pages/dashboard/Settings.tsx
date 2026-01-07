@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import OrganizationManagement from '@/components/settings/OrganizationManagement';
 import UserManagement from '@/components/settings/UserManagement';
 import ReminderSettingsPanel from '@/components/settings/ReminderSettingsPanel';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell } from 'lucide-react';
+import MessageSettingsPanel from '@/components/messaging/MessageSettingsPanel';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -90,8 +91,9 @@ export default function Settings() {
   const canManageOrgs = user?.role === 'super_admin';
   const canManageUsers = user?.role === 'super_admin';
   const canManageReminders = user?.role === 'super_admin';
+  const canManageMessages = user?.role === 'super_admin';
 
-  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0);
+  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0) + (canManageMessages ? 1 : 0);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -129,6 +131,12 @@ export default function Settings() {
             <TabsTrigger value="reminders" className="gap-2">
               <Bell className="h-4 w-4" />
               Reminders
+            </TabsTrigger>
+          )}
+          {canManageMessages && (
+            <TabsTrigger value="messages" className="gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Messages
             </TabsTrigger>
           )}
         </TabsList>
@@ -268,6 +276,12 @@ export default function Settings() {
         {canManageReminders && (
           <TabsContent value="reminders">
             <ReminderSettingsPanel />
+          </TabsContent>
+        )}
+
+        {canManageMessages && (
+          <TabsContent value="messages">
+            <MessageSettingsPanel />
           </TabsContent>
         )}
       </Tabs>
