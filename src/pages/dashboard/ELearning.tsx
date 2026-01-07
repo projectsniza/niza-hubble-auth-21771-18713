@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin, Search, Eye, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 
 interface Training {
   id: string;
@@ -105,6 +105,12 @@ export default function ELearning() {
   const fetchOrganizations = async () => {
     const { data } = await supabase.from('organizations').select('*').order('name');
     if (data) setOrganizations(data);
+  };
+
+  const safeFormatDate = (value: string | null | undefined, fmt: string) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return isValid(d) ? format(d, fmt) : null;
   };
 
   const fetchBranches = async (orgId: string) => {
@@ -574,12 +580,12 @@ export default function ELearning() {
                 {training.deadline && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    Due: {format(new Date(training.deadline), 'dd/MM/yyyy')}
+                    Due: {safeFormatDate(training.deadline, 'dd/MM/yyyy') || 'N/A'}
                   </div>
                 )}
                 {training.created_at && (
                   <div>
-                    Created: {format(new Date(training.created_at), 'dd/MM/yyyy')}
+                    Created: {safeFormatDate(training.created_at, 'dd/MM/yyyy') || 'N/A'}
                   </div>
                 )}
               </div>
