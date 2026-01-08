@@ -8,7 +8,8 @@ import OrganizationManagement from '@/components/settings/OrganizationManagement
 import UserManagement from '@/components/settings/UserManagement';
 import ReminderSettingsPanel from '@/components/settings/ReminderSettingsPanel';
 import MessageSettingsPanel from '@/components/messaging/MessageSettingsPanel';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare } from 'lucide-react';
+import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -92,8 +93,9 @@ export default function Settings() {
   const canManageUsers = user?.role === 'super_admin';
   const canManageReminders = user?.role === 'super_admin';
   const canManageMessages = user?.role === 'super_admin';
+  const canManageCustomRoles = user?.role === 'super_admin';
 
-  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0) + (canManageMessages ? 1 : 0);
+  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0) + (canManageMessages ? 1 : 0) + (canManageCustomRoles ? 1 : 0);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -104,7 +106,7 @@ export default function Settings() {
 
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList
-          className="grid w-full max-w-3xl"
+          className="grid w-full max-w-4xl"
           style={{ gridTemplateColumns: `repeat(${tabsCount}, 1fr)` }}
         >
           <TabsTrigger value="profile" className="gap-2">
@@ -125,6 +127,12 @@ export default function Settings() {
             <TabsTrigger value="users" className="gap-2">
               <Users className="h-4 w-4" />
               Users
+            </TabsTrigger>
+          )}
+          {canManageCustomRoles && (
+            <TabsTrigger value="custom-roles" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Custom Roles
             </TabsTrigger>
           )}
           {canManageReminders && (
@@ -270,6 +278,12 @@ export default function Settings() {
         {canManageUsers && (
           <TabsContent value="users">
             <UserManagement />
+          </TabsContent>
+        )}
+
+        {canManageCustomRoles && (
+          <TabsContent value="custom-roles">
+            <CustomRolesManagement />
           </TabsContent>
         )}
 
