@@ -67,6 +67,7 @@ export default function MessagingPanel() {
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<UserProfile[]>([]);
@@ -77,15 +78,23 @@ export default function MessagingPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isEmployee = user?.role === 'employee';
+  // Only restrict employees - all other roles can always use messaging
   const canUseMessaging = !isEmployee || settings['employee_messaging_enabled'] === 'true';
 
+  // Fetch settings first
   useEffect(() => {
-    fetchSettings();
-    if (canUseMessaging) {
+    if (user) {
+      fetchSettings();
+    }
+  }, [user]);
+
+  // Then fetch conversations only after settings are loaded and user can use messaging
+  useEffect(() => {
+    if (settingsLoaded && canUseMessaging && user) {
       fetchConversations();
       fetchAvailableUsers();
     }
-  }, [user]);
+  }, [settingsLoaded, canUseMessaging, user]);
 
   useEffect(() => {
     if (!selectedConversation) return;
@@ -124,16 +133,26 @@ export default function MessagingPanel() {
 
   const fetchSettings = async () => {
     try {
-      const { data } = await supabase.from('message_settings').select('*');
-      const settingsMap: Record<string, string> = {};
-      data?.forEach(s => {
-        settingsMap[s.setting_key] = typeof s.setting_value === 'string' 
-          ? s.setting_value 
-          : JSON.stringify(s.setting_value).replace(/"/g, '');
-      });
-      setSettings(settingsMap);
+      const { data, error } = await supabase.from('message_settings').select('*');
+      if (error) {
+        console.error('Error fetching settings:', error);
+        // Default to allowing messaging if we can't fetch settings
+        setSettings({ employee_messaging_enabled: 'true' });
+      } else {
+        const settingsMap: Record<string, string> = {};
+        data?.forEach(s => {
+          settingsMap[s.setting_key] = typeof s.setting_value === 'string' 
+            ? s.setting_value 
+            : JSON.stringify(s.setting_value).replace(/"/g, '');
+        });
+        setSettings(settingsMap);
+      }
     } catch (error) {
       console.error('Error fetching settings:', error);
+      // Default to allowing messaging if we can't fetch settings
+      setSettings({ employee_messaging_enabled: 'true' });
+    } finally {
+      setSettingsLoaded(true);
     }
   };
 
