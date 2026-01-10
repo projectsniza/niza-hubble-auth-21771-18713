@@ -159,7 +159,7 @@ export default function UploadDocumentDialog({
 
     setIsLoading(true);
     try {
-      const fileExt = selectedFile.name.split('.').pop();
+      const fileExt = selectedFile.name.split('.').pop() || 'bin';
       const filePath = `${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage

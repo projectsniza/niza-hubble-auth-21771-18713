@@ -113,7 +113,8 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
       for (const req of requirements) {
         const file = requirementFiles[req.id];
         if (file) {
-          const fileName = `${req.name}_${employeeId}_${Date.now()}.${file.name.split('.').pop()}`;
+          const fileExt = file.name.split('.').pop() || 'bin';
+          const fileName = `${req.name}_${employeeId}_${Date.now()}.${fileExt}`;
           const filePath = `employees/${employeeId}/documents/${fileName}`;
 
           const { error: uploadError } = await supabase.storage
