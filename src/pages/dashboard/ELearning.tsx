@@ -248,11 +248,11 @@ export default function ELearning() {
       return;
     }
 
-    // For admin/HR, they need to select a manager
+    // For admin/HR, they need to select a store account
     if (isAdminOrHR && !formData.assignedTo) {
       toast({
         title: 'Validation Error',
-        description: 'Please select a Store Login to assign the training',
+        description: 'Please select a Store Account to assign the training',
         variant: 'destructive'
       });
       return;
@@ -740,7 +740,7 @@ export default function ELearning() {
           <DialogHeader>
             <DialogTitle>Create New Training</DialogTitle>
             <DialogDescription>
-              {isManager ? 'Create a training for your branch' : 'Assign training to a Store Login'}
+              {isManager ? 'Create a training for your branch' : 'Assign training to a Store Account'}
             </DialogDescription>
           </DialogHeader>
 
@@ -796,16 +796,16 @@ export default function ELearning() {
               />
             </div>
 
-            {/* Only show manager selector for Admin/HR */}
+            {/* Only show store account selector for Admin/HR */}
             {isAdminOrHR && (
               <div>
-                <Label htmlFor="manager">Assign to Store Login *</Label>
+                <Label htmlFor="manager">Assign to Store Account *</Label>
                 <Select
                   value={formData.assignedTo}
                   onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select store login" />
+                    <SelectValue placeholder="Select store account" />
                   </SelectTrigger>
                   <SelectContent>
                     {managers.map((manager) => (

@@ -363,7 +363,7 @@ export default function CustomRolesManagement() {
       case 'hr':
         return <Badge variant="secondary">HR Based</Badge>;
       case 'manager':
-        return <Badge variant="outline">Manager Based</Badge>;
+        return <Badge variant="outline">Store Account Based</Badge>;
       default:
         return <Badge>Employee Based</Badge>;
     }
@@ -406,7 +406,7 @@ export default function CustomRolesManagement() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="manager">Store Login (Manager)</SelectItem>
+              <SelectItem value="manager">Store Account</SelectItem>
               <SelectItem value="hr">HR</SelectItem>
               <SelectItem value="employee">Employee</SelectItem>
             </SelectContent>

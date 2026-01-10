@@ -94,7 +94,7 @@ export default function CreateUserDialog({
 
     if (role === 'employee' || role === 'manager') {
       if (!organizationId || !branchId) {
-        toast.error(`${role === 'manager' ? 'Manager' : 'Employee'} must be assigned to an organization and branch`);
+        toast.error(`${role === 'manager' ? 'Store Account' : 'Employee'} must be assigned to an organization and branch`);
         return;
       }
     }
@@ -157,7 +157,7 @@ export default function CreateUserDialog({
     switch (r) {
       case 'super_admin': return 'Full platform control, contract signing, all approvals';
       case 'hr': return 'Employee management, onboarding, document uploads';
-      case 'manager': return 'Store management, team onboarding, limited approvals';
+      case 'manager': return 'Branch management, team onboarding, limited approvals';
       case 'employee': return 'Self-service portal access only';
       default: return '';
     }
@@ -241,7 +241,7 @@ export default function CreateUserDialog({
                         <p className="font-medium text-sm">
                           {r === 'super_admin' ? 'Super Admin' : 
                            r === 'hr' ? 'HR Admin' : 
-                           r === 'manager' ? 'Store Login' : 'Employee'}
+                           r === 'manager' ? 'Store Account' : 'Employee'}
                         </p>
                       </div>
                     </div>
@@ -379,7 +379,7 @@ export default function CreateUserDialog({
                     <div className="flex gap-2">
                       <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0 mt-0.5" />
                       <div className="text-xs text-orange-800">
-                        <p className="font-medium">Store Login Restrictions:</p>
+                        <p className="font-medium">Store Account Restrictions:</p>
                         <ul className="list-disc ml-4 mt-1 space-y-0.5">
                           <li>Can only manage employees in this branch</li>
                           <li>Can onboard new employees</li>

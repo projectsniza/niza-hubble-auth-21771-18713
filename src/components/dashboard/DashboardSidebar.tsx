@@ -28,7 +28,7 @@ const getMenuItems = (role: string) => {
     ];
   }
 
-  // Store Login role - branch-restricted view
+  // Store Account role - branch-restricted view
   if (role === 'manager') {
     return [
       { title: 'Home', icon: Home, path: '/dashboard' },
@@ -155,7 +155,7 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-foreground text-sm truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground truncate capitalize">{user.role.replace('_', ' ')}</p>
+              <p className="text-xs text-muted-foreground truncate capitalize">{user.role === 'manager' ? 'Store Account' : user.role.replace('_', ' ')}</p>
             </div>
           </div>
         </div>

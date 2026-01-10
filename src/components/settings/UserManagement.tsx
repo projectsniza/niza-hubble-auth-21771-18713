@@ -398,7 +398,7 @@ export default function UserManagement() {
     switch (role) {
       case 'super_admin': return 'Super Admin';
       case 'hr': return 'HR Admin';
-      case 'manager': return 'Manager';
+      case 'manager': return 'Store Account';
       case 'employee': return 'Employee';
       default: return role;
     }
@@ -541,7 +541,7 @@ export default function UserManagement() {
           </TabsTrigger>
           <TabsTrigger value="manager" className="gap-2">
             <Users className="h-4 w-4" />
-            Store Logins ({managers.length})
+            Store Accounts ({managers.length})
           </TabsTrigger>
           <TabsTrigger value="employee" className="gap-2">
             Employees ({employees.length})
@@ -657,14 +657,14 @@ export default function UserManagement() {
         <TabsContent value="manager" className="space-y-4 mt-4">
           <Card className="p-4 bg-orange-50 border-orange-200">
             <p className="text-sm text-orange-800">
-              <strong>Store Logins</strong> are assigned to a single branch and can onboard employees within their branch.
+              <strong>Store Accounts</strong> are assigned to a single branch and can onboard employees within their branch.
             </p>
           </Card>
           <div className="grid gap-3">
             {managers.map(user => <UserCard key={user.id} user={user} />)}
             {managers.length === 0 && (
               <Card className="p-8 text-center">
-                <p className="text-muted-foreground">No store logins found</p>
+                <p className="text-muted-foreground">No store accounts found</p>
               </Card>
             )}
           </div>
@@ -744,7 +744,7 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="manager">Store Login</SelectItem>
+                  <SelectItem value="manager">Store Account</SelectItem>
                   <SelectItem value="hr">HR Admin</SelectItem>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                 </SelectContent>
@@ -898,7 +898,7 @@ export default function UserManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="manager">Store Login</SelectItem>
+                  <SelectItem value="manager">Store Account</SelectItem>
                   <SelectItem value="hr">HR Admin</SelectItem>
                   <SelectItem value="super_admin">Super Admin</SelectItem>
                 </SelectContent>
