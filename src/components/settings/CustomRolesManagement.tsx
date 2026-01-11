@@ -15,21 +15,26 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2, Users, ShieldCheck, Settings2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+
+type BaseRole = 'manager' | 'hr' | 'employee';
+
+interface AppAccess {
+  niza_safe: boolean;
+  niza_finance: boolean;
+  niza_templates: boolean;
+}
 
 interface CustomRole {
   id: string;
   name: string;
   description: string | null;
-  base_role: 'manager' | 'hr' | 'employee';
+  base_role: BaseRole;
   organization_id: string | null;
   branch_id: string | null;
   permissions: Record<string, boolean>;
-  app_access: {
-    niza_safe: boolean;
-    niza_finance: boolean;
-    niza_templates: boolean;
-  };
+  app_access: AppAccess;
   is_active: boolean;
   created_at: string;
 }
@@ -115,6 +120,7 @@ const EMPLOYEE_FEATURES = {
 export default function CustomRolesManagement() {
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
+  const { user } = useAuth();
   
   const [roles, setRoles] = useState<CustomRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,19 +130,22 @@ export default function CustomRolesManagement() {
   const [selectedRole, setSelectedRole] = useState<CustomRole | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Default app access structure
+  const defaultAppAccess: AppAccess = {
+    niza_safe: false,
+    niza_finance: false,
+    niza_templates: false,
+  };
+  
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    base_role: 'manager' as 'manager' | 'hr' | 'employee',
+    base_role: 'manager' as BaseRole,
     organization_id: '',
     branch_id: '',
     permissions: {} as Record<string, boolean>,
-    app_access: {
-      niza_safe: false,
-      niza_finance: false,
-      niza_templates: false,
-    },
+    app_access: { ...defaultAppAccess },
   });
 
   useEffect(() => {
@@ -153,19 +162,49 @@ export default function CustomRolesManagement() {
 
       if (error) throw error;
       
-      const typedRoles = (data || []).map(role => ({
-        ...role,
-        permissions: typeof role.permissions === 'object' && role.permissions !== null 
-          ? role.permissions as Record<string, boolean> 
-          : {},
-        app_access: typeof role.app_access === 'object' && role.app_access !== null
-          ? role.app_access as { niza_safe: boolean; niza_finance: boolean; niza_templates: boolean }
-          : { niza_safe: false, niza_finance: false, niza_templates: false },
-      })) as CustomRole[];
+      // Parse database rows with proper type safety
+      const typedRoles: CustomRole[] = (data || []).map(role => {
+        // Safely parse permissions
+        let permissions: Record<string, boolean> = {};
+        if (role.permissions && typeof role.permissions === 'object' && !Array.isArray(role.permissions)) {
+          permissions = role.permissions as Record<string, boolean>;
+        }
+        
+        // Safely parse app_access
+        let app_access: AppAccess = { ...defaultAppAccess };
+        if (role.app_access && typeof role.app_access === 'object' && !Array.isArray(role.app_access)) {
+          const access = role.app_access as Record<string, unknown>;
+          app_access = {
+            niza_safe: Boolean(access.niza_safe),
+            niza_finance: Boolean(access.niza_finance),
+            niza_templates: Boolean(access.niza_templates),
+          };
+        }
+        
+        // Validate base_role
+        const validBaseRoles: BaseRole[] = ['manager', 'hr', 'employee'];
+        const base_role: BaseRole = validBaseRoles.includes(role.base_role as BaseRole) 
+          ? (role.base_role as BaseRole) 
+          : 'manager';
+        
+        return {
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          base_role,
+          organization_id: role.organization_id,
+          branch_id: role.branch_id,
+          permissions,
+          app_access,
+          is_active: role.is_active ?? true,
+          created_at: role.created_at ?? new Date().toISOString(),
+        };
+      });
       
       setRoles(typedRoles);
-    } catch (error: any) {
-      toast.error('Failed to load custom roles: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to load custom roles: ' + message);
     } finally {
       setLoading(false);
     }
@@ -179,11 +218,7 @@ export default function CustomRolesManagement() {
       organization_id: '',
       branch_id: '',
       permissions: {},
-      app_access: {
-        niza_safe: false,
-        niza_finance: false,
-        niza_templates: false,
-      },
+      app_access: { ...defaultAppAccess },
     });
   };
 
@@ -201,7 +236,7 @@ export default function CustomRolesManagement() {
       organization_id: role.organization_id || '',
       branch_id: role.branch_id || '',
       permissions: role.permissions || {},
-      app_access: role.app_access || { niza_safe: false, niza_finance: false, niza_templates: false },
+      app_access: role.app_access || { ...defaultAppAccess },
     });
     setShowEditDialog(true);
   };
@@ -227,6 +262,7 @@ export default function CustomRolesManagement() {
         branch_id: formData.branch_id || null,
         permissions: formData.permissions,
         app_access: formData.app_access,
+        created_by: user?.id || null,
       });
 
       if (error) throw error;
@@ -235,8 +271,9 @@ export default function CustomRolesManagement() {
       setShowCreateDialog(false);
       resetForm();
       fetchRoles();
-    } catch (error: any) {
-      toast.error('Failed to create role: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to create role: ' + message);
     } finally {
       setIsSubmitting(false);
     }
@@ -270,8 +307,9 @@ export default function CustomRolesManagement() {
       setSelectedRole(null);
       resetForm();
       fetchRoles();
-    } catch (error: any) {
-      toast.error('Failed to update role: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to update role: ' + message);
     } finally {
       setIsSubmitting(false);
     }
@@ -280,6 +318,7 @@ export default function CustomRolesManagement() {
   const handleDelete = async () => {
     if (!selectedRole) return;
 
+    setIsSubmitting(true);
     try {
       const { error } = await supabase
         .from('custom_roles')
@@ -292,8 +331,11 @@ export default function CustomRolesManagement() {
       setShowDeleteDialog(false);
       setSelectedRole(null);
       fetchRoles();
-    } catch (error: any) {
-      toast.error('Failed to delete role: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to delete role: ' + message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -308,8 +350,9 @@ export default function CustomRolesManagement() {
 
       toast.success(role.is_active ? 'Role deactivated' : 'Role activated');
       fetchRoles();
-    } catch (error: any) {
-      toast.error('Failed to update role status: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to update role status: ' + message);
     }
   };
 
@@ -398,7 +441,7 @@ export default function CustomRolesManagement() {
             value={formData.base_role} 
             onValueChange={(v) => setFormData(prev => ({ 
               ...prev, 
-              base_role: v as 'manager' | 'hr' | 'employee',
+              base_role: v as BaseRole,
               permissions: {} // Reset permissions when base role changes
             }))}
           >
