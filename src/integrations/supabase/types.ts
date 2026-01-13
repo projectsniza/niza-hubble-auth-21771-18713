@@ -1004,6 +1004,56 @@ export type Database = {
           },
         ]
       }
+      employee_contracts: {
+        Row: {
+          contract_type: string
+          created_at: string | null
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          employee_id: string
+          holiday_entitlement_days: number
+          holiday_year_start: string
+          id: string
+          updated_at: string | null
+          weekly_contracted_hours: number
+        }
+        Insert: {
+          contract_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          employee_id: string
+          holiday_entitlement_days?: number
+          holiday_year_start?: string
+          id?: string
+          updated_at?: string | null
+          weekly_contracted_hours?: number
+        }
+        Update: {
+          contract_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          employee_id?: string
+          holiday_entitlement_days?: number
+          holiday_year_start?: string
+          id?: string
+          updated_at?: string | null
+          weekly_contracted_hours?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_contracts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_onboarding: {
         Row: {
           basic_details_completed: boolean | null
@@ -1662,6 +1712,74 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      holiday_balances: {
+        Row: {
+          carry_forward_hours: number | null
+          created_at: string | null
+          employee_id: string
+          holiday_entitlement_days: number
+          holiday_hours_earned: number | null
+          holiday_hours_remaining: number | null
+          holiday_hours_taken: number | null
+          holiday_year_end: string
+          holiday_year_start: string
+          hours_per_day: number | null
+          id: string
+          last_calculated_at: string | null
+          total_holiday_hours_per_year: number | null
+          total_worked_hours: number | null
+          updated_at: string | null
+          weekly_contracted_hours: number
+          weeks_worked: number | null
+        }
+        Insert: {
+          carry_forward_hours?: number | null
+          created_at?: string | null
+          employee_id: string
+          holiday_entitlement_days: number
+          holiday_hours_earned?: number | null
+          holiday_hours_remaining?: number | null
+          holiday_hours_taken?: number | null
+          holiday_year_end: string
+          holiday_year_start: string
+          hours_per_day?: number | null
+          id?: string
+          last_calculated_at?: string | null
+          total_holiday_hours_per_year?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+          weekly_contracted_hours: number
+          weeks_worked?: number | null
+        }
+        Update: {
+          carry_forward_hours?: number | null
+          created_at?: string | null
+          employee_id?: string
+          holiday_entitlement_days?: number
+          holiday_hours_earned?: number | null
+          holiday_hours_remaining?: number | null
+          holiday_hours_taken?: number | null
+          holiday_year_end?: string
+          holiday_year_start?: string
+          hours_per_day?: number | null
+          id?: string
+          last_calculated_at?: string | null
+          total_holiday_hours_per_year?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+          weekly_contracted_hours?: number
+          weeks_worked?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holiday_balances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -3550,6 +3668,216 @@ export type Database = {
           },
         ]
       }
+      timesheet_entries: {
+        Row: {
+          actual_hours: number | null
+          adjustment_hours: number | null
+          break_duration_minutes: number | null
+          created_at: string | null
+          day_of_week: string
+          entry_date: string
+          entry_type: string | null
+          holiday_hours: number | null
+          id: string
+          notes: string | null
+          rota_shift_id: string | null
+          shift_end_time: string | null
+          shift_start_time: string | null
+          sick_hours: number | null
+          timesheet_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          actual_hours?: number | null
+          adjustment_hours?: number | null
+          break_duration_minutes?: number | null
+          created_at?: string | null
+          day_of_week: string
+          entry_date: string
+          entry_type?: string | null
+          holiday_hours?: number | null
+          id?: string
+          notes?: string | null
+          rota_shift_id?: string | null
+          shift_end_time?: string | null
+          shift_start_time?: string | null
+          sick_hours?: number | null
+          timesheet_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          actual_hours?: number | null
+          adjustment_hours?: number | null
+          break_duration_minutes?: number | null
+          created_at?: string | null
+          day_of_week?: string
+          entry_date?: string
+          entry_type?: string | null
+          holiday_hours?: number | null
+          id?: string
+          notes?: string | null
+          rota_shift_id?: string | null
+          shift_end_time?: string | null
+          shift_start_time?: string | null
+          sick_hours?: number | null
+          timesheet_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_entries_rota_shift_id_fkey"
+            columns: ["rota_shift_id"]
+            isOneToOne: false
+            referencedRelation: "rota_shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_entries_timesheet_id_fkey"
+            columns: ["timesheet_id"]
+            isOneToOne: false
+            referencedRelation: "timesheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheet_monthly_summary: {
+        Row: {
+          approved_timesheets_count: number | null
+          created_at: string | null
+          employee_id: string
+          id: string
+          month_year: string
+          total_adjustment_hours: number | null
+          total_holiday_hours: number | null
+          total_sick_hours: number | null
+          total_worked_hours: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_timesheets_count?: number | null
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          month_year: string
+          total_adjustment_hours?: number | null
+          total_holiday_hours?: number | null
+          total_sick_hours?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_timesheets_count?: number | null
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          month_year?: string
+          total_adjustment_hours?: number | null
+          total_holiday_hours?: number | null
+          total_sick_hours?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_monthly_summary_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheets: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          branch_id: string
+          created_at: string | null
+          created_by: string | null
+          employee_id: string
+          id: string
+          notes: string | null
+          organization_id: string
+          rejection_reason: string | null
+          status: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          total_adjustment_hours: number | null
+          total_holiday_hours: number | null
+          total_sick_hours: number | null
+          total_worked_hours: number | null
+          updated_at: string | null
+          week_end_date: string
+          week_start_date: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id: string
+          created_at?: string | null
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          rejection_reason?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_adjustment_hours?: number | null
+          total_holiday_hours?: number | null
+          total_sick_hours?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+          week_end_date: string
+          week_start_date: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          rejection_reason?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          total_adjustment_hours?: number | null
+          total_holiday_hours?: number | null
+          total_sick_hours?: number | null
+          total_worked_hours?: number | null
+          updated_at?: string | null
+          week_end_date?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheets_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_assignments: {
         Row: {
           assigned_by: string | null
@@ -3993,6 +4321,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_holiday_balance: {
+        Args: { p_employee_id: string; p_holiday_year_start?: string }
+        Returns: undefined
+      }
       delete_branch_cascade: {
         Args: { p_branch_id: string }
         Returns: undefined
