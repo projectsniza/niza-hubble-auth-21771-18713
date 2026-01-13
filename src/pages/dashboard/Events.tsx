@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
 interface Event {
   id: string;
@@ -39,6 +40,14 @@ export default function Events() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
+  
+  // Filter state for super admin / full HR
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -62,21 +71,25 @@ export default function Events() {
 
   useEffect(() => {
     fetchEvents();
-    fetchOrganizations();
+    fetchOrganizationsAndBranches();
   }, []);
 
   useEffect(() => {
     if (newEvent.organizationId) {
-      fetchBranches(newEvent.organizationId);
+      fetchBranchesForDialog(newEvent.organizationId);
     }
   }, [newEvent.organizationId]);
 
-  const fetchOrganizations = async () => {
-    const { data } = await supabase.from('organizations').select('*').order('name');
-    if (data) setOrganizations(data);
+  const fetchOrganizationsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
   };
 
-  const fetchBranches = async (orgId: string) => {
+  const fetchBranchesForDialog = async (orgId: string) => {
     const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
     if (data) setBranches(data);
   };
@@ -179,6 +192,20 @@ export default function Events() {
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = activeFilter === 'all' || event.event_type === activeFilter;
+    
+    // Apply org/branch filters for super admin / full HR
+    if (canViewFilters && viewMode !== 'all') {
+      if (viewMode === 'organization' && selectedOrg) {
+        return matchesSearch && matchesFilter && event.organization_id === selectedOrg;
+      }
+      if (viewMode === 'branch' && selectedBranch) {
+        return matchesSearch && matchesFilter && event.branch_id === selectedBranch;
+      }
+      if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
+        return matchesSearch && matchesFilter && event.organization_id === selectedOrg;
+      }
+    }
+    
     return matchesSearch && matchesFilter;
   });
 
@@ -333,6 +360,19 @@ export default function Events() {
           </Dialog>
         </div>
       </div>
+
+      {canViewFilters && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg}
+          onBranchChange={setSelectedBranch}
+        />
+      )}
 
       <Card className="mb-6 p-4 border-primary/20 bg-gradient-to-r from-card to-card/50">
         <div className="relative">

@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
 interface DailyReport {
   id: string;
@@ -41,8 +42,20 @@ export default function DailyReports() {
   const [submitting, setSubmitting] = useState(false);
   const [viewingReport, setViewingReport] = useState<DailyReport | null>(null);
   
+  // Filter state for super admin / full HR
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  
   useEffect(() => {
     fetchReports();
+    if (canViewFilters) {
+      fetchOrganizationsAndBranches();
+    }
 
     // Real-time subscription
     const channel = supabase
@@ -58,6 +71,15 @@ export default function DailyReports() {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  const fetchOrganizationsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
+  };
 
   const fetchReports = async () => {
     if (!user) return;
@@ -220,9 +242,27 @@ export default function DailyReports() {
     }
   };
 
-  const filteredReports = reports.filter(report =>
-    report.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredReports = reports.filter(report => {
+    const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Apply org/branch filters for super admin / full HR
+    if (canViewFilters && viewMode !== 'all') {
+      if (viewMode === 'organization' && selectedOrg) {
+        return matchesSearch && report.organization_id === selectedOrg;
+      }
+      if (viewMode === 'branch' && selectedBranch) {
+        return matchesSearch && report.branch_id === selectedBranch;
+      }
+      if (viewMode === 'organization' && !selectedOrg) {
+        return matchesSearch;
+      }
+      if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
+        return matchesSearch && report.organization_id === selectedOrg;
+      }
+    }
+    
+    return matchesSearch;
+  });
 
   const canCreateReport = user?.role === 'manager' || user?.role === 'hr';
 
@@ -320,6 +360,19 @@ export default function DailyReports() {
           </Dialog>
         )}
       </div>
+
+      {canViewFilters && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg}
+          onBranchChange={setSelectedBranch}
+        />
+      )}
 
       <div className="flex gap-4">
         <div className="relative flex-1">
