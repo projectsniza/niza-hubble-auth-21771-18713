@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { MessageSquare, Users, Paperclip, Eye, Bell, Clock, Save, RefreshCw } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { 
+  MessageSquare, Users, Paperclip, Clock, Save, RefreshCw, 
+  Shield, Building2, UserCog, User, Info, Eye, Bell, Check
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -37,7 +41,6 @@ export default function MessageSettingsPanel() {
 
       if (error) throw error;
       
-      // Parse the setting_value from JSONB to string
       const parsedSettings = (data || []).map(s => ({
         ...s,
         setting_value: typeof s.setting_value === 'string' ? s.setting_value : JSON.stringify(s.setting_value).replace(/"/g, '')
@@ -81,8 +84,9 @@ export default function MessageSettingsPanel() {
       toast.success('Message settings saved successfully');
       setChanges({});
       fetchSettings();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save settings');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save settings';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -100,10 +104,11 @@ export default function MessageSettingsPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Message Settings</h3>
-          <p className="text-sm text-muted-foreground">Configure messaging features and access control</p>
+          <p className="text-sm text-muted-foreground">Configure organization-wide messaging features and access control</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchSettings} disabled={loading}>
@@ -119,21 +124,83 @@ export default function MessageSettingsPanel() {
         </div>
       </div>
 
-      {/* Access Control */}
+      {/* Info Alert */}
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          Messaging is available across all organizations and branches. Super Admins, HR, and Store Accounts can always message each other. 
+          Employee access can be controlled separately below.
+        </AlertDescription>
+      </Alert>
+
+      {/* Role Access Overview */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Access Control
+            Role Access Overview
           </CardTitle>
-          <CardDescription>Control who can use the messaging feature</CardDescription>
+          <CardDescription>Who can use the messaging feature</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="flex flex-col items-center p-4 rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
+              <Shield className="h-8 w-8 text-green-600 mb-2" />
+              <span className="font-medium text-sm">Super Admin</span>
+              <Badge variant="default" className="mt-2 bg-green-600">
+                <Check className="h-3 w-3 mr-1" />
+                Always Enabled
+              </Badge>
+            </div>
+            <div className="flex flex-col items-center p-4 rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
+              <UserCog className="h-8 w-8 text-green-600 mb-2" />
+              <span className="font-medium text-sm">HR</span>
+              <Badge variant="default" className="mt-2 bg-green-600">
+                <Check className="h-3 w-3 mr-1" />
+                Always Enabled
+              </Badge>
+            </div>
+            <div className="flex flex-col items-center p-4 rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
+              <Building2 className="h-8 w-8 text-green-600 mb-2" />
+              <span className="font-medium text-sm">Store Account</span>
+              <Badge variant="default" className="mt-2 bg-green-600">
+                <Check className="h-3 w-3 mr-1" />
+                Always Enabled
+              </Badge>
+            </div>
+            <div className={`flex flex-col items-center p-4 rounded-lg border ${
+              getBoolValue('employee_messaging_enabled') 
+                ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900'
+                : 'bg-muted border-border'
+            }`}>
+              <User className="h-8 w-8 text-muted-foreground mb-2" />
+              <span className="font-medium text-sm">Employee</span>
+              <Badge variant={getBoolValue('employee_messaging_enabled') ? 'default' : 'secondary'} className={`mt-2 ${getBoolValue('employee_messaging_enabled') ? 'bg-green-600' : ''}`}>
+                {getBoolValue('employee_messaging_enabled') ? (
+                  <><Check className="h-3 w-3 mr-1" />Enabled</>
+                ) : 'Disabled'}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Employee Access Control */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            Employee Access Control
+          </CardTitle>
+          <CardDescription>Control whether employees can use the messaging feature</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Employee Messaging</Label>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Employee Messaging</Label>
               <p className="text-sm text-muted-foreground">
-                Allow employees to send and receive messages. When disabled, employees cannot see or use messaging.
+                When enabled, employees can send and receive messages with other users. 
+                When disabled, messaging is hidden from the employee dashboard.
               </p>
             </div>
             <Switch
@@ -144,9 +211,9 @@ export default function MessageSettingsPanel() {
           
           <Separator />
           
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Group Chats</Label>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Group Chats</Label>
               <p className="text-sm text-muted-foreground">
                 Allow users to create group conversations with multiple participants
               </p>
@@ -169,9 +236,9 @@ export default function MessageSettingsPanel() {
           <CardDescription>Configure file sharing in messages</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Allow File Attachments</Label>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Allow File Attachments</Label>
               <p className="text-sm text-muted-foreground">
                 Allow users to share files and images in messages
               </p>
@@ -184,11 +251,11 @@ export default function MessageSettingsPanel() {
           
           <Separator />
           
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Maximum Attachment Size</Label>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Maximum Attachment Size</Label>
               <p className="text-sm text-muted-foreground">
-                Maximum file size in megabytes (MB)
+                Maximum file size allowed for attachments
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -213,15 +280,18 @@ export default function MessageSettingsPanel() {
             <MessageSquare className="h-5 w-5 text-primary" />
             Message Features
           </CardTitle>
-          <CardDescription>Configure messaging experience</CardDescription>
+          <CardDescription>Configure messaging experience and notifications</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Read Receipts</Label>
-              <p className="text-sm text-muted-foreground">
-                Show when messages have been read by recipients
-              </p>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <Eye className="h-5 w-5 text-muted-foreground" />
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Read Receipts</Label>
+                <p className="text-sm text-muted-foreground">
+                  Show when messages have been read by recipients
+                </p>
+              </div>
             </div>
             <Switch
               checked={getBoolValue('read_receipts_enabled')}
@@ -231,12 +301,15 @@ export default function MessageSettingsPanel() {
           
           <Separator />
           
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Typing Indicators</Label>
-              <p className="text-sm text-muted-foreground">
-                Show when someone is typing a message
-              </p>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Typing Indicators</Label>
+                <p className="text-sm text-muted-foreground">
+                  Show when someone is typing a message
+                </p>
+              </div>
             </div>
             <Switch
               checked={getBoolValue('typing_indicators_enabled')}
@@ -246,12 +319,15 @@ export default function MessageSettingsPanel() {
           
           <Separator />
           
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Notification Sounds</Label>
-              <p className="text-sm text-muted-foreground">
-                Play sound when new messages arrive
-              </p>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <Bell className="h-5 w-5 text-muted-foreground" />
+              <div className="space-y-1">
+                <Label className="text-base font-medium">Notification Sounds</Label>
+                <p className="text-sm text-muted-foreground">
+                  Play sound when new messages arrive
+                </p>
+              </div>
             </div>
             <Switch
               checked={getBoolValue('notification_sound_enabled')}
@@ -271,9 +347,9 @@ export default function MessageSettingsPanel() {
           <CardDescription>Configure message storage policies</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base">Message Retention Period</Label>
+          <div className="flex items-center justify-between p-4 rounded-lg border">
+            <div className="space-y-1">
+              <Label className="text-base font-medium">Message Retention Period</Label>
               <p className="text-sm text-muted-foreground">
                 Number of days to keep messages (0 = keep forever)
               </p>
@@ -293,23 +369,35 @@ export default function MessageSettingsPanel() {
         </CardContent>
       </Card>
 
-      {/* Current Status */}
+      {/* Current Status Summary */}
       <Card className="bg-muted/50">
         <CardContent className="pt-6">
-          <h4 className="font-medium mb-3">Current Status</h4>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={getBoolValue('employee_messaging_enabled') ? 'default' : 'secondary'}>
-              Employees: {getBoolValue('employee_messaging_enabled') ? 'Enabled' : 'Disabled'}
-            </Badge>
-            <Badge variant={getBoolValue('allow_group_chats') ? 'default' : 'secondary'}>
-              Groups: {getBoolValue('allow_group_chats') ? 'Enabled' : 'Disabled'}
-            </Badge>
-            <Badge variant={getBoolValue('allow_file_attachments') ? 'default' : 'secondary'}>
-              Attachments: {getBoolValue('allow_file_attachments') ? 'Enabled' : 'Disabled'}
-            </Badge>
-            <Badge variant="outline">
-              Retention: {getValue('message_retention_days') === '0' ? 'Forever' : `${getValue('message_retention_days')} days`}
-            </Badge>
+          <h4 className="font-medium mb-4">Current Configuration Summary</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 rounded-lg bg-background border">
+              <p className="text-xs text-muted-foreground mb-1">Employee Access</p>
+              <Badge variant={getBoolValue('employee_messaging_enabled') ? 'default' : 'secondary'}>
+                {getBoolValue('employee_messaging_enabled') ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="p-3 rounded-lg bg-background border">
+              <p className="text-xs text-muted-foreground mb-1">Group Chats</p>
+              <Badge variant={getBoolValue('allow_group_chats') ? 'default' : 'secondary'}>
+                {getBoolValue('allow_group_chats') ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="p-3 rounded-lg bg-background border">
+              <p className="text-xs text-muted-foreground mb-1">Attachments</p>
+              <Badge variant={getBoolValue('allow_file_attachments') ? 'default' : 'secondary'}>
+                {getBoolValue('allow_file_attachments') ? `Up to ${getValue('max_attachment_size_mb')}MB` : 'Disabled'}
+              </Badge>
+            </div>
+            <div className="p-3 rounded-lg bg-background border">
+              <p className="text-xs text-muted-foreground mb-1">Retention</p>
+              <Badge variant="outline">
+                {getValue('message_retention_days') === '0' ? 'Forever' : `${getValue('message_retention_days')} days`}
+              </Badge>
+            </div>
           </div>
         </CardContent>
       </Card>
