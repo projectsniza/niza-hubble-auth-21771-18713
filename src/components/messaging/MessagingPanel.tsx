@@ -5,38 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  MessageSquare, Send, Search, Plus, Users, CheckCheck, 
-  Paperclip, X, ArrowLeft, Building2, Shield, UserCog, Image, File, Download, Loader2
+  MessageSquare, Send, Users, CheckCheck, 
+  Paperclip, X, Image, File, Download, Loader2, Shield, Building2, UserCog
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { format, isToday, isYesterday } from 'date-fns';
-
-interface Conversation {
-  id: string;
-  name: string | null;
-  is_group: boolean;
-  created_by: string;
-  updated_at: string;
-  participants?: Participant[];
-  lastMessage?: any;
-  unreadCount?: number;
-}
-
-interface Participant {
-  id: string;
-  user_id: string;
-  last_read_at: string | null;
-  profile?: {
-    name: string;
-    email: string;
-  };
-}
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 
 interface Attachment {
   name: string;
@@ -58,34 +34,30 @@ interface Message {
   sender?: {
     name: string;
     email: string;
+    role?: string;
   };
 }
 
-interface UserProfile {
+interface OnlineUser {
   id: string;
   name: string;
-  email: string;
-  role?: string;
+  role: string;
 }
+
+const ORG_CHAT_NAME = 'Organization Group Chat';
 
 export default function MessagingPanel() {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [availableUsers, setAvailableUsers] = useState<UserProfile[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [groupName, setGroupName] = useState('');
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -100,32 +72,32 @@ export default function MessagingPanel() {
     }
   }, [user]);
 
-  // Then fetch conversations only after settings are loaded and user can use messaging
+  // Then set up the organization chat
   useEffect(() => {
     if (settingsLoaded && canUseMessaging && user) {
-      fetchConversations();
-      fetchAvailableUsers();
+      initializeOrgChat();
+      fetchOnlineUsers();
     }
   }, [settingsLoaded, canUseMessaging, user]);
 
   useEffect(() => {
-    if (!selectedConversation) return;
+    if (!conversationId) return;
     
-    fetchMessages(selectedConversation.id);
+    fetchMessages();
     
     // Subscribe to new messages
     const channel = supabase
-      .channel(`messages-${selectedConversation.id}`)
+      .channel(`org-messages-${conversationId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${selectedConversation.id}`
+          filter: `conversation_id=eq.${conversationId}`
         },
         () => {
-          fetchMessages(selectedConversation.id);
+          fetchMessages();
         }
       )
       .subscribe();
@@ -133,7 +105,7 @@ export default function MessagingPanel() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation]);
+  }, [conversationId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -166,68 +138,100 @@ export default function MessagingPanel() {
     }
   };
 
-  const fetchConversations = async () => {
+  const initializeOrgChat = async () => {
     setLoading(true);
     try {
-      const { data: participations } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', user?.id);
-
-      if (!participations?.length) {
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
-
-      const conversationIds = participations.map(p => p.conversation_id);
-
-      const { data: convos } = await supabase
+      // Check for existing org-wide conversation
+      const { data: existingConvo } = await supabase
         .from('conversations')
-        .select('*')
-        .in('id', conversationIds)
-        .order('updated_at', { ascending: false });
+        .select('id')
+        .eq('name', ORG_CHAT_NAME)
+        .eq('is_group', true)
+        .maybeSingle();
 
-      const enrichedConvos = await Promise.all((convos || []).map(async (convo) => {
-        const { data: participants } = await supabase
+      if (existingConvo) {
+        // Check if user is participant
+        const { data: participation } = await supabase
           .from('conversation_participants')
-          .select('id, user_id, last_read_at')
-          .eq('conversation_id', convo.id);
+          .select('id')
+          .eq('conversation_id', existingConvo.id)
+          .eq('user_id', user?.id)
+          .maybeSingle();
 
-        const userIds = participants?.map(p => p.user_id) || [];
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .in('id', userIds);
+        if (!participation) {
+          // Add user as participant
+          await supabase.from('conversation_participants').insert({
+            conversation_id: existingConvo.id,
+            user_id: user?.id
+          });
+        }
 
-        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        setConversationId(existingConvo.id);
+      } else {
+        // Create new org-wide conversation
+        const { data: newConvo, error: createError } = await supabase
+          .from('conversations')
+          .insert({
+            name: ORG_CHAT_NAME,
+            is_group: true,
+            created_by: user?.id
+          })
+          .select()
+          .single();
 
-        const { data: lastMessages } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', convo.id)
-          .order('created_at', { ascending: false })
-          .limit(1);
+        if (createError) throw createError;
 
-        return {
-          ...convo,
-          participants: participants?.map(p => ({
-            ...p,
-            profile: profileMap.get(p.user_id)
-          })),
-          lastMessage: lastMessages?.[0]
-        };
-      }));
+        // Add current user as participant
+        await supabase.from('conversation_participants').insert({
+          conversation_id: newConvo.id,
+          user_id: user?.id
+        });
 
-      setConversations(enrichedConvos);
+        setConversationId(newConvo.id);
+      }
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      console.error('Error initializing org chat:', error);
+      toast.error('Failed to initialize chat');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMessages = async (conversationId: string) => {
+  const fetchOnlineUsers = async () => {
+    try {
+      // Fetch all users who can message (super_admin, hr, manager, and employees if enabled)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .order('name');
+
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      const roleMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
+      
+      const allowedUsers = (profiles || []).filter(p => {
+        const role = roleMap.get(p.id);
+        if (role === 'employee') {
+          return settings['employee_messaging_enabled'] === 'true';
+        }
+        return ['super_admin', 'hr', 'manager'].includes(role || '');
+      }).map(p => ({
+        id: p.id,
+        name: p.name,
+        role: roleMap.get(p.id) || 'user'
+      }));
+
+      setOnlineUsers(allowedUsers);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchMessages = async () => {
+    if (!conversationId) return;
+    
     try {
       const { data: msgs } = await supabase
         .from('messages')
@@ -242,16 +246,26 @@ export default function MessagingPanel() {
         .select('id, name, email')
         .in('id', senderIds);
 
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('user_id', senderIds);
+
       const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      const roleMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
 
       const enrichedMsgs = (msgs || []).map(m => ({
         ...m,
         attachments: (m.attachments as unknown) as Attachment[] | null,
-        sender: profileMap.get(m.sender_id)
+        sender: {
+          ...profileMap.get(m.sender_id),
+          role: roleMap.get(m.sender_id)
+        }
       }));
 
       setMessages(enrichedMsgs);
 
+      // Mark messages as read
       await supabase
         .from('conversation_participants')
         .update({ last_read_at: new Date().toISOString() })
@@ -259,42 +273,6 @@ export default function MessagingPanel() {
         .eq('user_id', user?.id);
     } catch (error) {
       console.error('Error fetching messages:', error);
-    }
-  };
-
-  const fetchAvailableUsers = async () => {
-    try {
-      // Fetch profiles with their roles
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name, email')
-        .neq('id', user?.id)
-        .order('name');
-
-      // Fetch user roles
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      const roleMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
-      
-      // Filter users based on role
-      // Super admins, HR, and managers (store accounts) can always message each other
-      // Employees only appear if employee messaging is enabled
-      const filteredUsers = (profiles || []).filter(p => {
-        const role = roleMap.get(p.id);
-        if (role === 'employee') {
-          return settings['employee_messaging_enabled'] === 'true';
-        }
-        return ['super_admin', 'hr', 'manager'].includes(role || '');
-      }).map(p => ({
-        ...p,
-        role: roleMap.get(p.id)
-      }));
-
-      setAvailableUsers(filteredUsers);
-    } catch (error) {
-      console.error('Error fetching users:', error);
     }
   };
 
@@ -348,7 +326,7 @@ export default function MessagingPanel() {
   };
 
   const handleSendMessage = async () => {
-    if ((!newMessage.trim() && attachments.length === 0) || !selectedConversation) return;
+    if ((!newMessage.trim() && attachments.length === 0) || !conversationId) return;
 
     setSendingMessage(true);
     setUploading(attachments.length > 0);
@@ -365,7 +343,7 @@ export default function MessagingPanel() {
         : 'text';
 
       const { error } = await supabase.from('messages').insert([{
-        conversation_id: selectedConversation.id,
+        conversation_id: conversationId,
         sender_id: user?.id,
         content: newMessage.trim() || null,
         message_type: messageType,
@@ -376,8 +354,6 @@ export default function MessagingPanel() {
 
       setNewMessage('');
       setAttachments([]);
-      fetchMessages(selectedConversation.id);
-      fetchConversations();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       toast.error(errorMessage);
@@ -387,123 +363,75 @@ export default function MessagingPanel() {
     }
   };
 
-  const handleCreateConversation = async () => {
-    if (selectedUsers.length === 0) {
-      toast.error('Please select at least one user');
-      return;
-    }
-
-    try {
-      const isGroup = selectedUsers.length > 1;
-      
-      if (!isGroup) {
-        const existingConvo = conversations.find(c => 
-          !c.is_group && 
-          c.participants?.some(p => p.user_id === selectedUsers[0])
-        );
-        
-        if (existingConvo) {
-          setSelectedConversation(existingConvo);
-          setShowNewChat(false);
-          setSelectedUsers([]);
-          return;
-        }
-      }
-
-      const { data: convo, error: convoError } = await supabase
-        .from('conversations')
-        .insert({
-          name: isGroup ? (groupName || 'Group Chat') : null,
-          is_group: isGroup,
-          created_by: user?.id
-        })
-        .select()
-        .single();
-
-      if (convoError) throw convoError;
-
-      const participants = [...selectedUsers, user?.id].map(userId => ({
-        conversation_id: convo.id,
-        user_id: userId
-      }));
-
-      const { error: participantsError } = await supabase
-        .from('conversation_participants')
-        .insert(participants);
-
-      if (participantsError) throw participantsError;
-
-      toast.success('Conversation created');
-      setShowNewChat(false);
-      setSelectedUsers([]);
-      setGroupName('');
-      setUserSearchQuery('');
-      fetchConversations();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create conversation';
-      toast.error(errorMessage);
-    }
-  };
-
-  const getConversationName = (convo: Conversation) => {
-    if (convo.is_group && convo.name) return convo.name;
-    
-    const otherParticipant = convo.participants?.find(p => p.user_id !== user?.id);
-    return otherParticipant?.profile?.name || 'Unknown User';
-  };
-
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
   };
 
   const formatMessageTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    if (isToday(date)) return format(date, 'HH:mm');
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'dd/MM/yyyy');
+    return format(date, 'HH:mm');
   };
 
-  const getRoleBadge = (role?: string) => {
+  const formatDateDivider = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'EEEE, MMMM d, yyyy');
+  };
+
+  const getRoleBadgeSmall = (role?: string) => {
     switch (role) {
       case 'super_admin':
-        return <Badge variant="default" className="text-xs"><Shield className="h-3 w-3 mr-1" />Super Admin</Badge>;
+        return <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4"><Shield className="h-2.5 w-2.5 mr-0.5" />Admin</Badge>;
       case 'hr':
-        return <Badge variant="secondary" className="text-xs"><UserCog className="h-3 w-3 mr-1" />HR</Badge>;
+        return <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4"><UserCog className="h-2.5 w-2.5 mr-0.5" />HR</Badge>;
       case 'manager':
-        return <Badge variant="outline" className="text-xs"><Building2 className="h-3 w-3 mr-1" />Store Account</Badge>;
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4"><Building2 className="h-2.5 w-2.5 mr-0.5" />Store</Badge>;
       case 'employee':
-        return <Badge variant="outline" className="text-xs">Employee</Badge>;
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Employee</Badge>;
       default:
         return null;
     }
   };
 
-  const getAttachmentUrl = async (path: string): Promise<string | null> => {
-    const { data } = await supabase.storage
-      .from('message-attachments')
-      .createSignedUrl(path, 3600);
-    return data?.signedUrl || null;
+  const getAvatarColor = (role?: string) => {
+    switch (role) {
+      case 'super_admin':
+        return 'bg-red-500 text-white';
+      case 'hr':
+        return 'bg-blue-500 text-white';
+      case 'manager':
+        return 'bg-green-500 text-white';
+      default:
+        return 'bg-muted';
+    }
   };
 
   const handleDownloadAttachment = async (attachment: Attachment) => {
-    const url = await getAttachmentUrl(attachment.path);
-    if (url) {
+    const { data } = await supabase.storage
+      .from('message-attachments')
+      .createSignedUrl(attachment.path, 3600);
+    
+    if (data?.signedUrl) {
       const link = document.createElement('a');
-      link.href = url;
+      link.href = data.signedUrl;
       link.download = attachment.name;
       link.click();
     }
   };
 
-  const filteredConversations = conversations.filter(c => {
-    const name = getConversationName(c).toLowerCase();
-    return name.includes(searchQuery.toLowerCase());
-  });
-
-  const filteredAvailableUsers = availableUsers.filter(u => 
-    u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-  );
+  // Group messages by date
+  const groupedMessages = messages.reduce((acc, msg, idx) => {
+    const msgDate = new Date(msg.created_at);
+    const prevMsg = messages[idx - 1];
+    const showDateDivider = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.created_at));
+    
+    if (showDateDivider) {
+      acc.push({ type: 'divider', date: msg.created_at });
+    }
+    acc.push({ type: 'message', message: msg });
+    return acc;
+  }, [] as Array<{ type: 'divider'; date: string } | { type: 'message'; message: Message }>);
 
   if (!canUseMessaging) {
     return (
@@ -519,330 +447,232 @@ export default function MessagingPanel() {
     );
   }
 
+  if (loading) {
+    return (
+      <Card className="h-full flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </Card>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-12rem)] flex border rounded-lg overflow-hidden bg-card">
-      {/* Conversations List */}
-      <div className={`w-80 border-r flex flex-col ${selectedConversation ? 'hidden md:flex' : ''}`}>
-        <div className="p-4 border-b space-y-3">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Chat Header */}
+        <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold">Messages</h3>
-              <p className="text-xs text-muted-foreground">Organization-wide messaging</p>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Organization Chat</h3>
+                <p className="text-xs text-muted-foreground">
+                  {onlineUsers.length} members • All organizations
+                </p>
+              </div>
             </div>
-            <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="ghost">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>New Conversation</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  {settings['allow_group_chats'] === 'true' && selectedUsers.length > 1 && (
-                    <div>
-                      <Label>Group Name (optional)</Label>
-                      <Input
-                        value={groupName}
-                        onChange={(e) => setGroupName(e.target.value)}
-                        placeholder="Enter group name..."
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <Label>Search Users</Label>
-                    <div className="relative mt-2">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={userSearchQuery}
-                        onChange={(e) => setUserSearchQuery(e.target.value)}
-                        placeholder="Search by name or email..."
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Select Users ({selectedUsers.length} selected)</Label>
-                    <ScrollArea className="h-64 mt-2 border rounded-md p-2">
-                      {filteredAvailableUsers.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No users found</p>
-                        </div>
-                      ) : (
-                        filteredAvailableUsers.map(u => (
-                          <div 
-                            key={u.id} 
-                            className={`flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer ${
-                              selectedUsers.includes(u.id) ? 'bg-muted' : ''
-                            }`}
-                            onClick={() => {
-                              if (selectedUsers.includes(u.id)) {
-                                setSelectedUsers(selectedUsers.filter(id => id !== u.id));
-                              } else {
-                                if (settings['allow_group_chats'] !== 'true' && selectedUsers.length > 0) {
-                                  setSelectedUsers([u.id]);
-                                } else {
-                                  setSelectedUsers([...selectedUsers, u.id]);
-                                }
-                              }
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedUsers.includes(u.id)}
-                              onCheckedChange={() => {}}
-                            />
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback>{getInitials(u.name)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{u.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                            </div>
-                            {getRoleBadge(u.role)}
-                          </div>
-                        ))
-                      )}
-                    </ScrollArea>
-                  </div>
-                  <Button onClick={handleCreateConversation} className="w-full" disabled={selectedUsers.length === 0}>
-                    Start Conversation
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+            <Badge variant="outline" className="hidden md:flex">
+              <Users className="h-3 w-3 mr-1" />
+              Group Chat
+            </Badge>
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No conversations yet</p>
-              <Button variant="link" onClick={() => setShowNewChat(true)}>
-                Start a new chat
-              </Button>
-            </div>
-          ) : (
-            filteredConversations.map(convo => (
-              <div
-                key={convo.id}
-                className={`p-3 cursor-pointer hover:bg-muted/50 border-b transition-colors ${
-                  selectedConversation?.id === convo.id ? 'bg-muted' : ''
-                }`}
-                onClick={() => setSelectedConversation(convo)}
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback>
-                      {convo.is_group ? <Users className="h-4 w-4" /> : getInitials(getConversationName(convo))}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium truncate">{getConversationName(convo)}</p>
-                      {convo.lastMessage && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatMessageTime(convo.lastMessage.created_at)}
-                        </span>
-                      )}
-                    </div>
-                    {convo.lastMessage && (
-                      <p className="text-sm text-muted-foreground truncate">
-                        {convo.lastMessage.content || (convo.lastMessage.message_type === 'image' ? '📷 Image' : '📎 Attachment')}
-                      </p>
-                    )}
-                  </div>
-                </div>
+        {/* Messages */}
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {groupedMessages.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p className="text-lg font-medium mb-1">Welcome to Organization Chat</p>
+                <p className="text-sm">Start a conversation with your team</p>
               </div>
-            ))
-          )}
-        </ScrollArea>
-      </div>
-
-      {/* Chat Area */}
-      <div className={`flex-1 flex flex-col ${!selectedConversation ? 'hidden md:flex' : ''}`}>
-        {selectedConversation ? (
-          <>
-            {/* Chat Header */}
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setSelectedConversation(null)}>
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Avatar>
-                  <AvatarFallback>
-                    {selectedConversation.is_group ? <Users className="h-4 w-4" /> : getInitials(getConversationName(selectedConversation))}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{getConversationName(selectedConversation)}</p>
-                  {selectedConversation.is_group && (
-                    <p className="text-xs text-muted-foreground">
-                      {selectedConversation.participants?.length} members
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((msg, idx) => {
-                  const isOwn = msg.sender_id === user?.id;
-                  const showAvatar = !isOwn && (idx === 0 || messages[idx - 1]?.sender_id !== msg.sender_id);
-                  
+            ) : (
+              groupedMessages.map((item, idx) => {
+                if (item.type === 'divider') {
                   return (
-                    <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    <div key={`divider-${idx}`} className="flex items-center gap-4 my-6">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground font-medium px-2">
+                        {formatDateDivider(item.date)}
+                      </span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  );
+                }
+
+                const msg = item.message;
+                const isOwn = msg.sender_id === user?.id;
+                const prevItem = groupedMessages[idx - 1];
+                const showAvatar = !isOwn && (
+                  prevItem?.type === 'divider' || 
+                  (prevItem?.type === 'message' && prevItem.message.sender_id !== msg.sender_id)
+                );
+
+                return (
+                  <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      {showAvatar && !isOwn ? (
+                        <Avatar className={`h-8 w-8 ${getAvatarColor(msg.sender?.role)}`}>
+                          <AvatarFallback className="text-xs bg-transparent">
+                            {getInitials(msg.sender?.name || 'U')}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : !isOwn ? (
+                        <div className="w-8" />
+                      ) : null}
+                      <div className="flex flex-col">
                         {showAvatar && !isOwn && (
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
-                              {getInitials(msg.sender?.name || 'U')}
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
-                        {!showAvatar && !isOwn && <div className="w-8" />}
-                        <div>
-                          {showAvatar && !isOwn && (
-                            <p className="text-xs text-muted-foreground mb-1">{msg.sender?.name}</p>
-                          )}
-                          <div className={`rounded-lg px-3 py-2 ${
-                            isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                          }`}>
-                            {msg.content && (
-                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                            )}
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <div className="mt-2 space-y-2">
-                                {msg.attachments.map((att, i) => (
-                                  <div 
-                                    key={i} 
-                                    className={`flex items-center gap-2 p-2 rounded ${
-                                      isOwn ? 'bg-primary-foreground/10' : 'bg-background'
-                                    }`}
-                                  >
-                                    {att.type.startsWith('image/') ? (
-                                      <Image className="h-4 w-4" />
-                                    ) : (
-                                      <File className="h-4 w-4" />
-                                    )}
-                                    <span className="text-xs flex-1 truncate">{att.name}</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => handleDownloadAttachment(att)}
-                                    >
-                                      <Download className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium">{msg.sender?.name}</span>
+                            {getRoleBadgeSmall(msg.sender?.role)}
                           </div>
-                          <p className={`text-xs text-muted-foreground mt-1 ${isOwn ? 'text-right' : ''}`}>
-                            {format(new Date(msg.created_at), 'HH:mm')}
-                            {isOwn && settings['read_receipts_enabled'] === 'true' && (
-                              <CheckCheck className="inline h-3 w-3 ml-1" />
-                            )}
-                          </p>
+                        )}
+                        <div className={`rounded-2xl px-4 py-2 ${
+                          isOwn 
+                            ? 'bg-primary text-primary-foreground rounded-br-md' 
+                            : 'bg-muted rounded-bl-md'
+                        }`}>
+                          {msg.content && (
+                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          )}
+                          {msg.attachments && msg.attachments.length > 0 && (
+                            <div className={`mt-2 space-y-1 ${msg.content ? 'pt-2 border-t border-white/20' : ''}`}>
+                              {msg.attachments.map((att, i) => (
+                                <div 
+                                  key={i} 
+                                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${
+                                    isOwn ? 'bg-primary-foreground/10' : 'bg-background'
+                                  }`}
+                                  onClick={() => handleDownloadAttachment(att)}
+                                >
+                                  {att.type.startsWith('image/') ? (
+                                    <Image className="h-4 w-4 shrink-0" />
+                                  ) : (
+                                    <File className="h-4 w-4 shrink-0" />
+                                  )}
+                                  <span className="text-xs flex-1 truncate">{att.name}</span>
+                                  <Download className="h-3 w-3 shrink-0" />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : ''}`}>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatMessageTime(msg.created_at)}
+                          </span>
+                          {isOwn && settings['read_receipts_enabled'] === 'true' && (
+                            <CheckCheck className="h-3 w-3 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
-
-            {/* Attachments Preview */}
-            {attachments.length > 0 && (
-              <div className="px-4 py-2 border-t bg-muted/50">
-                <div className="flex flex-wrap gap-2">
-                  {attachments.map((file, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-background px-2 py-1 rounded text-sm">
-                      {file.type.startsWith('image/') ? <Image className="h-4 w-4" /> : <File className="h-4 w-4" />}
-                      <span className="truncate max-w-[100px]">{file.name}</span>
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeAttachment(i)}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })
             )}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
 
-            {/* Message Input */}
-            <div className="p-4 border-t">
-              <div className="flex items-center gap-2">
-                {settings['allow_file_attachments'] === 'true' && (
-                  <>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={handleFileSelect}
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                    />
-                    <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                      <Paperclip className="h-5 w-5" />
-                    </Button>
-                  </>
-                )}
-                <Input
-                  placeholder="Type a message..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  className="flex-1"
-                  disabled={sendingMessage}
-                />
-                <Button 
-                  onClick={handleSendMessage} 
-                  disabled={(!newMessage.trim() && attachments.length === 0) || sendingMessage}
-                >
-                  {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
-              <p className="text-muted-foreground mb-4">
-                Message anyone across your organization
-              </p>
-              <Button onClick={() => setShowNewChat(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Conversation
-              </Button>
+        {/* Attachments Preview */}
+        {attachments.length > 0 && (
+          <div className="px-4 py-2 border-t bg-muted/50">
+            <div className="flex flex-wrap gap-2 max-w-4xl mx-auto">
+              {attachments.map((file, i) => (
+                <div key={i} className="flex items-center gap-2 bg-background px-3 py-1.5 rounded-full text-sm border">
+                  {file.type.startsWith('image/') ? <Image className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                  <span className="truncate max-w-[120px]">{file.name}</span>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 hover:bg-destructive/10" onClick={() => removeAttachment(i)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
         )}
+
+        {/* Message Input */}
+        <div className="p-4 border-t bg-background">
+          <div className="flex items-center gap-2 max-w-4xl mx-auto">
+            {settings['allow_file_attachments'] === 'true' && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="shrink-0"
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={uploading}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+              </>
+            )}
+            <Input
+              placeholder="Type your message..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              className="flex-1 rounded-full px-4"
+              disabled={sendingMessage}
+            />
+            <Button 
+              onClick={handleSendMessage} 
+              disabled={(!newMessage.trim() && attachments.length === 0) || sendingMessage}
+              size="icon"
+              className="shrink-0 rounded-full"
+            >
+              {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Members Sidebar - Desktop Only */}
+      <div className="w-64 border-l hidden lg:flex flex-col bg-muted/30">
+        <div className="p-4 border-b">
+          <h4 className="font-medium text-sm">Members</h4>
+          <p className="text-xs text-muted-foreground">{onlineUsers.length} people</p>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {onlineUsers.map(u => (
+              <div 
+                key={u.id} 
+                className={`flex items-center gap-2 p-2 rounded-lg ${u.id === user?.id ? 'bg-primary/5' : 'hover:bg-muted'}`}
+              >
+                <Avatar className={`h-8 w-8 ${getAvatarColor(u.role)}`}>
+                  <AvatarFallback className="text-xs bg-transparent">
+                    {getInitials(u.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {u.name}
+                    {u.id === user?.id && <span className="text-muted-foreground"> (You)</span>}
+                  </p>
+                  {getRoleBadgeSmall(u.role)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );
