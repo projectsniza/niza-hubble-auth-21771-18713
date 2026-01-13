@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, differenceInDays, isWithinInterval, parseISO } from "date-fns";
 import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
 interface LeaveRequest {
   id: string;
@@ -63,6 +64,15 @@ export default function Attendance() {
   const [showLeaveTypeSettings, setShowLeaveTypeSettings] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   
+  // Filter state for super admin / full HR
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  
   const [newLeave, setNewLeave] = useState({
     employeeId: '',
     leaveTypeId: '',
@@ -88,7 +98,19 @@ export default function Attendance() {
 
   useEffect(() => {
     fetchData();
+    if (canViewFilters) {
+      fetchOrganizationsAndBranches();
+    }
   }, [user]);
+
+  const fetchOrganizationsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -96,12 +118,12 @@ export default function Attendance() {
       const [leaveReqRes, leaveTypesRes, mandatoryRes, employeesRes] = await Promise.all([
         supabase.from('leave_requests').select(`
           *,
-          employee:employees(first_name, last_name),
+          employee:employees(first_name, last_name, organization_id, branch_id),
           leave_type:leave_types(name)
         `).order('created_at', { ascending: false }),
         supabase.from('leave_types').select('*').order('name'),
         supabase.from('mandatory_leave').select('*').order('start_date'),
-        supabase.from('employees').select('id, first_name, last_name, branch_id').eq('status', 'active')
+        supabase.from('employees').select('id, first_name, last_name, branch_id, organization_id').eq('status', 'active')
       ]);
 
       setLeaveRequests(leaveReqRes.data || []);
@@ -243,12 +265,40 @@ export default function Attendance() {
     { name: "Pending", color: "bg-pink-500", filter: "pending" },
   ];
 
-  const pendingRequests = leaveRequests.filter(r => r.status === 'pending');
+  // Apply org/branch filters for super admin / full HR
+  const applyFilters = (requests: LeaveRequest[]) => {
+    if (!canViewFilters || viewMode === 'all') return requests;
+    
+    return requests.filter(r => {
+      const emp = r.employee as any;
+      if (viewMode === 'organization' && selectedOrg) {
+        return emp?.organization_id === selectedOrg;
+      }
+      if (viewMode === 'branch' && selectedBranch) {
+        return emp?.branch_id === selectedBranch;
+      }
+      if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
+        return emp?.organization_id === selectedOrg;
+      }
+      return true;
+    });
+  };
+
+  const pendingRequests = applyFilters(leaveRequests.filter(r => r.status === 'pending'));
   const filteredRequests = filterType === 'all' 
-    ? leaveRequests 
+    ? applyFilters(leaveRequests)
     : filterType === 'pending'
       ? pendingRequests
-      : leaveRequests.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType));
+      : applyFilters(leaveRequests.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType)));
+  
+  const filteredEmployees = canViewFilters && viewMode !== 'all' 
+    ? employees.filter(e => {
+        if (viewMode === 'organization' && selectedOrg) return e.organization_id === selectedOrg;
+        if (viewMode === 'branch' && selectedBranch) return e.branch_id === selectedBranch;
+        if (viewMode === 'branch' && selectedOrg && !selectedBranch) return e.organization_id === selectedOrg;
+        return true;
+      })
+    : employees;
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));

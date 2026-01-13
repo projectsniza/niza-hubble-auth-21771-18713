@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
 interface MaintenanceTicket {
   id: string;
@@ -44,9 +45,21 @@ export default function Maintenance() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
+  
+  // Filter state for super admin / full HR
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
 
   useEffect(() => {
     fetchTickets();
+    if (canViewFilters) {
+      fetchOrganizationsAndBranches();
+    }
 
     // Real-time subscription
     const channel = supabase
@@ -62,6 +75,15 @@ export default function Maintenance() {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  const fetchOrganizationsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
+  };
 
   const fetchTickets = async () => {
     if (!user) return;
@@ -281,9 +303,27 @@ export default function Maintenance() {
     }
   };
 
-  const filteredTickets = tickets.filter(ticket =>
-    ticket.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTickets = tickets.filter(ticket => {
+    const matchesSearch = ticket.title.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Apply org/branch filters for super admin / full HR
+    if (canViewFilters && viewMode !== 'all') {
+      if (viewMode === 'organization' && selectedOrg) {
+        return matchesSearch && ticket.organization_id === selectedOrg;
+      }
+      if (viewMode === 'branch' && selectedBranch) {
+        return matchesSearch && ticket.branch_id === selectedBranch;
+      }
+      if (viewMode === 'organization' && !selectedOrg) {
+        return matchesSearch;
+      }
+      if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
+        return matchesSearch && ticket.organization_id === selectedOrg;
+      }
+    }
+    
+    return matchesSearch;
+  });
 
   const canCreateTicket = user?.role === 'manager' || user?.role === 'hr';
   const canUpdateStatus = user?.role === 'super_admin';
@@ -391,6 +431,19 @@ export default function Maintenance() {
           </Dialog>
         )}
       </div>
+
+      {canViewFilters && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg}
+          onBranchChange={setSelectedBranch}
+        />
+      )}
 
       {/* Search */}
       <div className="relative max-w-md">

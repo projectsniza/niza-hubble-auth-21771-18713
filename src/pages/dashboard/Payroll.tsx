@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import nizaLogo from '@/assets/niza-group-logo.png';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
 const loadLogoAsBase64 = (): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -275,6 +276,16 @@ export default function Payroll() {
   const [showEditSalary, setShowEditSalary] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Filter state for super admin / full HR
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  
   const [salaryForm, setSalaryForm] = useState({
     basicSalary: '',
     hra: '',
@@ -287,7 +298,19 @@ export default function Payroll() {
 
   useEffect(() => {
     fetchData();
+    if (canViewFilters) {
+      fetchOrganizationsAndBranches();
+    }
   }, []);
+
+  const fetchOrganizationsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -411,10 +434,20 @@ export default function Payroll() {
     return (salary.basic_salary || 0) + totalAllowances - totalDeductions;
   };
 
+  // Apply org/branch filters
+  const filteredEmployeesList = canViewFilters && viewMode !== 'all'
+    ? employees.filter(e => {
+        if (viewMode === 'organization' && selectedOrg) return e.organization_id === selectedOrg;
+        if (viewMode === 'branch' && selectedBranch) return e.branch_id === selectedBranch;
+        if (viewMode === 'branch' && selectedOrg && !selectedBranch) return e.organization_id === selectedOrg;
+        return true;
+      })
+    : employees;
+
   // Separate configured and unconfigured employees
   const configuredEmployeeIds = new Set(salaryStructures.map(s => s.employee_id));
-  const unconfiguredEmployees = employees.filter(e => !configuredEmployeeIds.has(e.id));
-  const configuredEmployees = employees.filter(e => configuredEmployeeIds.has(e.id));
+  const unconfiguredEmployees = filteredEmployeesList.filter(e => !configuredEmployeeIds.has(e.id));
+  const configuredEmployees = filteredEmployeesList.filter(e => configuredEmployeeIds.has(e.id));
 
   const totalMonthlyPayroll = salaryStructures.reduce((sum, s) => sum + calculateNetSalary(s), 0);
   const payslipsGenerated = payrollRecords.filter(p => 
@@ -486,6 +519,39 @@ export default function Payroll() {
           <h2 className="text-3xl font-bold text-foreground">Payroll Management</h2>
           <p className="text-muted-foreground mt-1">Salary Setup & Process employee payroll</p>
         </div>
+        <div className="flex gap-2">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => {
+                const date = new Date();
+                date.setMonth(date.getMonth() - i);
+                const value = format(date, 'yyyy-MM');
+                return (
+                  <SelectItem key={value} value={value}>
+                    {format(date, 'MMMM yyyy')}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {canViewFilters && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg}
+          onBranchChange={setSelectedBranch}
+        />
+      )}
         <div className="flex gap-2">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-40">
