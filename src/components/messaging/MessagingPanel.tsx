@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  MessageSquare, Send, Search, Plus, Users, Check, CheckCheck, 
-  MoreVertical, Phone, Video, Paperclip, Smile, X, ArrowLeft
+  MessageSquare, Send, Search, Plus, Users, CheckCheck, 
+  Paperclip, X, ArrowLeft, Building2, Shield, UserCog, Image, File, Download, Loader2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +24,7 @@ interface Conversation {
   created_by: string;
   updated_at: string;
   participants?: Participant[];
-  lastMessage?: Message;
+  lastMessage?: any;
   unreadCount?: number;
 }
 
@@ -38,12 +38,20 @@ interface Participant {
   };
 }
 
+interface Attachment {
+  name: string;
+  path: string;
+  type: string;
+  size: number;
+}
+
 interface Message {
   id: string;
   conversation_id: string;
   sender_id: string;
   content: string;
   message_type: string;
+  attachments: Attachment[] | null;
   created_at: string;
   is_edited: boolean;
   is_deleted: boolean;
@@ -57,6 +65,7 @@ interface UserProfile {
   id: string;
   name: string;
   email: string;
+  role?: string;
 }
 
 export default function MessagingPanel() {
@@ -74,11 +83,14 @@ export default function MessagingPanel() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [groupName, setGroupName] = useState('');
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [isMobileView, setIsMobileView] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isEmployee = user?.role === 'employee';
-  // Only restrict employees - all other roles can always use messaging
+  // Only restrict employees - all other roles (super_admin, hr, manager) can always use messaging
   const canUseMessaging = !isEmployee || settings['employee_messaging_enabled'] === 'true';
 
   // Fetch settings first
@@ -112,7 +124,7 @@ export default function MessagingPanel() {
           table: 'messages',
           filter: `conversation_id=eq.${selectedConversation.id}`
         },
-        (payload) => {
+        () => {
           fetchMessages(selectedConversation.id);
         }
       )
@@ -136,8 +148,7 @@ export default function MessagingPanel() {
       const { data, error } = await supabase.from('message_settings').select('*');
       if (error) {
         console.error('Error fetching settings:', error);
-        // Default to allowing messaging if we can't fetch settings
-        setSettings({ employee_messaging_enabled: 'true' });
+        setSettings({ employee_messaging_enabled: 'false' });
       } else {
         const settingsMap: Record<string, string> = {};
         data?.forEach(s => {
@@ -149,8 +160,7 @@ export default function MessagingPanel() {
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
-      // Default to allowing messaging if we can't fetch settings
-      setSettings({ employee_messaging_enabled: 'true' });
+      setSettings({ employee_messaging_enabled: 'false' });
     } finally {
       setSettingsLoaded(true);
     }
@@ -159,7 +169,6 @@ export default function MessagingPanel() {
   const fetchConversations = async () => {
     setLoading(true);
     try {
-      // Get all conversations where user is a participant
       const { data: participations } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
@@ -179,15 +188,12 @@ export default function MessagingPanel() {
         .in('id', conversationIds)
         .order('updated_at', { ascending: false });
 
-      // Get participants and last messages for each conversation
       const enrichedConvos = await Promise.all((convos || []).map(async (convo) => {
-        // Get participants
         const { data: participants } = await supabase
           .from('conversation_participants')
           .select('id, user_id, last_read_at')
           .eq('conversation_id', convo.id);
 
-        // Get profiles for participants
         const userIds = participants?.map(p => p.user_id) || [];
         const { data: profiles } = await supabase
           .from('profiles')
@@ -196,7 +202,6 @@ export default function MessagingPanel() {
 
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-        // Get last message
         const { data: lastMessages } = await supabase
           .from('messages')
           .select('*')
@@ -231,7 +236,6 @@ export default function MessagingPanel() {
         .eq('is_deleted', false)
         .order('created_at', { ascending: true });
 
-      // Get sender profiles
       const senderIds = [...new Set(msgs?.map(m => m.sender_id) || [])];
       const { data: profiles } = await supabase
         .from('profiles')
@@ -242,12 +246,12 @@ export default function MessagingPanel() {
 
       const enrichedMsgs = (msgs || []).map(m => ({
         ...m,
+        attachments: (m.attachments as unknown) as Attachment[] | null,
         sender: profileMap.get(m.sender_id)
       }));
 
       setMessages(enrichedMsgs);
 
-      // Mark messages as read
       await supabase
         .from('conversation_participants')
         .update({ last_read_at: new Date().toISOString() })
@@ -260,39 +264,126 @@ export default function MessagingPanel() {
 
   const fetchAvailableUsers = async () => {
     try {
-      const { data } = await supabase
+      // Fetch profiles with their roles
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, name, email')
         .neq('id', user?.id)
         .order('name');
 
-      setAvailableUsers(data || []);
+      // Fetch user roles
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      const roleMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
+      
+      // Filter users based on role
+      // Super admins, HR, and managers (store accounts) can always message each other
+      // Employees only appear if employee messaging is enabled
+      const filteredUsers = (profiles || []).filter(p => {
+        const role = roleMap.get(p.id);
+        if (role === 'employee') {
+          return settings['employee_messaging_enabled'] === 'true';
+        }
+        return ['super_admin', 'hr', 'manager'].includes(role || '');
+      }).map(p => ({
+        ...p,
+        role: roleMap.get(p.id)
+      }));
+
+      setAvailableUsers(filteredUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxSize = parseInt(settings['max_attachment_size_mb'] || '10') * 1024 * 1024;
+    
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        toast.error(`${file.name} exceeds maximum size of ${settings['max_attachment_size_mb'] || '10'}MB`);
+        return false;
+      }
+      return true;
+    });
+
+    setAttachments(prev => [...prev, ...validFiles]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadAttachments = async (): Promise<Attachment[]> => {
+    const uploadedAttachments: Attachment[] = [];
+    
+    for (const file of attachments) {
+      const fileExt = file.name.split('.').pop() || 'bin';
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${user?.id}/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('message-attachments')
+        .upload(filePath, file);
+
+      if (error) {
+        console.error('Error uploading file:', error);
+        toast.error(`Failed to upload ${file.name}`);
+        continue;
+      }
+
+      uploadedAttachments.push({
+        name: file.name,
+        path: filePath,
+        type: file.type,
+        size: file.size
+      });
+    }
+
+    return uploadedAttachments;
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation) return;
+    if ((!newMessage.trim() && attachments.length === 0) || !selectedConversation) return;
 
     setSendingMessage(true);
+    setUploading(attachments.length > 0);
+    
     try {
-      const { error } = await supabase.from('messages').insert({
+      let uploadedAttachments: Attachment[] = [];
+      
+      if (attachments.length > 0) {
+        uploadedAttachments = await uploadAttachments();
+      }
+
+      const messageType = uploadedAttachments.length > 0 
+        ? (uploadedAttachments.some(a => a.type.startsWith('image/')) ? 'image' : 'file')
+        : 'text';
+
+      const { error } = await supabase.from('messages').insert([{
         conversation_id: selectedConversation.id,
         sender_id: user?.id,
-        content: newMessage.trim(),
-        message_type: 'text'
-      });
+        content: newMessage.trim() || null,
+        message_type: messageType,
+        attachments: uploadedAttachments.length > 0 ? (uploadedAttachments as unknown as any) : null
+      }]);
 
       if (error) throw error;
 
       setNewMessage('');
+      setAttachments([]);
       fetchMessages(selectedConversation.id);
       fetchConversations();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to send message');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+      toast.error(errorMessage);
     } finally {
       setSendingMessage(false);
+      setUploading(false);
     }
   };
 
@@ -305,7 +396,6 @@ export default function MessagingPanel() {
     try {
       const isGroup = selectedUsers.length > 1;
       
-      // For 1:1 chats, check if conversation already exists
       if (!isGroup) {
         const existingConvo = conversations.find(c => 
           !c.is_group && 
@@ -320,7 +410,6 @@ export default function MessagingPanel() {
         }
       }
 
-      // Create conversation
       const { data: convo, error: convoError } = await supabase
         .from('conversations')
         .insert({
@@ -333,7 +422,6 @@ export default function MessagingPanel() {
 
       if (convoError) throw convoError;
 
-      // Add participants (including self)
       const participants = [...selectedUsers, user?.id].map(userId => ({
         conversation_id: convo.id,
         user_id: userId
@@ -349,9 +437,11 @@ export default function MessagingPanel() {
       setShowNewChat(false);
       setSelectedUsers([]);
       setGroupName('');
+      setUserSearchQuery('');
       fetchConversations();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create conversation');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create conversation';
+      toast.error(errorMessage);
     }
   };
 
@@ -373,10 +463,47 @@ export default function MessagingPanel() {
     return format(date, 'dd/MM/yyyy');
   };
 
+  const getRoleBadge = (role?: string) => {
+    switch (role) {
+      case 'super_admin':
+        return <Badge variant="default" className="text-xs"><Shield className="h-3 w-3 mr-1" />Super Admin</Badge>;
+      case 'hr':
+        return <Badge variant="secondary" className="text-xs"><UserCog className="h-3 w-3 mr-1" />HR</Badge>;
+      case 'manager':
+        return <Badge variant="outline" className="text-xs"><Building2 className="h-3 w-3 mr-1" />Store Account</Badge>;
+      case 'employee':
+        return <Badge variant="outline" className="text-xs">Employee</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getAttachmentUrl = async (path: string): Promise<string | null> => {
+    const { data } = await supabase.storage
+      .from('message-attachments')
+      .createSignedUrl(path, 3600);
+    return data?.signedUrl || null;
+  };
+
+  const handleDownloadAttachment = async (attachment: Attachment) => {
+    const url = await getAttachmentUrl(attachment.path);
+    if (url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.name;
+      link.click();
+    }
+  };
+
   const filteredConversations = conversations.filter(c => {
     const name = getConversationName(c).toLowerCase();
     return name.includes(searchQuery.toLowerCase());
   });
+
+  const filteredAvailableUsers = availableUsers.filter(u => 
+    u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
 
   if (!canUseMessaging) {
     return (
@@ -395,17 +522,20 @@ export default function MessagingPanel() {
   return (
     <div className="h-[calc(100vh-12rem)] flex border rounded-lg overflow-hidden bg-card">
       {/* Conversations List */}
-      <div className={`w-80 border-r flex flex-col ${selectedConversation && isMobileView ? 'hidden' : ''}`}>
+      <div className={`w-80 border-r flex flex-col ${selectedConversation ? 'hidden md:flex' : ''}`}>
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Messages</h3>
+            <div>
+              <h3 className="font-semibold">Messages</h3>
+              <p className="text-xs text-muted-foreground">Organization-wide messaging</p>
+            </div>
             <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="ghost">
                   <Plus className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>New Conversation</DialogTitle>
                 </DialogHeader>
@@ -421,36 +551,62 @@ export default function MessagingPanel() {
                     </div>
                   )}
                   <div>
-                    <Label>Select Users</Label>
+                    <Label>Search Users</Label>
+                    <div className="relative mt-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                        placeholder="Search by name or email..."
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Select Users ({selectedUsers.length} selected)</Label>
                     <ScrollArea className="h-64 mt-2 border rounded-md p-2">
-                      {availableUsers.map(u => (
-                        <div key={u.id} className="flex items-center gap-2 p-2 hover:bg-muted rounded">
-                          <Checkbox
-                            checked={selectedUsers.includes(u.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
+                      {filteredAvailableUsers.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No users found</p>
+                        </div>
+                      ) : (
+                        filteredAvailableUsers.map(u => (
+                          <div 
+                            key={u.id} 
+                            className={`flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer ${
+                              selectedUsers.includes(u.id) ? 'bg-muted' : ''
+                            }`}
+                            onClick={() => {
+                              if (selectedUsers.includes(u.id)) {
+                                setSelectedUsers(selectedUsers.filter(id => id !== u.id));
+                              } else {
                                 if (settings['allow_group_chats'] !== 'true' && selectedUsers.length > 0) {
                                   setSelectedUsers([u.id]);
                                 } else {
                                   setSelectedUsers([...selectedUsers, u.id]);
                                 }
-                              } else {
-                                setSelectedUsers(selectedUsers.filter(id => id !== u.id));
                               }
                             }}
-                          />
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>{getInitials(u.name)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">{u.name}</p>
-                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                          >
+                            <Checkbox
+                              checked={selectedUsers.includes(u.id)}
+                              onCheckedChange={() => {}}
+                            />
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback>{getInitials(u.name)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{u.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                            </div>
+                            {getRoleBadge(u.role)}
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </ScrollArea>
                   </div>
-                  <Button onClick={handleCreateConversation} className="w-full">
+                  <Button onClick={handleCreateConversation} className="w-full" disabled={selectedUsers.length === 0}>
                     Start Conversation
                   </Button>
                 </div>
@@ -471,7 +627,7 @@ export default function MessagingPanel() {
         <ScrollArea className="flex-1">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           ) : filteredConversations.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground">
@@ -507,7 +663,7 @@ export default function MessagingPanel() {
                     </div>
                     {convo.lastMessage && (
                       <p className="text-sm text-muted-foreground truncate">
-                        {convo.lastMessage.content}
+                        {convo.lastMessage.content || (convo.lastMessage.message_type === 'image' ? '📷 Image' : '📎 Attachment')}
                       </p>
                     )}
                   </div>
@@ -519,7 +675,7 @@ export default function MessagingPanel() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${!selectedConversation ? 'hidden md:flex' : ''}`}>
         {selectedConversation ? (
           <>
             {/* Chat Header */}
@@ -569,7 +725,36 @@ export default function MessagingPanel() {
                           <div className={`rounded-lg px-3 py-2 ${
                             isOwn ? 'bg-primary text-primary-foreground' : 'bg-muted'
                           }`}>
-                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            {msg.content && (
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            )}
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className="mt-2 space-y-2">
+                                {msg.attachments.map((att, i) => (
+                                  <div 
+                                    key={i} 
+                                    className={`flex items-center gap-2 p-2 rounded ${
+                                      isOwn ? 'bg-primary-foreground/10' : 'bg-background'
+                                    }`}
+                                  >
+                                    {att.type.startsWith('image/') ? (
+                                      <Image className="h-4 w-4" />
+                                    ) : (
+                                      <File className="h-4 w-4" />
+                                    )}
+                                    <span className="text-xs flex-1 truncate">{att.name}</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleDownloadAttachment(att)}
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <p className={`text-xs text-muted-foreground mt-1 ${isOwn ? 'text-right' : ''}`}>
                             {format(new Date(msg.created_at), 'HH:mm')}
@@ -586,13 +771,40 @@ export default function MessagingPanel() {
               </div>
             </ScrollArea>
 
+            {/* Attachments Preview */}
+            {attachments.length > 0 && (
+              <div className="px-4 py-2 border-t bg-muted/50">
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((file, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-background px-2 py-1 rounded text-sm">
+                      {file.type.startsWith('image/') ? <Image className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                      <span className="truncate max-w-[100px]">{file.name}</span>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeAttachment(i)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Message Input */}
             <div className="p-4 border-t">
               <div className="flex items-center gap-2">
                 {settings['allow_file_attachments'] === 'true' && (
-                  <Button variant="ghost" size="icon">
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileSelect}
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    />
+                    <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      <Paperclip className="h-5 w-5" />
+                    </Button>
+                  </>
                 )}
                 <Input
                   placeholder="Type a message..."
@@ -605,9 +817,13 @@ export default function MessagingPanel() {
                     }
                   }}
                   className="flex-1"
+                  disabled={sendingMessage}
                 />
-                <Button onClick={handleSendMessage} disabled={!newMessage.trim() || sendingMessage}>
-                  <Send className="h-4 w-4" />
+                <Button 
+                  onClick={handleSendMessage} 
+                  disabled={(!newMessage.trim() && attachments.length === 0) || sendingMessage}
+                >
+                  {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -618,7 +834,7 @@ export default function MessagingPanel() {
               <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
               <p className="text-muted-foreground mb-4">
-                Choose a conversation or start a new one
+                Message anyone across your organization
               </p>
               <Button onClick={() => setShowNewChat(true)}>
                 <Plus className="h-4 w-4 mr-2" />
