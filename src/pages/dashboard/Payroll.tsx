@@ -552,34 +552,6 @@ export default function Payroll() {
           onBranchChange={setSelectedBranch}
         />
       )}
-        <div className="flex gap-2">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 12 }, (_, i) => {
-                const date = new Date();
-                date.setMonth(date.getMonth() - i);
-                const value = format(date, 'yyyy-MM');
-                return (
-                  <SelectItem key={value} value={value}>
-                    {format(date, 'MMMM yyyy')}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          <Button className="gap-2" onClick={handleGeneratePayroll} disabled={isSaving}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
-            Generate Payroll
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-        </div>
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
