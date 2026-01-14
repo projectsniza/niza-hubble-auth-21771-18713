@@ -7,79 +7,59 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
-  Calendar, Clock, Umbrella, RefreshCw, Edit, Search,
-  TrendingUp, TrendingDown, Loader2, Download, Settings, FileSpreadsheet
+  Calendar, Clock, Umbrella, RefreshCw, Search,
+  TrendingUp, Loader2, Download
 } from 'lucide-react';
-import { format, parseISO, addMonths } from 'date-fns';
+import { format, parseISO, addMonths, startOfMonth, endOfMonth, eachWeekOfInterval, startOfWeek, endOfWeek } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
-interface MonthlyData {
-  month_year: string;
-  total_worked_hours: number;
-  total_holiday_hours: number;
+interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  organization_id: string;
+  branch_id: string;
+  branch?: { name: string };
 }
 
-interface HolidayBalanceData {
-  id: string;
+interface TimesheetData {
   employee_id: string;
-  holiday_year_start: string;
-  holiday_year_end: string;
+  total_worked_hours: number | null;
+  total_holiday_hours: number | null;
+  week_start_date: string;
+}
+
+interface EmployeeBalance {
+  employee: Employee;
   weekly_contracted_hours: number;
   holiday_entitlement_days: number;
-  hours_per_day: number;
-  total_holiday_hours_per_year: number;
   total_worked_hours: number;
   weeks_worked: number;
+  hours_per_day: number;
+  total_holiday_hours_per_year: number;
   holiday_hours_earned: number;
   holiday_hours_taken: number;
   holiday_hours_remaining: number;
-  carry_forward_hours: number;
-  last_calculated_at: string | null;
-  monthly_data?: MonthlyData[];
-  employee?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    organization_id: string;
-    branch_id: string;
-    branch?: { name: string };
-  };
-}
-
-interface EmployeeContract {
-  id: string;
-  employee_id: string;
-  contract_type: string;
-  weekly_contracted_hours: number;
-  holiday_entitlement_days: number;
-  holiday_year_start: string;
-  effective_from: string;
-  effective_to: string | null;
+  monthly_data: { month: string; actual: number; holiday: number }[];
 }
 
 const MONTHS = ['April', 'May', 'June', 'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
+// Default values for UK employees
+const DEFAULT_WEEKLY_HOURS = 40;
+const DEFAULT_HOLIDAY_DAYS = 28;
 
 export function HolidayBalance() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
-  const [balances, setBalances] = useState<HolidayBalanceData[]>([]);
+  const [balances, setBalances] = useState<EmployeeBalance[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedYear, setSelectedYear] = useState('2025-04-01');
-  const [showContractDialog, setShowContractDialog] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [contractForm, setContractForm] = useState({
-    contract_type: 'full-time',
-    weekly_contracted_hours: '40',
-    holiday_entitlement_days: '28'
-  });
-  const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'summary' | 'monthly'>('summary');
   
   // Filters
@@ -110,182 +90,148 @@ export function HolidayBalance() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch holiday balances
-      const { data: balanceData, error } = await supabase
-        .from('holiday_balances')
+      // Fetch all employees with their branch info
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
         .select(`
-          *,
-          employee:employees(
-            id, first_name, last_name, organization_id, branch_id,
-            branch:branches(name)
-          )
+          id, first_name, last_name, organization_id, branch_id,
+          branch:branches(name)
         `)
-        .eq('holiday_year_start', selectedYear)
-        .order('holiday_hours_remaining', { ascending: true });
+        .eq('status', 'active')
+        .order('first_name');
 
-      if (error) throw error;
-
-      // Fetch monthly summaries for all employees
-      const yearStart = parseISO(selectedYear);
-      const employeeIds = balanceData?.map(b => b.employee_id) || [];
-      
-      if (employeeIds.length > 0) {
-        const { data: monthlyData } = await supabase
-          .from('timesheet_monthly_summary')
-          .select('*')
-          .in('employee_id', employeeIds)
-          .gte('month_start', selectedYear)
-          .lte('month_start', format(addMonths(yearStart, 11), 'yyyy-MM-dd'));
-
-        // Attach monthly data to balances
-        const balancesWithMonthly = balanceData?.map(balance => ({
-          ...balance,
-          monthly_data: monthlyData?.filter(m => m.employee_id === balance.employee_id) || []
-        })) || [];
-
-        setBalances(balancesWithMonthly);
-      } else {
-        setBalances(balanceData || []);
+      if (empError) throw empError;
+      if (!employees || employees.length === 0) {
+        setBalances([]);
+        setLoading(false);
+        return;
       }
+
+      // Fetch timesheets for the selected holiday year (April to March)
+      const yearStart = parseISO(selectedYear);
+      const yearEnd = addMonths(yearStart, 12);
+
+      const { data: timesheets, error: tsError } = await supabase
+        .from('timesheets')
+        .select('employee_id, total_worked_hours, total_holiday_hours, week_start_date')
+        .gte('week_start_date', format(yearStart, 'yyyy-MM-dd'))
+        .lt('week_start_date', format(yearEnd, 'yyyy-MM-dd'));
+
+      if (tsError) throw tsError;
+
+      // Optionally fetch contracts for employees who have them
+      const { data: contracts } = await supabase
+        .from('employee_contracts')
+        .select('employee_id, weekly_contracted_hours, holiday_entitlement_days')
+        .is('effective_to', null);
+
+      const contractMap = new Map(contracts?.map(c => [c.employee_id, c]) || []);
+
+      // Calculate balances for each employee
+      const calculatedBalances: EmployeeBalance[] = employees.map(emp => {
+        const empTimesheets = timesheets?.filter(t => t.employee_id === emp.id) || [];
+        
+        // Get contract or use defaults
+        const contract = contractMap.get(emp.id);
+        const weeklyHours = contract?.weekly_contracted_hours || DEFAULT_WEEKLY_HOURS;
+        const holidayDays = contract?.holiday_entitlement_days || DEFAULT_HOLIDAY_DAYS;
+        
+        // Calculate totals from timesheets
+        const totalWorkedHours = empTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0);
+        const totalHolidayTaken = empTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0);
+        
+        // UK Pro-rata calculations
+        const hoursPerDay = weeklyHours / 5;
+        const totalHolidayHoursPerYear = holidayDays * hoursPerDay;
+        const weeksWorked = weeklyHours > 0 ? totalWorkedHours / weeklyHours : 0;
+        const holidayEarned = (totalHolidayHoursPerYear / 52) * weeksWorked;
+        const holidayRemaining = holidayEarned - totalHolidayTaken;
+
+        // Calculate monthly breakdown
+        const monthlyData = MONTHS.map((monthName, idx) => {
+          const monthDate = addMonths(yearStart, idx);
+          const monthStart = startOfMonth(monthDate);
+          const monthEnd = endOfMonth(monthDate);
+          
+          const monthTimesheets = empTimesheets.filter(t => {
+            const weekStart = parseISO(t.week_start_date);
+            return weekStart >= monthStart && weekStart <= monthEnd;
+          });
+
+          return {
+            month: monthName,
+            actual: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
+            holiday: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0)
+          };
+        });
+
+        return {
+          employee: emp as Employee,
+          weekly_contracted_hours: weeklyHours,
+          holiday_entitlement_days: holidayDays,
+          total_worked_hours: totalWorkedHours,
+          weeks_worked: weeksWorked,
+          hours_per_day: hoursPerDay,
+          total_holiday_hours_per_year: totalHolidayHoursPerYear,
+          holiday_hours_earned: holidayEarned,
+          holiday_hours_taken: totalHolidayTaken,
+          holiday_hours_remaining: holidayRemaining,
+          monthly_data: monthlyData
+        };
+      });
+
+      setBalances(calculatedBalances);
     } catch (error) {
-      console.error('Error fetching holiday balances:', error);
-      toast.error('Failed to fetch holiday balances');
+      console.error('Error fetching data:', error);
+      toast.error('Failed to fetch holiday data');
     } finally {
       setLoading(false);
     }
   };
 
-  const recalculateBalance = async (employeeId: string) => {
+  const recalculateAll = async () => {
     setRecalculating(true);
-    try {
-      const { error } = await supabase.rpc('calculate_holiday_balance', {
-        p_employee_id: employeeId,
-        p_holiday_year_start: selectedYear
-      });
-      if (error) throw error;
-      toast.success('Holiday balance recalculated');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to recalculate');
-    } finally {
-      setRecalculating(false);
-    }
-  };
-
-  const recalculateAllBalances = async () => {
-    setRecalculating(true);
-    try {
-      const { data: contracts } = await supabase
-        .from('employee_contracts')
-        .select('employee_id')
-        .is('effective_to', null);
-      
-      if (contracts) {
-        for (const contract of contracts) {
-          await supabase.rpc('calculate_holiday_balance', {
-            p_employee_id: contract.employee_id,
-            p_holiday_year_start: selectedYear
-          });
-        }
-      }
-      
-      toast.success('All balances recalculated');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to recalculate');
-    } finally {
-      setRecalculating(false);
-    }
-  };
-
-  const openContractEditor = async (balance: HolidayBalanceData) => {
-    const { data: contract } = await supabase
-      .from('employee_contracts')
-      .select('*')
-      .eq('employee_id', balance.employee_id)
-      .is('effective_to', null)
-      .maybeSingle();
-
-    setSelectedEmployee(balance.employee);
-    setContractForm({
-      contract_type: contract?.contract_type || 'full-time',
-      weekly_contracted_hours: contract?.weekly_contracted_hours?.toString() || '40',
-      holiday_entitlement_days: contract?.holiday_entitlement_days?.toString() || '28'
-    });
-    setShowContractDialog(true);
-  };
-
-  const saveContract = async () => {
-    if (!selectedEmployee) return;
-    
-    setSaving(true);
-    try {
-      await supabase
-        .from('employee_contracts')
-        .update({ effective_to: format(new Date(), 'yyyy-MM-dd') })
-        .eq('employee_id', selectedEmployee.id)
-        .is('effective_to', null);
-
-      await supabase.from('employee_contracts').insert({
-        employee_id: selectedEmployee.id,
-        contract_type: contractForm.contract_type,
-        weekly_contracted_hours: parseFloat(contractForm.weekly_contracted_hours),
-        holiday_entitlement_days: parseFloat(contractForm.holiday_entitlement_days),
-        holiday_year_start: selectedYear,
-        effective_from: format(new Date(), 'yyyy-MM-dd'),
-        created_by: user?.id
-      });
-
-      await supabase.rpc('calculate_holiday_balance', {
-        p_employee_id: selectedEmployee.id,
-        p_holiday_year_start: selectedYear
-      });
-
-      toast.success('Contract saved and balance updated');
-      setShowContractDialog(false);
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save contract');
-    } finally {
-      setSaving(false);
-    }
+    await fetchData();
+    toast.success('All balances recalculated');
+    setRecalculating(false);
   };
 
   const exportToCSV = () => {
     const headers = viewMode === 'monthly'
-      ? ['No', 'Staff Name', 'Location', 'Contract Type', 'Total Worked Hours', 'No of Weeks', 'Holiday Entitlement', ...MONTHS.map(m => `${m} Actual`), 'Total Actual', ...MONTHS.map(m => `${m} Holiday`), 'Total Holiday', 'Holiday Remaining']
+      ? ['No', 'Staff Name', 'Location', 'Contract Type', 'Weekly Hrs', 'Total Worked Hours', 'No of Weeks', 'Holiday Entitlement', ...MONTHS.map(m => `${m} Actual`), 'Total Actual', ...MONTHS.map(m => `${m} Holiday`), 'Total Holiday', 'Holiday Remaining']
       : ['No', 'Staff Name', 'Location', 'Contract Type', 'Weekly Hours', 'Entitlement Days', 'Worked Hours', 'Weeks', 'Earned', 'Taken', 'Remaining'];
     
     const rows = filteredBalances.map((b, idx) => {
       if (viewMode === 'monthly') {
-        const monthlyActual = MONTHS.map(m => getMonthlyHours(b, m, 'actual'));
-        const monthlyHoliday = MONTHS.map(m => getMonthlyHours(b, m, 'holiday'));
+        const monthlyActual = b.monthly_data.map(m => m.actual.toFixed(1));
+        const monthlyHoliday = b.monthly_data.map(m => m.holiday.toFixed(1));
         return [
           idx + 1,
-          `${b.employee?.first_name} ${b.employee?.last_name}`,
-          b.employee?.branch?.name || '',
+          `${b.employee.first_name} ${b.employee.last_name}`,
+          b.employee.branch?.name || '',
           b.weekly_contracted_hours === 40 ? 'Full-time' : 'Part-time',
-          b.total_worked_hours,
+          b.weekly_contracted_hours,
+          b.total_worked_hours.toFixed(1),
           b.weeks_worked.toFixed(1),
           b.holiday_entitlement_days,
           ...monthlyActual,
-          b.total_worked_hours,
+          b.total_worked_hours.toFixed(1),
           ...monthlyHoliday,
-          b.holiday_hours_taken,
+          b.holiday_hours_taken.toFixed(1),
           b.holiday_hours_remaining.toFixed(2)
         ];
       }
       return [
         idx + 1,
-        `${b.employee?.first_name} ${b.employee?.last_name}`,
-        b.employee?.branch?.name || '',
+        `${b.employee.first_name} ${b.employee.last_name}`,
+        b.employee.branch?.name || '',
         b.weekly_contracted_hours === 40 ? 'Full-time' : 'Part-time',
         b.weekly_contracted_hours,
         b.holiday_entitlement_days,
-        b.total_worked_hours,
+        b.total_worked_hours.toFixed(1),
         b.weeks_worked.toFixed(1),
         b.holiday_hours_earned.toFixed(2),
-        b.holiday_hours_taken,
+        b.holiday_hours_taken.toFixed(1),
         b.holiday_hours_remaining.toFixed(2)
       ];
     });
@@ -300,20 +246,8 @@ export function HolidayBalance() {
     toast.success('Exported to CSV');
   };
 
-  const getMonthlyHours = (balance: HolidayBalanceData, monthName: string, type: 'actual' | 'holiday'): number => {
-    const monthIndex = MONTHS.indexOf(monthName);
-    const yearStart = parseISO(selectedYear);
-    const monthDate = addMonths(yearStart, monthIndex);
-    const monthStr = format(monthDate, 'yyyy-MM');
-    
-    const monthData = balance.monthly_data?.find(m => m.month_year?.startsWith(monthStr));
-    return type === 'actual' ? (monthData?.total_worked_hours || 0) : (monthData?.total_holiday_hours || 0);
-  };
-
   const filteredBalances = balances.filter(b => {
     const emp = b.employee;
-    if (!emp) return false;
-    
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (!matchesSearch) return false;
@@ -338,16 +272,16 @@ export function HolidayBalance() {
 
   // Group by location/branch for the Excel-like view
   const groupedByBranch = filteredBalances.reduce((acc, balance) => {
-    const branchName = balance.employee?.branch?.name || 'Unassigned';
+    const branchName = balance.employee.branch?.name || 'Unassigned';
     if (!acc[branchName]) acc[branchName] = [];
     acc[branchName].push(balance);
     return acc;
-  }, {} as Record<string, HolidayBalanceData[]>);
+  }, {} as Record<string, EmployeeBalance[]>);
 
   // Summary stats
-  const totalEarned = filteredBalances.reduce((sum, b) => sum + Number(b.holiday_hours_earned), 0);
-  const totalTaken = filteredBalances.reduce((sum, b) => sum + Number(b.holiday_hours_taken), 0);
-  const totalRemaining = filteredBalances.reduce((sum, b) => sum + Number(b.holiday_hours_remaining), 0);
+  const totalEarned = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_earned, 0);
+  const totalTaken = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_taken, 0);
+  const totalRemaining = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_remaining, 0);
 
   return (
     <div className="space-y-6">
@@ -382,7 +316,7 @@ export function HolidayBalance() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button variant="outline" onClick={recalculateAllBalances} disabled={recalculating}>
+          <Button variant="outline" onClick={recalculateAll} disabled={recalculating}>
             {recalculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-2 hidden md:inline">Recalculate</span>
           </Button>
@@ -478,6 +412,7 @@ export function HolidayBalance() {
                     <TableHead className="font-bold sticky left-8 bg-muted/50 z-10 min-w-[180px]">Staff Name</TableHead>
                     <TableHead className="font-bold">Location</TableHead>
                     <TableHead className="font-bold text-center">Contract</TableHead>
+                    <TableHead className="font-bold text-center">Weekly Hrs</TableHead>
                     <TableHead className="font-bold text-center">Total Hours</TableHead>
                     <TableHead className="font-bold text-center">Weeks</TableHead>
                     <TableHead className="font-bold text-center">Entitlement</TableHead>
@@ -492,7 +427,6 @@ export function HolidayBalance() {
                     ))}
                     <TableHead className="text-center font-bold bg-orange-100 dark:bg-orange-900">Total</TableHead>
                     <TableHead className="text-center font-bold bg-green-100 dark:bg-green-900">Remaining</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -505,56 +439,47 @@ export function HolidayBalance() {
                         </TableCell>
                       </TableRow>
                       {branchBalances.map((balance, idx) => {
-                        const status = getBalanceStatus(Number(balance.holiday_hours_remaining), Number(balance.holiday_hours_earned));
+                        const status = getBalanceStatus(balance.holiday_hours_remaining, balance.holiday_hours_earned);
                         return (
-                          <TableRow key={balance.id}>
+                          <TableRow key={balance.employee.id}>
                             <TableCell className="sticky left-0 bg-background">{idx + 1}</TableCell>
                             <TableCell className="sticky left-8 bg-background font-medium min-w-[180px]">
-                              {balance.employee?.first_name} {balance.employee?.last_name}
+                              {balance.employee.first_name} {balance.employee.last_name}
                             </TableCell>
                             <TableCell className="text-muted-foreground">{branchName}</TableCell>
                             <TableCell className="text-center">
                               <Badge variant="outline" className="capitalize text-xs">
-                                {balance.weekly_contracted_hours === 40 ? 'FT' : 'PT'}
+                                {balance.weekly_contracted_hours >= 35 ? 'FT' : 'PT'}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center font-medium">{Number(balance.total_worked_hours).toFixed(1)}</TableCell>
-                            <TableCell className="text-center">{Number(balance.weeks_worked).toFixed(1)}</TableCell>
+                            <TableCell className="text-center">{balance.weekly_contracted_hours}</TableCell>
+                            <TableCell className="text-center font-medium">{balance.total_worked_hours.toFixed(1)}</TableCell>
+                            <TableCell className="text-center">{balance.weeks_worked.toFixed(1)}</TableCell>
                             <TableCell className="text-center">{balance.holiday_entitlement_days}</TableCell>
                             {/* Monthly Actual Hours */}
-                            {MONTHS.map(m => (
-                              <TableCell key={`actual-${m}`} className="text-center text-sm">
-                                {getMonthlyHours(balance, m, 'actual') || '-'}
+                            {balance.monthly_data.map(m => (
+                              <TableCell key={`actual-${m.month}`} className="text-center text-sm">
+                                {m.actual > 0 ? m.actual.toFixed(1) : '-'}
                               </TableCell>
                             ))}
                             <TableCell className="text-center font-bold bg-blue-50 dark:bg-blue-950">
-                              {Number(balance.total_worked_hours).toFixed(1)}
+                              {balance.total_worked_hours.toFixed(1)}
                             </TableCell>
                             {/* Monthly Holiday Hours */}
-                            {MONTHS.map(m => (
-                              <TableCell key={`holiday-${m}`} className="text-center text-sm">
-                                {getMonthlyHours(balance, m, 'holiday') || '-'}
+                            {balance.monthly_data.map(m => (
+                              <TableCell key={`holiday-${m.month}`} className="text-center text-sm">
+                                {m.holiday > 0 ? m.holiday.toFixed(1) : '-'}
                               </TableCell>
                             ))}
                             <TableCell className="text-center font-bold bg-orange-50 dark:bg-orange-950">
-                              {Number(balance.holiday_hours_taken).toFixed(1)}
+                              {balance.holiday_hours_taken.toFixed(1)}
                             </TableCell>
                             <TableCell className={`text-center font-bold ${
                               status === 'good' ? 'text-green-600 bg-green-50 dark:bg-green-950' :
                               status === 'warning' ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950' :
                               status === 'critical' ? 'text-red-600 bg-red-50 dark:bg-red-950' : ''
                             }`}>
-                              {Number(balance.holiday_hours_remaining).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" variant="ghost" onClick={() => openContractEditor(balance)}>
-                                  <Settings className="h-3 w-3" />
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => recalculateBalance(balance.employee_id)} disabled={recalculating}>
-                                  <RefreshCw className="h-3 w-3" />
-                                </Button>
-                              </div>
+                              {balance.holiday_hours_remaining.toFixed(2)}
                             </TableCell>
                           </TableRow>
                         );
@@ -565,7 +490,7 @@ export function HolidayBalance() {
                   {filteredBalances.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={35} className="text-center py-8 text-muted-foreground">
-                        No holiday balances found. Create employee contracts first.
+                        No employees found. Add employees to the system first.
                       </TableCell>
                     </TableRow>
                   )}
@@ -592,38 +517,37 @@ export function HolidayBalance() {
                 <TableHead className="text-center">Taken</TableHead>
                 <TableHead className="text-center">Remaining</TableHead>
                 <TableHead className="text-center">Progress</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredBalances.map((balance) => {
-                const status = getBalanceStatus(Number(balance.holiday_hours_remaining), Number(balance.holiday_hours_earned));
+                const status = getBalanceStatus(balance.holiday_hours_remaining, balance.holiday_hours_earned);
                 const progressPct = balance.holiday_hours_earned > 0 
-                  ? (Number(balance.holiday_hours_taken) / Number(balance.holiday_hours_earned)) * 100 
+                  ? (balance.holiday_hours_taken / balance.holiday_hours_earned) * 100 
                   : 0;
                 
                 return (
-                  <TableRow key={balance.id}>
+                  <TableRow key={balance.employee.id}>
                     <TableCell className="font-medium">
-                      {balance.employee?.first_name} {balance.employee?.last_name}
+                      {balance.employee.first_name} {balance.employee.last_name}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {balance.employee?.branch?.name || '-'}
+                      {balance.employee.branch?.name || '-'}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className="capitalize">
-                        {balance.weekly_contracted_hours === 40 ? 'Full-time' : 'Part-time'}
+                        {balance.weekly_contracted_hours >= 35 ? 'Full-time' : 'Part-time'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">{balance.weekly_contracted_hours}</TableCell>
                     <TableCell className="text-center">{balance.holiday_entitlement_days} days</TableCell>
-                    <TableCell className="text-center">{Number(balance.total_worked_hours).toFixed(1)}</TableCell>
-                    <TableCell className="text-center">{Number(balance.weeks_worked).toFixed(1)}</TableCell>
+                    <TableCell className="text-center">{balance.total_worked_hours.toFixed(1)}</TableCell>
+                    <TableCell className="text-center">{balance.weeks_worked.toFixed(1)}</TableCell>
                     <TableCell className="text-center font-medium text-blue-600">
-                      {Number(balance.holiday_hours_earned).toFixed(1)}
+                      {balance.holiday_hours_earned.toFixed(1)}
                     </TableCell>
                     <TableCell className="text-center font-medium text-orange-600">
-                      {Number(balance.holiday_hours_taken).toFixed(1)}
+                      {balance.holiday_hours_taken.toFixed(1)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span className={`font-bold ${
@@ -631,7 +555,7 @@ export function HolidayBalance() {
                         status === 'warning' ? 'text-yellow-600' :
                         status === 'critical' ? 'text-red-600' : ''
                       }`}>
-                        {Number(balance.holiday_hours_remaining).toFixed(1)}
+                        {balance.holiday_hours_remaining.toFixed(1)}
                       </span>
                     </TableCell>
                     <TableCell className="min-w-[120px]">
@@ -646,24 +570,14 @@ export function HolidayBalance() {
                         <p className="text-xs text-muted-foreground text-center">{progressPct.toFixed(0)}% used</p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => openContractEditor(balance)}>
-                          <Settings className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => recalculateBalance(balance.employee_id)} disabled={recalculating}>
-                          <RefreshCw className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
                   </TableRow>
                 );
               })}
               
               {filteredBalances.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
-                    No holiday balances found. Create employee contracts first.
+                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                    No employees found. Add employees to the system first.
                   </TableCell>
                 </TableRow>
               )}
@@ -671,62 +585,6 @@ export function HolidayBalance() {
           </Table>
         </Card>
       )}
-
-      {/* Contract Edit Dialog */}
-      <Dialog open={showContractDialog} onOpenChange={setShowContractDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Contract - {selectedEmployee?.first_name} {selectedEmployee?.last_name}</DialogTitle>
-            <DialogDescription>
-              Update contract details. This will create a new contract and recalculate holiday balance.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Contract Type</Label>
-              <Select value={contractForm.contract_type} onValueChange={(v) => setContractForm({...contractForm, contract_type: v})}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="full-time">Full-time</SelectItem>
-                  <SelectItem value="part-time">Part-time</SelectItem>
-                  <SelectItem value="zero-hours">Zero Hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Weekly Contracted Hours</Label>
-                <Input
-                  type="number"
-                  value={contractForm.weekly_contracted_hours}
-                  onChange={(e) => setContractForm({...contractForm, weekly_contracted_hours: e.target.value})}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Holiday Entitlement (days)</Label>
-                <Input
-                  type="number"
-                  value={contractForm.holiday_entitlement_days}
-                  onChange={(e) => setContractForm({...contractForm, holiday_entitlement_days: e.target.value})}
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowContractDialog(false)}>Cancel</Button>
-            <Button onClick={saveContract} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save Contract
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
