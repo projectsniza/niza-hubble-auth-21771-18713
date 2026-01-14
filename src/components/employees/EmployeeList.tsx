@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, Loader2, MoreHorizontal, Eye, Trash2, UserCog } from 'lucide-react';
+import { UserPlus, Users, Loader2, MoreHorizontal, Eye, Trash2, UserCog, Edit } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import EmployeeStatusBadge, { EMPLOYEE_STATUSES } from './EmployeeStatusBadge';
+import EditEmployeeDialog from './EditEmployeeDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [branchFilter, setBranchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
 
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
@@ -71,7 +73,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     return filters;
   }, [user, organizationFilter, branchFilter, statusFilter, searchQuery]);
 
-  const { employees, isLoading, deleteEmployee } = useEmployees(employeeFilters);
+  const { employees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
 
   const filteredBranches = organizationFilter !== 'all' 
     ? branches.filter(b => b.organization_id === organizationFilter)
@@ -226,6 +228,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                           <Eye className="h-4 w-4 mr-2" />
                           View Profile
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEditingEmployee(employee)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
                         {employee.status === 'onboarding' && (
                           <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
                             <UserCog className="h-4 w-4 mr-2" />
@@ -266,6 +272,16 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EditEmployeeDialog
+        open={!!editingEmployee}
+        onOpenChange={(open) => !open && setEditingEmployee(null)}
+        employee={editingEmployee}
+        onSuccess={() => {
+          fetchEmployees();
+          setEditingEmployee(null);
+        }}
+      />
     </div>
   );
 }

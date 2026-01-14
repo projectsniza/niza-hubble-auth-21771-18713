@@ -6,9 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Loader2, Mail, Phone, MapPin, Building2, Clock } from 'lucide-react';
+import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Loader2, Mail, Phone, MapPin, Building2, Clock, Edit } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 
 export default function EmployeeProfile() {
   const { id } = useParams();
@@ -23,6 +24,7 @@ export default function EmployeeProfile() {
   const [formResponses, setFormResponses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Only Super Admin, HR, and Manager can view employee profiles
   if (user?.role === 'employee') {
@@ -209,12 +211,26 @@ export default function EmployeeProfile() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
-              Continue Onboarding
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Profile
             </Button>
+            {employee.status === 'onboarding' && (
+              <Button onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
+                Continue Onboarding
+              </Button>
+            )}
           </div>
         </div>
       </Card>
+
+      {/* Edit Employee Dialog */}
+      <EditEmployeeDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        employee={employee}
+        onSuccess={fetchEmployeeData}
+      />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
