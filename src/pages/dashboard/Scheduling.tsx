@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
-import { EmployeeContracts } from '@/components/scheduling/EmployeeContracts';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
@@ -147,7 +146,7 @@ export default function Scheduling() {
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Timesheets & Holiday</h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Track worked hours, manage contracts, and monitor holiday balances
+          Track worked hours and monitor holiday balances
         </p>
       </div>
 
@@ -155,7 +154,6 @@ export default function Scheduling() {
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">
           <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
           <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
-          <TabsTrigger value="contracts" className="flex-1 min-w-[100px] text-xs md:text-sm">Contracts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timesheets" className="mt-0">
@@ -164,10 +162,6 @@ export default function Scheduling() {
 
         <TabsContent value="holiday" className="mt-0">
           <HolidayBalance />
-        </TabsContent>
-
-        <TabsContent value="contracts" className="mt-0">
-          <EmployeeContracts />
         </TabsContent>
       </Tabs>
     </div>
