@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ActiveRotas } from '@/components/scheduling/ActiveRotas';
-import { OldRotas } from '@/components/scheduling/OldRotas';
-import { ShiftsView } from '@/components/scheduling/ShiftsView';
-import { CreateRota } from '@/components/scheduling/CreateRota';
-import { RotaSettings } from '@/components/scheduling/RotaSettings';
 import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
 import { EmployeeContracts } from '@/components/scheduling/EmployeeContracts';
@@ -67,7 +62,7 @@ export default function Scheduling() {
     }
   };
 
-  // Employee View
+  // Employee View - show their schedule and timesheets
   if (user?.role === 'employee') {
     const todayStr = new Date().toISOString().split('T')[0];
     const todayShifts = employeeShifts.filter(s => s.shift_date === todayStr);
@@ -77,7 +72,7 @@ export default function Scheduling() {
       <div className="p-4 md:p-8">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">My Schedule</h1>
-          <p className="text-sm md:text-base text-muted-foreground">View your upcoming shifts and schedule</p>
+          <p className="text-sm md:text-base text-muted-foreground">View your shifts and holiday balance</p>
         </div>
 
         {loading ? (
@@ -146,26 +141,21 @@ export default function Scheduling() {
     );
   }
 
-  // Admin/HR/Manager View
+  // Admin/HR/Manager View - Full timesheet system
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Scheduling & Timesheets</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Timesheets & Holiday</h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Manage rotas, timesheets, and holiday balances
+          Track worked hours, manage contracts, and monitor holiday balances
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">
-          <TabsTrigger value="timesheets" className="flex-1 min-w-[80px] text-xs md:text-sm">Timesheets</TabsTrigger>
-          <TabsTrigger value="holiday" className="flex-1 min-w-[80px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
-          <TabsTrigger value="contracts" className="flex-1 min-w-[80px] text-xs md:text-sm">Contracts</TabsTrigger>
-          <TabsTrigger value="active-rotas" className="flex-1 min-w-[80px] text-xs md:text-sm">Rotas</TabsTrigger>
-          <TabsTrigger value="shifts" className="flex-1 min-w-[80px] text-xs md:text-sm">Shifts</TabsTrigger>
-          <TabsTrigger value="create-rota" className="flex-1 min-w-[80px] text-xs md:text-sm">Create Rota</TabsTrigger>
-          <TabsTrigger value="old-rotas" className="flex-1 min-w-[80px] text-xs md:text-sm">Old Rotas</TabsTrigger>
-          <TabsTrigger value="settings" className="flex-1 min-w-[80px] text-xs md:text-sm">Settings</TabsTrigger>
+          <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
+          <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
+          <TabsTrigger value="contracts" className="flex-1 min-w-[100px] text-xs md:text-sm">Contracts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="timesheets" className="mt-0">
@@ -178,26 +168,6 @@ export default function Scheduling() {
 
         <TabsContent value="contracts" className="mt-0">
           <EmployeeContracts />
-        </TabsContent>
-
-        <TabsContent value="active-rotas" className="mt-0">
-          <ActiveRotas />
-        </TabsContent>
-
-        <TabsContent value="shifts" className="mt-0">
-          <ShiftsView />
-        </TabsContent>
-
-        <TabsContent value="create-rota" className="mt-0">
-          <CreateRota />
-        </TabsContent>
-
-        <TabsContent value="old-rotas" className="mt-0">
-          <OldRotas />
-        </TabsContent>
-
-        <TabsContent value="settings" className="mt-0">
-          <RotaSettings />
         </TabsContent>
       </Tabs>
     </div>
