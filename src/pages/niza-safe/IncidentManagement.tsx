@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar } from "lucide-react";
+import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar, Paperclip } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +17,14 @@ import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from '@/lib/utils';
+import { FileAttachment, FileViewer } from '@/components/shared/FileAttachment';
+
+interface FileInfo {
+  name: string;
+  path: string;
+  size?: number;
+  type?: string;
+}
 
 export default function IncidentManagement() {
   const { toast } = useToast();
@@ -24,6 +32,8 @@ export default function IncidentManagement() {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('accidents');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -42,6 +52,8 @@ export default function IncidentManagement() {
     victim_name: '',
     injury_type: '',
   });
+
+  const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
 
   useEffect(() => {
     fetchIncidents();
@@ -132,13 +144,15 @@ export default function IncidentManagement() {
         injury_type: formData.injury_type,
         organization_id: orgId,
         branch_id: branchId,
-        reported_by: authUser?.id,
+        reported_by: authUser?.id!,
+        images: attachedFiles as any,
       });
 
       if (error) throw error;
 
       toast({ title: "Success", description: "Incident reported successfully" });
       setShowCreateDialog(false);
+      setAttachedFiles([]);
       fetchIncidents();
     } catch (error: any) {
       toast({
@@ -159,9 +173,15 @@ export default function IncidentManagement() {
       victim_name: '',
       injury_type: '',
     });
+    setAttachedFiles([]);
     setSelectedOrg('');
     setSelectedBranch('');
     setShowCreateDialog(true);
+  };
+
+  const openViewDialog = (incident: any) => {
+    setSelectedIncident(incident);
+    setShowViewDialog(true);
   };
 
   const accidents = incidents.filter(i => i.incident_type === 'accident');
@@ -176,6 +196,12 @@ export default function IncidentManagement() {
     }
   };
 
+  const getFilesFromIncident = (incident: any): FileInfo[] => {
+    if (!incident?.images) return [];
+    if (Array.isArray(incident.images)) return incident.images as FileInfo[];
+    return [];
+  };
+
   const incidentTypes = [
     {
       icon: AlertTriangle,
@@ -187,11 +213,11 @@ export default function IncidentManagement() {
     },
     {
       icon: Info,
-      title: "Near Misses",
-      description: "Track and analyze near miss incidents to prevent future accidents",
+      title: "Incidents",
+      description: "Track and analyze incidents to prevent future accidents",
       gradient: "from-accent to-primary",
       count: nearMisses.length,
-      key: 'near-misses'
+      key: 'incidents'
     }
   ];
 
@@ -253,7 +279,7 @@ export default function IncidentManagement() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="accidents">Accidents ({accidents.length})</TabsTrigger>
-          <TabsTrigger value="near-misses">Near Misses ({nearMisses.length})</TabsTrigger>
+          <TabsTrigger value="incidents">Incidents ({nearMisses.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="accidents">
@@ -264,6 +290,7 @@ export default function IncidentManagement() {
                   <TableHead>Title</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Victim</TableHead>
+                  <TableHead>Files</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -271,7 +298,7 @@ export default function IncidentManagement() {
               <TableBody>
                 {accidents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No accidents reported
                     </TableCell>
                   </TableRow>
@@ -282,11 +309,19 @@ export default function IncidentManagement() {
                       <TableCell>{format(new Date(item.incident_date), 'PPP')}</TableCell>
                       <TableCell>{item.victim_name || '-'}</TableCell>
                       <TableCell>
+                        {getFilesFromIncident(item).length > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">{getFilesFromIncident(item).length}</span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item)}><Eye className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
@@ -298,7 +333,7 @@ export default function IncidentManagement() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="near-misses">
+        <TabsContent value="incidents">
           <Card>
             <Table>
               <TableHeader>
@@ -306,6 +341,7 @@ export default function IncidentManagement() {
                   <TableHead>Title</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Files</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -313,8 +349,8 @@ export default function IncidentManagement() {
               <TableBody>
                 {nearMisses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No near misses reported
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No incidents reported
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -324,11 +360,19 @@ export default function IncidentManagement() {
                       <TableCell>{format(new Date(item.incident_date), 'PPP')}</TableCell>
                       <TableCell>{item.location_details || '-'}</TableCell>
                       <TableCell>
+                        {getFilesFromIncident(item).length > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">{getFilesFromIncident(item).length}</span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => openViewDialog(item)}><Eye className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
@@ -341,10 +385,11 @@ export default function IncidentManagement() {
         </TabsContent>
       </Tabs>
 
+      {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Report {formData.incident_type === 'accident' ? 'Accident' : 'Near Miss'}</DialogTitle>
+            <DialogTitle>Report {formData.incident_type === 'accident' ? 'Accident' : 'Incident'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             {/* Organization and Branch selection for Super Admin */}
@@ -381,7 +426,7 @@ export default function IncidentManagement() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="accident">Accident</SelectItem>
-                  <SelectItem value="near_miss">Near Miss</SelectItem>
+                  <SelectItem value="near_miss">Incident</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -448,11 +493,76 @@ export default function IncidentManagement() {
                 </div>
               </>
             )}
+
+            {/* File Attachments */}
+            <FileAttachment
+              files={attachedFiles}
+              onFilesChange={setAttachedFiles}
+              bucket="documents"
+              folderPath="incidents"
+              maxFiles={10}
+              label="Attach Evidence/Documents"
+              accept="image/*,.pdf,.doc,.docx"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
             <Button onClick={handleCreate}>Report Incident</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
+          </DialogHeader>
+          {selectedIncident && (
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+              <div>
+                <Label className="text-muted-foreground">Title</Label>
+                <p className="font-medium">{selectedIncident.title}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">Description</Label>
+                <p>{selectedIncident.description || '-'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground">Date</Label>
+                  <p>{format(new Date(selectedIncident.incident_date), 'PPP')}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Status</Label>
+                  <Badge className={getStatusBadgeColor(selectedIncident.status)}>{selectedIncident.status}</Badge>
+                </div>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">Location</Label>
+                <p>{selectedIncident.location_details || '-'}</p>
+              </div>
+              {selectedIncident.incident_type === 'accident' && (
+                <>
+                  <div>
+                    <Label className="text-muted-foreground">Victim Name</Label>
+                    <p>{selectedIncident.victim_name || '-'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Injury Type</Label>
+                    <p>{selectedIncident.injury_type || '-'}</p>
+                  </div>
+                </>
+              )}
+
+              {/* View Attached Files */}
+              <FileViewer
+                files={getFilesFromIncident(selectedIncident)}
+                bucket="documents"
+                label="Attached Files"
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
