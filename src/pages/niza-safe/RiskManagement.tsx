@@ -9,12 +9,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2, X } from "lucide-react";
+import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2, X, Paperclip } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { FileAttachment, FileViewer } from '@/components/shared/FileAttachment';
+
+interface FileInfo {
+  name: string;
+  path: string;
+  size?: number;
+  type?: string;
+}
 
 export default function RiskManagement() {
   const { toast } = useToast();
@@ -53,6 +61,8 @@ export default function RiskManagement() {
     priority: 'medium',
     responsibilities: '',
   });
+
+  const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
@@ -100,6 +110,26 @@ export default function RiskManagement() {
     }
   };
 
+  const getFilesColumn = (item: any, type: 'risk' | 'coshh' | 'hazard' | 'method'): FileInfo[] => {
+    if (type === 'risk') {
+      return Array.isArray(item.evidence_files) ? item.evidence_files : [];
+    }
+    if (type === 'hazard') {
+      return Array.isArray(item.images) ? item.images : [];
+    }
+    if (type === 'coshh') {
+      // COSHH uses sds_file_path as a single file, convert to array format
+      if (item.sds_file_path) {
+        return [{ name: 'SDS Document', path: item.sds_file_path }];
+      }
+      return [];
+    }
+    if (type === 'method') {
+      return Array.isArray(item.attachments) ? item.attachments : [];
+    }
+    return [];
+  };
+
   const openCreateDialog = (type: 'risk' | 'coshh' | 'hazard' | 'method') => {
     setDialogType(type);
     setFormData({
@@ -115,6 +145,7 @@ export default function RiskManagement() {
       priority: 'medium',
       responsibilities: '',
     });
+    setAttachedFiles([]);
     setSelectedOrg('');
     setSelectedBranch('');
     setShowCreateDialog(true);
@@ -142,6 +173,7 @@ export default function RiskManagement() {
       priority: item.priority || 'medium',
       responsibilities: item.responsibilities || '',
     });
+    setAttachedFiles(getFilesColumn(item, type));
     setShowEditDialog(true);
   };
 
@@ -157,6 +189,7 @@ export default function RiskManagement() {
             hazard_description: formData.hazard_description,
             control_measures: formData.control_measures,
             risk_level: formData.risk_level,
+            evidence_files: attachedFiles as any,
           }).eq('id', selectedItem.id));
           break;
         case 'coshh':
@@ -164,6 +197,7 @@ export default function RiskManagement() {
             chemical_name: formData.chemical_name,
             storage_requirements: formData.storage_requirements,
             exposure_limits: formData.exposure_limits,
+            sds_file_path: attachedFiles[0]?.path || null,
           }).eq('id', selectedItem.id));
           break;
         case 'hazard':
@@ -172,12 +206,14 @@ export default function RiskManagement() {
             description: formData.description,
             location_details: formData.location_details,
             priority: formData.priority,
+            images: attachedFiles as any,
           }).eq('id', selectedItem.id));
           break;
         case 'method':
           ({ error } = await supabase.from('method_statements').update({
             title: formData.title,
             responsibilities: formData.responsibilities,
+            attachments: attachedFiles,
           }).eq('id', selectedItem.id));
           break;
       }
@@ -185,6 +221,7 @@ export default function RiskManagement() {
       toast({ title: "Success", description: "Updated successfully" });
       setShowEditDialog(false);
       setSelectedItem(null);
+      setAttachedFiles([]);
       fetchData();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -273,9 +310,10 @@ export default function RiskManagement() {
             hazard_description: formData.hazard_description,
             control_measures: formData.control_measures,
             risk_level: formData.risk_level,
-            organization_id: orgId,
-            branch_id: branchId,
+            organization_id: orgId!,
+            branch_id: branchId!,
             created_by: authUser?.id,
+            evidence_files: attachedFiles as any,
           }));
           break;
         case 'coshh':
@@ -283,9 +321,10 @@ export default function RiskManagement() {
             chemical_name: formData.chemical_name,
             storage_requirements: formData.storage_requirements,
             exposure_limits: formData.exposure_limits,
-            organization_id: orgId,
-            branch_id: branchId,
+            organization_id: orgId!,
+            branch_id: branchId!,
             created_by: authUser?.id,
+            sds_file_path: attachedFiles[0]?.path || null,
           }));
           break;
         case 'hazard':
@@ -294,18 +333,20 @@ export default function RiskManagement() {
             description: formData.description,
             location_details: formData.location_details,
             priority: formData.priority,
-            organization_id: orgId,
-            branch_id: branchId,
-            reported_by: authUser?.id,
+            organization_id: orgId!,
+            branch_id: branchId!,
+            reported_by: authUser?.id!,
+            images: attachedFiles as any,
           }));
           break;
         case 'method':
           ({ error } = await supabase.from('method_statements').insert({
             title: formData.title,
             responsibilities: formData.responsibilities,
-            organization_id: orgId,
-            branch_id: branchId,
+            organization_id: orgId!,
+            branch_id: branchId!,
             created_by: authUser?.id,
+            attachments: attachedFiles as any,
           }));
           break;
       }
@@ -314,6 +355,7 @@ export default function RiskManagement() {
 
       toast({ title: "Success", description: "Created successfully" });
       setShowCreateDialog(false);
+      setAttachedFiles([]);
       fetchData();
     } catch (error: any) {
       toast({
@@ -350,6 +392,27 @@ export default function RiskManagement() {
     { icon: AlertCircle, title: "Hazard Reports", key: 'hazards', count: hazardReports.length, gradient: "from-primary/80 to-accent/80" },
     { icon: Clipboard, title: "Method Statements", key: 'methods', count: methodStatements.length, gradient: "from-accent/80 to-primary/80" }
   ];
+
+  const renderFileAttachmentForm = () => {
+    const labels: Record<string, string> = {
+      risk: 'Evidence Files',
+      coshh: 'Safety Data Sheet (SDS)',
+      hazard: 'Photos/Evidence',
+      method: 'Supporting Documents',
+    };
+
+    return (
+      <FileAttachment
+        files={attachedFiles}
+        onFilesChange={setAttachedFiles}
+        bucket="documents"
+        folderPath={`safety/${dialogType}`}
+        maxFiles={dialogType === 'coshh' ? 1 : 10}
+        label={labels[dialogType]}
+        accept="image/*,.pdf,.doc,.docx"
+      />
+    );
+  };
 
   return (
     <div className="p-8 max-w-7xl mx-auto animate-fade-in">
@@ -413,6 +476,7 @@ export default function RiskManagement() {
                   <TableHead>Title</TableHead>
                   <TableHead>Risk Level</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Files</TableHead>
                   <TableHead>Review Date</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -420,7 +484,7 @@ export default function RiskManagement() {
               <TableBody>
                 {riskAssessments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No risk assessments found
                     </TableCell>
                   </TableRow>
@@ -433,6 +497,14 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {getFilesColumn(item, 'risk').length > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">{getFilesColumn(item, 'risk').length}</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{item.review_date ? format(new Date(item.review_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
@@ -457,6 +529,7 @@ export default function RiskManagement() {
                 <TableRow>
                   <TableHead>Chemical Name</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>SDS</TableHead>
                   <TableHead>SDS Expiry</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -464,7 +537,7 @@ export default function RiskManagement() {
               <TableBody>
                 {coshhAssessments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No COSHH assessments found
                     </TableCell>
                   </TableRow>
@@ -474,6 +547,14 @@ export default function RiskManagement() {
                       <TableCell className="font-medium">{item.chemical_name}</TableCell>
                       <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.sds_file_path && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">1</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{item.sds_expiry_date ? format(new Date(item.sds_expiry_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
@@ -499,6 +580,7 @@ export default function RiskManagement() {
                   <TableHead>Title</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Files</TableHead>
                   <TableHead>Reported</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -506,7 +588,7 @@ export default function RiskManagement() {
               <TableBody>
                 {hazardReports.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No hazard reports found
                     </TableCell>
                   </TableRow>
@@ -519,6 +601,14 @@ export default function RiskManagement() {
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {getFilesColumn(item, 'hazard').length > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">{getFilesColumn(item, 'hazard').length}</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
                       <TableCell>
@@ -543,6 +633,7 @@ export default function RiskManagement() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Files</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -550,7 +641,7 @@ export default function RiskManagement() {
               <TableBody>
                 {methodStatements.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No method statements found
                     </TableCell>
                   </TableRow>
@@ -560,6 +651,14 @@ export default function RiskManagement() {
                       <TableCell className="font-medium">{item.title}</TableCell>
                       <TableCell>
                         <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {getFilesColumn(item, 'method').length > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Paperclip className="h-4 w-4" />
+                            <span className="text-sm">{getFilesColumn(item, 'method').length}</span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
                       <TableCell>
@@ -578,6 +677,7 @@ export default function RiskManagement() {
         </TabsContent>
       </Tabs>
 
+      {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -745,6 +845,9 @@ export default function RiskManagement() {
                 </div>
               </>
             )}
+
+            {/* File Attachment */}
+            {renderFileAttachmentForm()}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
@@ -763,7 +866,7 @@ export default function RiskManagement() {
             </DialogTitle>
           </DialogHeader>
           {selectedItem && (
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
               {dialogType === 'risk' && (
                 <>
                   <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
@@ -774,6 +877,7 @@ export default function RiskManagement() {
                     <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={getRiskBadgeColor(selectedItem.risk_level)}>{selectedItem.risk_level}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
                   </div>
+                  <FileViewer files={getFilesColumn(selectedItem, 'risk')} bucket="documents" label="Evidence Files" />
                   {isAdmin && selectedItem.status !== 'approved' && (
                     <div className="flex gap-2 pt-4 border-t">
                       <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'risk', 'approved'); setShowViewDialog(false); }}>Approve</Button>
@@ -787,6 +891,7 @@ export default function RiskManagement() {
                   <div><Label className="text-muted-foreground">Storage Requirements</Label><p>{selectedItem.storage_requirements || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Exposure Limits</Label><p>{selectedItem.exposure_limits || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  <FileViewer files={getFilesColumn(selectedItem, 'coshh')} bucket="documents" label="Safety Data Sheet" />
                   {isAdmin && selectedItem.status !== 'approved' && (
                     <div className="flex gap-2 pt-4 border-t">
                       <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'coshh', 'approved'); setShowViewDialog(false); }}>Approve</Button>
@@ -803,10 +908,10 @@ export default function RiskManagement() {
                     <div><Label className="text-muted-foreground">Priority</Label><Badge className={getRiskBadgeColor(selectedItem.priority)}>{selectedItem.priority}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
                   </div>
+                  <FileViewer files={getFilesColumn(selectedItem, 'hazard')} bucket="documents" label="Photos/Evidence" />
                   {isAdmin && selectedItem.status !== 'resolved' && (
                     <div className="flex gap-2 pt-4 border-t">
-                      <Button size="sm" variant="outline" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'investigating'); setShowViewDialog(false); }}>Investigating</Button>
-                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'resolved'); setShowViewDialog(false); }}>Resolve</Button>
+                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'resolved'); setShowViewDialog(false); }}>Mark Resolved</Button>
                     </div>
                   )}
                 </>
@@ -816,6 +921,7 @@ export default function RiskManagement() {
                   <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
                   <div><Label className="text-muted-foreground">Responsibilities</Label><p>{selectedItem.responsibilities || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                  <FileViewer files={getFilesColumn(selectedItem, 'method')} bucket="documents" label="Supporting Documents" />
                   {isAdmin && selectedItem.status !== 'approved' && (
                     <div className="flex gap-2 pt-4 border-t">
                       <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'method', 'approved'); setShowViewDialog(false); }}>Approve</Button>
@@ -832,37 +938,57 @@ export default function RiskManagement() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Edit {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}</DialogTitle>
+            <DialogTitle>
+              Edit {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
             {dialogType === 'coshh' ? (
               <>
                 <div className="space-y-2">
                   <Label>Chemical Name</Label>
-                  <Input value={formData.chemical_name} onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })} />
+                  <Input
+                    value={formData.chemical_name}
+                    onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Storage Requirements</Label>
-                  <Textarea value={formData.storage_requirements} onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })} />
+                  <Textarea
+                    value={formData.storage_requirements}
+                    onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Exposure Limits</Label>
-                  <Input value={formData.exposure_limits} onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })} />
+                  <Input
+                    value={formData.exposure_limits}
+                    onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })}
+                  />
                 </div>
               </>
             ) : dialogType === 'hazard' ? (
               <>
                 <div className="space-y-2">
                   <Label>Title</Label>
-                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
-                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Input value={formData.location_details} onChange={(e) => setFormData({ ...formData, location_details: e.target.value })} />
+                  <Label>Location Details</Label>
+                  <Input
+                    value={formData.location_details}
+                    onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Priority</Label>
@@ -880,30 +1006,48 @@ export default function RiskManagement() {
               <>
                 <div className="space-y-2">
                   <Label>Title</Label>
-                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Responsibilities</Label>
-                  <Textarea value={formData.responsibilities} onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })} />
+                  <Textarea
+                    value={formData.responsibilities}
+                    onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
+                  />
                 </div>
               </>
             ) : (
               <>
                 <div className="space-y-2">
                   <Label>Title</Label>
-                  <Input value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
-                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Hazard Description</Label>
-                  <Textarea value={formData.hazard_description} onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })} />
+                  <Textarea
+                    value={formData.hazard_description}
+                    onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Control Measures</Label>
-                  <Textarea value={formData.control_measures} onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })} />
+                  <Textarea
+                    value={formData.control_measures}
+                    onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Risk Level</Label>
@@ -918,26 +1062,31 @@ export default function RiskManagement() {
                 </div>
               </>
             )}
+
+            {/* File Attachment */}
+            {renderFileAttachmentForm()}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdate}>Save Changes</Button>
+            <Button onClick={handleUpdate}>Update</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Item</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this item? This action cannot be undone.
+              This action cannot be undone. This will permanently delete this record.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
