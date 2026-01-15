@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -8,11 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
-  Calendar, Clock, ChevronLeft, ChevronRight, Save, Check, 
-  X, FileText, Download, Loader2, Users, Building2, Plus, Search
+  ChevronLeft, ChevronRight, Save, Check, 
+  Download, Loader2, Users, Plus, Search
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
@@ -57,17 +57,15 @@ interface Timesheet {
   entries?: TimesheetEntry[];
 }
 
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
-    startOfWeek(new Date(), { weekStartsOn: 1 })
-  );
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -76,8 +74,6 @@ export function TimesheetView() {
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filters
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
@@ -87,14 +83,9 @@ export function TimesheetView() {
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
 
   useEffect(() => {
-    if (viewTab === 'weekly') {
-      fetchWeeklyData();
-    } else {
-      fetchMonthlyData();
-    }
-    if (canViewFilters) {
-      fetchOrganizationsAndBranches();
-    }
+    if (viewTab === 'weekly') fetchWeeklyData();
+    else fetchMonthlyData();
+    if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentWeekStart, currentMonth, viewTab]);
 
   const fetchOrganizationsAndBranches = async () => {
@@ -112,7 +103,6 @@ export function TimesheetView() {
       const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
 
-      // Fetch employees with branch info
       const { data: employeesData } = await supabase
         .from('employees')
         .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
@@ -121,13 +111,9 @@ export function TimesheetView() {
 
       setEmployees(employeesData || []);
 
-      // Fetch timesheets for the week
       const { data: timesheetsData } = await supabase
         .from('timesheets')
-        .select(`
-          *,
-          employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))
-        `)
+        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .eq('week_start_date', weekStartStr);
 
       setTimesheets(timesheetsData || []);
@@ -145,7 +131,6 @@ export function TimesheetView() {
       const monthStart = startOfMonth(currentMonth);
       const monthEnd = endOfMonth(currentMonth);
 
-      // Fetch employees with branch info
       const { data: employeesData } = await supabase
         .from('employees')
         .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
@@ -154,13 +139,9 @@ export function TimesheetView() {
 
       setEmployees(employeesData || []);
 
-      // Fetch all timesheets for the month
       const { data: timesheetsData } = await supabase
         .from('timesheets')
-        .select(`
-          *,
-          employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))
-        `)
+        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .gte('week_start_date', format(monthStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(monthEnd, 'yyyy-MM-dd'));
 
@@ -175,7 +156,6 @@ export function TimesheetView() {
 
   const createTimesheetForEmployee = async (employee: Employee) => {
     const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
-    
     try {
       const { data: timesheet, error } = await supabase
         .from('timesheets')
@@ -193,7 +173,6 @@ export function TimesheetView() {
 
       if (error) throw error;
 
-      // Create empty entries for each day
       const days = eachDayOfInterval({ start: currentWeekStart, end: weekEnd });
       const entryInserts = days.map((day, idx) => ({
         timesheet_id: timesheet.id,
@@ -208,7 +187,6 @@ export function TimesheetView() {
       }));
 
       await supabase.from('timesheet_entries').insert(entryInserts);
-
       toast.success('Timesheet created');
       fetchWeeklyData();
     } catch (error: any) {
@@ -220,11 +198,9 @@ export function TimesheetView() {
     const employeesWithoutTimesheet = filteredEmployees.filter(
       emp => !timesheets.some(t => t.employee_id === emp.id)
     );
-
     for (const emp of employeesWithoutTimesheet) {
       await createTimesheetForEmployee(emp);
     }
-    
     toast.success(`Created ${employeesWithoutTimesheet.length} timesheets`);
   };
 
@@ -244,48 +220,54 @@ export function TimesheetView() {
     const updated = [...entries];
     (updated[index] as any)[field] = value;
     
-    // Auto-calculate actual hours if start/end times are set
     if ((field === 'shift_start_time' || field === 'shift_end_time' || field === 'break_duration_minutes') 
         && updated[index].shift_start_time && updated[index].shift_end_time) {
       const start = updated[index].shift_start_time!;
       const end = updated[index].shift_end_time!;
       const breakMins = updated[index].break_duration_minutes || 0;
-      
       const [startH, startM] = start.split(':').map(Number);
       const [endH, endM] = end.split(':').map(Number);
-      
       let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
-      if (totalMins < 0) totalMins += 24 * 60; // Handle overnight
-      
+      if (totalMins < 0) totalMins += 24 * 60;
       updated[index].actual_hours = Math.round(totalMins / 60 * 100) / 100;
     }
-    
     setEntries(updated);
   };
 
   const saveTimesheet = async () => {
     if (!selectedTimesheet) return;
-    
     setSaving(true);
     try {
+      // Calculate totals
+      const totalWorked = entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
+      const totalHoliday = entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0);
+      const totalSick = entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0);
+      const totalAdj = entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0);
+
+      // Update entries
       for (const entry of entries) {
         if (entry.id) {
-          await supabase
-            .from('timesheet_entries')
-            .update({
-              shift_start_time: entry.shift_start_time,
-              shift_end_time: entry.shift_end_time,
-              break_duration_minutes: entry.break_duration_minutes,
-              actual_hours: entry.actual_hours,
-              holiday_hours: entry.holiday_hours,
-              sick_hours: entry.sick_hours,
-              adjustment_hours: entry.adjustment_hours,
-              entry_type: entry.entry_type,
-              notes: entry.notes
-            })
-            .eq('id', entry.id);
+          await supabase.from('timesheet_entries').update({
+            shift_start_time: entry.shift_start_time,
+            shift_end_time: entry.shift_end_time,
+            break_duration_minutes: entry.break_duration_minutes,
+            actual_hours: entry.actual_hours,
+            holiday_hours: entry.holiday_hours,
+            sick_hours: entry.sick_hours,
+            adjustment_hours: entry.adjustment_hours,
+            entry_type: entry.entry_type,
+            notes: entry.notes
+          }).eq('id', entry.id);
         }
       }
+
+      // Update timesheet totals
+      await supabase.from('timesheets').update({
+        total_worked_hours: totalWorked,
+        total_holiday_hours: totalHoliday,
+        total_sick_hours: totalSick,
+        total_adjustment_hours: totalAdj
+      }).eq('id', selectedTimesheet.id);
 
       toast.success('Timesheet saved');
       setShowEditDialog(false);
@@ -299,22 +281,16 @@ export function TimesheetView() {
 
   const approveTimesheet = async (timesheetId: string) => {
     try {
-      await supabase
-        .from('timesheets')
-        .update({
-          status: 'approved',
-          approved_at: new Date().toISOString(),
-          approved_by: user?.id
-        })
-        .eq('id', timesheetId);
+      await supabase.from('timesheets').update({
+        status: 'approved',
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id
+      }).eq('id', timesheetId);
 
       const timesheet = timesheets.find(t => t.id === timesheetId);
       if (timesheet) {
-        await supabase.rpc('calculate_holiday_balance', {
-          p_employee_id: timesheet.employee_id
-        });
+        await supabase.rpc('calculate_holiday_balance', { p_employee_id: timesheet.employee_id });
       }
-
       toast.success('Timesheet approved');
       fetchWeeklyData();
     } catch (error: any) {
@@ -324,35 +300,23 @@ export function TimesheetView() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
-        return <Badge variant="secondary">Draft</Badge>;
-      case 'submitted':
-        return <Badge variant="outline" className="border-blue-500 text-blue-600">Submitted</Badge>;
-      case 'approved':
-        return <Badge className="bg-green-500">Approved</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+      case 'draft': return <Badge variant="secondary">Draft</Badge>;
+      case 'submitted': return <Badge variant="outline" className="border-blue-500 text-blue-600">Submitted</Badge>;
+      case 'approved': return <Badge className="bg-green-500">Approved</Badge>;
+      case 'rejected': return <Badge variant="destructive">Rejected</Badge>;
+      default: return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  // Filter employees based on selection and search
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
-    
     if (!canViewFilters) return true;
-    if (viewMode === 'organization' && selectedOrg) {
-      return emp.organization_id === selectedOrg;
-    }
-    if (viewMode === 'branch' && selectedBranch) {
-      return emp.branch_id === selectedBranch;
-    }
+    if (viewMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
+    if (viewMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
     return true;
   });
 
-  // Get employees without timesheets for this week
   const employeesWithoutTimesheet = filteredEmployees.filter(
     emp => !timesheets.some(t => t.employee_id === emp.id)
   );
@@ -360,21 +324,14 @@ export function TimesheetView() {
   const filteredTimesheets = timesheets.filter(t => {
     const emp = t.employee;
     if (!emp) return true;
-    
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
-    
     if (!canViewFilters) return true;
-    if (viewMode === 'organization' && selectedOrg) {
-      return emp.organization_id === selectedOrg;
-    }
-    if (viewMode === 'branch' && selectedBranch) {
-      return emp.branch_id === selectedBranch;
-    }
+    if (viewMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
+    if (viewMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
     return true;
   });
 
-  // Monthly view - aggregate by employee
   const getMonthlyEmployeeData = () => {
     const aggregated: Record<string, { 
       employee: Employee; 
@@ -382,6 +339,7 @@ export function TimesheetView() {
       totalHours: number;
       totalHoliday: number;
       totalSick: number;
+      totalAdj: number;
     }> = {};
 
     const monthStart = startOfMonth(currentMonth);
@@ -400,31 +358,32 @@ export function TimesheetView() {
           weeks: {},
           totalHours: 0,
           totalHoliday: 0,
-          totalSick: 0
+          totalSick: 0,
+          totalAdj: 0
         };
       }
 
-      const weekIdx = weeksInMonth.findIndex(w => 
-        format(w, 'yyyy-MM-dd') === ts.week_start_date
-      );
-      
-      if (weekIdx >= 0) {
-        aggregated[empId].weeks[weekIdx + 1] = ts;
-      }
+      const weekIdx = weeksInMonth.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
+      if (weekIdx >= 0) aggregated[empId].weeks[weekIdx + 1] = ts;
       
       aggregated[empId].totalHours += Number(ts.total_worked_hours) || 0;
       aggregated[empId].totalHoliday += Number(ts.total_holiday_hours) || 0;
       aggregated[empId].totalSick += Number(ts.total_sick_hours) || 0;
+      aggregated[empId].totalAdj += Number(ts.total_adjustment_hours) || 0;
     });
 
     return { aggregated, weeksInMonth };
   };
 
-  const weekTotal = (field: 'actual_hours' | 'holiday_hours' | 'sick_hours') => 
-    entries.reduce((sum, e) => sum + (Number(e[field]) || 0), 0);
+  const weekTotals = {
+    worked: entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0),
+    holiday: entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0),
+    sick: entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0),
+    adj: entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0)
+  };
 
   const exportToCSV = () => {
-    const headers = ['Employee', 'Location', 'Week', 'Worked Hours', 'Holiday Hours', 'Sick Hours', 'Total', 'Status'];
+    const headers = ['Employee', 'Location', 'Week', 'Worked', 'Holiday', 'Sick', 'ADJ+/-', 'Total', 'Status'];
     const rows = filteredTimesheets.map(t => [
       `${t.employee?.first_name} ${t.employee?.last_name}`,
       t.employee?.branch?.name || '',
@@ -432,30 +391,36 @@ export function TimesheetView() {
       t.total_worked_hours,
       t.total_holiday_hours,
       t.total_sick_hours,
-      Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours),
+      t.total_adjustment_hours || 0,
+      Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours) + Number(t.total_adjustment_hours || 0),
       t.status
     ]);
-
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `timesheets-${format(currentWeekStart, 'yyyy-MM-dd')}.csv`;
+    a.download = `TimeSheet_${format(currentWeekStart, 'yyyy-MM-dd')}.csv`;
     a.click();
     toast.success('Exported to CSV');
   };
 
+  // Group timesheets by branch
+  const groupedTimesheets = filteredTimesheets.reduce((acc, ts) => {
+    const branchName = ts.employee?.branch?.name || 'Unassigned';
+    if (!acc[branchName]) acc[branchName] = [];
+    acc[branchName].push(ts);
+    return acc;
+  }, {} as Record<string, Timesheet[]>);
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Staff Attendance Details</h2>
-          <p className="text-muted-foreground">Track actual worked hours, holiday & sick time</p>
+          <h2 className="text-2xl font-bold">Time Sheet {format(currentWeekStart, 'yyyy')}-{format(addMonths(currentWeekStart, 12), 'yyyy')}</h2>
+          <p className="text-muted-foreground">Weekly timesheet tracking (UK format)</p>
         </div>
         
-        {/* View Toggle & Navigation */}
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={viewTab} onValueChange={(v) => setViewTab(v as 'weekly' | 'monthly')}>
             <TabsList>
@@ -466,274 +431,158 @@ export function TimesheetView() {
 
           {viewTab === 'weekly' ? (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="px-4 py-2 bg-muted rounded-md min-w-[200px] text-center">
-                <span className="font-medium">
-                  {format(currentWeekStart, 'dd MMM')} - {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'dd MMM yyyy')}
-                </span>
+              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+              <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium">
+                {format(currentWeekStart, 'dd MMM')} - {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'dd MMM yyyy')}
               </div>
-              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
-                Today
-              </Button>
+              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}><ChevronRight className="h-4 w-4" /></Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>Today</Button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="px-4 py-2 bg-muted rounded-md min-w-[150px] text-center">
-                <span className="font-medium">{format(currentMonth, 'MMMM yyyy')}</span>
-              </div>
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+              <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium">{format(currentMonth, 'MMMM yyyy')}</div>
+              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           )}
           
-          <Button variant="outline" onClick={exportToCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+          <Button variant="outline" onClick={exportToCSV}><Download className="h-4 w-4 mr-2" />Export</Button>
         </div>
       </div>
 
-      {/* Filters */}
       {canViewFilters && (
-        <OrgBranchFilter
-          organizations={organizations}
-          branches={branches}
-          viewMode={viewMode}
-          selectedOrg={selectedOrg}
-          selectedBranch={selectedBranch}
-          onViewModeChange={setViewMode}
-          onOrgChange={setSelectedOrg}
-          onBranchChange={setSelectedBranch}
-        />
+        <OrgBranchFilter organizations={organizations} branches={branches} viewMode={viewMode}
+          selectedOrg={selectedOrg} selectedBranch={selectedBranch} onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg} onBranchChange={setSelectedBranch} />
       )}
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Employees</p>
-              <p className="text-2xl font-bold">{filteredEmployees.length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <Check className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Approved</p>
-              <p className="text-2xl font-bold">{filteredTimesheets.filter(t => t.status === 'approved').length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Pending</p>
-              <p className="text-2xl font-bold">{filteredTimesheets.filter(t => t.status === 'draft' || t.status === 'submitted').length}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Not Created</p>
-              <p className="text-2xl font-bold">{employeesWithoutTimesheet.length}</p>
-            </div>
-          </div>
-        </Card>
+        <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="h-5 w-5 text-primary" /></div><div><p className="text-sm text-muted-foreground">Employees</p><p className="text-2xl font-bold">{filteredEmployees.length}</p></div></div></Card>
+        <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center"><Check className="h-5 w-5 text-green-600" /></div><div><p className="text-sm text-muted-foreground">Approved</p><p className="text-2xl font-bold">{filteredTimesheets.filter(t => t.status === 'approved').length}</p></div></div></Card>
+        <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center"><Save className="h-5 w-5 text-yellow-600" /></div><div><p className="text-sm text-muted-foreground">Pending</p><p className="text-2xl font-bold">{filteredTimesheets.filter(t => t.status === 'draft' || t.status === 'submitted').length}</p></div></div></Card>
+        <Card className="p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center"><Plus className="h-5 w-5 text-muted-foreground" /></div><div><p className="text-sm text-muted-foreground">Not Created</p><p className="text-2xl font-bold">{employeesWithoutTimesheet.length}</p></div></div></Card>
       </div>
 
-      {/* Search and Bulk Actions */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="relative max-w-md w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search employees..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+          <Input placeholder="Search employees..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
         {viewTab === 'weekly' && employeesWithoutTimesheet.length > 0 && (
-          <Button onClick={createAllTimesheets}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create All Timesheets ({employeesWithoutTimesheet.length})
-          </Button>
+          <Button onClick={createAllTimesheets}><Plus className="h-4 w-4 mr-2" />Create All ({employeesWithoutTimesheet.length})</Button>
         )}
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <div className="flex items-center justify-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : viewTab === 'weekly' ? (
-        /* Weekly View */
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead className="text-center">Mon</TableHead>
-                <TableHead className="text-center">Tue</TableHead>
-                <TableHead className="text-center">Wed</TableHead>
-                <TableHead className="text-center">Thu</TableHead>
-                <TableHead className="text-center">Fri</TableHead>
-                <TableHead className="text-center">Sat</TableHead>
-                <TableHead className="text-center">Sun</TableHead>
-                <TableHead className="text-center">Hours</TableHead>
-                <TableHead className="text-center">Holiday</TableHead>
-                <TableHead className="text-center">Sick</TableHead>
-                <TableHead className="text-center">Total</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Existing Timesheets */}
-              {filteredTimesheets.map((timesheet) => (
-                <TableRow key={timesheet.id}>
-                  <TableCell className="font-medium">
-                    {timesheet.employee?.first_name} {timesheet.employee?.last_name}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {timesheet.employee?.branch?.name || '-'}
-                  </TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center text-muted-foreground">-</TableCell>
-                  <TableCell className="text-center font-medium">{timesheet.total_worked_hours}</TableCell>
-                  <TableCell className="text-center text-blue-600">{timesheet.total_holiday_hours}</TableCell>
-                  <TableCell className="text-center text-red-600">{timesheet.total_sick_hours}</TableCell>
-                  <TableCell className="text-center font-bold">
-                    {Number(timesheet.total_worked_hours) + Number(timesheet.total_holiday_hours) + Number(timesheet.total_sick_hours)}
-                  </TableCell>
-                  <TableCell className="text-center">{getStatusBadge(timesheet.status)}</TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Button size="sm" variant="outline" onClick={() => openTimesheetEditor(timesheet)}>
-                        Edit
-                      </Button>
-                      {timesheet.status !== 'approved' && (
-                        <Button size="sm" variant="default" onClick={() => approveTimesheet(timesheet.id)}>
-                          <Check className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              
-              {/* Employees without timesheets */}
-              {employeesWithoutTimesheet.map((emp) => (
-                <TableRow key={emp.id} className="bg-muted/30">
-                  <TableCell className="font-medium text-muted-foreground">
-                    {emp.first_name} {emp.last_name}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {emp.branch?.name || '-'}
-                  </TableCell>
-                  <TableCell colSpan={11} className="text-center text-muted-foreground">
-                    No timesheet for this week
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button size="sm" variant="outline" onClick={() => createTimesheetForEmployee(emp)}>
-                      <Plus className="h-3 w-3 mr-1" /> Create
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      ) : (
-        /* Monthly View - like Excel format */
         <Card>
           <ScrollArea className="w-full">
-            <div className="min-w-[1200px]">
+            <div className="min-w-[1100px]">
+              <Table className="text-sm">
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="sticky left-0 bg-muted/50 z-10 min-w-[150px]">Employee</TableHead>
+                    <TableHead>Location</TableHead>
+                    {DAYS_SHORT.map(d => <TableHead key={d} className="text-center w-12">{d}</TableHead>)}
+                    <TableHead className="text-center bg-blue-50 dark:bg-blue-950">Worked</TableHead>
+                    <TableHead className="text-center bg-orange-50 dark:bg-orange-950">Holiday</TableHead>
+                    <TableHead className="text-center bg-red-50 dark:bg-red-950">Sick</TableHead>
+                    <TableHead className="text-center bg-purple-50 dark:bg-purple-950">ADJ+/-</TableHead>
+                    <TableHead className="text-center bg-green-50 dark:bg-green-950 font-bold">Total</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(groupedTimesheets).map(([branchName, branchTimesheets]) => (
+                    <React.Fragment key={branchName}>
+                      <TableRow className="bg-primary/10"><TableCell colSpan={15} className="font-bold text-primary py-2">📍 {branchName}</TableCell></TableRow>
+                      {branchTimesheets.map((ts) => {
+                        const total = Number(ts.total_worked_hours) + Number(ts.total_holiday_hours) + Number(ts.total_sick_hours) + Number(ts.total_adjustment_hours || 0);
+                        return (
+                          <TableRow key={ts.id}>
+                            <TableCell className="sticky left-0 bg-background font-medium">{ts.employee?.first_name} {ts.employee?.last_name}</TableCell>
+                            <TableCell className="text-muted-foreground text-xs">{ts.employee?.branch?.name || '-'}</TableCell>
+                            {DAYS_SHORT.map((_, idx) => <TableCell key={idx} className="text-center text-muted-foreground">-</TableCell>)}
+                            <TableCell className="text-center font-medium bg-blue-50/50">{ts.total_worked_hours}</TableCell>
+                            <TableCell className="text-center text-orange-600 bg-orange-50/50">{ts.total_holiday_hours}</TableCell>
+                            <TableCell className="text-center text-red-600 bg-red-50/50">{ts.total_sick_hours}</TableCell>
+                            <TableCell className={`text-center bg-purple-50/50 ${(ts.total_adjustment_hours || 0) < 0 ? 'text-red-600' : (ts.total_adjustment_hours || 0) > 0 ? 'text-green-600' : ''}`}>
+                              {(ts.total_adjustment_hours || 0) > 0 ? '+' : ''}{ts.total_adjustment_hours || 0}
+                            </TableCell>
+                            <TableCell className="text-center font-bold bg-green-50/50">{total.toFixed(1)}</TableCell>
+                            <TableCell className="text-center">{getStatusBadge(ts.status)}</TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button size="sm" variant="outline" onClick={() => openTimesheetEditor(ts)}>Edit</Button>
+                                {ts.status !== 'approved' && <Button size="sm" onClick={() => approveTimesheet(ts.id)}><Check className="h-3 w-3" /></Button>}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                  {employeesWithoutTimesheet.map((emp) => (
+                    <TableRow key={emp.id} className="bg-muted/30">
+                      <TableCell className="font-medium text-muted-foreground">{emp.first_name} {emp.last_name}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{emp.branch?.name || '-'}</TableCell>
+                      <TableCell colSpan={11} className="text-center text-muted-foreground">No timesheet</TableCell>
+                      <TableCell className="text-center"><Button size="sm" variant="outline" onClick={() => createTimesheetForEmployee(emp)}><Plus className="h-3 w-3 mr-1" />Create</Button></TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredTimesheets.length === 0 && employeesWithoutTimesheet.length === 0 && (
+                    <TableRow><TableCell colSpan={15} className="text-center py-8 text-muted-foreground">No employees found</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+        </Card>
+      ) : (
+        <Card>
+          <ScrollArea className="w-full">
+            <div className="min-w-[900px]">
               {(() => {
                 const { aggregated, weeksInMonth } = getMonthlyEmployeeData();
                 return (
-                  <Table>
+                  <Table className="text-sm">
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead className="sticky left-0 bg-muted/50">Employee</TableHead>
+                        <TableHead className="sticky left-0 bg-muted/50 z-10">Employee</TableHead>
                         <TableHead>Location</TableHead>
                         {weeksInMonth.map((w, idx) => (
-                          <TableHead key={idx} className="text-center text-xs">
-                            Week {idx + 1}<br/>
-                            <span className="text-muted-foreground">{format(w, 'dd/MM')}</span>
-                          </TableHead>
+                          <TableHead key={idx} className="text-center text-xs">Wk {idx + 1}<br/><span className="text-muted-foreground">{format(w, 'dd/MM')}</span></TableHead>
                         ))}
-                        <TableHead className="text-center font-bold bg-blue-50 dark:bg-blue-950">Hours</TableHead>
-                        <TableHead className="text-center font-bold bg-orange-50 dark:bg-orange-950">Holiday</TableHead>
-                        <TableHead className="text-center font-bold bg-red-50 dark:bg-red-950">Sick</TableHead>
-                        <TableHead className="text-center font-bold">Total</TableHead>
+                        <TableHead className="text-center bg-blue-100 dark:bg-blue-900">Hours</TableHead>
+                        <TableHead className="text-center bg-orange-100 dark:bg-orange-900">Holiday</TableHead>
+                        <TableHead className="text-center bg-red-100 dark:bg-red-900">Sick</TableHead>
+                        <TableHead className="text-center bg-purple-100 dark:bg-purple-900">ADJ</TableHead>
+                        <TableHead className="text-center bg-green-100 dark:bg-green-900 font-bold">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {Object.values(aggregated).map((data) => (
                         <TableRow key={data.employee.id}>
-                          <TableCell className="sticky left-0 bg-background font-medium">
-                            {data.employee.first_name} {data.employee.last_name}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {data.employee.branch?.name || '-'}
-                          </TableCell>
+                          <TableCell className="sticky left-0 bg-background font-medium">{data.employee.first_name} {data.employee.last_name}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{data.employee.branch?.name || '-'}</TableCell>
                           {weeksInMonth.map((_, idx) => {
                             const ts = data.weeks[idx + 1];
-                            return (
-                              <TableCell key={idx} className="text-center text-sm">
-                                {ts ? Number(ts.total_worked_hours).toFixed(1) : '-'}
-                              </TableCell>
-                            );
+                            return <TableCell key={idx} className="text-center text-sm">{ts ? Number(ts.total_worked_hours).toFixed(1) : '-'}</TableCell>;
                           })}
-                          <TableCell className="text-center font-bold bg-blue-50 dark:bg-blue-950">
-                            {data.totalHours.toFixed(1)}
+                          <TableCell className="text-center font-bold bg-blue-50">{data.totalHours.toFixed(1)}</TableCell>
+                          <TableCell className="text-center font-bold text-orange-600 bg-orange-50">{data.totalHoliday.toFixed(1)}</TableCell>
+                          <TableCell className="text-center font-bold text-red-600 bg-red-50">{data.totalSick.toFixed(1)}</TableCell>
+                          <TableCell className={`text-center font-bold bg-purple-50 ${data.totalAdj < 0 ? 'text-red-600' : data.totalAdj > 0 ? 'text-green-600' : ''}`}>
+                            {data.totalAdj > 0 ? '+' : ''}{data.totalAdj.toFixed(1)}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-orange-600 bg-orange-50 dark:bg-orange-950">
-                            {data.totalHoliday.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-red-600 bg-red-50 dark:bg-red-950">
-                            {data.totalSick.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="text-center font-bold">
-                            {(data.totalHours + data.totalHoliday + data.totalSick).toFixed(1)}
-                          </TableCell>
+                          <TableCell className="text-center font-bold bg-green-50">{(data.totalHours + data.totalHoliday + data.totalSick + data.totalAdj).toFixed(1)}</TableCell>
                         </TableRow>
                       ))}
-                      
                       {Object.keys(aggregated).length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={weeksInMonth.length + 6} className="text-center py-8 text-muted-foreground">
-                            No timesheets found for this month
-                          </TableCell>
-                        </TableRow>
+                        <TableRow><TableCell colSpan={weeksInMonth.length + 7} className="text-center py-8 text-muted-foreground">No timesheets found</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -745,19 +594,14 @@ export function TimesheetView() {
         </Card>
       )}
 
-      {/* Edit Timesheet Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>
-              Edit Timesheet - {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name}
-            </DialogTitle>
+            <DialogTitle>Edit Timesheet - {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              Week: {selectedTimesheet?.week_start_date} to {selectedTimesheet?.week_end_date}
-            </div>
+            <div className="text-sm text-muted-foreground">Week: {selectedTimesheet?.week_start_date} to {selectedTimesheet?.week_end_date}</div>
             
             <Table>
               <TableHeader>
@@ -766,90 +610,35 @@ export function TimesheetView() {
                   <TableHead>Date</TableHead>
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
-                  <TableHead>Break (min)</TableHead>
-                  <TableHead>Worked</TableHead>
-                  <TableHead>Holiday</TableHead>
-                  <TableHead>Sick</TableHead>
-                  <TableHead>Adj+/-</TableHead>
+                  <TableHead>Break</TableHead>
+                  <TableHead className="bg-blue-50">Worked</TableHead>
+                  <TableHead className="bg-orange-50">Holiday</TableHead>
+                  <TableHead className="bg-red-50">Sick</TableHead>
+                  <TableHead className="bg-purple-50">ADJ+/-</TableHead>
                   <TableHead>Type</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.map((entry, idx) => (
                   <TableRow key={entry.id || idx}>
-                    <TableCell className="font-medium">{entry.day_of_week}</TableCell>
+                    <TableCell className="font-medium">{DAYS_SHORT[idx] || entry.day_of_week}</TableCell>
                     <TableCell>{format(parseISO(entry.entry_date), 'dd/MM')}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="time"
-                        value={entry.shift_start_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="time"
-                        value={entry.shift_end_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={entry.break_duration_minutes}
-                        onChange={(e) => updateEntry(idx, 'break_duration_minutes', parseInt(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        value={entry.actual_hours}
-                        onChange={(e) => updateEntry(idx, 'actual_hours', parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        value={entry.holiday_hours}
-                        onChange={(e) => updateEntry(idx, 'holiday_hours', parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        value={entry.sick_hours}
-                        onChange={(e) => updateEntry(idx, 'sick_hours', parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        value={entry.adjustment_hours}
-                        onChange={(e) => updateEntry(idx, 'adjustment_hours', parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
-                    </TableCell>
+                    <TableCell><Input type="time" value={entry.shift_start_time || ''} onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value)} className="w-24" /></TableCell>
+                    <TableCell><Input type="time" value={entry.shift_end_time || ''} onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value)} className="w-24" /></TableCell>
+                    <TableCell><Input type="number" value={entry.break_duration_minutes} onChange={(e) => updateEntry(idx, 'break_duration_minutes', parseInt(e.target.value) || 0)} className="w-16" /></TableCell>
+                    <TableCell className="bg-blue-50/50"><Input type="number" step="0.25" value={entry.actual_hours} onChange={(e) => updateEntry(idx, 'actual_hours', parseFloat(e.target.value) || 0)} className="w-20" /></TableCell>
+                    <TableCell className="bg-orange-50/50"><Input type="number" step="0.25" value={entry.holiday_hours} onChange={(e) => updateEntry(idx, 'holiday_hours', parseFloat(e.target.value) || 0)} className="w-20" /></TableCell>
+                    <TableCell className="bg-red-50/50"><Input type="number" step="0.25" value={entry.sick_hours} onChange={(e) => updateEntry(idx, 'sick_hours', parseFloat(e.target.value) || 0)} className="w-20" /></TableCell>
+                    <TableCell className="bg-purple-50/50"><Input type="number" step="0.25" value={entry.adjustment_hours} onChange={(e) => updateEntry(idx, 'adjustment_hours', parseFloat(e.target.value) || 0)} className="w-20" /></TableCell>
                     <TableCell>
                       <Select value={entry.entry_type} onValueChange={(v) => updateEntry(idx, 'entry_type', v)}>
-                        <SelectTrigger className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="work">Work</SelectItem>
                           <SelectItem value="holiday">Holiday</SelectItem>
                           <SelectItem value="sick">Sick</SelectItem>
                           <SelectItem value="absence">Absence</SelectItem>
-                          <SelectItem value="bank_holiday">Bank Holiday</SelectItem>
+                          <SelectItem value="bank_holiday">Bank Hol</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -858,35 +647,18 @@ export function TimesheetView() {
               </TableBody>
             </Table>
 
-            {/* Week Totals */}
-            <div className="flex gap-6 p-4 bg-muted rounded-lg">
-              <div>
-                <span className="text-sm text-muted-foreground">Total Worked:</span>
-                <span className="ml-2 font-bold">{weekTotal('actual_hours').toFixed(2)} hrs</span>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Holiday:</span>
-                <span className="ml-2 font-bold text-blue-600">{weekTotal('holiday_hours').toFixed(2)} hrs</span>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Sick:</span>
-                <span className="ml-2 font-bold text-red-600">{weekTotal('sick_hours').toFixed(2)} hrs</span>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Grand Total:</span>
-                <span className="ml-2 font-bold">
-                  {(weekTotal('actual_hours') + weekTotal('holiday_hours') + weekTotal('sick_hours')).toFixed(2)} hrs
-                </span>
-              </div>
+            <div className="flex gap-6 p-4 bg-muted rounded-lg text-sm">
+              <div><span className="text-muted-foreground">Worked:</span> <span className="font-bold text-blue-600">{weekTotals.worked.toFixed(1)}h</span></div>
+              <div><span className="text-muted-foreground">Holiday:</span> <span className="font-bold text-orange-600">{weekTotals.holiday.toFixed(1)}h</span></div>
+              <div><span className="text-muted-foreground">Sick:</span> <span className="font-bold text-red-600">{weekTotals.sick.toFixed(1)}h</span></div>
+              <div><span className="text-muted-foreground">ADJ+/-:</span> <span className={`font-bold ${weekTotals.adj < 0 ? 'text-red-600' : weekTotals.adj > 0 ? 'text-green-600' : ''}`}>{weekTotals.adj > 0 ? '+' : ''}{weekTotals.adj.toFixed(1)}h</span></div>
+              <div className="ml-auto"><span className="text-muted-foreground">Total:</span> <span className="font-bold text-lg">{(weekTotals.worked + weekTotals.holiday + weekTotals.sick + weekTotals.adj).toFixed(1)}h</span></div>
             </div>
           </div>
-
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-            <Button onClick={saveTimesheet} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Timesheet
-            </Button>
+            <Button onClick={saveTimesheet} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
