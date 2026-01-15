@@ -796,6 +796,47 @@ export type Database = {
           },
         ]
       }
+      document_follow_up_settings: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          follow_up_count: number
+          follow_up_intervals: number[]
+          id: string
+          is_active: boolean | null
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          follow_up_count?: number
+          follow_up_intervals?: number[]
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          follow_up_count?: number
+          follow_up_intervals?: number[]
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_follow_up_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_requirements: {
         Row: {
           branch_id: string | null

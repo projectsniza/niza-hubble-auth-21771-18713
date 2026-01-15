@@ -136,9 +136,9 @@ export default function BulkUploadedEmployees() {
     ));
   };
 
-  const handleDateChange = (requirementId: string, field: 'expiry_date' | 'follow_up_date', value: string) => {
+  const handleDateChange = (requirementId: string, value: string) => {
     setUploadedDocs(prev => prev.map(doc => 
-      doc.requirement_id === requirementId ? { ...doc, [field]: value } : doc
+      doc.requirement_id === requirementId ? { ...doc, expiry_date: value } : doc
     ));
   };
 
@@ -179,8 +179,7 @@ export default function BulkUploadedEmployees() {
             file_type: doc.file.type,
             file_size: doc.file.size,
             employee_id: selectedEmployee.id,
-            expiry_date: doc.expiry_date || null,
-            follow_up_date: doc.follow_up_date || null
+            expiry_date: doc.expiry_date || null
           });
 
         if (docError) throw docError;
@@ -401,19 +400,7 @@ export default function BulkUploadedEmployees() {
                                     id={`expiry-${requirement.id}`}
                                     type="date"
                                     value={docState?.expiry_date || ''}
-                                    onChange={(e) => handleDateChange(requirement.id, 'expiry_date', e.target.value)}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label htmlFor={`followup-${requirement.id}`} className="text-xs text-muted-foreground">
-                                    Follow-up Date
-                                  </Label>
-                                  <Input
-                                    id={`followup-${requirement.id}`}
-                                    type="date"
-                                    value={docState?.follow_up_date || ''}
-                                    onChange={(e) => handleDateChange(requirement.id, 'follow_up_date', e.target.value)}
+                                    onChange={(e) => handleDateChange(requirement.id, e.target.value)}
                                     className="h-8 text-sm"
                                   />
                                 </div>

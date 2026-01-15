@@ -31,7 +31,6 @@ export default function UploadDocumentDialog({
 }: UploadDocumentDialogProps) {
   const { toast } = useToast();
   const [fileName, setFileName] = useState('');
-  const [followUpDate, setFollowUpDate] = useState<Date>();
   const [expiryDate, setExpiryDate] = useState<Date>();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -175,7 +174,6 @@ export default function UploadDocumentDialog({
         file_size: selectedFile.size,
         file_type: selectedFile.type,
         folder_id: folderId || null,
-        follow_up_date: followUpDate?.toISOString().split('T')[0] || null,
         expiry_date: expiryDate?.toISOString().split('T')[0] || null,
       };
 
@@ -200,7 +198,6 @@ export default function UploadDocumentDialog({
       
       // Reset form
       setFileName('');
-      setFollowUpDate(undefined);
       setExpiryDate(undefined);
       setSelectedFile(null);
       setVerifierName('');
@@ -278,41 +275,6 @@ export default function UploadDocumentDialog({
                 />
               </PopoverContent>
             </Popover>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Follow up date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !followUpDate && "text-muted-foreground",
-                    followUpDate && "border-primary border-2"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {followUpDate ? format(followUpDate, "PPP") : "Not set"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={followUpDate}
-                  onSelect={setFollowUpDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            {followUpDate && (
-              <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-                <CalendarIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  Follow-up required: {format(followUpDate, "PPP")}
-                </p>
-              </div>
-            )}
           </div>
 
           {/* E-Signature Section */}

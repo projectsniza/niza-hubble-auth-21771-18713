@@ -24,7 +24,6 @@ interface AdditionalDocument {
   title: string;
   file: File | null;
   expiryDate: string;
-  followUpDate: string;
 }
 
 interface DocumentUploadStepProps {
@@ -51,7 +50,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
   const [requirements, setRequirements] = useState<DocumentRequirement[]>([]);
   const [requirementFiles, setRequirementFiles] = useState<Record<string, File | null>>({});
   const [requirementExpiry, setRequirementExpiry] = useState<Record<string, string>>({});
-  const [requirementFollowUp, setRequirementFollowUp] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -83,10 +81,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
 
   const handleRequirementExpiryChange = (reqId: string, date: string) => {
     setRequirementExpiry(prev => ({ ...prev, [reqId]: date }));
-  };
-
-  const handleRequirementFollowUpChange = (reqId: string, date: string) => {
-    setRequirementFollowUp(prev => ({ ...prev, [reqId]: date }));
   };
 
   const hasAllMandatoryDocuments = () => {
@@ -132,7 +126,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
             employee_id: employeeId,
             folder_id: folderId,
             expiry_date: requirementExpiry[req.id] || null,
-            follow_up_date: requirementFollowUp[req.id] || null,
             uploaded_by: user?.id
           });
         }
@@ -159,7 +152,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
             employee_id: employeeId,
             folder_id: folderId,
             expiry_date: doc.expiryDate || null,
-            follow_up_date: doc.followUpDate || null,
             uploaded_by: user?.id
           });
         }
@@ -240,7 +232,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Upload Document *</Label>
                     <div className="border-2 border-dashed rounded-lg p-4 text-center">
@@ -266,14 +258,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                       type="date"
                       value={requirementExpiry[req.id] || ''}
                       onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Follow-up Date</Label>
-                    <Input 
-                      type="date"
-                      value={requirementFollowUp[req.id] || ''}
-                      onChange={(e) => handleRequirementFollowUpChange(req.id, e.target.value)}
                     />
                   </div>
                 </div>
@@ -308,7 +292,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Upload Document</Label>
                     <div className="border-2 border-dashed rounded-lg p-4 text-center">
@@ -336,14 +320,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                       onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Follow-up Date</Label>
-                    <Input 
-                      type="date"
-                      value={requirementFollowUp[req.id] || ''}
-                      onChange={(e) => handleRequirementFollowUpChange(req.id, e.target.value)}
-                    />
-                  </div>
                 </div>
               </div>
             </Card>
@@ -358,7 +334,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
         
         {additionalDocuments.map((doc, index) => (
           <Card key={index} className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Document Title</Label>
                 <Input 
@@ -380,14 +356,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                   type="date"
                   value={doc.expiryDate} 
                   onChange={(e) => onUpdateDocument(index, { expiryDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Follow-up Date</Label>
-                <Input 
-                  type="date"
-                  value={doc.followUpDate} 
-                  onChange={(e) => onUpdateDocument(index, { followUpDate: e.target.value })}
                 />
               </div>
             </div>
