@@ -53,7 +53,7 @@ interface FormData {
   shareCode: string;
   govPortalLink: string;
   rightToWorkDocument: File | null;
-  additionalDocuments: { title: string; file: File | null; expiryDate: string; followUpDate: string }[];
+  additionalDocuments: { title: string; file: File | null; expiryDate: string }[];
 }
 
 export default function AddEmployee() {
@@ -95,7 +95,7 @@ export default function AddEmployee() {
     shareCode: '',
     govPortalLink: '',
     rightToWorkDocument: null,
-    additionalDocuments: [{ title: '', file: null, expiryDate: '', followUpDate: '' }]
+    additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
   });
 
   // Get active steps based on form settings
@@ -182,7 +182,7 @@ export default function AddEmployee() {
         shareCode: '',
         govPortalLink: '',
         rightToWorkDocument: null,
-        additionalDocuments: [{ title: '', file: null, expiryDate: '', followUpDate: '' }]
+        additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
       });
       
       // Set current step based on onboarding progress
@@ -350,7 +350,7 @@ export default function AddEmployee() {
 
   const addDocument = () => {
     updateFormData({
-      additionalDocuments: [...formData.additionalDocuments, { title: '', file: null, expiryDate: '', followUpDate: '' }]
+      additionalDocuments: [...formData.additionalDocuments, { title: '', file: null, expiryDate: '' }]
     });
   };
 
