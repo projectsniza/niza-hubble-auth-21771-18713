@@ -12,8 +12,11 @@ import { format, isPast, isWithinInterval, addDays } from 'date-fns';
 export default function NizaSafeHome() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [riskAssessments, setRiskAssessments] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [incidents, setIncidents] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tasks, setTasks] = useState<any[]>([]);
   const [currentRiskIndex, setCurrentRiskIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
