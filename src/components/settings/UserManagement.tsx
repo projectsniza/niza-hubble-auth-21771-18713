@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, User, Shield, Building2, Loader2, Edit, Users, Eye, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, XCircle } from 'lucide-react';
+import { Shield, Building2, Loader2, Edit, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useUsers } from '@/hooks/useUsers';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';

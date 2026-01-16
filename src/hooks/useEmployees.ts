@@ -25,9 +25,10 @@ export function useEmployees(filters?: {
   
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
 
-  const fetchEmployees = useCallback(async () => {
-    // Prevent duplicate fetches with same params
-    if (lastFetchParamsRef.current === filterKey && employees.length > 0) {
+  const fetchEmployees = useCallback(async (force = false) => {
+    // Prevent duplicate fetches with same params unless forced
+    if (!force && lastFetchParamsRef.current === filterKey && employees.length > 0) {
+      setIsLoading(false);
       return;
     }
     

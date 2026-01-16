@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Briefcase, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
