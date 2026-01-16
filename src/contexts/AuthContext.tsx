@@ -41,22 +41,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .from('profiles')
           .select('id, email, name, organization_id, branch_id, hr_access_level, is_active')
           .eq('id', userId)
-          .single(),
+          .maybeSingle(),
         supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', userId)
           .order('created_at', { ascending: true })
           .limit(1)
-          .single()
+          .maybeSingle()
       ]);
 
       if (profileResult.error) {
-        console.error('Error fetching profile:', profileResult.error);
+        // PGRST116 = no rows found
+        if (profileResult.error.code !== 'PGRST116') {
+          console.error('Error fetching profile:', profileResult.error);
+        }
         return null;
       }
 
       const profile = profileResult.data;
+      if (!profile) return null;
 
       // Check if user is deactivated
       if (profile.is_active === false) {
@@ -64,7 +68,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (roleResult.error) {
-        console.error('Error fetching role:', roleResult.error);
+        if (roleResult.error.code !== 'PGRST116') {
+          console.error('Error fetching role:', roleResult.error);
+        }
         return null;
       }
 
@@ -72,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: profile.id,
         email: profile.email,
         name: profile.name,
-        role: roleResult.data.role as UserRole,
+        role: (roleResult.data?.role as UserRole) ?? 'employee',
         organizationId: profile.organization_id || undefined,
         branchId: profile.branch_id || undefined,
         hrAccessLevel: profile.hr_access_level as HRAccessLevel | undefined,

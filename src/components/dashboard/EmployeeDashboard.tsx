@@ -88,12 +88,12 @@ export default function EmployeeDashboard() {
 
         // Fetch manager and shifts
         if (employee.manager_id) {
-          const { data: manager } = await supabase
+          const { data: manager, error: managerError } = await supabase
             .from('profiles')
             .select('name')
             .eq('id', employee.manager_id)
-            .single();
-          if (manager) {
+            .maybeSingle();
+          if (!managerError && manager?.name) {
             setManagerName(manager.name);
           }
         }
