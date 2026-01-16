@@ -164,9 +164,10 @@ export default function PendingAccountsDialog({
         fetchPendingEmployees();
         onActivate?.();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error activating account:', err);
-      toast.error(err.message || 'Failed to activate account');
+      const message = err instanceof Error ? err.message : 'Failed to activate account';
+      toast.error(message);
     } finally {
       setActivatingId(null);
     }

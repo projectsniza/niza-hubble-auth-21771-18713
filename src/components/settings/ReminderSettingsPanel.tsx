@@ -14,13 +14,15 @@ const SETTINGS_KEY = "reminder_intervals";
 function parseIntervals(value: unknown): ReminderInterval[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((v) => {
-      const minutes = Number((v as any)?.minutes);
-      const label = String((v as any)?.label ?? "");
+    .map((v): ReminderInterval | null => {
+      if (typeof v !== 'object' || v === null) return null;
+      const item = v as Record<string, unknown>;
+      const minutes = Number(item.minutes);
+      const label = String(item.label ?? "");
       if (!Number.isFinite(minutes) || !label) return null;
-      return { minutes: Math.max(0, Math.floor(minutes)), label } as ReminderInterval;
+      return { minutes: Math.max(0, Math.floor(minutes)), label };
     })
-    .filter(Boolean) as ReminderInterval[];
+    .filter((item): item is ReminderInterval => item !== null);
 }
 
 export default function ReminderSettingsPanel() {

@@ -134,7 +134,7 @@ export default function IncidentManagement() {
         branchId = profile.branch_id;
       }
 
-      const { error } = await supabase.from('incidents').insert({
+      const { error } = await supabase.from('incidents').insert([{
         title: formData.title,
         description: formData.description,
         incident_type: formData.incident_type,
@@ -144,9 +144,9 @@ export default function IncidentManagement() {
         injury_type: formData.injury_type,
         organization_id: orgId,
         branch_id: branchId,
-        reported_by: authUser?.id!,
-        images: attachedFiles as any,
-      });
+        reported_by: authUser?.id ?? '',
+        images: attachedFiles as unknown as null,
+      }]);
 
       if (error) throw error;
 
@@ -154,10 +154,11 @@ export default function IncidentManagement() {
       setShowCreateDialog(false);
       setAttachedFiles([]);
       fetchIncidents();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to report incident';
       toast({
         title: "Error",
-        description: error.message || "Failed to report incident",
+        description: message,
         variant: "destructive",
       });
     }

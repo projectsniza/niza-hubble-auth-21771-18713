@@ -69,8 +69,9 @@ export function useUsers() {
       
       // Fetch pending counts for managers
       await fetchPendingCounts(usersWithRoles);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch users';
+      setError(message);
       console.error('Error fetching users:', err);
     } finally {
       setIsLoading(false);
@@ -108,9 +109,10 @@ export function useUsers() {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
       toast.success('User role updated');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update role';
+      toast.error(message);
+      return { error: message };
     }
   };
 
@@ -142,9 +144,10 @@ export function useUsers() {
 
       toast.success('User profile updated');
       return { data: data ?? null, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update profile';
+      toast.error(message);
+      return { data: null, error: message };
     }
   };
 

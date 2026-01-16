@@ -95,8 +95,9 @@ export default function BankDetailsForm({
       if (error) throw error;
       toast.success('Bank details saved');
       onSave();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save bank details';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

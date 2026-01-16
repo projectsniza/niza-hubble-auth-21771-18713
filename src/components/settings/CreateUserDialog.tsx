@@ -136,9 +136,10 @@ export default function CreateUserDialog({
         onSuccess?.();
         handleClose();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating user:', err);
-      toast.error(err.message || 'Failed to create user');
+      const message = err instanceof Error ? err.message : 'Failed to create user';
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
