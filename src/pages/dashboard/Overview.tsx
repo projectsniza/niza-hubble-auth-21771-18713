@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileText, AlertCircle, UserPlus, DollarSign, Wrench, Building } from 'lucide-react';
+import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileText, UserPlus, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';

@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  Clock, Calendar, MapPin, User, Users, Building, 
+  Clock, Calendar, MapPin, User, Users, 
   CalendarDays, CheckCircle, AlertCircle, FileText, DollarSign,
   ChevronRight
 } from 'lucide-react';
@@ -86,36 +86,33 @@ export default function EmployeeDashboard() {
         const employee = employeeResult.data;
         setEmployeeData(employee);
 
-        // Fetch manager and shifts in parallel
-        const [managerResult, shiftsResult] = await Promise.all([
-          employee.manager_id
-            ? supabase
-                .from('profiles')
-                .select('name')
-                .eq('id', employee.manager_id)
-                .single()
-            : Promise.resolve({ data: null }),
-          employee.id
-            ? supabase
-                .from('rota_shifts')
-                .select('shift_date, start_time, end_time, status')
-                .eq('employee_id', employee.id)
-                .gte('shift_date', today)
-                .order('shift_date', { ascending: true })
-                .limit(10)
-            : Promise.resolve({ data: null })
-        ]);
-
-        if (managerResult.data) {
-          setManagerName(managerResult.data.name);
+        // Fetch manager and shifts
+        if (employee.manager_id) {
+          const { data: manager } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', employee.manager_id)
+            .single();
+          if (manager) {
+            setManagerName(manager.name);
+          }
         }
-
-        if (shiftsResult.data) {
-          const shifts = shiftsResult.data;
-          const todayShifts = shifts.filter((s: Shift) => s.shift_date === today);
-          const futureShifts = shifts.filter((s: Shift) => s.shift_date !== today);
-          setTodaysShifts(todayShifts);
-          setUpcomingShifts(futureShifts.slice(0, 5));
+        
+        if (employee.id) {
+          const { data: shifts } = await supabase
+            .from('rota_shifts')
+            .select('shift_date, start_time, end_time, status')
+            .eq('employee_id', employee.id)
+            .gte('shift_date', today)
+            .order('shift_date', { ascending: true })
+            .limit(10);
+          
+          if (shifts) {
+            const todayShifts = shifts.filter((s: Shift) => s.shift_date === today);
+            const futureShifts = shifts.filter((s: Shift) => s.shift_date !== today);
+            setTodaysShifts(todayShifts);
+            setUpcomingShifts(futureShifts.slice(0, 5));
+          }
         }
       } else {
         // Fallback: fetch from profile if no employee record linked
