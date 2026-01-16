@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,8 +19,18 @@ export function useEmployees(filters?: {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track last fetch params to prevent unnecessary refetches
+  const lastFetchParamsRef = useRef<string>('');
+  
+  const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
 
   const fetchEmployees = useCallback(async () => {
+    // Prevent duplicate fetches with same params
+    if (lastFetchParamsRef.current === filterKey && employees.length > 0) {
+      return;
+    }
+    
     try {
       setIsLoading(true);
       let query = supabase
@@ -55,15 +65,16 @@ export function useEmployees(filters?: {
 
       if (error) throw error;
       setEmployees(data || []);
+      lastFetchParamsRef.current = filterKey;
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching employees:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [filters?.organizationId, filters?.branchId, filters?.managerId, filters?.status, filters?.searchQuery]);
+  }, [filterKey, filters?.organizationId, filters?.branchId, filters?.managerId, filters?.status, filters?.searchQuery, employees.length]);
 
-  const createEmployee = async (employeeData: {
+  const createEmployee = useCallback(async (employeeData: {
     organization_id: string;
     branch_id: string;
     first_name: string;
@@ -106,9 +117,9 @@ export function useEmployees(filters?: {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, [user?.id]);
 
-  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
+  const updateEmployee = useCallback(async (id: string, updates: Partial<Employee>) => {
     try {
       const { data, error } = await supabase
         .from('employees')
@@ -126,9 +137,9 @@ export function useEmployees(filters?: {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, []);
 
-  const deleteEmployee = async (id: string) => {
+  const deleteEmployee = useCallback(async (id: string) => {
     try {
       const { error } = await supabase
         .from('employees')
@@ -144,7 +155,7 @@ export function useEmployees(filters?: {
       toast.error(err.message);
       return { error: err.message };
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -168,8 +179,9 @@ export function usePendingApprovals() {
   const [pendingApprovals, setPendingApprovals] = useState<ContractApproval[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
 
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = useCallback(async () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
@@ -187,7 +199,7 @@ export function usePendingApprovals() {
 
       if (error) throw error;
       
-      // Fetch documents for each employee
+      // Fetch documents for each employee in parallel
       const approvalsWithDocs = await Promise.all((data || []).map(async (approval) => {
         if (approval.employee?.id) {
           const { data: docs } = await supabase
@@ -208,9 +220,9 @@ export function usePendingApprovals() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const approveContract = async (approvalId: string, signature: string, signatureType: string, signatureDate: string) => {
+  const approveContract = useCallback(async (approvalId: string, signature: string, signatureType: string, signatureDate: string) => {
     try {
       const { data, error } = await supabase
         .from('contract_approvals')
@@ -232,19 +244,19 @@ export function usePendingApprovals() {
       // Update onboarding status
       const approval = pendingApprovals.find(a => a.id === approvalId);
       if (approval) {
-        await supabase
-          .from('employee_onboarding')
-          .update({
-            contract_approved: true,
-            current_step: 4
-          })
-          .eq('employee_id', approval.employee_id);
-
-        // Update employee status
-        await supabase
-          .from('employees')
-          .update({ status: 'awaiting_signature' })
-          .eq('id', approval.employee_id);
+        await Promise.all([
+          supabase
+            .from('employee_onboarding')
+            .update({
+              contract_approved: true,
+              current_step: 4
+            })
+            .eq('employee_id', approval.employee_id),
+          supabase
+            .from('employees')
+            .update({ status: 'awaiting_signature' })
+            .eq('id', approval.employee_id)
+        ]);
       }
       
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
@@ -254,9 +266,9 @@ export function usePendingApprovals() {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, [user?.id, pendingApprovals]);
 
-  const rejectContract = async (approvalId: string, reason: string) => {
+  const rejectContract = useCallback(async (approvalId: string, reason: string) => {
     try {
       const { data, error } = await supabase
         .from('contract_approvals')
@@ -279,13 +291,14 @@ export function usePendingApprovals() {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !fetchedRef.current) {
+      fetchedRef.current = true;
       fetchPendingApprovals();
     }
-  }, [user]);
+  }, [user, fetchPendingApprovals]);
 
   return {
     pendingApprovals,
@@ -301,8 +314,9 @@ export function useOnboarding(employeeId?: string) {
   const { user } = useAuth();
   const [onboarding, setOnboarding] = useState<EmployeeOnboarding | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const lastEmployeeIdRef = useRef<string | undefined>(undefined);
 
-  const fetchOnboarding = async () => {
+  const fetchOnboarding = useCallback(async () => {
     if (!employeeId) return;
     
     try {
@@ -320,9 +334,9 @@ export function useOnboarding(employeeId?: string) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [employeeId]);
 
-  const updateOnboarding = async (updates: Partial<EmployeeOnboarding>) => {
+  const updateOnboarding = useCallback(async (updates: Partial<EmployeeOnboarding>) => {
     if (!employeeId) return { error: 'No employee ID' };
     
     try {
@@ -339,36 +353,35 @@ export function useOnboarding(employeeId?: string) {
     } catch (err: any) {
       return { data: null, error: err.message };
     }
-  };
+  }, [employeeId]);
 
-  const submitContractForApproval = async (contractFilePath: string, contractFileName: string) => {
+  const submitContractForApproval = useCallback(async (contractFilePath: string, contractFileName: string) => {
     if (!employeeId) return { error: 'No employee ID' };
     
     try {
-      // Create contract approval record
-      const { error: approvalError } = await supabase
-        .from('contract_approvals')
-        .insert({
-          employee_id: employeeId,
-          contract_file_path: contractFilePath,
-          contract_file_name: contractFileName,
-          submitted_by: user?.id,
-          status: 'pending'
-        });
+      // Create contract approval and update onboarding in parallel
+      const [approvalResult, onboardingResult] = await Promise.all([
+        supabase
+          .from('contract_approvals')
+          .insert({
+            employee_id: employeeId,
+            contract_file_path: contractFilePath,
+            contract_file_name: contractFileName,
+            submitted_by: user?.id,
+            status: 'pending'
+          }),
+        supabase
+          .from('employee_onboarding')
+          .update({
+            contract_uploaded: true,
+            contract_submitted_for_approval: true,
+            current_step: 3
+          })
+          .eq('employee_id', employeeId)
+      ]);
 
-      if (approvalError) throw approvalError;
-
-      // Update onboarding status
-      const { error: onboardingError } = await supabase
-        .from('employee_onboarding')
-        .update({
-          contract_uploaded: true,
-          contract_submitted_for_approval: true,
-          current_step: 3
-        })
-        .eq('employee_id', employeeId);
-
-      if (onboardingError) throw onboardingError;
+      if (approvalResult.error) throw approvalResult.error;
+      if (onboardingResult.error) throw onboardingResult.error;
 
       toast.success('Contract submitted for approval');
       return { error: null };
@@ -376,13 +389,14 @@ export function useOnboarding(employeeId?: string) {
       toast.error(err.message);
       return { error: err.message };
     }
-  };
+  }, [employeeId, user?.id]);
 
   useEffect(() => {
-    if (employeeId) {
+    if (employeeId && lastEmployeeIdRef.current !== employeeId) {
+      lastEmployeeIdRef.current = employeeId;
       fetchOnboarding();
     }
-  }, [employeeId]);
+  }, [employeeId, fetchOnboarding]);
 
   return {
     onboarding,

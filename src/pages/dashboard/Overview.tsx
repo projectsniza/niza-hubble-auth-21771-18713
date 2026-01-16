@@ -5,7 +5,7 @@ import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileT
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -56,6 +56,7 @@ interface Stats {
 export default function Overview() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const fetchedRef = useRef(false);
   
   const [overdueFollowUps, setOverdueFollowUps] = useState<DocumentFollowUp[]>([]);
   const [upcomingFollowUps, setUpcomingFollowUps] = useState<DocumentFollowUp[]>([]);
@@ -65,51 +66,7 @@ export default function Overview() {
   const [stats, setStats] = useState<Stats>({ totalEmployees: 0, presentToday: 0, pendingApprovals: 0, activeEvents: 0 });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAllData();
-
-    // Real-time subscriptions
-    const documentsChannel = supabase
-      .channel('documents-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => fetchDocumentFollowUps())
-      .subscribe();
-
-    const approvalsChannel = supabase
-      .channel('approvals-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contract_approvals' }, () => fetchPendingApprovals())
-      .subscribe();
-
-    const reportsChannel = supabase
-      .channel('daily-reports-overview')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_reports' }, () => fetchDailyReports())
-      .subscribe();
-
-    const maintenanceChannel = supabase
-      .channel('maintenance-overview')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets' }, () => fetchMaintenanceTickets())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(documentsChannel);
-      supabase.removeChannel(approvalsChannel);
-      supabase.removeChannel(reportsChannel);
-      supabase.removeChannel(maintenanceChannel);
-    };
-  }, [user?.role]);
-
-  const fetchAllData = async () => {
-    setLoading(true);
-    await Promise.all([
-      fetchStats(),
-      fetchDocumentFollowUps(),
-      fetchPendingApprovals(),
-      fetchDailyReports(),
-      fetchMaintenanceTickets()
-    ]);
-    setLoading(false);
-  };
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0];
     
     const [employeesRes, clockInsRes, approvalsRes, eventsRes] = await Promise.all([
@@ -128,9 +85,9 @@ export default function Overview() {
       pendingApprovals: approvalsRes.count || 0,
       activeEvents: eventsRes.count || 0
     });
-  };
+  }, []);
 
-  const fetchDocumentFollowUps = async () => {
+  const fetchDocumentFollowUps = useCallback(async () => {
     const today = new Date();
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
@@ -155,9 +112,9 @@ export default function Overview() {
 
     setOverdueFollowUps(overdueRes.data || []);
     setUpcomingFollowUps(upcomingRes.data || []);
-  };
+  }, []);
 
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = useCallback(async () => {
     const { data } = await supabase
       .from('contract_approvals')
       .select(`id, employee_id, submitted_at, employee:employees(first_name, last_name, job_title, join_date)`)
@@ -165,18 +122,18 @@ export default function Overview() {
       .order('submitted_at', { ascending: false })
       .limit(10);
     setPendingApprovals(data || []);
-  };
+  }, []);
 
-  const fetchDailyReports = async () => {
+  const fetchDailyReports = useCallback(async () => {
     const { data } = await supabase
       .from('daily_reports')
       .select(`id, title, report_type, submitted_at, branch:branches(name)`)
       .order('submitted_at', { ascending: false })
       .limit(10);
     setDailyReports(data || []);
-  };
+  }, []);
 
-  const fetchMaintenanceTickets = async () => {
+  const fetchMaintenanceTickets = useCallback(async () => {
     const { data } = await supabase
       .from('maintenance_tickets')
       .select(`id, title, priority, status, created_at, branch:branches(name)`)
@@ -184,12 +141,48 @@ export default function Overview() {
       .order('created_at', { ascending: false })
       .limit(10);
     setMaintenanceTickets(data || []);
-  };
+  }, []);
 
-  const highPriorityTickets = maintenanceTickets.filter(t => t.priority === 'high');
-  const attendanceRate = stats.totalEmployees > 0 
+  const fetchAllData = useCallback(async () => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    
+    setLoading(true);
+    await Promise.all([
+      fetchStats(),
+      fetchDocumentFollowUps(),
+      fetchPendingApprovals(),
+      fetchDailyReports(),
+      fetchMaintenanceTickets()
+    ]);
+    setLoading(false);
+  }, [fetchStats, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets]);
+
+  useEffect(() => {
+    fetchAllData();
+
+    // Single consolidated real-time channel for better performance
+    const overviewChannel = supabase
+      .channel('overview-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => fetchDocumentFollowUps())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contract_approvals' }, () => {
+        fetchPendingApprovals();
+        fetchStats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_reports' }, () => fetchDailyReports())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets' }, () => fetchMaintenanceTickets())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(overviewChannel);
+    };
+  }, [fetchAllData, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets, fetchStats]);
+
+  const highPriorityTickets = useMemo(() => maintenanceTickets.filter(t => t.priority === 'high'), [maintenanceTickets]);
+  const attendanceRate = useMemo(() => stats.totalEmployees > 0 
     ? ((stats.presentToday / stats.totalEmployees) * 100).toFixed(1) 
-    : '0';
+    : '0', [stats.totalEmployees, stats.presentToday]);
+
 
   // Employee View
   if (user?.role === 'employee') {

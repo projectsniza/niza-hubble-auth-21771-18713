@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 
@@ -33,36 +33,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const fetchUserProfile = async (userId: string): Promise<AppUser | null | 'deactivated'> => {
+  const fetchUserProfile = useCallback(async (userId: string): Promise<AppUser | null | 'deactivated'> => {
     try {
-      // Fetch profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Fetch profile and role in parallel for better performance
+      const [profileResult, roleResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, email, name, organization_id, branch_id, hr_access_level, is_active')
+          .eq('id', userId)
+          .single(),
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single()
+      ]);
 
-      if (profileError) {
-        console.error('Error fetching profile:', profileError);
+      if (profileResult.error) {
+        console.error('Error fetching profile:', profileResult.error);
         return null;
       }
+
+      const profile = profileResult.data;
 
       // Check if user is deactivated
       if (profile.is_active === false) {
         return 'deactivated';
       }
 
-      // Fetch role
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (roleError) {
-        console.error('Error fetching role:', roleError);
+      if (roleResult.error) {
+        console.error('Error fetching role:', roleResult.error);
         return null;
       }
 
@@ -70,7 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: profile.id,
         email: profile.email,
         name: profile.name,
-        role: roleData.role as UserRole,
+        role: roleResult.data.role as UserRole,
         organizationId: profile.organization_id || undefined,
         branchId: profile.branch_id || undefined,
         hrAccessLevel: profile.hr_access_level as HRAccessLevel | undefined,
@@ -81,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error in fetchUserProfile:', error);
       return null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -162,9 +164,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isInitialized]);
+  }, [isInitialized, fetchUserProfile]);
 
-  const login = async (email: string, password: string): Promise<{ error: string | null }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -175,15 +177,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return { error: null };
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-  };
+  }, []);
 
-  const updatePassword = async (newPassword: string): Promise<{ error: string | null }> => {
+  const updatePassword = useCallback(async (newPassword: string): Promise<{ error: string | null }> => {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -193,10 +195,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return { error: null };
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    session,
+    isLoading,
+    login,
+    logout,
+    updatePassword
+  }), [user, session, isLoading, login, logout, updatePassword]);
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, login, logout, updatePassword }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
