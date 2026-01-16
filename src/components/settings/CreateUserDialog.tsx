@@ -27,8 +27,8 @@ import { UserRole, HRAccessLevel } from '@/types/database';
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizations: any[];
-  branches: any[];
+  organizations: { id: string; name: string }[];
+  branches: { id: string; name: string; organization_id: string }[];
   onSuccess?: () => void;
 }
 

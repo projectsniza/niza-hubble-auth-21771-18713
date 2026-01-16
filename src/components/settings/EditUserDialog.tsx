@@ -24,10 +24,10 @@ import { UserRole, HRAccessLevel } from '@/types/database';
 interface EditUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: any;
-  organizations: any[];
-  branches: any[];
-  onSave: (userId: string, updates: any) => void;
+  user: { id: string; name: string; email?: string; role: UserRole; organization_id?: string | null; branch_id?: string | null; hr_access_level?: HRAccessLevel | null; is_active?: boolean };
+  organizations: { id: string; name: string }[];
+  branches: { id: string; name: string; organization_id: string }[];
+  onSave: (userId: string, updates: { name?: string; role?: UserRole; organization_id?: string | null; branch_id?: string | null; hr_access_level?: HRAccessLevel | null }) => void;
 }
 
 export default function EditUserDialog({

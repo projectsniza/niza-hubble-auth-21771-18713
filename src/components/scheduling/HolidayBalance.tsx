@@ -10,8 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
-  Calendar, Clock, Umbrella, RefreshCw, Search,
-  TrendingUp, Loader2, Download
+  Calendar, Clock, Umbrella, RefreshCw, Search, TrendingUp, Loader2, Download
 } from 'lucide-react';
 import { format, parseISO, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { toast } from 'sonner';
