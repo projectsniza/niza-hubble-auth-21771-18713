@@ -278,8 +278,8 @@ export default function Payroll() {
   const [isSaving, setIsSaving] = useState(false);
   
   // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');

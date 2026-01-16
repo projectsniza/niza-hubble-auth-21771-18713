@@ -74,8 +74,8 @@ export function TimesheetView() {
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -229,9 +229,30 @@ export function TimesheetView() {
     setShowEditDialog(true);
   };
 
-  const updateEntry = (index: number, field: keyof TimesheetEntry, value: any) => {
+  const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
     const updated = [...entries];
-    (updated[index] as any)[field] = value;
+    const entry = { ...updated[index] };
+    
+    // Type-safe assignment based on field
+    switch (field) {
+      case 'shift_start_time':
+      case 'shift_end_time':
+      case 'day_of_week':
+      case 'entry_date':
+      case 'entry_type':
+      case 'notes':
+        entry[field] = value as string;
+        break;
+      case 'break_duration_minutes':
+      case 'actual_hours':
+      case 'holiday_hours':
+      case 'sick_hours':
+      case 'adjustment_hours':
+        entry[field] = value as number;
+        break;
+    }
+    
+    updated[index] = entry;
     
     if ((field === 'shift_start_time' || field === 'shift_end_time' || field === 'break_duration_minutes') 
         && updated[index].shift_start_time && updated[index].shift_end_time) {

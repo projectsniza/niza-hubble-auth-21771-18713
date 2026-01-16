@@ -18,11 +18,31 @@ import { format } from 'date-fns';
 
 export default function Performance() {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [criteria, setCriteria] = useState<any[]>([]);
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Array<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    branch_id: string;
+    organization_id: string;
+    job_title?: string | null;
+    organization?: { name: string } | null;
+    branch?: { name: string } | null;
+  }>>([]);
+  const [reviews, setReviews] = useState<Array<{
+    id: string;
+    employee_id: string;
+    review_period_start: string;
+    review_period_end: string;
+    overall_rating: number;
+    status: string;
+    feedback: string | null;
+    goals: string | null;
+    goals_progress: number | null;
+    created_at: string;
+  }>>([]);
+  const [criteria, setCriteria] = useState<Array<{ id: string; name: string; description: string | null; weight: number }>>([]);
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string }>>([]);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; organization_id: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [viewMode, setViewMode] = useState<'all' | 'company' | 'organization' | 'branch'>('all');

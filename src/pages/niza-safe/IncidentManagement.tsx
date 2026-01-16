@@ -38,8 +38,8 @@ export default function IncidentManagement() {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Organizations and branches for Super Admin
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
 

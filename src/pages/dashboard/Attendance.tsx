@@ -56,7 +56,7 @@ export default function Attendance() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [mandatoryLeave, setMandatoryLeave] = useState<MandatoryLeave[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string; organization_id: string; branch_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddTimeOff, setShowAddTimeOff] = useState(false);
   const [showAddMandatory, setShowAddMandatory] = useState(false);
@@ -64,8 +64,8 @@ export default function Attendance() {
   const [filterType, setFilterType] = useState<string>('all');
   
   // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');

@@ -41,7 +41,7 @@ interface SafetyTask {
 export default function SafetyTasks() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<SafetyTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
