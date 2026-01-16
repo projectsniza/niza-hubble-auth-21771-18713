@@ -208,10 +208,11 @@ export default function DailyReports() {
       setFiles([]);
       setShowUploadDialog(false);
       fetchReports();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit report';
       toast({
         title: "Error",
-        description: error.message || "Failed to submit report",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -233,7 +234,7 @@ export default function DailyReports() {
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: "Failed to download file",

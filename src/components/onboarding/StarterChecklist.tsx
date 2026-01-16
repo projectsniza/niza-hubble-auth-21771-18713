@@ -107,8 +107,9 @@ export default function StarterChecklist({
       if (error) throw error;
       toast.success('Starter checklist saved');
       onSave();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save checklist';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

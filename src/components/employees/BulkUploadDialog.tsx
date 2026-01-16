@@ -159,8 +159,9 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
           } else {
             successCount++;
           }
-        } catch (err: any) {
-          errors.push(`${emp.first_name} ${emp.last_name}: ${err.message}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          errors.push(`${emp.first_name} ${emp.last_name}: ${message}`);
           failedCount++;
         }
       }
@@ -182,8 +183,9 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
         toast.success(`Successfully imported ${successCount} employees`);
         onSuccess();
       }
-    } catch (err: any) {
-      toast.error('Upload failed: ' + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Upload failed: ' + message);
     } finally {
       setIsUploading(false);
     }

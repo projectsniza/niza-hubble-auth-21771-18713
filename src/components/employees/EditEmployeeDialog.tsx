@@ -113,8 +113,9 @@ export default function EditEmployeeDialog({
       toast.success('Employee updated successfully');
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error('Failed to update employee: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to update employee: ' + message);
     } finally {
       setIsSubmitting(false);
     }

@@ -145,8 +145,9 @@ export function ShiftsView() {
         notes: ''
       });
       fetchShifts();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create shift';
+      toast.error(message);
     }
   };
 

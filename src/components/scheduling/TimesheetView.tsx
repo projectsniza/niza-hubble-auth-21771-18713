@@ -202,8 +202,9 @@ export function TimesheetView() {
       await supabase.from('timesheet_entries').insert(entryInserts);
       toast.success('Timesheet created');
       fetchWeeklyData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create timesheet');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create timesheet';
+      toast.error(message);
     }
   };
 
@@ -303,8 +304,9 @@ export function TimesheetView() {
       toast.success('Timesheet saved');
       setShowEditDialog(false);
       fetchWeeklyData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save timesheet');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save timesheet';
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -324,8 +326,9 @@ export function TimesheetView() {
       }
       toast.success('Timesheet approved');
       fetchWeeklyData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve timesheet');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to approve timesheet';
+      toast.error(message);
     }
   };
 

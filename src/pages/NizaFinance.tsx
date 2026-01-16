@@ -114,7 +114,7 @@ export default function NizaFinance() {
       }));
 
       setSavedReports(reports);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching reports:', error);
       toast({
         title: "Error",
@@ -161,7 +161,7 @@ export default function NizaFinance() {
         title: "Report Saved",
         description: `${data.name} has been saved successfully.`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving report:', error);
       toast({
         title: "Error",
@@ -188,7 +188,7 @@ export default function NizaFinance() {
         title: "Report Deleted",
         description: "The report has been removed.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting report:', error);
       toast({
         title: "Error",

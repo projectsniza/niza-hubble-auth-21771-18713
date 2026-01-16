@@ -112,8 +112,9 @@ export function StatutoryLeave() {
       setShowLeaveDialog(false);
       setNewLeave({ employee_id: '', leave_type: 'maternity', baby_due_date: '', pay_type: 'statutory', notes: '' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create leave request';
+      toast.error(message);
     }
   };
 
@@ -134,8 +135,9 @@ export function StatutoryLeave() {
       setShowSSPDialog(false);
       setNewSSP({ employee_id: '', absence_start_date: '', reason: '' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create SSP record';
+      toast.error(message);
     }
   };
 
@@ -150,8 +152,9 @@ export function StatutoryLeave() {
       if (error) throw error;
       toast.success('Leave approved');
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to approve leave';
+      toast.error(message);
     }
   };
 
@@ -165,8 +168,9 @@ export function StatutoryLeave() {
       if (error) throw error;
       toast.success('SSP record closed');
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to close SSP record';
+      toast.error(message);
     }
   };
 
