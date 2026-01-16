@@ -3405,6 +3405,75 @@ export type Database = {
           },
         ]
       }
+      shared_templates: {
+        Row: {
+          branch_id: string | null
+          content: Json | null
+          created_at: string
+          description: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          id: string
+          is_active: boolean | null
+          is_global: boolean | null
+          organization_id: string | null
+          shared_by: string
+          template_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          content?: Json | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_global?: boolean | null
+          organization_id?: string | null
+          shared_by: string
+          template_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          content?: Json | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_global?: boolean | null
+          organization_id?: string | null
+          shared_by?: string
+          template_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_templates_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ssp_records: {
         Row: {
           absence_end_date: string | null
@@ -3553,6 +3622,72 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_templates: {
+        Row: {
+          branch_id: string
+          content: Json | null
+          created_at: string
+          created_by: string
+          description: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          id: string
+          is_active: boolean | null
+          organization_id: string
+          template_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          content?: Json | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_id: string
+          template_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          content?: Json | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string
+          template_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_templates_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
