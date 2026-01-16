@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Organization, Branch } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,8 +9,9 @@ export function useOrganizations() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
 
-  const fetchOrganizations = async () => {
+  const fetchOrganizations = useCallback(async () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
@@ -26,9 +27,9 @@ export function useOrganizations() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const createOrganization = async (name: string, autoCreateFolder: boolean = true, vatNumber?: string) => {
+  const createOrganization = useCallback(async (name: string, autoCreateFolder: boolean = true, vatNumber?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
@@ -50,9 +51,9 @@ export function useOrganizations() {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, [user?.id]);
 
-  const updateOrganization = async (id: string, name: string, vatNumber?: string) => {
+  const updateOrganization = useCallback(async (id: string, name: string, vatNumber?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
@@ -70,9 +71,9 @@ export function useOrganizations() {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, []);
 
-  const deleteOrganization = async (id: string) => {
+  const deleteOrganization = useCallback(async (id: string) => {
     try {
       const { error } = await (supabase as any).rpc('delete_organization_cascade', {
         p_organization_id: id,
@@ -87,13 +88,14 @@ export function useOrganizations() {
       toast.error(err.message);
       return { error: err.message };
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (user) {
+    if (user && !fetchedRef.current) {
+      fetchedRef.current = true;
       fetchOrganizations();
     }
-  }, [user]);
+  }, [user, fetchOrganizations]);
 
   return {
     organizations,
@@ -111,8 +113,9 @@ export function useBranches(organizationId?: string) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastOrgIdRef = useRef<string | undefined>(undefined);
 
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       setIsLoading(true);
       let query = supabase
@@ -134,9 +137,9 @@ export function useBranches(organizationId?: string) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organizationId]);
 
-  const createBranch = async (
+  const createBranch = useCallback(async (
     organizationId: string,
     name: string,
     address?: string,
@@ -168,9 +171,9 @@ export function useBranches(organizationId?: string) {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, [user?.id]);
 
-  const updateBranch = async (id: string, name: string, address?: string) => {
+  const updateBranch = useCallback(async (id: string, name: string, address?: string) => {
     try {
       const { data, error } = await supabase
         .from('branches')
@@ -188,9 +191,9 @@ export function useBranches(organizationId?: string) {
       toast.error(err.message);
       return { data: null, error: err.message };
     }
-  };
+  }, []);
 
-  const deleteBranch = async (id: string) => {
+  const deleteBranch = useCallback(async (id: string) => {
     try {
       const { error } = await (supabase as any).rpc('delete_branch_cascade', {
         p_branch_id: id,
@@ -205,13 +208,15 @@ export function useBranches(organizationId?: string) {
       toast.error(err.message);
       return { error: err.message };
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (user) {
+    // Only fetch if user exists and organizationId changed
+    if (user && lastOrgIdRef.current !== organizationId) {
+      lastOrgIdRef.current = organizationId;
       fetchBranches();
     }
-  }, [user, organizationId]);
+  }, [user, organizationId, fetchBranches]);
 
   return {
     branches,

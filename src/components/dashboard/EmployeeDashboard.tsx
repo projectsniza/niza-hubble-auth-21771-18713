@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,73 +45,96 @@ export default function EmployeeDashboard() {
   const [managerName, setManagerName] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchEmployeeData();
-    }
-  }, [user]);
-
-  const fetchEmployeeData = async () => {
+  const fetchEmployeeData = useCallback(async () => {
+    if (!user?.id) return;
+    
     setLoading(true);
     try {
-      // Fetch employee profile
-      const { data: employee } = await supabase
-        .from('employees')
-        .select(`
-          first_name,
-          last_name,
-          job_title,
-          department,
-          manager_id,
-          branch:branches(name),
-          organization:organizations(name),
-          team:teams(name)
-        `)
-        .eq('user_id', user?.id)
-        .maybeSingle();
+      const today = new Date().toISOString().split('T')[0];
 
-      if (employee) {
+      // Fetch employee profile and clock-in in parallel
+      const [employeeResult, clockInResult] = await Promise.all([
+        supabase
+          .from('employees')
+          .select(`
+            id,
+            first_name,
+            last_name,
+            job_title,
+            department,
+            manager_id,
+            branch:branches(name),
+            organization:organizations(name),
+            team:teams(name)
+          `)
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('clock_ins')
+          .select('clock_in_time, clock_out_time')
+          .eq('user_id', user.id)
+          .gte('clock_in_time', `${today}T00:00:00`)
+          .lte('clock_in_time', `${today}T23:59:59`)
+          .order('clock_in_time', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ]);
+
+      setTodayClockIn(clockInResult.data);
+
+      if (employeeResult.data) {
+        const employee = employeeResult.data;
         setEmployeeData(employee);
 
-        // Fetch manager name if exists
-        if (employee.manager_id) {
-          const { data: manager } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', employee.manager_id)
-            .single();
-          if (manager) setManagerName(manager.name);
+        // Fetch manager and shifts in parallel
+        const [managerResult, shiftsResult] = await Promise.all([
+          employee.manager_id
+            ? supabase
+                .from('profiles')
+                .select('name')
+                .eq('id', employee.manager_id)
+                .single()
+            : Promise.resolve({ data: null }),
+          employee.id
+            ? supabase
+                .from('rota_shifts')
+                .select('shift_date, start_time, end_time, status')
+                .eq('employee_id', employee.id)
+                .gte('shift_date', today)
+                .order('shift_date', { ascending: true })
+                .limit(10)
+            : Promise.resolve({ data: null })
+        ]);
+
+        if (managerResult.data) {
+          setManagerName(managerResult.data.name);
+        }
+
+        if (shiftsResult.data) {
+          const shifts = shiftsResult.data;
+          const todayShifts = shifts.filter((s: Shift) => s.shift_date === today);
+          const futureShifts = shifts.filter((s: Shift) => s.shift_date !== today);
+          setTodaysShifts(todayShifts);
+          setUpcomingShifts(futureShifts.slice(0, 5));
         }
       } else {
         // Fallback: fetch from profile if no employee record linked
         const { data: profile } = await supabase
           .from('profiles')
           .select('name, organization_id, branch_id')
-          .eq('id', user?.id)
+          .eq('id', user.id)
           .maybeSingle();
 
         if (profile) {
-          // Fetch org and branch names separately
-          let orgName = null;
-          let branchName = null;
-
-          if (profile.organization_id) {
-            const { data: orgData } = await supabase
-              .from('organizations')
-              .select('name')
-              .eq('id', profile.organization_id)
-              .maybeSingle();
-            orgName = orgData?.name || null;
-          }
-
-          if (profile.branch_id) {
-            const { data: branchData } = await supabase
-              .from('branches')
-              .select('name')
-              .eq('id', profile.branch_id)
-              .maybeSingle();
-            branchName = branchData?.name || null;
-          }
+          // Fetch org and branch names in parallel
+          const [orgResult, branchResult] = await Promise.all([
+            profile.organization_id 
+              ? supabase.from('organizations').select('name').eq('id', profile.organization_id).maybeSingle()
+              : Promise.resolve({ data: null }),
+            profile.branch_id
+              ? supabase.from('branches').select('name').eq('id', profile.branch_id).maybeSingle()
+              : Promise.resolve({ data: null })
+          ]);
 
           setEmployeeData({
             first_name: profile.name?.split(' ')[0] || '',
@@ -119,49 +142,10 @@ export default function EmployeeDashboard() {
             job_title: '',
             department: '',
             manager_id: null,
-            branch: branchName ? { name: branchName } : null,
-            organization: orgName ? { name: orgName } : null,
+            branch: branchResult.data ? { name: branchResult.data.name } : null,
+            organization: orgResult.data ? { name: orgResult.data.name } : null,
             team: null
           });
-        }
-      }
-
-      // Fetch today's clock-in
-      const today = new Date().toISOString().split('T')[0];
-      const { data: clockIn } = await supabase
-        .from('clock_ins')
-        .select('clock_in_time, clock_out_time')
-        .eq('user_id', user?.id)
-        .gte('clock_in_time', `${today}T00:00:00`)
-        .lte('clock_in_time', `${today}T23:59:59`)
-        .order('clock_in_time', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      setTodayClockIn(clockIn);
-
-      // Fetch employee record to get employee_id for shifts query
-      const { data: empRecord } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('user_id', user?.id)
-        .maybeSingle();
-
-      if (empRecord) {
-        // Fetch today's and upcoming shifts using employee record id
-        const { data: shifts } = await supabase
-          .from('rota_shifts')
-          .select('shift_date, start_time, end_time, status')
-          .eq('employee_id', empRecord.id)
-          .gte('shift_date', today)
-          .order('shift_date', { ascending: true })
-          .limit(10);
-
-        if (shifts) {
-          const todayShifts = shifts.filter(s => s.shift_date === today);
-          const futureShifts = shifts.filter(s => s.shift_date !== today);
-          setTodaysShifts(todayShifts);
-          setUpcomingShifts(futureShifts.slice(0, 5));
         }
       }
     } catch (error) {
@@ -169,9 +153,19 @@ export default function EmployeeDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  const currentDate = format(new Date(), 'EEEE, dd MMMM yyyy');
+  useEffect(() => {
+    if (user) {
+      fetchEmployeeData();
+    }
+  }, [user, fetchEmployeeData]);
+
+  const currentDate = useMemo(() => format(new Date(), 'EEEE, dd MMMM yyyy'), []);
+
+  const handleNavigate = useCallback((path: string) => {
+    navigate(path);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -192,7 +186,7 @@ export default function EmployeeDashboard() {
           <p className="text-sm md:text-base text-muted-foreground">{currentDate}</p>
         </div>
         <Button 
-          onClick={() => navigate('/dashboard/clock-ins')}
+          onClick={() => handleNavigate('/dashboard/clock-ins')}
           className="w-full md:w-auto"
           size="lg"
         >
@@ -311,7 +305,7 @@ export default function EmployeeDashboard() {
               <CalendarDays className="h-5 w-5 text-primary" />
               <h2 className="text-base md:text-lg font-semibold">Upcoming Shifts</h2>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/scheduling')} className="text-xs md:text-sm">
+            <Button variant="ghost" size="sm" onClick={() => handleNavigate('/dashboard/scheduling')} className="text-xs md:text-sm">
               View All
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
@@ -346,7 +340,7 @@ export default function EmployeeDashboard() {
           <Button 
             variant="outline" 
             className="h-16 md:h-20 flex-col gap-1 md:gap-2 text-xs md:text-sm" 
-            onClick={() => navigate('/dashboard/my-profile')}
+            onClick={() => handleNavigate('/dashboard/my-profile')}
           >
             <User className="h-4 w-4 md:h-5 md:w-5" />
             <span>My Profile</span>
@@ -354,7 +348,7 @@ export default function EmployeeDashboard() {
           <Button 
             variant="outline" 
             className="h-16 md:h-20 flex-col gap-1 md:gap-2 text-xs md:text-sm" 
-            onClick={() => navigate('/dashboard/attendance')}
+            onClick={() => handleNavigate('/dashboard/attendance')}
           >
             <Calendar className="h-4 w-4 md:h-5 md:w-5" />
             <span>Request Leave</span>
@@ -362,7 +356,7 @@ export default function EmployeeDashboard() {
           <Button 
             variant="outline" 
             className="h-16 md:h-20 flex-col gap-1 md:gap-2 text-xs md:text-sm" 
-            onClick={() => navigate('/dashboard/documents')}
+            onClick={() => handleNavigate('/dashboard/documents')}
           >
             <FileText className="h-4 w-4 md:h-5 md:w-5" />
             <span>My Documents</span>
@@ -370,7 +364,7 @@ export default function EmployeeDashboard() {
           <Button 
             variant="outline" 
             className="h-16 md:h-20 flex-col gap-1 md:gap-2 text-xs md:text-sm" 
-            onClick={() => navigate('/dashboard/payroll')}
+            onClick={() => handleNavigate('/dashboard/payroll')}
           >
             <DollarSign className="h-4 w-4 md:h-5 md:w-5" />
             <span>Pay Slips</span>
