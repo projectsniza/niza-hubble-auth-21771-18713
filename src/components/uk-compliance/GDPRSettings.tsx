@@ -103,8 +103,9 @@ export function GDPRSettings() {
       setShowPolicyDialog(false);
       setNewPolicy({ data_category: '', retention_period_months: 84, legal_basis: 'legal_obligation', description: '' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to add policy';
+      toast.error(message);
     }
   };
 
@@ -123,8 +124,9 @@ export function GDPRSettings() {
       setShowRequestDialog(false);
       setNewRequest({ request_type: 'access', requester_name: '', requester_email: '', notes: '' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to log data request';
+      toast.error(message);
     }
   };
 
@@ -141,8 +143,9 @@ export function GDPRSettings() {
 
       toast.success('Request updated');
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update request';
+      toast.error(message);
     }
   };
 

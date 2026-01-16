@@ -146,8 +146,9 @@ export default function ContractTemplate({
 
       toast.success('Contract saved');
       onSave();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save contract';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -195,8 +196,9 @@ export default function ContractTemplate({
 
       toast.success('Contract submitted for approval');
       onSubmit();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit for approval';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -241,8 +243,9 @@ export default function ContractTemplate({
       toast.success('Contract approved and signed');
       setShowSignatureDialog(false);
       onSubmit();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to approve contract';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

@@ -54,7 +54,7 @@ export function useSharedTemplates() {
 
       if (error) throw error;
       setTemplates((data || []) as SharedTemplate[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching shared templates:', error);
       toast.error('Failed to load templates');
     } finally {
@@ -118,7 +118,7 @@ export function useSharedTemplates() {
       toast.success('Template shared successfully');
       fetchTemplates();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating shared template:', error);
       toast.error('Failed to share template');
       return null;
@@ -136,7 +136,7 @@ export function useSharedTemplates() {
 
       toast.success('Template removed');
       fetchTemplates();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting shared template:', error);
       toast.error('Failed to remove template');
     }
@@ -181,7 +181,7 @@ export function useStoreTemplates() {
 
       setTemplates((storeData || []) as StoreTemplate[]);
       setSharedTemplates((sharedData || []) as SharedTemplate[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching templates:', error);
       toast.error('Failed to load templates');
     } finally {
@@ -247,7 +247,7 @@ export function useStoreTemplates() {
       toast.success('Template created successfully');
       fetchTemplates();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating store template:', error);
       toast.error('Failed to create template');
       return null;
@@ -265,7 +265,7 @@ export function useStoreTemplates() {
 
       toast.success('Template removed');
       fetchTemplates();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting template:', error);
       toast.error('Failed to remove template');
     }

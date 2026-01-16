@@ -167,8 +167,9 @@ export default function ApplicationForm({
       if (error) throw error;
       toast.success('Application form saved');
       onSave();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save form';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

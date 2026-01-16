@@ -283,8 +283,9 @@ export default function AddEmployee() {
       if (empError) throw empError;
       setEmployeeRecord(employee);
       toast.success('Basic details saved');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save details');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save details';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -316,8 +317,9 @@ export default function AddEmployee() {
 
       toast.success('Contract submitted for approval');
       handleNext();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to submit for approval');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit for approval';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -339,8 +341,9 @@ export default function AddEmployee() {
 
       toast.success('Employee onboarding completed!');
       navigate('/dashboard/employees');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to complete onboarding';
+      toast.error(message);
     }
   };
 

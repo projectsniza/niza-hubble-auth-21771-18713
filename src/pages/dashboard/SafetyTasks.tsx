@@ -137,8 +137,9 @@ export default function SafetyTasks() {
 
       toast({ title: "Success", description: `Task ${newStatus === 'in_progress' ? 'started' : newStatus === 'completed' ? 'completed' : 'updated'}` });
       fetchTasks();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update task';
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 

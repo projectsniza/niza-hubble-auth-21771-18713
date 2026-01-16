@@ -204,10 +204,11 @@ export default function Maintenance() {
       setImages([]);
       setShowCreateTicket(false);
       fetchTickets();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create ticket';
       toast({
         title: "Error",
-        description: error.message || "Failed to create ticket",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -244,10 +245,11 @@ export default function Maintenance() {
       });
       fetchTickets();
       setViewingTicket(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update status';
       toast({
         title: "Error",
-        description: error.message || "Failed to update status",
+        description: message,
         variant: "destructive",
       });
     }

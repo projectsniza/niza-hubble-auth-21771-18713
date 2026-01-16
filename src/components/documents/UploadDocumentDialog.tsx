@@ -205,10 +205,11 @@ export default function UploadDocumentDialog({
       setHasSignature(false);
       onOpenChange(false);
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to upload document';
       toast({
         title: "Error",
-        description: error.message || "Failed to upload document",
+        description: message,
         variant: "destructive",
       });
     } finally {

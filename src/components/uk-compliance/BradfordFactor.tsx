@@ -171,8 +171,9 @@ export function BradfordFactor() {
       setShowAbsenceDialog(false);
       setNewAbsence({ employee_id: '', absence_type: 'sickness', start_date: '', end_date: '', reason: '' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to record absence';
+      toast.error(message);
     }
   };
 
@@ -189,8 +190,9 @@ export function BradfordFactor() {
       setShowThresholdDialog(false);
       setNewThreshold({ threshold_score: 100, action_required: 'informal_discussion', description: '', color: '#FCD34D' });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to add threshold';
+      toast.error(message);
     }
   };
 
@@ -205,8 +207,9 @@ export function BradfordFactor() {
       if (error) throw error;
       toast.success('Return to work recorded');
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to record return to work';
+      toast.error(message);
     }
   };
 

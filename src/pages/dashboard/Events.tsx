@@ -165,8 +165,9 @@ export default function Events() {
       setShowCreate(false);
       setNewEvent({ title: '', description: '', eventType: 'announcement', eventDate: '', visibility: 'company', organizationId: '', branchId: '', isPinned: false });
       fetchEvents();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create event');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create event';
+      toast.error(message);
     }
   };
 
@@ -184,8 +185,9 @@ export default function Events() {
       toast.success('Event deleted successfully');
       setDeleteEventId(null);
       fetchEvents();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete event');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete event';
+      toast.error(message);
     }
   };
 

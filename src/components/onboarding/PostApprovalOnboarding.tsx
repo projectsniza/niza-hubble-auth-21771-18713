@@ -104,8 +104,9 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       toast.success('Signed contract uploaded successfully');
       setCurrentStep(prev => prev + 1);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload signed contract');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to upload signed contract';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -126,8 +127,9 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       toast.success('Onboarding completed!');
       onBack();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to complete onboarding';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

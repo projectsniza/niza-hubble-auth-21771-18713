@@ -390,8 +390,9 @@ export default function Payroll() {
       toast.success('Salary structure saved');
       setShowEditSalary(false);
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save salary');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save salary';
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -435,8 +436,9 @@ export default function Payroll() {
         toast.info('No new payroll to generate');
       }
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to generate payroll');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to generate payroll';
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }

@@ -88,7 +88,7 @@ export function useTemplates(folderId?: string) {
       if (error) throw error;
       
       setTemplates((data || []) as Template[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching templates:', error);
       toast({ title: 'Error loading templates', variant: 'destructive' });
     } finally {
@@ -112,7 +112,7 @@ export function useTemplates(folderId?: string) {
       toast({ title: 'Template created successfully' });
       fetchTemplates();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating template:', error);
       toast({ title: 'Error creating template', variant: 'destructive' });
       throw error;
@@ -133,7 +133,7 @@ export function useTemplates(folderId?: string) {
       toast({ title: 'Template updated successfully' });
       fetchTemplates();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating template:', error);
       toast({ title: 'Error updating template', variant: 'destructive' });
       throw error;
@@ -151,7 +151,7 @@ export function useTemplates(folderId?: string) {
       
       toast({ title: 'Template deleted successfully' });
       fetchTemplates();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting template:', error);
       toast({ title: 'Error deleting template', variant: 'destructive' });
       throw error;
@@ -190,7 +190,7 @@ export function useTemplateFolders() {
       if (error) throw error;
       
       setFolders((data || []) as TemplateFolder[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching folders:', error);
       toast({ title: 'Error loading folders', variant: 'destructive' });
     } finally {
@@ -214,7 +214,7 @@ export function useTemplateFolders() {
       toast({ title: 'Folder created successfully' });
       fetchFolders();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating folder:', error);
       toast({ title: 'Error creating folder', variant: 'destructive' });
       throw error;
@@ -235,7 +235,7 @@ export function useTemplateFolders() {
       toast({ title: 'Folder updated successfully' });
       fetchFolders();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating folder:', error);
       toast({ title: 'Error updating folder', variant: 'destructive' });
       throw error;
@@ -253,7 +253,7 @@ export function useTemplateFolders() {
       
       toast({ title: 'Folder deleted successfully' });
       fetchFolders();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting folder:', error);
       toast({ title: 'Error deleting folder', variant: 'destructive' });
       throw error;
@@ -293,7 +293,7 @@ export function useGiftCards() {
       if (error) throw error;
       
       setGiftCards((data || []) as GiftCard[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching gift cards:', error);
       toast({ title: 'Error loading gift cards', variant: 'destructive' });
     } finally {
@@ -317,7 +317,7 @@ export function useGiftCards() {
       toast({ title: 'Gift card created successfully' });
       fetchGiftCards();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating gift card:', error);
       toast({ title: 'Error creating gift card', variant: 'destructive' });
       throw error;
@@ -338,7 +338,7 @@ export function useGiftCards() {
       toast({ title: 'Gift card updated successfully' });
       fetchGiftCards();
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating gift card:', error);
       toast({ title: 'Error updating gift card', variant: 'destructive' });
       throw error;
@@ -356,7 +356,7 @@ export function useGiftCards() {
       
       toast({ title: 'Gift card deleted successfully' });
       fetchGiftCards();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting gift card:', error);
       toast({ title: 'Error deleting gift card', variant: 'destructive' });
       throw error;
@@ -396,7 +396,7 @@ export function useBrandSettings() {
       if (error) throw error;
       
       setBrandSettings(data as BrandSettings | null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching brand settings:', error);
       toast({ title: 'Error loading brand settings', variant: 'destructive' });
     } finally {
@@ -435,7 +435,7 @@ export function useBrandSettings() {
         toast({ title: 'Brand settings created successfully' });
         return data;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving brand settings:', error);
       toast({ title: 'Error saving brand settings', variant: 'destructive' });
       throw error;
@@ -463,7 +463,7 @@ export function useBrandSettings() {
 
       toast({ title: `${type === 'primary' ? 'Primary' : 'Secondary'} logo uploaded successfully` });
       return urlData.publicUrl;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading logo:', error);
       toast({ title: 'Error uploading logo', variant: 'destructive' });
       throw error;
