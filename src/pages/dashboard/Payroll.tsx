@@ -17,6 +17,17 @@ import { jsPDF } from 'jspdf';
 import nizaLogo from '@/assets/niza-group-logo.png';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
+interface OrgOption {
+  id: string;
+  name: string;
+}
+
+interface BranchOption {
+  id: string;
+  name: string;
+  organization_id: string;
+}
+
 const loadLogoAsBase64 = (): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -266,20 +277,24 @@ const generatePayslipPDF = async (
 
 export default function Payroll() {
   const { user } = useAuth();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [employees, setEmployees] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [activeTab, setActiveTab] = useState('setup');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showEditSalary, setShowEditSalary] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  const [organizations, setOrganizations] = useState<OrgOption[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');

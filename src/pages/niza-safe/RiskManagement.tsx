@@ -24,26 +24,42 @@ interface FileInfo {
   type?: string;
 }
 
+interface OrgOption {
+  id: string;
+  name: string;
+}
+
+interface BranchOption {
+  id: string;
+  name: string;
+  organization_id: string;
+}
+
 export default function RiskManagement() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('risk-assessments');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [riskAssessments, setRiskAssessments] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [coshhAssessments, setCoshhAssessments] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [hazardReports, setHazardReports] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [methodStatements, setMethodStatements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [dialogType, setDialogType] = useState<'risk' | 'coshh' | 'hazard' | 'method'>('risk');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Organizations and branches for Super Admin
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  const [organizations, setOrganizations] = useState<OrgOption[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
 

@@ -417,3 +417,118 @@ export interface SafetyTask {
   created_at: string;
   updated_at: string;
 }
+
+// Risk Management Types
+export interface RiskAssessment {
+  id: string;
+  title: string;
+  description: string | null;
+  hazard_description: string | null;
+  control_measures: string | null;
+  risk_level: 'low' | 'medium' | 'high';
+  status: 'draft' | 'pending_review' | 'approved' | 'rejected';
+  organization_id: string;
+  branch_id: string;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  review_date: string | null;
+  attachments: FileInfo[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CoshhAssessment {
+  id: string;
+  chemical_name: string;
+  storage_requirements: string | null;
+  exposure_limits: string | null;
+  ppe_requirements: string[] | null;
+  sds_file_path: string | null;
+  sds_expiry_date: string | null;
+  status: 'draft' | 'approved' | 'expired';
+  is_discontinued: boolean;
+  organization_id: string;
+  branch_id: string;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MethodStatement {
+  id: string;
+  title: string;
+  description: string | null;
+  procedure: string | null;
+  ppe_requirements: string[] | null;
+  emergency_procedures: string | null;
+  status: 'draft' | 'approved' | 'archived';
+  organization_id: string;
+  branch_id: string;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  attachments: FileInfo[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Incident {
+  id: string;
+  title: string;
+  description: string | null;
+  incident_type: 'accident' | 'near_miss' | 'first_aid' | 'riddor';
+  incident_date: string;
+  location_details: string | null;
+  victim_name: string | null;
+  victim_employee_id: string | null;
+  injury_type: string | null;
+  witness_statements: string | null;
+  root_cause: string | null;
+  corrective_actions: string | null;
+  status: 'reported' | 'investigating' | 'closed';
+  organization_id: string;
+  branch_id: string;
+  reported_by: string;
+  investigated_by: string | null;
+  closed_by: string | null;
+  closed_at: string | null;
+  images: FileInfo[] | null;
+  medical_documents: FileInfo[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyReport {
+  id: string;
+  title: string;
+  report_type: string | null;
+  organization_id: string;
+  branch_id: string;
+  submitted_by: string;
+  submitted_at: string | null;
+  files: FileInfo[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileInfo {
+  name: string;
+  path: string;
+  size?: number;
+  type?: string;
+}
+
+// Shared filter types
+export interface OrgOption {
+  id: string;
+  name: string;
+}
+
+export interface BranchOption {
+  id: string;
+  name: string;
+  organization_id: string;
+}
