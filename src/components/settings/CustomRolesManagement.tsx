@@ -477,7 +477,7 @@ export default function CustomRolesManagement() {
   };
 
   const RoleFormContent = ({ isEditMode = false }: { isEditMode?: boolean }) => (
-    <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+    <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2 overscroll-contain">
       {/* Basic Info */}
       <div className="space-y-4">
         <div className="space-y-2">
@@ -864,8 +864,8 @@ export default function CustomRolesManagement() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog} modal={true}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Create Custom Role</DialogTitle>
             <DialogDescription>
@@ -886,8 +886,8 @@ export default function CustomRolesManagement() {
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog} modal={true}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Custom Role</DialogTitle>
             <DialogDescription>
