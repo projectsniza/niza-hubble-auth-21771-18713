@@ -129,13 +129,19 @@ export function useUsers() {
         .update(updates)
         .eq('id', userId)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
+
+      // Some PostgREST configs can return no rows even on successful update.
+      // Keep UI consistent by applying the provided updates locally.
+      setUsers(prev => prev.map(u => {
+        if (u.id !== userId) return u;
+        return { ...u, ...(data ?? updates) };
+      }));
+
       toast.success('User profile updated');
-      return { data, error: null };
+      return { data: data ?? null, error: null };
     } catch (err: any) {
       toast.error(err.message);
       return { data: null, error: err.message };

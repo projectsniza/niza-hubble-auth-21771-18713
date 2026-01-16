@@ -332,7 +332,7 @@ export default function Attendance() {
         .from('employees')
         .select('id')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (empError || !empData) {
         toast.error('Employee record not found');
