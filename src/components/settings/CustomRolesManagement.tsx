@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2, Users, ShieldCheck, Settings2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2, Users, ShieldCheck, Settings2, User, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -147,6 +147,12 @@ export default function CustomRolesManagement() {
     permissions: {} as Record<string, boolean>,
     app_access: { ...defaultAppAccess },
   });
+  
+  // User creation state
+  const [createUser, setCreateUser] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userPassword, setUserPassword] = useState('');
 
   useEffect(() => {
     fetchRoles();
@@ -220,6 +226,10 @@ export default function CustomRolesManagement() {
       permissions: {},
       app_access: { ...defaultAppAccess },
     });
+    setCreateUser(false);
+    setUserEmail('');
+    setUserName('');
+    setUserPassword('');
   };
 
   const openCreateDialog = () => {
@@ -252,9 +262,27 @@ export default function CustomRolesManagement() {
       return;
     }
 
+    // Validate user creation fields if enabled
+    if (createUser) {
+      if (!userEmail.trim() || !userName.trim() || !userPassword.trim()) {
+        toast.error('Please fill in all user credential fields');
+        return;
+      }
+      if (userPassword.length < 6) {
+        toast.error('Password must be at least 6 characters');
+        return;
+      }
+      // Validate required org/branch based on role
+      if (formData.base_role !== 'employee' && formData.base_role === 'manager' && !formData.branch_id) {
+        toast.error('Store Account users must be assigned to a branch');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('custom_roles').insert({
+      // Create the custom role first
+      const { data: roleData, error: roleError } = await supabase.from('custom_roles').insert({
         name: formData.name.trim(),
         description: formData.description.trim() || null,
         base_role: formData.base_role,
@@ -263,11 +291,48 @@ export default function CustomRolesManagement() {
         permissions: formData.permissions,
         app_access: formData.app_access,
         created_by: user?.id || null,
-      });
+      }).select().single();
 
-      if (error) throw error;
+      if (roleError) throw roleError;
 
-      toast.success('Custom role created successfully');
+      // If user creation is enabled, create the user
+      if (createUser && roleData) {
+        // Store current session to restore after user creation
+        const { data: currentSession } = await supabase.auth.getSession();
+        
+        // Create user with metadata - the trigger will use these values
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: userEmail.trim(),
+          password: userPassword,
+          options: {
+            data: {
+              name: userName.trim(),
+              role: formData.base_role,
+              organization_id: formData.organization_id || '',
+              branch_id: formData.branch_id || '',
+              custom_role_id: roleData.id,
+            },
+            emailRedirectTo: `${window.location.origin}/`
+          }
+        });
+
+        if (authError) {
+          // Role was created but user creation failed - inform user
+          toast.error('Role created but user creation failed: ' + authError.message);
+        } else if (authData.user) {
+          // Restore the original session to prevent switching users
+          if (currentSession?.session) {
+            await supabase.auth.setSession({
+              access_token: currentSession.session.access_token,
+              refresh_token: currentSession.session.refresh_token
+            });
+          }
+          toast.success('Custom role and user created successfully');
+        }
+      } else {
+        toast.success('Custom role created successfully');
+      }
+
       setShowCreateDialog(false);
       resetForm();
       fetchRoles();
@@ -412,7 +477,7 @@ export default function CustomRolesManagement() {
     }
   };
 
-  const RoleFormContent = () => (
+  const RoleFormContent = ({ isEditMode = false }: { isEditMode?: boolean }) => (
     <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
       {/* Basic Info */}
       <div className="space-y-4">
@@ -622,6 +687,62 @@ export default function CustomRolesManagement() {
           </div>
         </div>
       </div>
+
+      {/* User Credentials - Only show in Create mode */}
+      {!isEditMode && (
+        <div className="space-y-4 border-t pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              <h4 className="font-medium">Create User with this Role</h4>
+            </div>
+            <Switch
+              checked={createUser}
+              onCheckedChange={setCreateUser}
+            />
+          </div>
+          
+          {createUser && (
+            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">
+                Create a user account that will be assigned this custom role. The user can log in with these credentials.
+              </p>
+              
+              <div className="space-y-2">
+                <Label>Full Name *</Label>
+                <Input
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Enter full name"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Email Address *</Label>
+                <Input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="user@company.com"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Password *</Label>
+                <Input
+                  type="password"
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Share these credentials with the user so they can log in
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -752,14 +873,14 @@ export default function CustomRolesManagement() {
               Define a new custom role with specific permissions
             </DialogDescription>
           </DialogHeader>
-          <RoleFormContent />
+          <RoleFormContent isEditMode={false} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>
             <Button onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Create Role
+              {createUser ? 'Create Role & User' : 'Create Role'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -774,7 +895,7 @@ export default function CustomRolesManagement() {
               Modify the role's permissions and settings
             </DialogDescription>
           </DialogHeader>
-          <RoleFormContent />
+          <RoleFormContent isEditMode={true} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancel
