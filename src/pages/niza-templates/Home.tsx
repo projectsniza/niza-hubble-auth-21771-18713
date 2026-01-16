@@ -2,6 +2,7 @@ import { BadgeCheck, CreditCard, Mail, Gift, Receipt, Palette } from 'lucide-rea
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTemplateStats, useBrandSettings } from '@/hooks/useTemplates';
 import { useNavigate } from 'react-router-dom';
+import SharedTemplatesPanel from '@/components/templates/SharedTemplatesPanel';
 
 export default function TemplatesHome() {
   const { stats, isLoading } = useTemplateStats();
@@ -118,6 +119,9 @@ export default function TemplatesHome() {
           ))}
         </div>
       </div>
+
+      {/* Shared Templates Panel */}
+      <SharedTemplatesPanel />
 
       {/* Stats */}
       <Card>
