@@ -1,17 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Profile, UserRoleRecord, UserRole, HRAccessLevel } from '@/types/database';
+import { Profile, UserRole, HRAccessLevel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface UserWithRole extends Profile {
   role: UserRole;
   pending_count?: number;
-}
-
-interface ManagerPendingCount {
-  manager_id: string;
-  count: number;
 }
 
 export function useUsers() {

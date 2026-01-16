@@ -178,7 +178,6 @@ export default function Overview() {
     };
   }, [fetchAllData, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets, fetchStats]);
 
-  const highPriorityTickets = useMemo(() => maintenanceTickets.filter(t => t.priority === 'high'), [maintenanceTickets]);
   const attendanceRate = useMemo(() => stats.totalEmployees > 0 
     ? ((stats.presentToday / stats.totalEmployees) * 100).toFixed(1) 
     : '0', [stats.totalEmployees, stats.presentToday]);
@@ -356,70 +355,43 @@ export default function Overview() {
                 View All
               </Button>
             </div>
-            
-            {overdueFollowUps.length > 0 && (
-              <div className="mb-4">
-                <div 
-                  className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80"
-                  onClick={() => navigate('/dashboard/documents?filter=overdue')}
-                >
-                  <Badge variant="destructive" className="text-xs">Overdue</Badge>
-                  <span className="text-xs text-muted-foreground">{overdueFollowUps.length} documents</span>
-                </div>
-                <ScrollArea className="h-24">
-                  {overdueFollowUps.slice(0, 3).map(doc => (
-                    <div 
-                      key={doc.id} 
-                      className="flex items-center justify-between p-2 rounded-lg bg-destructive/5 mb-1 cursor-pointer hover:bg-destructive/10"
-                      onClick={() => navigate('/dashboard/documents?filter=overdue')}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate block">{doc.title}</span>
-                        {doc.employee && (
-                          <span className="text-xs text-muted-foreground">{doc.employee.first_name} {doc.employee.last_name}</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-destructive ml-2 whitespace-nowrap">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </div>
-            )}
 
-            {upcomingFollowUps.length > 0 && (
-              <div>
-                <div 
-                  className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80"
-                  onClick={() => navigate('/dashboard/documents?filter=upcoming')}
-                >
-                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700">Upcoming</Badge>
-                  <span className="text-xs text-muted-foreground">{upcomingFollowUps.length} documents</span>
-                </div>
-                <ScrollArea className="h-24">
-                  {upcomingFollowUps.slice(0, 3).map(doc => (
-                    <div 
-                      key={doc.id} 
-                      className="flex items-center justify-between p-2 rounded-lg bg-amber-50 mb-1 cursor-pointer hover:bg-amber-100"
-                      onClick={() => navigate('/dashboard/documents?filter=upcoming')}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate block">{doc.title}</span>
-                        {doc.employee && (
-                          <span className="text-xs text-muted-foreground">{doc.employee.first_name} {doc.employee.last_name}</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-amber-700 ml-2 whitespace-nowrap">{format(new Date(doc.follow_up_date), 'dd MMM')}</span>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </div>
-            )}
-
-            {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 && (
+            {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No document follow-ups</p>
               </div>
+            ) : (
+              <ScrollArea className="h-[200px]">
+                <div className="space-y-3">
+                  {overdueFollowUps.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                      <div>
+                        <p className="font-medium text-sm">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                        </p>
+                      </div>
+                      <Badge variant="destructive" className="text-xs">
+                        Overdue {formatDistanceToNow(new Date(doc.follow_up_date), { addSuffix: false })}
+                      </Badge>
+                    </div>
+                  ))}
+                  {upcomingFollowUps.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {format(new Date(doc.follow_up_date), 'MMM dd')}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             )}
           </div>
         </Card>
@@ -430,32 +402,37 @@ export default function Overview() {
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">New Employee Approvals</h3>
+                <h3 className="text-lg md:text-xl font-bold text-foreground">Pending Approvals</h3>
               </div>
               <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/employees')} className="text-xs md:text-sm">
                 View All
               </Button>
             </div>
-            <ScrollArea className="h-[180px]">
-              {pendingApprovals.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <UserPlus className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No pending approvals</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {pendingApprovals.map(approval => (
-                    <div key={approval.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+
+            {pendingApprovals.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <UserPlus className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No pending approvals</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[200px]">
+                <div className="space-y-3">
+                  {pendingApprovals.map((approval) => (
+                    <div key={approval.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer" onClick={() => navigate('/dashboard/employees')}>
                       <div>
-                        <p className="font-medium text-sm">{approval.employee?.first_name} {approval.employee?.last_name}</p>
+                        <p className="font-medium text-sm">
+                          {approval.employee ? `${approval.employee.first_name} ${approval.employee.last_name}` : 'Unknown'}
+                        </p>
                         <p className="text-xs text-muted-foreground">{approval.employee?.job_title || 'New Employee'}</p>
                       </div>
-                      <Badge variant="secondary" className="text-xs">Pending</Badge>
+                      <Badge className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500">
+                        Pending
+                      </Badge>
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+              </ScrollArea>
+            )}
           </div>
         </Card>
 
@@ -465,39 +442,38 @@ export default function Overview() {
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">Daily Reports</h3>
+                <h3 className="text-lg md:text-xl font-bold text-foreground">Recent Reports</h3>
               </div>
               <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/daily-reports')} className="text-xs md:text-sm">
                 View All
               </Button>
             </div>
-            <ScrollArea className="h-[180px]">
-              {dailyReports.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Bell className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No reports submitted</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {dailyReports.map(report => (
-                    <div key={report.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+
+            {dailyReports.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Bell className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent reports</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[200px]">
+                <div className="space-y-3">
+                  {dailyReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
                         <p className="font-medium text-sm">{report.title}</p>
-                        <p className="text-xs text-muted-foreground">{report.branch?.name}</p>
+                        <p className="text-xs text-muted-foreground">{report.branch?.name || 'All Branches'}</p>
                       </div>
                       <div className="text-right">
-                        <Badge variant="outline" className="text-xs">{report.report_type || 'Report'}</Badge>
+                        <Badge variant="outline" className="text-xs capitalize">{report.report_type || 'General'}</Badge>
                         {report.submitted_at && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatDistanceToNow(new Date(report.submitted_at), { addSuffix: true })}
-                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">{format(new Date(report.submitted_at), 'MMM dd, HH:mm')}</p>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+              </ScrollArea>
+            )}
           </div>
         </Card>
 
@@ -507,37 +483,37 @@ export default function Overview() {
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">Maintenance Tickets</h3>
+                <h3 className="text-lg md:text-xl font-bold text-foreground">Maintenance</h3>
               </div>
               <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/maintenance')} className="text-xs md:text-sm">
                 View All
               </Button>
             </div>
-            <ScrollArea className="h-[180px]">
-              {maintenanceTickets.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Wrench className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No open tickets</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {maintenanceTickets.map(ticket => (
-                    <div key={ticket.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+
+            {maintenanceTickets.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Wrench className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No active tickets</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[200px]">
+                <div className="space-y-3">
+                  {maintenanceTickets.map((ticket) => (
+                    <div key={ticket.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
                         <p className="font-medium text-sm">{ticket.title}</p>
-                        <p className="text-xs text-muted-foreground">{ticket.branch?.name}</p>
+                        <p className="text-xs text-muted-foreground">{ticket.branch?.name || 'Unknown'}</p>
                       </div>
-                      <Badge 
-                        variant={ticket.priority === 'high' ? 'destructive' : ticket.priority === 'medium' ? 'secondary' : 'outline'}
-                        className="text-xs"
-                      >
-                        {ticket.priority || 'Normal'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={ticket.priority === 'high' ? 'destructive' : ticket.priority === 'medium' ? 'default' : 'secondary'} className="text-xs capitalize">
+                          {ticket.priority || 'low'}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+              </ScrollArea>
+            )}
           </div>
         </Card>
       </div>

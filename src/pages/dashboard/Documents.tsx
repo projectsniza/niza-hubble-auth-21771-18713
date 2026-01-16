@@ -6,14 +6,14 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
   Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { format, differenceInDays, isPast, addDays } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import CreateFolderDialog from '@/components/documents/CreateFolderDialog';
 import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';

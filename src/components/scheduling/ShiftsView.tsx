@@ -42,7 +42,6 @@ interface Rota {
 }
 
 export function ShiftsView() {
-  const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rotas, setRotas] = useState<Rota[]>([]);
