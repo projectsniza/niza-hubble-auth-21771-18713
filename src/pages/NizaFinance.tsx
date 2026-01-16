@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, FileText, Download, Eye, Loader2 } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import AppsDialog from '@/components/dashboard/AppsDialog';
 import { Card } from '@/components/ui/card';
@@ -81,7 +80,6 @@ interface FinancialData {
 }
 
 export default function NizaFinance() {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   const [savedReports, setSavedReports] = useState<FinancialData[]>([]);

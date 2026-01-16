@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Users, Search, Timer, CalendarDays, FileText } from 'lucide-react';
+import { Users, Search, Timer, CalendarDays, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInMinutes, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 

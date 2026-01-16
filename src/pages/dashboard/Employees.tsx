@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  UserPlus, Search, Upload, FileSignature, Users, Calendar, 
+  UserPlus, Search, Upload, FileSignature, Users, 
   UserCog, Settings, Briefcase, FileCheck, FileUp 
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileText, Image, File, FolderIcon, Eye, CalendarClock } from 'lucide-react';
-import { Document, Folder, SortField, SortOrder } from '@/types/documents';
+import { Document, Folder } from '@/types/documents';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -23,8 +23,6 @@ interface DocumentListProps {
 
 export default function DocumentList({ folders = [], documents, onFolderClick, onDocumentSelect }: DocumentListProps) {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [sortField, setSortField] = useState<SortField>('dateCreated');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   
   const allItems = [...folders, ...documents];
   const hasItems = allItems.length > 0;
