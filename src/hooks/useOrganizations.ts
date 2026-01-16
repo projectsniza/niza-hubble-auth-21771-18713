@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Organization, Branch } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export function useOrganizations() {
   const { user } = useAuth();
@@ -21,8 +22,9 @@ export function useOrganizations() {
 
       if (error) throw error;
       setOrganizations(data || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setError(message);
       console.error('Error fetching organizations:', err);
     } finally {
       setIsLoading(false);
@@ -47,9 +49,10 @@ export function useOrganizations() {
       setOrganizations(prev => [...prev, data]);
       toast.success('Organization created successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, [user?.id]);
 
@@ -67,9 +70,10 @@ export function useOrganizations() {
       setOrganizations(prev => prev.map(org => org.id === id ? { ...org, ...data } : org));
       toast.success('Organization updated successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, []);
 
@@ -84,9 +88,10 @@ export function useOrganizations() {
       setOrganizations(prev => prev.filter(org => org.id !== id));
       toast.success('Organization deleted');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { error: message };
     }
   }, []);
 
@@ -131,8 +136,9 @@ export function useBranches(organizationId?: string) {
 
       if (error) throw error;
       setBranches(data || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setError(message);
       console.error('Error fetching branches:', err);
     } finally {
       setIsLoading(false);
@@ -167,9 +173,10 @@ export function useBranches(organizationId?: string) {
       setBranches(prev => [...prev, data]);
       toast.success('Branch created successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, [user?.id]);
 
@@ -187,9 +194,10 @@ export function useBranches(organizationId?: string) {
       setBranches(prev => prev.map(branch => branch.id === id ? { ...branch, ...data } : branch));
       toast.success('Branch updated successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, []);
 
@@ -204,9 +212,10 @@ export function useBranches(organizationId?: string) {
       setBranches(prev => prev.filter(branch => branch.id !== id));
       toast.success('Branch deleted');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { error: message };
     }
   }, []);
 

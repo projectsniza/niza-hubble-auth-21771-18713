@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 // Use any for database types to avoid strict type conflicts with Supabase
 type Folder = any;
@@ -24,8 +25,9 @@ export function useFolders() {
 
       if (error) throw error;
       setFolders(data || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setError(message);
       console.error('Error fetching folders:', err);
     } finally {
       setIsLoading(false);
@@ -69,9 +71,10 @@ export function useFolders() {
       setFolders(prev => [...prev, data]);
       toast.success('Folder created');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   };
 
@@ -87,9 +90,10 @@ export function useFolders() {
       setFolders(prev => prev.filter(f => f.id !== id));
       toast.success('Folder deleted');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { error: message };
     }
   };
 

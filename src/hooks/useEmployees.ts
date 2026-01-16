@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 // Use any for database types to avoid strict type conflicts with Supabase
 type Employee = any;
@@ -67,8 +68,9 @@ export function useEmployees(filters?: {
       if (error) throw error;
       setEmployees(data || []);
       lastFetchParamsRef.current = filterKey;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setError(message);
       console.error('Error fetching employees:', err);
     } finally {
       setIsLoading(false);
@@ -114,9 +116,10 @@ export function useEmployees(filters?: {
       setEmployees(prev => [data, ...prev]);
       toast.success('Employee created successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, [user?.id]);
 
@@ -134,9 +137,10 @@ export function useEmployees(filters?: {
       setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...data } : emp));
       toast.success('Employee updated successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, []);
 
@@ -152,9 +156,10 @@ export function useEmployees(filters?: {
       setEmployees(prev => prev.filter(emp => emp.id !== id));
       toast.success('Employee deleted');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { error: message };
     }
   }, []);
 
@@ -215,8 +220,9 @@ export function usePendingApprovals() {
       }));
       
       setPendingApprovals(approvalsWithDocs);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setError(message);
       console.error('Error fetching pending approvals:', err);
     } finally {
       setIsLoading(false);
@@ -263,9 +269,10 @@ export function usePendingApprovals() {
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
       toast.success('Contract approved successfully');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, [user?.id, pendingApprovals]);
 
@@ -288,9 +295,10 @@ export function usePendingApprovals() {
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
       toast.success('Contract rejected');
       return { data, error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { data: null, error: message };
     }
   }, [user?.id]);
 
@@ -330,7 +338,7 @@ export function useOnboarding(employeeId?: string) {
 
       if (error) throw error;
       setOnboarding(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching onboarding:', err);
     } finally {
       setIsLoading(false);
@@ -351,8 +359,9 @@ export function useOnboarding(employeeId?: string) {
       if (error) throw error;
       setOnboarding(data);
       return { data, error: null };
-    } catch (err: any) {
-      return { data: null, error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      return { data: null, error: message };
     }
   }, [employeeId]);
 
@@ -386,9 +395,10 @@ export function useOnboarding(employeeId?: string) {
 
       toast.success('Contract submitted for approval');
       return { error: null };
-    } catch (err: any) {
-      toast.error(err.message);
-      return { error: err.message };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { error: message };
     }
   }, [employeeId, user?.id]);
 
