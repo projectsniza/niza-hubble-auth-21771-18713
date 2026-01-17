@@ -98,7 +98,8 @@ export default function NizaFinance() {
       const { data, error } = await supabase
         .from('financial_reports')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
 

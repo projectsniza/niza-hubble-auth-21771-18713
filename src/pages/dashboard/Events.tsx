@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Bell, Briefcase, GraduationCap, Cake, Users, Megaphone, Eye, Calendar, Pin, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -37,8 +38,7 @@ export default function Events() {
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const { organizations, branches, getBranchesByOrg } = useOrgBranch();
   const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
   
   // Filter state for super admin / full HR
@@ -69,30 +69,17 @@ export default function Events() {
     urgent: { label: "Urgent", icon: Bell, color: "from-red-500 to-red-600" },
   };
 
+  // Get branches for dialog based on selected org
+  const dialogBranches = useMemo(() => 
+    newEvent.organizationId ? getBranchesByOrg(newEvent.organizationId) : [],
+    [newEvent.organizationId, getBranchesByOrg]
+  );
+
   useEffect(() => {
     fetchEvents();
-    fetchOrganizationsAndBranches();
   }, []);
 
-  useEffect(() => {
-    if (newEvent.organizationId) {
-      fetchBranchesForDialog(newEvent.organizationId);
-    }
-  }, [newEvent.organizationId]);
-
-  const fetchOrganizationsAndBranches = async () => {
-    const [orgsRes, branchesRes] = await Promise.all([
-      supabase.from('organizations').select('id, name').order('name'),
-      supabase.from('branches').select('id, name, organization_id').order('name')
-    ]);
-    setOrganizations(orgsRes.data || []);
-    setBranches(branchesRes.data || []);
-  };
-
-  const fetchBranchesForDialog = async (orgId: string) => {
-    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
-    if (data) setBranches(data);
-  };
+  // dialogBranches is now computed from centralized context via getBranchesByOrg
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -101,7 +88,8 @@ export default function Events() {
         .from('events')
         .select('*')
         .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       // Filter by scope for HR/Manager
       if (user?.role === 'hr' || user?.role === 'manager') {

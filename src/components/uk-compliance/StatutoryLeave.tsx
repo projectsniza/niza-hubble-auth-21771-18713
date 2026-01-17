@@ -79,9 +79,9 @@ export function StatutoryLeave() {
   const fetchData = async () => {
     try {
       const [entitlementsRes, sspRes, employeesRes] = await Promise.all([
-        supabase.from('statutory_leave_entitlements').select('*, employees(first_name, last_name)').order('created_at', { ascending: false }),
-        supabase.from('ssp_records').select('*, employees(first_name, last_name)').order('absence_start_date', { ascending: false }),
-        supabase.from('employees').select('id, first_name, last_name').eq('status', 'active')
+        supabase.from('statutory_leave_entitlements').select('*, employees(first_name, last_name)').order('created_at', { ascending: false }).limit(100),
+        supabase.from('ssp_records').select('*, employees(first_name, last_name)').order('absence_start_date', { ascending: false }).limit(100),
+        supabase.from('employees').select('id, first_name, last_name').eq('status', 'active').limit(500)
       ]);
 
       if (entitlementsRes.data) setEntitlements(entitlementsRes.data);

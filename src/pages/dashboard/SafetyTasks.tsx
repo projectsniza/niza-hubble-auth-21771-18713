@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -46,23 +46,34 @@ export default function SafetyTasks() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Debounce ref to prevent excessive refetches
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedFetchTasks = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchTasks();
+    }, 300);
+  }, []);
+
   useEffect(() => {
     fetchTasks();
 
-    // Real-time subscription
+    // Real-time subscription with debounce
     const channel = supabase
       .channel('safety-tasks-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'safety_tasks' },
-        () => fetchTasks()
+        debouncedFetchTasks
       )
       .subscribe();
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, debouncedFetchTasks]);
 
   const fetchTasks = async () => {
     if (!user) return;
@@ -75,7 +86,8 @@ export default function SafetyTasks() {
           *,
           branch:branches(name)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       // Filter based on role
       if (user.role === 'employee') {

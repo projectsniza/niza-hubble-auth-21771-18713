@@ -131,7 +131,8 @@ export default function ELearning() {
       let query = supabase
         .from('trainings')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       // For employees, fetch trainings assigned to their branch (via manager's branch)
       if (isEmployee && user?.branchId) {
