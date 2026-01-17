@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 
 const getMenuItems = (role: string) => {
   // Employee gets restricted view
@@ -106,10 +108,31 @@ interface DashboardSidebarProps {
 
 export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: DashboardSidebarProps) {
   const { user, logout } = useAuth();
+  const { counts } = useNotificationCounts();
 
   if (!user) return null;
 
   const menuItems = getMenuItems(user.role);
+
+  // Map paths to notification counts
+  const getCountForPath = (path: string): number => {
+    switch (path) {
+      case '/dashboard/messages':
+        return counts.messages;
+      case '/dashboard/employees':
+        return counts.employees;
+      case '/dashboard/attendance':
+        return counts.attendance;
+      case '/dashboard/maintenance':
+        return counts.maintenance;
+      case '/dashboard/events':
+        return counts.events;
+      case '/dashboard/documents':
+        return counts.documents;
+      default:
+        return 0;
+    }
+  };
 
   const handleNavClick = () => {
     if (onNavigate) {
@@ -164,26 +187,45 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-1 relative z-10">
-        {menuItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/dashboard'}
-            onClick={handleNavClick}
-            className={({ isActive }) => `
-              flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group
-              ${collapsed ? 'justify-center' : ''}
-              ${isActive 
-                ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25' 
-                : 'text-foreground/70 hover:bg-card/50 hover:text-foreground'
-              }
-            `}
-            title={collapsed ? item.title : undefined}
-          >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
-          </NavLink>
-        ))}
+        {menuItems.map((item) => {
+          const notifCount = getCountForPath(item.path);
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/dashboard'}
+              onClick={handleNavClick}
+              className={({ isActive }) => `
+                flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group
+                ${collapsed ? 'justify-center' : ''}
+                ${isActive 
+                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25' 
+                  : 'text-foreground/70 hover:bg-card/50 hover:text-foreground'
+                }
+              `}
+              title={collapsed ? item.title : undefined}
+            >
+              <div className="relative">
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                {collapsed && notifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {notifCount > 9 ? '9+' : notifCount}
+                  </span>
+                )}
+              </div>
+              {!collapsed && (
+                <>
+                  <span className="text-sm font-medium flex-1">{item.title}</span>
+                  {notifCount > 0 && (
+                    <Badge variant="secondary" className="h-5 min-w-[20px] px-1.5 text-xs">
+                      {notifCount > 99 ? '99+' : notifCount}
+                    </Badge>
+                  )}
+                </>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Logout - Always visible, especially important for mobile */}

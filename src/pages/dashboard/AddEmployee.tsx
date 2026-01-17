@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet, File } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet, File, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -541,6 +541,7 @@ export default function AddEmployee() {
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
               organizations={organizations}
+              branches={branches}
               onSave={() => {}}
               onSubmit={() => {
                 toast.success('Contract submitted for approval. Continue in Approved Contracts tab after Super Admin approves.');
@@ -562,12 +563,26 @@ export default function AddEmployee() {
                 Previous
               </Button>
               
-              {currentStepId !== 'approval' && (
-                <Button onClick={handleNext} disabled={loading} className="gap-2">
-                  {loading ? 'Saving...' : 'Next'}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {/* Edit Basic Details button - available on all steps except first */}
+                {currentStep > 0 && employeeRecord && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCurrentStep(0)}
+                    className="gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Basic Details
+                  </Button>
+                )}
+                
+                {currentStepId !== 'approval' && (
+                  <Button onClick={handleNext} disabled={loading} className="gap-2">
+                    {loading ? 'Saving...' : 'Next'}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </Card>
