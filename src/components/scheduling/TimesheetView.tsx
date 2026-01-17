@@ -517,6 +517,7 @@ export function TimesheetView() {
           )}
           
           <Button variant="outline" onClick={exportToCSV}><Download className="h-4 w-4 mr-2" />Export</Button>
+          <Button variant="outline" onClick={() => window.print()}><Download className="h-4 w-4 mr-2" />Print</Button>
         </div>
       </div>
 

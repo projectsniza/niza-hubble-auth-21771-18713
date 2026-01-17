@@ -34,6 +34,7 @@ export default function DailyReports() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
@@ -247,24 +248,27 @@ export default function DailyReports() {
   const filteredReports = useMemo(() => reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
     
+    // Apply date filter
+    const matchesDate = !dateFilter || (report.submitted_at && format(new Date(report.submitted_at), 'yyyy-MM-dd') === dateFilter);
+    
     // Apply org/branch filters for super admin / full HR
     if (canViewFilters && viewMode !== 'all') {
       if (viewMode === 'organization' && selectedOrg) {
-        return matchesSearch && report.organization_id === selectedOrg;
+        return matchesSearch && matchesDate && report.organization_id === selectedOrg;
       }
       if (viewMode === 'branch' && selectedBranch) {
-        return matchesSearch && report.branch_id === selectedBranch;
+        return matchesSearch && matchesDate && report.branch_id === selectedBranch;
       }
       if (viewMode === 'organization' && !selectedOrg) {
-        return matchesSearch;
+        return matchesSearch && matchesDate;
       }
       if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
-        return matchesSearch && report.organization_id === selectedOrg;
+        return matchesSearch && matchesDate && report.organization_id === selectedOrg;
       }
     }
     
-    return matchesSearch;
-  }), [reports, searchQuery, canViewFilters, viewMode, selectedOrg, selectedBranch]);
+    return matchesSearch && matchesDate;
+  }), [reports, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateReport = user?.role === 'manager' || user?.role === 'hr';
 
@@ -376,8 +380,8 @@ export default function DailyReports() {
         />
       )}
 
-      <div className="flex gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             placeholder="Search reports..." 
@@ -385,6 +389,20 @@ export default function DailyReports() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by date:</Label>
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="w-auto"
+          />
+          {dateFilter && (
+            <Button variant="ghost" size="sm" onClick={() => setDateFilter('')}>
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 

@@ -529,14 +529,25 @@ export default function GiftCards() {
                   </div>
 
                   {formData.providerName === 'Other' && (
-                    <div className="space-y-2">
-                      <Label>Provider URL (optional)</Label>
-                      <Input 
-                        value={formData.providerUrl}
-                        onChange={(e) => setFormData({ ...formData, providerUrl: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label>Provider Name *</Label>
+                        <Input 
+                          value={formData.customProviderName || ''}
+                          onChange={(e) => setFormData({ ...formData, customProviderName: e.target.value })}
+                          placeholder="Enter provider name"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Provider URL (optional)</Label>
+                        <Input 
+                          value={formData.providerUrl}
+                          onChange={(e) => setFormData({ ...formData, providerUrl: e.target.value })}
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </>
                   )}
 
                   <div className="space-y-2">
