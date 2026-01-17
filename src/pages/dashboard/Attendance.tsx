@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
@@ -63,9 +64,8 @@ export default function Attendance() {
   const [showLeaveTypeSettings, setShowLeaveTypeSettings] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   
-  // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  // Use centralized org/branch data
+  const { organizations, branches } = useOrgBranch();
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -97,19 +97,7 @@ export default function Attendance() {
 
   useEffect(() => {
     fetchData();
-    if (canViewFilters) {
-      fetchOrganizationsAndBranches();
-    }
   }, [user]);
-
-  const fetchOrganizationsAndBranches = async () => {
-    const [orgsRes, branchesRes] = await Promise.all([
-      supabase.from('organizations').select('id, name').order('name'),
-      supabase.from('branches').select('id, name, organization_id').order('name')
-    ]);
-    setOrganizations(orgsRes.data || []);
-    setBranches(branchesRes.data || []);
-  };
 
   const fetchData = async () => {
     setLoading(true);

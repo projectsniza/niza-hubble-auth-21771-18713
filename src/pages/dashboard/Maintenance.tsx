@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, AlertCircle, Clock, CheckCircle, Upload, Image as ImageIcon, X, Building2, MapPin, User, Eye, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
@@ -46,9 +47,8 @@ export default function Maintenance() {
   const [submitting, setSubmitting] = useState(false);
   const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
   
-  // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  // Use centralized org/branch data
+  const { organizations, branches } = useOrgBranch();
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -67,9 +67,6 @@ export default function Maintenance() {
 
   useEffect(() => {
     fetchTickets();
-    if (canViewFilters) {
-      fetchOrganizationsAndBranches();
-    }
 
     // Real-time subscription with debounce
     const channel = supabase
@@ -87,15 +84,6 @@ export default function Maintenance() {
     };
   }, [user, debouncedFetchTickets]);
 
-  const fetchOrganizationsAndBranches = async () => {
-    const [orgsRes, branchesRes] = await Promise.all([
-      supabase.from('organizations').select('id, name').order('name'),
-      supabase.from('branches').select('id, name, organization_id').order('name')
-    ]);
-    setOrganizations(orgsRes.data || []);
-    setBranches(branchesRes.data || []);
-  };
-
   const fetchTickets = async () => {
     if (!user) return;
 
@@ -108,7 +96,8 @@ export default function Maintenance() {
           branch:branches(name),
           organization:organizations(name)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       // Filter based on role and access level
       if (user.role === 'manager') {

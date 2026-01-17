@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -42,9 +43,8 @@ export default function DailyReports() {
   const [submitting, setSubmitting] = useState(false);
   const [viewingReport, setViewingReport] = useState<DailyReport | null>(null);
   
-  // Filter state for super admin / full HR
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  // Use centralized org/branch data
+  const { organizations, branches } = useOrgBranch();
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -63,9 +63,6 @@ export default function DailyReports() {
 
   useEffect(() => {
     fetchReports();
-    if (canViewFilters) {
-      fetchOrganizationsAndBranches();
-    }
 
     // Real-time subscription with debounce
     const channel = supabase
@@ -83,15 +80,6 @@ export default function DailyReports() {
     };
   }, [user, debouncedFetchReports]);
 
-  const fetchOrganizationsAndBranches = async () => {
-    const [orgsRes, branchesRes] = await Promise.all([
-      supabase.from('organizations').select('id, name').order('name'),
-      supabase.from('branches').select('id, name, organization_id').order('name')
-    ]);
-    setOrganizations(orgsRes.data || []);
-    setBranches(branchesRes.data || []);
-  };
-
   const fetchReports = async () => {
     if (!user) return;
     
@@ -104,7 +92,8 @@ export default function DailyReports() {
           branch:branches(name),
           organization:organizations(name)
         `)
-        .order('submitted_at', { ascending: false });
+        .order('submitted_at', { ascending: false })
+        .limit(100);
 
       // Filter based on role and access level
       if (user.role === 'manager') {

@@ -38,14 +38,17 @@ export function useEmployees(filters?: {
       let query = supabase
         .from('employees')
         .select(`
-          *,
-          organization:organizations(*),
-          branch:branches(*),
-          team:teams(*),
-          onboarding:employee_onboarding(*),
-          contract_approval:contract_approvals(*)
+          id, first_name, last_name, email, phone, job_title, department, status, 
+          date_of_birth, join_date, national_insurance_number, address,
+          emergency_contact_name, emergency_contact_phone, organization_id, branch_id, team_id, manager_id,
+          organization:organizations(id, name),
+          branch:branches(id, name),
+          team:teams(id, name),
+          onboarding:employee_onboarding(id, current_step, completed_at, contract_approved),
+          contract_approval:contract_approvals(id, status)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
 
       if (filters?.organizationId) {
         query = query.eq('organization_id', filters.organizationId);

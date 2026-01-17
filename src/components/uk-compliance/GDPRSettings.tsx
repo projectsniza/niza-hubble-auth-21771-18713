@@ -77,8 +77,8 @@ export function GDPRSettings() {
   const fetchData = async () => {
     try {
       const [policiesRes, requestsRes] = await Promise.all([
-        supabase.from('gdpr_retention_policies').select('*').order('data_category'),
-        supabase.from('gdpr_data_requests').select('*').order('created_at', { ascending: false })
+        supabase.from('gdpr_retention_policies').select('*').order('data_category').limit(100),
+        supabase.from('gdpr_data_requests').select('*').order('created_at', { ascending: false }).limit(100)
       ]);
 
       if (policiesRes.data) setPolicies(policiesRes.data);

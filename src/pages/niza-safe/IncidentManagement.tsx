@@ -84,7 +84,8 @@ export default function IncidentManagement() {
       const { data, error } = await supabase
         .from('incidents')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setIncidents(data || []);
