@@ -37,6 +37,7 @@ export default function Maintenance() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [showCreateTicket, setShowCreateTicket] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -448,15 +449,31 @@ export default function Maintenance() {
         />
       )}
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search maintenance tickets..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search and Date Filter */}
+      <div className="flex flex-wrap gap-4">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search maintenance tickets..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by date:</Label>
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="w-auto"
+          />
+          {dateFilter && (
+            <Button variant="ghost" size="sm" onClick={() => setDateFilter('')}>
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tickets Grid */}
@@ -516,6 +533,11 @@ export default function Maintenance() {
                   <div>
                     Created: {ticket.created_at ? format(new Date(ticket.created_at), 'dd/MM/yyyy') : 'N/A'}
                   </div>
+                  {ticket.resolved_at && (
+                    <div className="text-green-600">
+                      Resolved: {format(new Date(ticket.resolved_at), 'dd/MM/yyyy')}
+                    </div>
+                  )}
                 </div>
 
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setViewingTicket(ticket)}>
@@ -568,6 +590,12 @@ export default function Maintenance() {
                   <Label className="text-muted-foreground">Created</Label>
                   <p>{viewingTicket.created_at ? format(new Date(viewingTicket.created_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
                 </div>
+                {viewingTicket.resolved_at && (
+                  <div>
+                    <Label className="text-muted-foreground">Resolved</Label>
+                    <p className="text-green-600">{format(new Date(viewingTicket.resolved_at), 'dd/MM/yyyy HH:mm')}</p>
+                  </div>
+                )}
               </div>
               
               <div>

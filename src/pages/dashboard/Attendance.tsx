@@ -601,11 +601,11 @@ export default function Attendance() {
                 </div>
               </div>
               <div>
-                <Label>Reason</Label>
+                <Label>Notes</Label>
                 <Textarea
                   value={employeeLeaveForm.reason}
                   onChange={(e) => setEmployeeLeaveForm(prev => ({ ...prev, reason: e.target.value }))}
-                  placeholder="Optional reason for leave"
+                  placeholder="Optional notes"
                   rows={3}
                 />
               </div>
@@ -953,8 +953,8 @@ export default function Attendance() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Reason</Label>
-              <Textarea value={newLeave.reason} onChange={(e) => setNewLeave({ ...newLeave, reason: e.target.value })} />
+              <Label>Notes</Label>
+              <Textarea value={newLeave.reason} onChange={(e) => setNewLeave({ ...newLeave, reason: e.target.value })} placeholder="Optional notes" />
             </div>
           </div>
           <DialogFooter>
@@ -1020,10 +1020,14 @@ export default function Attendance() {
                   <Input type="number" value={newLeaveType.daysAllowed} onChange={(e) => setNewLeaveType({ ...newLeaveType, daysAllowed: e.target.value })} />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="ltPaid" checked={newLeaveType.isPaid} onChange={(e) => setNewLeaveType({ ...newLeaveType, isPaid: e.target.checked })} />
                   <Label htmlFor="ltPaid">Paid leave</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="ltRequiresDoc" checked={newLeaveType.requiresDocument || false} onChange={(e) => setNewLeaveType({ ...newLeaveType, requiresDocument: e.target.checked })} />
+                  <Label htmlFor="ltRequiresDoc">Requires supporting document</Label>
                 </div>
                 <Button size="sm" onClick={handleAddLeaveType}>Add Leave Type</Button>
               </div>
