@@ -92,7 +92,8 @@ export default function Attendance() {
     name: '',
     daysAllowed: '',
     isPaid: true,
-    description: ''
+    description: '',
+    requiresDocument: false
   });
 
   useEffect(() => {
@@ -225,7 +226,7 @@ export default function Attendance() {
 
       if (error) throw error;
       toast.success('Leave type added');
-      setNewLeaveType({ name: '', daysAllowed: '', isPaid: true, description: '' });
+      setNewLeaveType({ name: '', daysAllowed: '', isPaid: true, description: '', requiresDocument: false });
       fetchData();
     } catch (error: any) {
       toast.error(error.message);
