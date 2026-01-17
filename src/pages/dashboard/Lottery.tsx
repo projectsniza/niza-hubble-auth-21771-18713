@@ -390,6 +390,24 @@ export default function Lottery() {
           <p className="text-muted-foreground">Track scratchcard inventory and sales</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Branch selector for HR/Super Admin */}
+          {(user?.role === 'super_admin' || user?.role === 'hr') && (
+            <Select
+              value={selectedBranchId || ''}
+              onValueChange={(value) => setSelectedBranchId(value || null)}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
             Previous
           </Button>
@@ -399,64 +417,80 @@ export default function Lottery() {
           </Button>
         </div>
       </div>
+      {/* No Branch Selected Message */}
+      {!effectiveBranchId && (user?.role === 'super_admin' || user?.role === 'hr') && (
+        <Card className="p-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Ticket className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Select a Branch</h3>
+              <p className="text-muted-foreground">Please select a branch from the dropdown above to view lottery data.</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <Ticket className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active Games</p>
-                <p className="text-2xl font-bold">{games.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-500/10 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Sales</p>
-                <p className="text-2xl font-bold">£{totals.totalSalesValue.toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-500/10 rounded-lg">
-                <Package className="h-6 w-6 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Working Stock</p>
-                <p className="text-2xl font-bold">{totals.totalClosingStock}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-500/10 rounded-lg">
-                <Calculator className="h-6 w-6 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Stock Difference</p>
-                <p className="text-2xl font-bold">
-                  {monthlySummary ? totals.totalClosingStock - (monthlySummary.closing_stock_physical ?? 0) : '-'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Summary Cards - Only show when branch is selected */}
+      {effectiveBranchId && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary/10 rounded-lg">
+                    <Ticket className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Active Games</p>
+                    <p className="text-2xl font-bold">{games.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-green-500/10 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Sales</p>
+                    <p className="text-2xl font-bold">£{totals.totalSalesValue.toFixed(2)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-blue-500/10 rounded-lg">
+                    <Package className="h-6 w-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Working Stock</p>
+                    <p className="text-2xl font-bold">{totals.totalClosingStock}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-orange-500/10 rounded-lg">
+                    <Calculator className="h-6 w-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Stock Difference</p>
+                    <p className="text-2xl font-bold">
+                      {monthlySummary ? totals.totalClosingStock - (monthlySummary.closing_stock_physical ?? 0) : '-'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
       <Tabs defaultValue="daily" className="space-y-4">
         <TabsList>
@@ -766,6 +800,8 @@ export default function Lottery() {
           </Card>
         </TabsContent>
       </Tabs>
+        </>
+      )}
 
       {/* Add Game Dialog */}
       <Dialog open={showAddGameDialog} onOpenChange={setShowAddGameDialog}>
