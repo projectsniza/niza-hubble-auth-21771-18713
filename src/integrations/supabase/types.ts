@@ -2132,6 +2132,161 @@ export type Database = {
           },
         ]
       }
+      lottery_daily_records: {
+        Row: {
+          activated_tickets: number
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          game_id: string
+          id: string
+          record_date: string
+          stock_begin: number
+          stock_end: number | null
+          tickets_sold: number | null
+          updated_at: string
+        }
+        Insert: {
+          activated_tickets?: number
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          game_id: string
+          id?: string
+          record_date: string
+          stock_begin?: number
+          stock_end?: number | null
+          tickets_sold?: number | null
+          updated_at?: string
+        }
+        Update: {
+          activated_tickets?: number
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          game_id?: string
+          id?: string
+          record_date?: string
+          stock_begin?: number
+          stock_end?: number | null
+          tickets_sold?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_daily_records_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_daily_records_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "lottery_games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lottery_games: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          game_name: string
+          id: string
+          is_active: boolean
+          organization_id: string | null
+          ticket_price: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          game_name: string
+          id?: string
+          is_active?: boolean
+          organization_id?: string | null
+          ticket_price?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          game_name?: string
+          id?: string
+          is_active?: boolean
+          organization_id?: string | null
+          ticket_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_games_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_games_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lottery_monthly_summaries: {
+        Row: {
+          branch_id: string
+          closing_stock_physical: number | null
+          closing_stock_working: number
+          created_at: string
+          created_by: string | null
+          id: string
+          month_year: string
+          stock_difference: number | null
+          total_sales_value: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          closing_stock_physical?: number | null
+          closing_stock_working?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month_year: string
+          stock_difference?: number | null
+          total_sales_value?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          closing_stock_physical?: number | null
+          closing_stock_working?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month_year?: string
+          stock_difference?: number | null
+          total_sales_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_monthly_summaries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_tickets: {
         Row: {
           assigned_to: string | null

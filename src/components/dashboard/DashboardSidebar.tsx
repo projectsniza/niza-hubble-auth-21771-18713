@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ const getMenuItems = (role: string) => {
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
+      { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Safety', icon: Shield, path: '/dashboard/safety-tasks' },
@@ -80,6 +81,7 @@ const getMenuItems = (role: string) => {
     { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+    { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
     { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
     { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
     { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },

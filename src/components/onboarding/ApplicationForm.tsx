@@ -309,7 +309,7 @@ export default function ApplicationForm({
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    doc.text(`Present Employment:`, margin, y);
+    doc.text(`Previous Employment:`, margin, y);
     y += lineHeight;
     doc.text(`Job Title: ${formData.current_job_title || '............................'}`, margin, y);
     y += lineHeight;
@@ -317,10 +317,10 @@ export default function ApplicationForm({
     y += lineHeight + 2;
     doc.text(`Date Employment Commenced: ${formData.employment_commenced || '............................'}`, margin, y);
     y += lineHeight;
-    doc.text(`Present Salary: ${formData.present_salary || '............................'}`, margin, y);
+    doc.text(`Previous Salary: ${formData.present_salary || '............................'}`, margin, y);
     y += lineHeight + 4;
 
-    doc.text('Please provide a brief summary of your current duties:', margin, y);
+    doc.text('Please provide a brief summary of your previous duties:', margin, y);
     y += lineHeight;
     doc.text(formData.current_duties || '', margin, y, { maxWidth: contentWidth });
     y += Math.max(15, (formData.current_duties?.length || 0) / 80 * lineHeight);
@@ -691,7 +691,7 @@ export default function ApplicationForm({
         {/* Section 3: Employment */}
         <div className="border-b pb-6 mb-6">
           <h3 className="font-bold text-lg mb-4">3. Employment</h3>
-          <p className="text-sm text-muted-foreground mb-4">Present Employment:</p>
+          <p className="text-sm text-muted-foreground mb-4">Previous Employment:</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Job Title</Label>
@@ -719,7 +719,7 @@ export default function ApplicationForm({
               />
             </div>
             <div className="space-y-2">
-              <Label>Present Salary</Label>
+              <Label>Previous Salary</Label>
               <Input
                 value={formData.present_salary}
                 onChange={(e) => updateField('present_salary', e.target.value)}
@@ -728,7 +728,7 @@ export default function ApplicationForm({
             </div>
           </div>
           <div className="mt-4 space-y-2">
-            <Label>Please provide a brief summary of your current duties:</Label>
+            <Label>Please provide a brief summary of your previous duties:</Label>
             <Textarea
               value={formData.current_duties}
               onChange={(e) => updateField('current_duties', e.target.value)}
