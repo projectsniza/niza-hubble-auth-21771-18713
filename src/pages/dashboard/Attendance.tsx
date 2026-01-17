@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -264,8 +264,8 @@ export default function Attendance() {
     { name: "Pending", color: "bg-pink-500", filter: "pending" },
   ];
 
-  // Apply org/branch filters for super admin / full HR
-  const applyFilters = (requests: LeaveRequest[]) => {
+  // Memoized filter function for performance
+  const applyFilters = useCallback((requests: LeaveRequest[]) => {
     if (!canViewFilters || viewMode === 'all') return requests;
     
     return requests.filter(r => {
@@ -281,23 +281,29 @@ export default function Attendance() {
       }
       return true;
     });
-  };
+  }, [canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
-  const pendingRequests = applyFilters(leaveRequests.filter(r => r.status === 'pending'));
-  const filteredRequests = filterType === 'all' 
-    ? applyFilters(leaveRequests)
-    : filterType === 'pending'
-      ? pendingRequests
-      : applyFilters(leaveRequests.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType)));
+  // Memoize filtered requests to prevent recalculation on every render
+  const pendingRequests = useMemo(() => 
+    applyFilters(leaveRequests.filter(r => r.status === 'pending')),
+    [leaveRequests, applyFilters]
+  );
   
-  const filteredEmployees = canViewFilters && viewMode !== 'all' 
-    ? employees.filter(e => {
-        if (viewMode === 'organization' && selectedOrg) return e.organization_id === selectedOrg;
-        if (viewMode === 'branch' && selectedBranch) return e.branch_id === selectedBranch;
-        if (viewMode === 'branch' && selectedOrg && !selectedBranch) return e.organization_id === selectedOrg;
-        return true;
-      })
-    : employees;
+  const filteredRequests = useMemo(() => {
+    if (filterType === 'all') return applyFilters(leaveRequests);
+    if (filterType === 'pending') return pendingRequests;
+    return applyFilters(leaveRequests.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType)));
+  }, [leaveRequests, filterType, pendingRequests, applyFilters]);
+  
+  const filteredEmployees = useMemo(() => {
+    if (!canViewFilters || viewMode === 'all') return employees;
+    return employees.filter(e => {
+      if (viewMode === 'organization' && selectedOrg) return e.organization_id === selectedOrg;
+      if (viewMode === 'branch' && selectedBranch) return e.branch_id === selectedBranch;
+      if (viewMode === 'branch' && selectedOrg && !selectedBranch) return e.organization_id === selectedOrg;
+      return true;
+    });
+  }, [employees, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));

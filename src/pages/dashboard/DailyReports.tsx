@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,26 +51,37 @@ export default function DailyReports() {
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
+  // Debounce ref to prevent excessive refetches
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedFetchReports = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchReports();
+    }, 300);
+  }, []);
+
   useEffect(() => {
     fetchReports();
     if (canViewFilters) {
       fetchOrganizationsAndBranches();
     }
 
-    // Real-time subscription
+    // Real-time subscription with debounce
     const channel = supabase
       .channel('daily-reports-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daily_reports' },
-        () => fetchReports()
+        debouncedFetchReports
       )
       .subscribe();
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, debouncedFetchReports]);
 
   const fetchOrganizationsAndBranches = async () => {
     const [orgsRes, branchesRes] = await Promise.all([
@@ -243,7 +254,8 @@ export default function DailyReports() {
     }
   };
 
-  const filteredReports = reports.filter(report => {
+  // Memoized filtering for better performance
+  const filteredReports = useMemo(() => reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
     
     // Apply org/branch filters for super admin / full HR
@@ -263,7 +275,7 @@ export default function DailyReports() {
     }
     
     return matchesSearch;
-  });
+  }), [reports, searchQuery, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateReport = user?.role === 'manager' || user?.role === 'hr';
 

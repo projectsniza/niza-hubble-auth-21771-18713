@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -211,7 +211,8 @@ export function HolidayBalance() {
     setRecalculating(false);
   };
 
-  const filteredBalances = balances.filter(b => {
+  // Memoized filtering for better performance
+  const filteredBalances = useMemo(() => balances.filter(b => {
     const emp = b.employee;
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
@@ -219,22 +220,25 @@ export function HolidayBalance() {
     if (filterViewMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
     if (filterViewMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
     return true;
-  });
+  }), [balances, searchQuery, canViewFilters, filterViewMode, selectedOrg, selectedBranch]);
 
-  const groupedByBranch = filteredBalances.reduce((acc, balance) => {
+  // Memoized grouping and totals
+  const groupedByBranch = useMemo(() => filteredBalances.reduce((acc, balance) => {
     const branchName = balance.employee.branch?.name || 'Unassigned';
     if (!acc[branchName]) acc[branchName] = [];
     acc[branchName].push(balance);
     return acc;
-  }, {} as Record<string, EmployeeBalance[]>);
+  }, {} as Record<string, EmployeeBalance[]>), [filteredBalances]);
 
-  // Calculate totals per column
-  const totalEarned = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_earned, 0);
-  const totalTaken = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_taken, 0);
-  const totalRemaining = filteredBalances.reduce((sum, b) => sum + b.holiday_hours_remaining, 0);
-  const totalWorked = filteredBalances.reduce((sum, b) => sum + b.total_worked_hours, 0);
-  const totalSick = filteredBalances.reduce((sum, b) => sum + b.total_sick_hours, 0);
-  const totalCarryForward = filteredBalances.reduce((sum, b) => sum + b.carry_forward, 0);
+  // Memoized totals calculation
+  const { totalEarned, totalTaken, totalRemaining, totalWorked, totalSick, totalCarryForward } = useMemo(() => ({
+    totalEarned: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_earned, 0),
+    totalTaken: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_taken, 0),
+    totalRemaining: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_remaining, 0),
+    totalWorked: filteredBalances.reduce((sum, b) => sum + b.total_worked_hours, 0),
+    totalSick: filteredBalances.reduce((sum, b) => sum + b.total_sick_hours, 0),
+    totalCarryForward: filteredBalances.reduce((sum, b) => sum + b.carry_forward, 0),
+  }), [filteredBalances]);
 
   const getBalanceStatus = (remaining: number, earned: number) => {
     if (earned === 0) return 'neutral';

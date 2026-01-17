@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,26 +55,37 @@ export default function Maintenance() {
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
 
+  // Debounce ref to prevent excessive refetches
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedFetchTickets = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchTickets();
+    }, 300);
+  }, []);
+
   useEffect(() => {
     fetchTickets();
     if (canViewFilters) {
       fetchOrganizationsAndBranches();
     }
 
-    // Real-time subscription
+    // Real-time subscription with debounce
     const channel = supabase
       .channel('maintenance-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'maintenance_tickets' },
-        () => fetchTickets()
+        debouncedFetchTickets
       )
       .subscribe();
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, debouncedFetchTickets]);
 
   const fetchOrganizationsAndBranches = async () => {
     const [orgsRes, branchesRes] = await Promise.all([
@@ -305,7 +316,8 @@ export default function Maintenance() {
     }
   };
 
-  const filteredTickets = tickets.filter(ticket => {
+  // Memoized filtering for better performance
+  const filteredTickets = useMemo(() => tickets.filter(ticket => {
     const matchesSearch = ticket.title.toLowerCase().includes(searchQuery.toLowerCase());
     
     // Apply org/branch filters for super admin / full HR
@@ -325,7 +337,7 @@ export default function Maintenance() {
     }
     
     return matchesSearch;
-  });
+  }), [tickets, searchQuery, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateTicket = user?.role === 'manager' || user?.role === 'hr';
   const canUpdateStatus = user?.role === 'super_admin';

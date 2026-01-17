@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,7 +191,8 @@ export default function Events() {
     }
   };
 
-  const filteredEvents = events.filter(event => {
+  // Memoized filtering for better performance
+  const filteredEvents = useMemo(() => events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = activeFilter === 'all' || event.event_type === activeFilter;
     
@@ -209,18 +210,17 @@ export default function Events() {
     }
     
     return matchesSearch && matchesFilter;
-  });
+  }), [events, searchQuery, activeFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
-  const getCounts = () => {
-    const counts: Record<string, number> = { all: events.length };
+  // Memoized counts
+  const counts = useMemo(() => {
+    const result: Record<string, number> = { all: events.length };
     events.forEach(e => {
       const type = e.event_type || 'other';
-      counts[type] = (counts[type] || 0) + 1;
+      result[type] = (result[type] || 0) + 1;
     });
-    return counts;
-  };
-
-  const counts = getCounts();
+    return result;
+  }, [events]);
 
   const QuickFilterButton = ({ category, count }: { category: string; count: number }) => {
     const config = categoryConfig[category as keyof typeof categoryConfig];
