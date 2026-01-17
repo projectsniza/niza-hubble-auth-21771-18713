@@ -26,6 +26,7 @@ interface ContractTemplateProps {
     branch_id: string;
   };
   organizations: { id: string; name: string; vat_number?: string | null }[];
+  branches?: { id: string; name: string; address?: string | null }[];
   onSave: () => void;
   onSubmit: () => void;
   readOnly?: boolean;
@@ -54,6 +55,7 @@ export default function ContractTemplate({
   employeeId,
   employeeData,
   organizations,
+  branches = [],
   onSave,
   onSubmit,
   readOnly = false,
@@ -87,6 +89,7 @@ export default function ContractTemplate({
   });
 
   const selectedOrg = organizations.find(o => o.id === contractData.organization_id);
+  const selectedBranch = branches.find(b => b.id === employeeData.branch_id);
 
   // Auto-fill VAT number when organization changes
   useEffect(() => {
@@ -94,6 +97,13 @@ export default function ContractTemplate({
       setContractData(prev => ({ ...prev, vat_number: selectedOrg.vat_number || '' }));
     }
   }, [selectedOrg]);
+
+  // Auto-fill place of work from branch address
+  useEffect(() => {
+    if (selectedBranch?.address && !contractData.place_of_work) {
+      setContractData(prev => ({ ...prev, place_of_work: selectedBranch.address || '' }));
+    }
+  }, [selectedBranch]);
 
   useEffect(() => {
     loadSavedData();
