@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,18 +68,23 @@ export default function Performance() {
     weight: 1
   });
 
+  const fetchBranchesMemoized = useCallback(async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    setBranches(data || []);
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
     if (selectedOrg) {
-      fetchBranches(selectedOrg);
+      fetchBranchesMemoized(selectedOrg);
     } else {
       setBranches([]);
       setSelectedBranch('');
     }
-  }, [selectedOrg]);
+  }, [selectedOrg, fetchBranchesMemoized]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -179,8 +184,8 @@ export default function Performance() {
     }
   };
 
-  // Filter employees based on view mode
-  const getFilteredEmployees = () => {
+  // Memoized filter for employees based on view mode
+  const filteredEmployees = useMemo(() => {
     let filtered = employees;
     
     if (viewMode === 'organization' && selectedOrg) {
@@ -190,17 +195,16 @@ export default function Performance() {
     }
     
     return filtered;
-  };
+  }, [employees, viewMode, selectedOrg, selectedBranch]);
 
-  // Get reviews for filtered employees
-  const getFilteredReviews = () => {
-    const filteredEmployeeIds = getFilteredEmployees().map(e => e.id);
-    return reviews.filter(r => filteredEmployeeIds.includes(r.employee_id));
-  };
+  // Memoized reviews for filtered employees
+  const filteredReviewsAll = useMemo(() => {
+    const filteredEmployeeIds = new Set(filteredEmployees.map(e => e.id));
+    return reviews.filter(r => filteredEmployeeIds.has(r.employee_id));
+  }, [reviews, filteredEmployees]);
 
-  // Calculate performance rankings
-  const getPerformanceRankings = () => {
-    const filteredEmployees = getFilteredEmployees();
+  // Memoized performance rankings - expensive calculation
+  const rankings = useMemo(() => {
     const employeeRatings = filteredEmployees.map(emp => {
       const empReviews = reviews.filter(r => r.employee_id === emp.id && r.status === 'completed');
       const avgRating = empReviews.length > 0
@@ -215,32 +219,32 @@ export default function Performance() {
         avgRating,
         avgGoals,
         reviewCount: empReviews.length,
-        score: avgRating * 20 + avgGoals * 0.3 // Combined score
+        score: avgRating * 20 + avgGoals * 0.3
       };
     }).filter(e => e.reviewCount > 0)
       .sort((a, b) => b.score - a.score);
 
     return employeeRatings;
-  };
+  }, [filteredEmployees, reviews]);
 
-  const filteredReviews = getFilteredReviews().filter(review => {
-    if (activeTab === 'pending') return review.status === 'draft';
-    if (activeTab === 'completed') return review.status === 'completed';
-    return true;
-  });
+  const filteredReviews = useMemo(() => {
+    if (activeTab === 'pending') return filteredReviewsAll.filter(r => r.status === 'draft');
+    if (activeTab === 'completed') return filteredReviewsAll.filter(r => r.status === 'completed');
+    return filteredReviewsAll;
+  }, [filteredReviewsAll, activeTab]);
 
-  const currentReviews = getFilteredReviews();
-  const averageRating = currentReviews.length > 0 
-    ? (currentReviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / currentReviews.length).toFixed(1)
-    : '0.0';
+  const { averageRating, completedReviews, avgGoalsProgress } = useMemo(() => {
+    const avg = filteredReviewsAll.length > 0 
+      ? (filteredReviewsAll.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / filteredReviewsAll.length).toFixed(1)
+      : '0.0';
+    const completed = filteredReviewsAll.filter(r => r.status === 'completed').length;
+    const goals = filteredReviewsAll.length > 0
+      ? Math.round(filteredReviewsAll.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / filteredReviewsAll.length)
+      : 0;
+    return { averageRating: avg, completedReviews: completed, avgGoalsProgress: goals };
+  }, [filteredReviewsAll]);
 
-  const completedReviews = currentReviews.filter(r => r.status === 'completed').length;
-  const avgGoalsProgress = currentReviews.length > 0
-    ? Math.round(currentReviews.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / currentReviews.length)
-    : 0;
-
-  const rankings = getPerformanceRankings();
-  const topPerformers = rankings.slice(0, 5);
+  const topPerformers = useMemo(() => rankings.slice(0, 5), [rankings]);
 
   const getRankIcon = (index: number) => {
     if (index === 0) return <Trophy className="h-5 w-5 text-yellow-500" />;
@@ -493,7 +497,7 @@ export default function Performance() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Based on {currentReviews.length} reviews
+              Based on {filteredReviewsAll.length} reviews
             </p>
           </CardContent>
         </Card>
@@ -506,8 +510,8 @@ export default function Performance() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{completedReviews} / {currentReviews.length}</div>
-            <Progress value={currentReviews.length > 0 ? (completedReviews / currentReviews.length) * 100 : 0} className="mt-2" />
+            <div className="text-3xl font-bold">{completedReviews} / {filteredReviewsAll.length}</div>
+            <Progress value={filteredReviewsAll.length > 0 ? (completedReviews / filteredReviewsAll.length) * 100 : 0} className="mt-2" />
           </CardContent>
         </Card>
 
@@ -534,7 +538,7 @@ export default function Performance() {
           <CardContent>
             <div className="text-3xl font-bold">{rankings.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Out of {getFilteredEmployees().length} total
+              Out of {filteredEmployees.length} total
             </p>
           </CardContent>
         </Card>
@@ -608,8 +612,8 @@ export default function Performance() {
       {/* Reviews List */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="all">All Reviews ({currentReviews.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending ({currentReviews.filter(r => r.status === 'draft').length})</TabsTrigger>
+          <TabsTrigger value="all">All Reviews ({filteredReviewsAll.length})</TabsTrigger>
+          <TabsTrigger value="pending">Pending ({filteredReviewsAll.filter(r => r.status === 'draft').length})</TabsTrigger>
           <TabsTrigger value="completed">Completed ({completedReviews})</TabsTrigger>
         </TabsList>
 
