@@ -24,6 +24,7 @@ interface GiftCardFormData {
   providerName: string;
   providerUrl: string;
   purchaseValue: string;
+  customProviderName: string;
 }
 
 const defaultFormData: GiftCardFormData = {
@@ -37,6 +38,7 @@ const defaultFormData: GiftCardFormData = {
   providerName: '',
   providerUrl: '',
   purchaseValue: '',
+  customProviderName: '',
 };
 
 // Popular gift card providers
@@ -113,6 +115,7 @@ export default function GiftCards() {
       providerName: designTemplate?.providerName || '',
       providerUrl: designTemplate?.providerUrl || '',
       purchaseValue: designTemplate?.purchaseValue || '',
+      customProviderName: designTemplate?.customProviderName || '',
     });
     setSelectedTemplate(designTemplate?.template || 1);
     setEditingId(card.id);
