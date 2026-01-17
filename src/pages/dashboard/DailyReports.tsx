@@ -38,6 +38,7 @@ export default function DailyReports() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
+  const [customTypeName, setCustomTypeName] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,9 +188,10 @@ export default function DailyReports() {
       }
 
       // Insert report record
+      const finalReportType = reportType === 'other' && customTypeName ? customTypeName : reportType;
       const { error } = await supabase.from('daily_reports').insert({
         title: reportTitle,
-        report_type: reportType,
+        report_type: finalReportType,
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
@@ -206,6 +208,7 @@ export default function DailyReports() {
 
       setReportTitle('');
       setReportType('report');
+      setCustomTypeName('');
       setFiles([]);
       setShowUploadDialog(false);
       fetchReports();
@@ -308,7 +311,7 @@ export default function DailyReports() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Type</Label>
-                  <Select value={reportType} onValueChange={setReportType}>
+                  <Select value={reportType} onValueChange={(v) => { setReportType(v); if (v !== 'other') setCustomTypeName(''); }}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -320,6 +323,17 @@ export default function DailyReports() {
                     </SelectContent>
                   </Select>
                 </div>
+                {reportType === 'other' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="customType">Custom Type Name *</Label>
+                    <Input 
+                      id="customType" 
+                      placeholder="Enter custom type name..." 
+                      value={customTypeName}
+                      onChange={(e) => setCustomTypeName(e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
                   <div className="flex items-center gap-4">

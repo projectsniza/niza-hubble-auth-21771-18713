@@ -238,13 +238,16 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             Continue Onboarding
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem 
-                          onClick={() => setDeleteEmployeeId(employee.id)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
+                        {/* Only show delete for super_admin and HR, or managers for their own branch employees */}
+                        {(user?.role === 'super_admin' || user?.role === 'hr' || (user?.role === 'manager' && employee.branch_id === user?.branchId)) && (
+                          <DropdownMenuItem 
+                            onClick={() => setDeleteEmployeeId(employee.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
