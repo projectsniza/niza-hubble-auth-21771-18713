@@ -74,7 +74,7 @@ export default function ELearning() {
     date: '',
     deadline: '',
     tags: '',
-    assignedTo: undefined as string | undefined,
+    assignedTo: [] as string[],
     description: '',
   }));
 
@@ -249,11 +249,11 @@ export default function ELearning() {
       return;
     }
 
-    // For admin/HR, they need to select a store account
-    if (isAdminOrHR && !formData.assignedTo) {
+    // For admin/HR, they need to select at least one store account
+    if (isAdminOrHR && formData.assignedTo.length === 0) {
       toast({
         title: 'Validation Error',
-        description: 'Please select a Store Account to assign the training',
+        description: 'Please select at least one Store Account to assign the training',
         variant: 'destructive'
       });
       return;
@@ -270,66 +270,83 @@ export default function ELearning() {
         status: 'pending'
       };
 
+      let insertedTrainings: any[] = [];
+
       if (isManager) {
         // Manager creates for their own branch, assigned to themselves
         trainingData.assigned_to = user?.id;
         trainingData.organization_id = user?.organizationId;
         trainingData.branch_id = user?.branchId;
+
+        const { data: insertedTraining, error: trainingError } = await supabase
+          .from('trainings')
+          .insert(trainingData)
+          .select('id')
+          .single();
+
+        if (trainingError) throw trainingError;
+        insertedTrainings = [insertedTraining];
       } else {
-        // Admin/HR assigns to selected manager
-        const selectedManager = managers.find(m => m.id === formData.assignedTo);
-        trainingData.assigned_to = formData.assignedTo;
-        trainingData.organization_id = selectedManager?.organization_id || null;
-        trainingData.branch_id = selectedManager?.branch_id || null;
+        // Admin/HR assigns to multiple selected managers
+        for (const managerId of formData.assignedTo) {
+          const selectedManager = managers.find(m => m.id === managerId);
+          const managerTrainingData = {
+            ...trainingData,
+            assigned_to: managerId,
+            organization_id: selectedManager?.organization_id || null,
+            branch_id: selectedManager?.branch_id || null,
+          };
+
+          const { data: insertedTraining, error: trainingError } = await supabase
+            .from('trainings')
+            .insert(managerTrainingData)
+            .select('id')
+            .single();
+
+          if (trainingError) throw trainingError;
+          insertedTrainings.push(insertedTraining);
+        }
       }
 
-      const { data: insertedTraining, error: trainingError } = await supabase
-        .from('trainings')
-        .insert(trainingData)
-        .select('id')
-        .single();
+      // Upload files if trainings were created successfully
+      if (uploadedFiles.length > 0 && insertedTrainings.length > 0) {
+        for (const insertedTraining of insertedTrainings) {
+          for (const file of uploadedFiles) {
+            const filePath = `${insertedTraining.id}/${Date.now()}-${file.name}`;
+            const { error: uploadError } = await supabase.storage
+              .from('training-documents')
+              .upload(filePath, file);
 
-      if (trainingError) {
-        console.error('Training insert error:', trainingError);
-        throw trainingError;
-      }
+            if (uploadError) {
+              console.error('File upload error:', uploadError);
+              throw uploadError;
+            }
 
-      // Upload files if training was created successfully
-      if (uploadedFiles.length > 0 && insertedTraining?.id) {
-        for (const file of uploadedFiles) {
-          const filePath = `${insertedTraining.id}/${Date.now()}-${file.name}`;
-          const { error: uploadError } = await supabase.storage
-            .from('training-documents')
-            .upload(filePath, file);
+            const { error: docError } = await supabase.from('training_documents').insert({
+              training_id: insertedTraining.id,
+              file_name: file.name,
+              file_path: filePath,
+              file_type: file.type,
+              file_size: file.size,
+              document_type: 'training',
+              uploaded_by: user?.id
+            });
 
-          if (uploadError) {
-            console.error('File upload error:', uploadError);
-            throw uploadError;
-          }
-
-          const { error: docError } = await supabase.from('training_documents').insert({
-            training_id: insertedTraining.id,
-            file_name: file.name,
-            file_path: filePath,
-            file_type: file.type,
-            file_size: file.size,
-            document_type: 'training',
-            uploaded_by: user?.id
-          });
-
-          if (docError) {
-            console.error('Training document insert error:', docError);
-            throw docError;
+            if (docError) {
+              console.error('Training document insert error:', docError);
+              throw docError;
+            }
           }
         }
       }
 
+      const assignedCount = isManager ? 1 : formData.assignedTo.length;
       toast({
         title: 'Training Created',
-        description: `Training "${formData.title}" has been created successfully`,
+        description: `Training "${formData.title}" has been assigned to ${assignedCount} store account${assignedCount > 1 ? 's' : ''}`,
       });
       setShowCreateDialog(false);
-      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: undefined, description: '' });
+      setFormData({ title: '', date: '', deadline: '', tags: '', assignedTo: [], description: '' });
       setUploadedFiles([]);
       fetchTrainings();
     } catch (error: any) {
@@ -800,44 +817,44 @@ export default function ELearning() {
             {/* Only show store account selector for Admin/HR */}
             {isAdminOrHR && (
               <div>
-                <Label htmlFor="manager">Assign to Store Account *</Label>
-                <Select
-                  value={formData.assignedTo}
-                  onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select store account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {managers.map((manager) => (
-                      <SelectItem key={manager.id} value={manager.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{manager.name}</span>
+                <Label>Assign to Store Account(s) *</Label>
+                <p className="text-xs text-muted-foreground mb-2">Select multiple stores to assign this training</p>
+                <div className="border rounded-lg max-h-48 overflow-y-auto p-2 space-y-2">
+                  {managers.map((manager) => {
+                    const isSelected = formData.assignedTo.includes(manager.id);
+                    return (
+                      <label 
+                        key={manager.id} 
+                        className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted ${isSelected ? 'bg-primary/10 border border-primary/30' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, assignedTo: [...formData.assignedTo, manager.id] });
+                            } else {
+                              setFormData({ ...formData, assignedTo: formData.assignedTo.filter(id => id !== manager.id) });
+                            }
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium">{manager.name}</span>
                           {manager.branch_name && (
-                            <span className="text-muted-foreground text-xs">
+                            <span className="text-muted-foreground text-xs ml-2">
                               ({manager.branch_name})
                             </span>
                           )}
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formData.assignedTo && (
-                  <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-                    {managers.find(m => m.id === formData.assignedTo)?.organization_name && (
-                      <span className="flex items-center gap-1">
-                        <Building className="h-3 w-3" />
-                        {managers.find(m => m.id === formData.assignedTo)?.organization_name}
-                      </span>
-                    )}
-                    {managers.find(m => m.id === formData.assignedTo)?.branch_name && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {managers.find(m => m.id === formData.assignedTo)?.branch_name}
-                      </span>
-                    )}
-                  </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                {formData.assignedTo.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {formData.assignedTo.length} store account{formData.assignedTo.length > 1 ? 's' : ''} selected
+                  </p>
                 )}
               </div>
             )}
