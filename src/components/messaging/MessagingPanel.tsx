@@ -141,6 +141,15 @@ export default function MessagingPanel() {
   const initializeOrgChat = async () => {
     setLoading(true);
     try {
+      // Get current session to ensure user id matches auth.uid()
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.user?.id) {
+        console.error('No active session for chat initialization');
+        return;
+      }
+
+      const userId = currentSession.user.id;
+
       // Check for existing org-wide conversation
       const { data: existingConvo } = await supabase
         .from('conversations')
@@ -155,15 +164,18 @@ export default function MessagingPanel() {
           .from('conversation_participants')
           .select('id')
           .eq('conversation_id', existingConvo.id)
-          .eq('user_id', user?.id)
+          .eq('user_id', userId)
           .maybeSingle();
 
         if (!participation) {
           // Add user as participant
-          await supabase.from('conversation_participants').insert({
+          const { error: participantError } = await supabase.from('conversation_participants').insert({
             conversation_id: existingConvo.id,
-            user_id: user?.id
+            user_id: userId
           });
+          if (participantError) {
+            console.error('Error adding participant:', participantError);
+          }
         }
 
         setConversationId(existingConvo.id);
@@ -174,7 +186,7 @@ export default function MessagingPanel() {
           .insert({
             name: ORG_CHAT_NAME,
             is_group: true,
-            created_by: user?.id
+            created_by: userId
           })
           .select()
           .single();
@@ -184,7 +196,7 @@ export default function MessagingPanel() {
         // Add current user as participant
         await supabase.from('conversation_participants').insert({
           conversation_id: newConvo.id,
-          user_id: user?.id
+          user_id: userId
         });
 
         setConversationId(newConvo.id);
@@ -328,6 +340,26 @@ export default function MessagingPanel() {
   const handleSendMessage = async () => {
     if ((!newMessage.trim() && attachments.length === 0) || !conversationId) return;
 
+    // Ensure we have a valid user and session
+    if (!user?.id) {
+      toast.error('You must be logged in to send messages');
+      return;
+    }
+
+    // Get the current session to ensure auth.uid() will match
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (!currentSession?.user?.id) {
+      toast.error('Session expired. Please refresh the page and try again.');
+      return;
+    }
+
+    // Verify the session user matches our context user
+    if (currentSession.user.id !== user.id) {
+      console.error('Session mismatch:', { sessionUserId: currentSession.user.id, contextUserId: user.id });
+      toast.error('Session error. Please log out and log back in.');
+      return;
+    }
+
     setSendingMessage(true);
     setUploading(attachments.length > 0);
     
@@ -342,15 +374,19 @@ export default function MessagingPanel() {
         ? (uploadedAttachments.some(a => a.type.startsWith('image/')) ? 'image' : 'file')
         : 'text';
 
+      // Use the session user id to ensure it matches auth.uid() in the RLS policy
       const { error } = await supabase.from('messages').insert([{
         conversation_id: conversationId,
-        sender_id: user?.id,
+        sender_id: currentSession.user.id,
         content: newMessage.trim() || null,
         message_type: messageType,
         attachments: uploadedAttachments.length > 0 ? (uploadedAttachments as unknown as any) : null
       }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Message insert error:', error);
+        throw error;
+      }
 
       setNewMessage('');
       setAttachments([]);
