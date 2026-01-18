@@ -97,8 +97,6 @@ export default function Settings() {
   const canManageCustomRoles = user?.role === 'super_admin';
   const canManageDocuments = user?.role === 'super_admin';
 
-  const tabsCount = 2 + (canManageOrgs ? 1 : 0) + (canManageUsers ? 1 : 0) + (canManageReminders ? 1 : 0) + (canManageMessages ? 1 : 0) + (canManageCustomRoles ? 1 : 0) + (canManageDocuments ? 1 : 0);
-
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-8">
@@ -107,10 +105,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList
-          className="grid w-full max-w-4xl"
-          style={{ gridTemplateColumns: `repeat(${tabsCount}, 1fr)` }}
-        >
+        <TabsList className="flex flex-wrap gap-1 h-auto p-1">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Profile
