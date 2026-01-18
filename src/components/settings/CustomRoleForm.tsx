@@ -189,7 +189,7 @@ function CustomRoleFormImpl({
                 <SelectTrigger>
                   <SelectValue placeholder="Select organization" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[200]">
                   <SelectItem value="all">All Organizations</SelectItem>
                   {organizations.map((org) => (
                     <SelectItem key={org.id} value={org.id}>
@@ -210,7 +210,7 @@ function CustomRoleFormImpl({
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[200]">
                   <SelectItem value="all">All Branches</SelectItem>
                   {filteredBranches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
