@@ -278,7 +278,7 @@ export default function Settings() {
         </TabsContent>
 
         {canManageOrgs && (
-          <TabsContent value="organizations">
+          <TabsContent value="organizations" forceMount className="data-[state=inactive]:hidden">
             <OrganizationManagement />
           </TabsContent>
         )}
