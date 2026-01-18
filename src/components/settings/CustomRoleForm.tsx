@@ -201,14 +201,14 @@ function CustomRoleFormImpl({
             </div>
 
             <div className="space-y-2">
-              <Label>Branch</Label>
+              <Label>Branch {formData.organization_id ? `(${filteredBranches.length} available)` : '(select org first)'}</Label>
               <Select
                 value={formData.branch_id || "all"}
                 onValueChange={(v) => setFormData((prev) => ({ ...prev, branch_id: v === "all" ? "" : v }))}
                 disabled={!formData.organization_id}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select branch" />
+                <SelectTrigger className={!formData.organization_id ? "opacity-50" : ""}>
+                  <SelectValue placeholder={formData.organization_id ? "Select branch" : "Select organization first"} />
                 </SelectTrigger>
                 <SelectContent className="z-[200]">
                   <SelectItem value="all">All Branches</SelectItem>
