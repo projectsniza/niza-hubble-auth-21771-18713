@@ -1,29 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2, ShieldCheck, Settings2, Key } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { CustomRoleForm, type AppAccess, type BaseRole, type FeatureGroups, type CustomRoleFormData } from './CustomRoleForm';
 
-type BaseRole = 'manager' | 'hr' | 'employee';
-
-interface AppAccess {
-  niza_safe: boolean;
-  niza_finance: boolean;
-  niza_templates: boolean;
-}
 
 interface CustomRole {
   id: string;
@@ -137,13 +125,13 @@ export default function CustomRolesManagement() {
   };
   
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CustomRoleFormData>({
     name: '',
     description: '',
-    base_role: 'manager' as BaseRole,
+    base_role: 'manager',
     organization_id: '',
     branch_id: '',
-    permissions: {} as Record<string, boolean>,
+    permissions: {},
     app_access: { ...defaultAppAccess },
   });
   
@@ -279,16 +267,22 @@ export default function CustomRolesManagement() {
     setIsSubmitting(true);
     try {
       // Create the custom role first
-      const { data: roleData, error: roleError } = await supabase.from('custom_roles').insert({
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
-        base_role: formData.base_role,
-        organization_id: formData.organization_id || null,
-        branch_id: formData.branch_id || null,
-        permissions: formData.permissions,
-        app_access: formData.app_access,
-        created_by: user?.id || null,
-      }).select().single();
+      const { data: roleData, error: roleError } = await supabase
+        .from('custom_roles')
+        .insert([
+          {
+            name: formData.name.trim(),
+            description: formData.description.trim() || null,
+            base_role: formData.base_role,
+            organization_id: formData.organization_id || null,
+            branch_id: formData.branch_id || null,
+            permissions: formData.permissions as any,
+            app_access: formData.app_access as any,
+            created_by: user?.id || null,
+          },
+        ])
+        .select()
+        .single();
 
       if (roleError) throw roleError;
 
@@ -355,8 +349,8 @@ export default function CustomRolesManagement() {
           base_role: formData.base_role,
           organization_id: formData.organization_id || null,
           branch_id: formData.branch_id || null,
-          permissions: formData.permissions,
-          app_access: formData.app_access,
+          permissions: formData.permissions as any,
+          app_access: formData.app_access as any,
         })
         .eq('id', selectedRole.id);
 
@@ -472,259 +466,7 @@ export default function CustomRolesManagement() {
     }
   };
 
-  const RoleFormContent = ({ isEditMode = false }: { isEditMode?: boolean }) => (
-    <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2 overscroll-contain">
-      {/* Basic Info */}
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>Role Name *</Label>
-          <Input
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g., Store Supervisor"
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Description</Label>
-          <Textarea
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Describe the role's responsibilities..."
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Base Role Type *</Label>
-          <Select 
-            value={formData.base_role} 
-            onValueChange={(v) => setFormData(prev => ({ 
-              ...prev, 
-              base_role: v as BaseRole,
-              permissions: {} // Reset permissions when base role changes
-            }))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="z-[200]">
-              <SelectItem value="manager">Store Account</SelectItem>
-              <SelectItem value="hr">HR</SelectItem>
-              <SelectItem value="employee">Employee</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Select the base role type to inherit its feature set
-          </p>
-        </div>
-      </div>
-
-      {/* User Credentials - Only show in Create mode, positioned after base role */}
-      {!isEditMode && (
-        <div className="space-y-4 border-t pt-4">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Email Address *</Label>
-              <Input
-                type="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                placeholder="user@company.com"
-                autoComplete="off"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Password *</Label>
-              <Input
-                type="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-                autoComplete="new-password"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Full Name *</Label>
-              <Input
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter full name"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scope Configuration - Only for Manager/HR */}
-      {formData.base_role !== 'employee' && (
-        <div className="space-y-4 border-t pt-4">
-          <h4 className="font-medium flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            Scope Configuration
-          </h4>
-          
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Organization</Label>
-              <Select 
-                value={formData.organization_id || 'all'} 
-                onValueChange={(v) => setFormData(prev => ({ 
-                  ...prev, 
-                  organization_id: v === 'all' ? '' : v,
-                  branch_id: '' // Reset branch when org changes
-                }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select organization" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Organizations</SelectItem>
-                  {organizations.map(org => (
-                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Branch</Label>
-              <Select 
-                value={formData.branch_id || 'all'} 
-                onValueChange={(v) => setFormData(prev => ({ 
-                  ...prev, 
-                  branch_id: v === 'all' ? '' : v 
-                }))}
-                disabled={!formData.organization_id}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {filteredBranches.map(branch => (
-                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Feature Permissions */}
-      <div className="space-y-4 border-t pt-4">
-        <h4 className="font-medium flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4" />
-          Feature Permissions
-        </h4>
-        
-        <Accordion type="multiple" className="w-full">
-          {Object.entries(getFeatures()).map(([groupName, features]) => (
-            <AccordionItem key={groupName} value={groupName}>
-              <AccordionTrigger className="text-sm">
-                <div className="flex items-center gap-2">
-                  {groupName}
-                  <Badge variant="outline" className="text-xs">
-                    {features.filter(f => formData.permissions[f.key]).length}/{features.length}
-                  </Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-2 pl-2">
-                  <div className="flex gap-2 mb-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => toggleAllInGroup(features, true)}
-                    >
-                      Select All
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => toggleAllInGroup(features, false)}
-                    >
-                      Deselect All
-                    </Button>
-                  </div>
-                  {features.map(feature => (
-                    <div key={feature.key} className="flex items-center gap-2">
-                      <Checkbox
-                        id={feature.key}
-                        checked={formData.permissions[feature.key] || false}
-                        onCheckedChange={() => togglePermission(feature.key)}
-                      />
-                      <label htmlFor={feature.key} className="text-sm cursor-pointer">
-                        {feature.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </div>
-
-      {/* Extra App Access */}
-      <div className="space-y-4 border-t pt-4">
-        <h4 className="font-medium flex items-center gap-2">
-          <Settings2 className="h-4 w-4" />
-          Extra App Access
-        </h4>
-        
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Safe</p>
-              <p className="text-xs text-muted-foreground">Health & Safety management</p>
-            </div>
-            <Switch
-              checked={formData.app_access.niza_safe}
-              onCheckedChange={(checked) => setFormData(prev => ({
-                ...prev,
-                app_access: { ...prev.app_access, niza_safe: checked }
-              }))}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Finance</p>
-              <p className="text-xs text-muted-foreground">Financial reports & P&L</p>
-            </div>
-            <Switch
-              checked={formData.app_access.niza_finance}
-              onCheckedChange={(checked) => setFormData(prev => ({
-                ...prev,
-                app_access: { ...prev.app_access, niza_finance: checked }
-              }))}
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Templates</p>
-              <p className="text-xs text-muted-foreground">Business cards, ID cards, etc.</p>
-            </div>
-            <Switch
-              checked={formData.app_access.niza_templates}
-              onCheckedChange={(checked) => setFormData(prev => ({
-                ...prev,
-                app_access: { ...prev.app_access, niza_templates: checked }
-              }))}
-            />
-          </div>
-        </div>
-      </div>
-
-    </div>
-  );
+  const features: FeatureGroups = getFeatures();
 
   if (loading) {
     return (
@@ -857,7 +599,22 @@ export default function CustomRolesManagement() {
               Define a new custom role with specific permissions
             </DialogDescription>
           </DialogHeader>
-          <RoleFormContent isEditMode={false} />
+          <CustomRoleForm
+            isEditMode={false}
+            formData={formData}
+            setFormData={setFormData}
+            organizations={organizations}
+            filteredBranches={filteredBranches}
+            userEmail={userEmail}
+            setUserEmail={setUserEmail}
+            userPassword={userPassword}
+            setUserPassword={setUserPassword}
+            userName={userName}
+            setUserName={setUserName}
+            features={features}
+            toggleAllInGroup={toggleAllInGroup}
+            togglePermission={togglePermission}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
@@ -883,7 +640,22 @@ export default function CustomRolesManagement() {
               Modify the role's permissions and settings
             </DialogDescription>
           </DialogHeader>
-          <RoleFormContent isEditMode={true} />
+          <CustomRoleForm
+            isEditMode={true}
+            formData={formData}
+            setFormData={setFormData}
+            organizations={organizations}
+            filteredBranches={filteredBranches}
+            userEmail={userEmail}
+            setUserEmail={setUserEmail}
+            userPassword={userPassword}
+            setUserPassword={setUserPassword}
+            userName={userName}
+            setUserName={setUserName}
+            features={features}
+            toggleAllInGroup={toggleAllInGroup}
+            togglePermission={togglePermission}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancel
