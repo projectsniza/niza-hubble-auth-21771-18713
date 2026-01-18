@@ -148,7 +148,7 @@ export default function CustomRolesManagement() {
   });
   
   // User creation state
-  const [createUser, setCreateUser] = useState(false);
+  const [createUser] = useState(true); // Always enabled
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
   const [userPassword, setUserPassword] = useState('');
@@ -225,7 +225,7 @@ export default function CustomRolesManagement() {
       permissions: {},
       app_access: { ...defaultAppAccess },
     });
-    setCreateUser(false);
+    // createUser is always true, no need to reset
     setUserEmail('');
     setUserName('');
     setUserPassword('');
@@ -261,21 +261,19 @@ export default function CustomRolesManagement() {
       return;
     }
 
-    // Validate user creation fields if enabled
-    if (createUser) {
-      if (!userEmail.trim() || !userName.trim() || !userPassword.trim()) {
-        toast.error('Please fill in all user credential fields');
-        return;
-      }
-      if (userPassword.length < 6) {
-        toast.error('Password must be at least 6 characters');
-        return;
-      }
-      // Validate required org/branch based on role
-      if (formData.base_role !== 'employee' && formData.base_role === 'manager' && !formData.branch_id) {
-        toast.error('Store Account users must be assigned to a branch');
-        return;
-      }
+    // Validate user creation fields (always required now)
+    if (!userEmail.trim() || !userName.trim() || !userPassword.trim()) {
+      toast.error('Please fill in all user credential fields');
+      return;
+    }
+    if (userPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    // Validate required org/branch based on role
+    if (formData.base_role === 'manager' && !formData.branch_id) {
+      toast.error('Store Account users must be assigned to a branch');
+      return;
     }
 
     setIsSubmitting(true);
@@ -294,8 +292,8 @@ export default function CustomRolesManagement() {
 
       if (roleError) throw roleError;
 
-      // If user creation is enabled, create the user
-      if (createUser && roleData) {
+      // Create the user with this role
+      if (roleData) {
         // Store current session to restore after user creation
         const { data: currentSession } = await supabase.auth.getSession();
         
@@ -328,8 +326,6 @@ export default function CustomRolesManagement() {
           }
           toast.success('Custom role and user created successfully');
         }
-      } else {
-        toast.success('Custom role created successfully');
       }
 
       setShowCreateDialog(false);
@@ -486,6 +482,7 @@ export default function CustomRolesManagement() {
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="e.g., Store Supervisor"
+            autoComplete="off"
           />
         </div>
 
@@ -512,7 +509,7 @@ export default function CustomRolesManagement() {
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[200]">
               <SelectItem value="manager">Store Account</SelectItem>
               <SelectItem value="hr">HR</SelectItem>
               <SelectItem value="employee">Employee</SelectItem>
@@ -523,6 +520,45 @@ export default function CustomRolesManagement() {
           </p>
         </div>
       </div>
+
+      {/* User Credentials - Only show in Create mode, positioned after base role */}
+      {!isEditMode && (
+        <div className="space-y-4 border-t pt-4">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Email Address *</Label>
+              <Input
+                type="email"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                placeholder="user@company.com"
+                autoComplete="off"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={userPassword}
+                onChange={(e) => setUserPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Enter full name"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scope Configuration - Only for Manager/HR */}
       {formData.base_role !== 'employee' && (
@@ -687,61 +723,6 @@ export default function CustomRolesManagement() {
         </div>
       </div>
 
-      {/* User Credentials - Only show in Create mode */}
-      {!isEditMode && (
-        <div className="space-y-4 border-t pt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Key className="h-4 w-4" />
-              <h4 className="font-medium">Create User with this Role</h4>
-            </div>
-            <Switch
-              checked={createUser}
-              onCheckedChange={setCreateUser}
-            />
-          </div>
-          
-          {createUser && (
-            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground">
-                Create a user account that will be assigned this custom role. The user can log in with these credentials.
-              </p>
-              
-              <div className="space-y-2">
-                <Label>Full Name *</Label>
-                <Input
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  placeholder="Enter full name"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Email Address *</Label>
-                <Input
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder="user@company.com"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Password *</Label>
-                <Input
-                  type="password"
-                  value={userPassword}
-                  onChange={(e) => setUserPassword(e.target.value)}
-                  placeholder="Minimum 6 characters"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Share these credentials with the user so they can log in
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 
@@ -865,7 +846,11 @@ export default function CustomRolesManagement() {
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog} modal={true}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent 
+          className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Create Custom Role</DialogTitle>
             <DialogDescription>
@@ -879,7 +864,7 @@ export default function CustomRolesManagement() {
             </Button>
             <Button onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {createUser ? 'Create Role & User' : 'Create Role'}
+              Create Role & User
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -887,7 +872,11 @@ export default function CustomRolesManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog} modal={true}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent 
+          className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Edit Custom Role</DialogTitle>
             <DialogDescription>
