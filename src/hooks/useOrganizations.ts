@@ -118,7 +118,8 @@ export function useBranches(organizationId?: string) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const lastOrgIdRef = useRef<string | undefined>(undefined);
+  // Use a sentinel so the initial render always fetches even when organizationId is undefined
+  const lastOrgIdRef = useRef<string | undefined | null>(null);
 
   const fetchBranches = useCallback(async () => {
     try {
@@ -220,8 +221,11 @@ export function useBranches(organizationId?: string) {
   }, []);
 
   useEffect(() => {
-    // Only fetch if user exists and organizationId changed
-    if (user && lastOrgIdRef.current !== organizationId) {
+    // Fetch when user exists and whenever organizationId changes.
+    // Important: we must also fetch on first mount even if organizationId is undefined.
+    if (!user) return;
+
+    if (lastOrgIdRef.current !== organizationId) {
       lastOrgIdRef.current = organizationId;
       fetchBranches();
     }
