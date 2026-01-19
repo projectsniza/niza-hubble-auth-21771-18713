@@ -45,6 +45,7 @@ interface FormData {
   email: string;
   eligible_to_work_uk: boolean | null;
   start_date: string;
+  has_previous_employment: boolean | null;
   current_employer: string;
   current_job_title: string;
   employer_address: string;
@@ -95,6 +96,7 @@ export default function ApplicationForm({
     email: employeeData.email || '',
     eligible_to_work_uk: null,
     start_date: '',
+    has_previous_employment: null,
     current_employer: '',
     current_job_title: '',
     employer_address: '',
@@ -691,42 +693,68 @@ export default function ApplicationForm({
         {/* Section 3: Employment */}
         <div className="border-b pb-6 mb-6">
           <h3 className="font-bold text-lg mb-4">3. Employment</h3>
-          <p className="text-sm text-muted-foreground mb-4">Previous Employment:</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Job Title</Label>
-              <Input
-                value={formData.current_job_title}
-                onChange={(e) => updateField('current_job_title', e.target.value)}
-                disabled={readOnly}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Date Employment Commenced</Label>
-              <Input
-                type="date"
-                value={formData.employment_commenced}
-                onChange={(e) => updateField('employment_commenced', e.target.value)}
-                disabled={readOnly}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Name and Address of Employer</Label>
-              <Textarea
-                value={formData.employer_address}
-                onChange={(e) => updateField('employer_address', e.target.value)}
-                disabled={readOnly}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Previous Salary</Label>
-              <Input
-                value={formData.present_salary}
-                onChange={(e) => updateField('present_salary', e.target.value)}
-                disabled={readOnly}
-              />
+          <div className="flex flex-wrap items-center gap-4 mb-4">
+            <Label>Do you have previous employment to declare?</Label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={formData.has_previous_employment === true}
+                  onCheckedChange={() => updateField('has_previous_employment', true)}
+                  disabled={readOnly}
+                />
+                Yes
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={formData.has_previous_employment === false}
+                  onCheckedChange={() => updateField('has_previous_employment', false)}
+                  disabled={readOnly}
+                />
+                No
+              </label>
             </div>
           </div>
+          
+          {formData.has_previous_employment !== false && (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">Previous Employment:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Job Title</Label>
+                  <Input
+                    value={formData.current_job_title}
+                    onChange={(e) => updateField('current_job_title', e.target.value)}
+                    disabled={readOnly}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date Employment Commenced</Label>
+                  <Input
+                    type="date"
+                    value={formData.employment_commenced}
+                    onChange={(e) => updateField('employment_commenced', e.target.value)}
+                    disabled={readOnly}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Name and Address of Employer</Label>
+                  <Textarea
+                    value={formData.employer_address}
+                    onChange={(e) => updateField('employer_address', e.target.value)}
+                    disabled={readOnly}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Previous Salary</Label>
+                  <Input
+                    value={formData.present_salary}
+                    onChange={(e) => updateField('present_salary', e.target.value)}
+                    disabled={readOnly}
+                  />
+                </div>
+              </div>
+            </>
+          )}
           <div className="mt-4 space-y-2">
             <Label>Please provide a brief summary of your previous duties:</Label>
             <Textarea
