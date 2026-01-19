@@ -10,7 +10,8 @@ import ReminderSettingsPanel from '@/components/settings/ReminderSettingsPanel';
 import MessageSettingsPanel from '@/components/messaging/MessageSettingsPanel';
 import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
 import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare, Shield, FileText } from 'lucide-react';
+import DepartmentManagement from '@/components/settings/DepartmentManagement';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -96,6 +97,7 @@ export default function Settings() {
   const canManageMessages = user?.role === 'super_admin';
   const canManageCustomRoles = user?.role === 'super_admin';
   const canManageDocuments = user?.role === 'super_admin';
+  const canManageDepartments = user?.role === 'super_admin';
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -148,6 +150,12 @@ export default function Settings() {
             <TabsTrigger value="documents" className="gap-2">
               <FileText className="h-4 w-4" />
               Documents
+            </TabsTrigger>
+          )}
+          {canManageDepartments && (
+            <TabsTrigger value="departments" className="gap-2">
+              <Briefcase className="h-4 w-4" />
+              Departments
             </TabsTrigger>
           )}
         </TabsList>
@@ -305,6 +313,12 @@ export default function Settings() {
         {canManageDocuments && (
           <TabsContent value="documents">
             <DocumentSettingsPanel />
+          </TabsContent>
+        )}
+
+        {canManageDepartments && (
+          <TabsContent value="departments">
+            <DepartmentManagement />
           </TabsContent>
         )}
       </Tabs>

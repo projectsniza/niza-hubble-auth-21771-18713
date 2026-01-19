@@ -46,6 +46,7 @@ interface FormData {
   nationalInsuranceNumber: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
+  emergencyContactRelationship: string;
   organizationId: string;
   branchId: string;
   managerId: string;
@@ -54,6 +55,13 @@ interface FormData {
   govPortalLink: string;
   rightToWorkDocument: File | null;
   additionalDocuments: { title: string; file: File | null; expiryDate: string }[];
+}
+
+interface Department {
+  id: string;
+  name: string;
+  organization_id: string | null;
+  is_active: boolean;
 }
 
 export default function AddEmployee() {
@@ -65,6 +73,7 @@ export default function AddEmployee() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [employeeRecord, setEmployeeRecord] = useState<any>(null);
   const documentUploadRef = useRef<DocumentUploadStepRef>(null);
   
@@ -88,6 +97,7 @@ export default function AddEmployee() {
     nationalInsuranceNumber: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
+    emergencyContactRelationship: '',
     organizationId: '',
     branchId: '',
     managerId: '',
@@ -114,6 +124,7 @@ export default function AddEmployee() {
   useEffect(() => {
     fetchOrganizations();
     fetchFormSettings();
+    fetchDepartments();
     if (employeeId) {
       fetchEmployee(employeeId);
     }
@@ -122,6 +133,8 @@ export default function AddEmployee() {
   useEffect(() => {
     if (formData.organizationId) {
       fetchBranches(formData.organizationId);
+      // Filter departments by organization
+      fetchDepartments(formData.organizationId);
     }
   }, [formData.organizationId]);
 
@@ -175,6 +188,7 @@ export default function AddEmployee() {
         nationalInsuranceNumber: data.national_insurance_number || '',
         emergencyContactName: data.emergency_contact_name || '',
         emergencyContactPhone: data.emergency_contact_phone || '',
+        emergencyContactRelationship: data.emergency_contact_relationship || '',
         organizationId: data.organization_id || '',
         branchId: data.branch_id || '',
         managerId: data.manager_id || '',
@@ -211,6 +225,21 @@ export default function AddEmployee() {
     if (data) setManagers(data);
   };
 
+  const fetchDepartments = async (orgId?: string) => {
+    let query = supabase
+      .from('departments')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    
+    if (orgId) {
+      query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
+    }
+    
+    const { data } = await query;
+    if (data) setDepartments(data);
+  };
+
   const updateFormData = (updates: Partial<FormData>) => {
     setFormData(prev => ({ ...prev, ...updates }));
   };
@@ -219,8 +248,13 @@ export default function AddEmployee() {
     const currentStepId = STEPS[currentStep]?.id;
     
     if (currentStepId === 'basic') {
+      // Validate all required fields including emergency contact
       if (!formData.firstName || !formData.lastName || !formData.email || !formData.organizationId || !formData.branchId) {
-        toast.error('Please fill in all required fields');
+        toast.error('Please fill in all required fields (Name, Email, Organization, Branch)');
+        return;
+      }
+      if (!formData.emergencyContactName || !formData.emergencyContactPhone) {
+        toast.error('Emergency contact name and phone are required');
         return;
       }
       
@@ -271,6 +305,7 @@ export default function AddEmployee() {
           national_insurance_number: formData.nationalInsuranceNumber,
           emergency_contact_name: formData.emergencyContactName,
           emergency_contact_phone: formData.emergencyContactPhone,
+          emergency_contact_relationship: formData.emergencyContactRelationship || null,
           organization_id: formData.organizationId,
           branch_id: formData.branchId,
           manager_id: formData.managerId || null,
@@ -461,7 +496,14 @@ export default function AddEmployee() {
                 </div>
                 <div className="space-y-2">
                   <Label>Department</Label>
-                  <Input value={formData.department} onChange={(e) => updateFormData({ department: e.target.value })} placeholder="Engineering" />
+                  <Select value={formData.department} onValueChange={(v) => updateFormData({ department: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                    <SelectContent>
+                      {departments.map(dept => (
+                        <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Join Date</Label>
@@ -480,14 +522,29 @@ export default function AddEmployee() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Emergency Contact Name</Label>
-                  <Input value={formData.emergencyContactName} onChange={(e) => updateFormData({ emergencyContactName: e.target.value })} />
+                  <Label>Emergency Contact Name *</Label>
+                  <Input value={formData.emergencyContactName} onChange={(e) => updateFormData({ emergencyContactName: e.target.value })} placeholder="Contact name" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Emergency Contact Phone</Label>
-                  <Input value={formData.emergencyContactPhone} onChange={(e) => updateFormData({ emergencyContactPhone: e.target.value })} />
+                  <Label>Emergency Contact Phone *</Label>
+                  <Input value={formData.emergencyContactPhone} onChange={(e) => updateFormData({ emergencyContactPhone: e.target.value })} placeholder="+44 7xxx xxx xxx" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Relationship</Label>
+                  <Select value={formData.emergencyContactRelationship} onValueChange={(v) => updateFormData({ emergencyContactRelationship: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select relationship" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Spouse">Spouse</SelectItem>
+                      <SelectItem value="Parent">Parent</SelectItem>
+                      <SelectItem value="Sibling">Sibling</SelectItem>
+                      <SelectItem value="Child">Child</SelectItem>
+                      <SelectItem value="Friend">Friend</SelectItem>
+                      <SelectItem value="Partner">Partner</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
