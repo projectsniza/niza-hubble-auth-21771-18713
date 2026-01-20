@@ -99,6 +99,15 @@ export default function Settings() {
   const canManageDocuments = user?.role === 'super_admin';
   const canManageDepartments = user?.role === 'super_admin';
 
+  // Show loading state while user is being fetched
+  if (!user) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-8">
@@ -160,7 +169,7 @@ export default function Settings() {
           )}
         </TabsList>
 
-        <TabsContent value="profile">
+        <TabsContent value="profile" forceMount className="data-[state=inactive]:hidden">
           <Card className="max-w-lg">
             <CardHeader>
               <CardTitle className="text-foreground">Profile Settings</CardTitle>
@@ -219,7 +228,7 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="password">
+        <TabsContent value="password" forceMount className="data-[state=inactive]:hidden">
           <Card className="max-w-lg">
             <CardHeader>
               <CardTitle className="text-foreground">Change Password</CardTitle>
@@ -287,31 +296,31 @@ export default function Settings() {
         )}
 
         {canManageUsers && (
-          <TabsContent value="users">
+          <TabsContent value="users" forceMount className="data-[state=inactive]:hidden">
             <UserManagement />
           </TabsContent>
         )}
 
         {canManageCustomRoles && (
-          <TabsContent value="custom-roles">
+          <TabsContent value="custom-roles" forceMount className="data-[state=inactive]:hidden">
             <CustomRolesManagement />
           </TabsContent>
         )}
 
         {canManageReminders && (
-          <TabsContent value="reminders">
+          <TabsContent value="reminders" forceMount className="data-[state=inactive]:hidden">
             <ReminderSettingsPanel />
           </TabsContent>
         )}
 
         {canManageMessages && (
-          <TabsContent value="messages">
+          <TabsContent value="messages" forceMount className="data-[state=inactive]:hidden">
             <MessageSettingsPanel />
           </TabsContent>
         )}
 
         {canManageDocuments && (
-          <TabsContent value="documents">
+          <TabsContent value="documents" forceMount className="data-[state=inactive]:hidden">
             <DocumentSettingsPanel />
           </TabsContent>
         )}
