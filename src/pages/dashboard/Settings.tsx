@@ -317,7 +317,7 @@ export default function Settings() {
         )}
 
         {canManageDepartments && (
-          <TabsContent value="departments">
+          <TabsContent value="departments" forceMount className="data-[state=inactive]:hidden">
             <DepartmentManagement />
           </TabsContent>
         )}
