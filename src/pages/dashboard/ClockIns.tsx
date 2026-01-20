@@ -104,6 +104,7 @@ export default function ClockIns() {
   const [coordinateFormat, setCoordinateFormat] = useState<'decimal' | 'dms'>('decimal');
   const [activeClockIn, setActiveClockIn] = useState<ClockIn | null>(null);
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
+  const [clockAction, setClockAction] = useState<{ type: 'in' | 'out'; locationId?: string } | null>(null);
   
   const [newLocation, setNewLocation] = useState({
     name: '',
@@ -118,7 +119,7 @@ export default function ClockIns() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user?.id]);
 
   // Timer effect for active clock-in
   useEffect(() => {
@@ -338,6 +339,14 @@ export default function ClockIns() {
   };
 
   const handleClockIn = async (locationId: string) => {
+    if (!user?.id) {
+      toast.error('Please wait for login to finish, then try again.');
+      return;
+    }
+
+    if (clockAction) return;
+    setClockAction({ type: 'in', locationId });
+
     try {
       // Fetch fresh location data directly from database to ensure we have correct coordinates
       const { data: locationData, error: locationError } = await supabase
@@ -349,81 +358,103 @@ export default function ClockIns() {
       if (locationError) {
         console.error('Error fetching location:', locationError);
         toast.error('Failed to fetch location data');
+        setClockAction(null);
         return;
       }
 
       if (!locationData) {
         toast.error('Location not found. Please refresh the page.');
+        setClockAction(null);
         return;
       }
 
       console.log('Fresh location from DB:', locationData);
 
       // Validate location coordinates
-      if (locationData.latitude == null || locationData.longitude == null || 
-          isNaN(Number(locationData.latitude)) || isNaN(Number(locationData.longitude))) {
+      if (
+        locationData.latitude == null ||
+        locationData.longitude == null ||
+        isNaN(Number(locationData.latitude)) ||
+        isNaN(Number(locationData.longitude))
+      ) {
         console.error('Invalid location coordinates:', locationData);
         toast.error('Location coordinates are not configured properly. Please contact admin.');
+        setClockAction(null);
         return;
       }
 
       // Get current position
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        console.log('User GPS coordinates:', { latitude, longitude });
-        console.log('Location coordinates:', { 
-          lat: locationData.latitude, 
-          lng: locationData.longitude,
-          radius: locationData.radius 
-        });
-        
-        const distance = calculateDistance(
-          latitude, 
-          longitude, 
-          Number(locationData.latitude), 
-          Number(locationData.longitude)
-        );
-        const radius = locationData.radius || 100;
-        
-        console.log('Distance calculation:', { distance, radius, withinRange: distance <= radius });
-        
-        if (distance > radius) {
-          toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
-          return;
-        }
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
 
-        const { error } = await supabase.from('clock_ins').insert({
-          user_id: user?.id,
-          branch_id: locationData.branch_id,
-          location_id: locationId,
-          clock_in_time: new Date().toISOString(),
-          clock_in_latitude: latitude,
-          clock_in_longitude: longitude,
-          clock_in_method: 'gps'
-        });
+            console.log('User GPS coordinates:', { latitude, longitude });
+            console.log('Location coordinates:', {
+              lat: locationData.latitude,
+              lng: locationData.longitude,
+              radius: locationData.radius,
+            });
 
-        if (error) throw error;
-        toast.success('Clocked in successfully');
-        fetchData();
-      }, (geoError) => {
-        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
-        switch (geoError.code) {
-          case geoError.PERMISSION_DENIED:
-            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
-            break;
-          case geoError.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
-            break;
-          case geoError.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.';
-            break;
-        }
-        toast.error(errorMessage);
-      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            const distance = calculateDistance(
+              latitude,
+              longitude,
+              Number(locationData.latitude),
+              Number(locationData.longitude)
+            );
+            const radius = locationData.radius || 100;
+
+            console.log('Distance calculation:', { distance, radius, withinRange: distance <= radius });
+
+            if (distance > radius) {
+              toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
+              setClockAction(null);
+              return;
+            }
+
+            const { error } = await supabase.from('clock_ins').insert({
+              user_id: user.id,
+              branch_id: locationData.branch_id,
+              location_id: locationId,
+              clock_in_time: new Date().toISOString(),
+              clock_in_latitude: latitude,
+              clock_in_longitude: longitude,
+              clock_in_method: 'gps',
+            });
+
+            if (error) throw error;
+            toast.success('Clocked in successfully');
+            setClockAction(null);
+            fetchData();
+          } catch (error: any) {
+            console.error('Clock in error:', error);
+            toast.error(error.message || 'Failed to clock in');
+            setClockAction(null);
+          }
+        },
+        (geoError) => {
+          let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
+          switch (geoError.code) {
+            case geoError.PERMISSION_DENIED:
+              errorMessage =
+                'Location access denied. Please allow location access in your browser settings and refresh the page.';
+              break;
+            case geoError.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
+              break;
+            case geoError.TIMEOUT:
+              errorMessage = 'Location request timed out. Please try again.';
+              break;
+          }
+          toast.error(errorMessage);
+          setClockAction(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
     } catch (error: any) {
       console.error('Clock in error:', error);
       toast.error(error.message || 'Failed to clock in');
+      setClockAction(null);
     }
   };
 
@@ -433,40 +464,56 @@ export default function ClockIns() {
       return;
     }
 
+    if (clockAction) return;
+    setClockAction({ type: 'out' });
+
     try {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const { latitude, longitude } = position.coords;
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
 
-        const { error } = await supabase
-          .from('clock_ins')
-          .update({
-            clock_out_time: new Date().toISOString(),
-            clock_out_latitude: latitude,
-            clock_out_longitude: longitude
-          })
-          .eq('id', activeClockIn.id);
+            const { error } = await supabase
+              .from('clock_ins')
+              .update({
+                clock_out_time: new Date().toISOString(),
+                clock_out_latitude: latitude,
+                clock_out_longitude: longitude,
+              })
+              .eq('id', activeClockIn.id);
 
-        if (error) throw error;
-        toast.success('Clocked out successfully');
-        setActiveClockIn(null);
-        fetchData();
-      }, (geoError) => {
-        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
-        switch (geoError.code) {
-          case geoError.PERMISSION_DENIED:
-            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
-            break;
-          case geoError.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
-            break;
-          case geoError.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.';
-            break;
-        }
-        toast.error(errorMessage);
-      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            if (error) throw error;
+            toast.success('Clocked out successfully');
+            setActiveClockIn(null);
+            setClockAction(null);
+            fetchData();
+          } catch (error: any) {
+            toast.error(error.message || 'Failed to clock out');
+            setClockAction(null);
+          }
+        },
+        (geoError) => {
+          let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
+          switch (geoError.code) {
+            case geoError.PERMISSION_DENIED:
+              errorMessage =
+                'Location access denied. Please allow location access in your browser settings and refresh the page.';
+              break;
+            case geoError.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
+              break;
+            case geoError.TIMEOUT:
+              errorMessage = 'Location request timed out. Please try again.';
+              break;
+          }
+          toast.error(errorMessage);
+          setClockAction(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
     } catch (error: any) {
       toast.error(error.message || 'Failed to clock out');
+      setClockAction(null);
     }
   };
 
@@ -828,33 +875,36 @@ export default function ClockIns() {
                   </div>
                   <div className="flex gap-2">
                     {activeClockIn && activeClockIn.location_id === location.id ? (
-                      <Button 
-                        size="sm" 
-                        variant="destructive" 
-                        className="flex-1" 
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1"
+                        disabled={!!clockAction}
                         onClick={handleClockOut}
                       >
-                        <Clock className="h-4 w-4 mr-2" />
-                        Clock Out
+                        <Clock className={`h-4 w-4 mr-2 ${clockAction?.type === 'out' ? 'animate-spin' : ''}`} />
+                        {clockAction?.type === 'out' ? 'Clocking Out…' : 'Clock Out'}
                       </Button>
                     ) : activeClockIn ? (
-                      <Button 
-                        size="sm" 
-                        className="flex-1" 
-                        disabled
-                        variant="outline"
-                      >
+                      <Button size="sm" className="flex-1" disabled variant="outline">
                         <Clock className="h-4 w-4 mr-2" />
-                        Clock In
+                        Active
                       </Button>
                     ) : (
-                      <Button 
-                        size="sm" 
-                        className="flex-1" 
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        disabled={!!clockAction}
                         onClick={() => handleClockIn(location.id)}
                       >
-                        <Clock className="h-4 w-4 mr-2" />
-                        Clock In
+                        <Clock
+                          className={`h-4 w-4 mr-2 ${
+                            clockAction?.type === 'in' && clockAction.locationId === location.id ? 'animate-spin' : ''
+                          }`}
+                        />
+                        {clockAction?.type === 'in' && clockAction.locationId === location.id
+                          ? 'Clocking In…'
+                          : 'Clock In'}
                       </Button>
                     )}
                     {user?.role === 'super_admin' && (
