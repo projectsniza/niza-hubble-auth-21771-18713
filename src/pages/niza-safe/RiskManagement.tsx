@@ -555,14 +555,18 @@ export default function RiskManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {coshhAssessments.length === 0 ? (
+                {coshhAssessments.filter(item => 
+                  !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No COSHH assessments found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  coshhAssessments.map((item) => (
+                  coshhAssessments.filter(item => 
+                    !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.chemical_name}</TableCell>
                       <TableCell>
@@ -606,14 +610,18 @@ export default function RiskManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {hazardReports.length === 0 ? (
+                {hazardReports.filter(item => 
+                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No hazard reports found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  hazardReports.map((item) => (
+                  hazardReports.filter(item => 
+                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
                       <TableCell>
@@ -659,14 +667,18 @@ export default function RiskManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {methodStatements.length === 0 ? (
+                {methodStatements.filter(item => 
+                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No method statements found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  methodStatements.map((item) => (
+                  methodStatements.filter(item => 
+                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
                       <TableCell>

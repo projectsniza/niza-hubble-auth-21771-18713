@@ -326,7 +326,8 @@ export default function PLCalculatorDialog({ open, onOpenChange, onSave }: PLCal
                     <Input
                       type="number"
                       step="0.01"
-                      value={value}
+                      value={value || ''}
+                      onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
                       onChange={(e) => updateField('adminCosts', key, e.target.value)}
                       placeholder="0.00"
                       className="mt-1"
@@ -362,7 +363,8 @@ export default function PLCalculatorDialog({ open, onOpenChange, onSave }: PLCal
                     <Input
                       type="number"
                       step="0.01"
-                      value={value}
+                      value={value || ''}
+                      onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
                       onChange={(e) => updateField('otherIncome', key, e.target.value)}
                       placeholder="0.00"
                       className="mt-1"
