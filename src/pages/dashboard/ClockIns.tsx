@@ -827,7 +827,7 @@ export default function ClockIns() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {activeClockIn ? (
+                    {activeClockIn && activeClockIn.location_id === location.id ? (
                       <Button 
                         size="sm" 
                         variant="destructive" 
@@ -836,6 +836,16 @@ export default function ClockIns() {
                       >
                         <Clock className="h-4 w-4 mr-2" />
                         Clock Out
+                      </Button>
+                    ) : activeClockIn ? (
+                      <Button 
+                        size="sm" 
+                        className="flex-1" 
+                        disabled
+                        variant="outline"
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Clock In
                       </Button>
                     ) : (
                       <Button 
