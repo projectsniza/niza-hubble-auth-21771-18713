@@ -30,7 +30,10 @@ export default function DepartmentManagement() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [newDepartment, setNewDepartment] = useState('');
-  const [selectedOrg, setSelectedOrg] = useState<string>('');
+
+  const ALL_ORGS_VALUE = '__all_orgs__';
+  const [selectedOrg, setSelectedOrg] = useState<string>(ALL_ORGS_VALUE);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,7 +49,7 @@ export default function DepartmentManagement() {
         supabase.from('departments').select('*').order('name'),
         supabase.from('organizations').select('id, name').order('name')
       ]);
-      
+
       if (deptRes.data) setDepartments(deptRes.data);
       if (orgRes.data) setOrganizations(orgRes.data);
     } catch (error) {
@@ -64,9 +67,11 @@ export default function DepartmentManagement() {
 
     setSaving(true);
     try {
+      const organizationIdToSave = selectedOrg === ALL_ORGS_VALUE ? null : selectedOrg;
+
       const { error } = await supabase.from('departments').insert({
         name: newDepartment.trim(),
-        organization_id: selectedOrg || null,
+        organization_id: organizationIdToSave,
         created_by: user?.id,
         is_active: true
       });
@@ -75,6 +80,7 @@ export default function DepartmentManagement() {
 
       toast.success('Department added successfully');
       setNewDepartment('');
+      setSelectedOrg(ALL_ORGS_VALUE);
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add department');
@@ -182,7 +188,7 @@ export default function DepartmentManagement() {
                 <SelectValue placeholder="All Organizations" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Organizations</SelectItem>
+                <SelectItem value={ALL_ORGS_VALUE}>All Organizations</SelectItem>
                 {organizations.map(org => (
                   <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                 ))}

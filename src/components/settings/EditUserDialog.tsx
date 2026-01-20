@@ -38,10 +38,12 @@ export default function EditUserDialog({
   branches,
   onSave,
 }: EditUserDialogProps) {
+  const NONE_VALUE = '__none__';
+
   const [name, setName] = useState(user?.name || '');
   const [role, setRole] = useState<UserRole>(user?.role || 'employee');
-  const [organizationId, setOrganizationId] = useState(user?.organization_id || '');
-  const [branchId, setBranchId] = useState(user?.branch_id || '');
+  const [organizationId, setOrganizationId] = useState(user?.organization_id || NONE_VALUE);
+  const [branchId, setBranchId] = useState(user?.branch_id || NONE_VALUE);
   const [hrAccessLevel, setHrAccessLevel] = useState<HRAccessLevel>(user?.hr_access_level || 'full');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,40 +51,43 @@ export default function EditUserDialog({
     if (user) {
       setName(user.name || '');
       setRole(user.role || 'employee');
-      setOrganizationId(user.organization_id || '');
-      setBranchId(user.branch_id || '');
+      setOrganizationId(user.organization_id || NONE_VALUE);
+      setBranchId(user.branch_id || NONE_VALUE);
       setHrAccessLevel(user.hr_access_level || 'full');
     }
   }, [user]);
 
-  const filteredBranches = organizationId 
-    ? branches.filter(b => b.organization_id === organizationId)
+  const normalizedOrganizationId = organizationId === NONE_VALUE ? '' : organizationId;
+  const normalizedBranchId = branchId === NONE_VALUE ? '' : branchId;
+
+  const filteredBranches = normalizedOrganizationId
+    ? branches.filter(b => b.organization_id === normalizedOrganizationId)
     : branches;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate based on role
-    if (role === 'manager' && !branchId) {
+    if (role === 'manager' && !normalizedBranchId) {
       return;
     }
 
     if (role === 'hr') {
-      if (hrAccessLevel === 'organization' && !organizationId) {
+      if (hrAccessLevel === 'organization' && !normalizedOrganizationId) {
         return;
       }
-      if (hrAccessLevel === 'branch' && !branchId) {
+      if (hrAccessLevel === 'branch' && !normalizedBranchId) {
         return;
       }
     }
 
     setIsSubmitting(true);
-    
+
     await onSave(user.id, {
       name,
       role,
-      organization_id: organizationId || null,
-      branch_id: branchId || null,
+      organization_id: normalizedOrganizationId || null,
+      branch_id: normalizedBranchId || null,
       hr_access_level: role === 'hr' ? hrAccessLevel : null
     });
     
@@ -254,14 +259,14 @@ export default function EditUserDialog({
                 value={organizationId} 
                 onValueChange={(v) => {
                   setOrganizationId(v);
-                  setBranchId('');
+                  setBranchId(NONE_VALUE);
                 }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select organization" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value={NONE_VALUE}>None</SelectItem>
                   {organizations.map(org => (
                     <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                   ))}
@@ -271,7 +276,7 @@ export default function EditUserDialog({
           )}
 
           {/* Branch Selection */}
-          {((role === 'hr' && hrAccessLevel === 'branch') || role === 'manager' || (role === 'employee' && organizationId)) && organizationId && (
+          {((role === 'hr' && hrAccessLevel === 'branch') || role === 'manager' || (role === 'employee' && normalizedOrganizationId)) && normalizedOrganizationId && (
             <div className="space-y-2">
               <Label htmlFor="branch">
                 Branch {role === 'manager' || (role === 'hr' && hrAccessLevel === 'branch') ? '*' : ''}
@@ -281,7 +286,7 @@ export default function EditUserDialog({
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value={NONE_VALUE}>None</SelectItem>
                   {filteredBranches.map(branch => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}
