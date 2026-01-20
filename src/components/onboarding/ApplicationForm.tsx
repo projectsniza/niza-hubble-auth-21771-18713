@@ -153,7 +153,7 @@ export default function ApplicationForm({
     }
   }, [formData.branch_id, selectedBranch]);
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -169,11 +169,20 @@ export default function ApplicationForm({
       if (error) throw error;
       toast.success('Application form saved');
       onSave();
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save form';
       toast.error(message);
+      return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAndContinue = async () => {
+    const saved = await handleSave();
+    if (saved) {
+      onNext();
     }
   };
 
@@ -1225,8 +1234,8 @@ export default function ApplicationForm({
                 <Save className="h-4 w-4" />
                 Save
               </Button>
-              <Button onClick={() => { handleSave(); onNext(); }} disabled={loading}>
-                Save & Continue
+              <Button onClick={handleSaveAndContinue} disabled={loading}>
+                {loading ? 'Saving...' : 'Save & Continue'}
               </Button>
             </div>
           </div>

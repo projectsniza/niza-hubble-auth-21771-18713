@@ -79,7 +79,7 @@ export default function BankDetailsForm({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -95,11 +95,20 @@ export default function BankDetailsForm({
       if (error) throw error;
       toast.success('Bank details saved');
       onSave();
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save bank details';
       toast.error(message);
+      return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAndContinue = async () => {
+    const saved = await handleSave();
+    if (saved) {
+      onNext();
     }
   };
 
@@ -390,8 +399,8 @@ export default function BankDetailsForm({
                 <Save className="h-4 w-4" />
                 Save
               </Button>
-              <Button onClick={() => { handleSave(); onNext(); }} disabled={loading}>
-                Save & Continue
+              <Button onClick={handleSaveAndContinue} disabled={loading}>
+                {loading ? 'Saving...' : 'Save & Continue'}
               </Button>
             </div>
           </div>
