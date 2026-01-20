@@ -261,6 +261,26 @@ export default function AddEmployee() {
       // Create or update employee record after basic details
       if (!employeeRecord) {
         await saveBasicDetails();
+      } else {
+        // Update existing employee with latest data
+        await updateBasicDetails();
+      }
+    }
+
+    // For Application Form, Starter Checklist, Bank Details - the forms handle their own save
+    // Just validate they have been saved (form responses exist)
+    if ((currentStepId === 'application' || currentStepId === 'checklist' || currentStepId === 'bank_details') && employeeRecord) {
+      const formType = currentStepId === 'application' ? 'application_form' : currentStepId === 'checklist' ? 'starter_checklist' : 'bank_details';
+      const { data: formResponse } = await supabase
+        .from('onboarding_form_responses')
+        .select('id')
+        .eq('employee_id', employeeRecord.id)
+        .eq('form_type', formType)
+        .maybeSingle();
+      
+      if (!formResponse) {
+        toast.error(`Please save the ${STEPS[currentStep]?.name} before continuing`);
+        return;
       }
     }
 
@@ -275,15 +295,72 @@ export default function AddEmployee() {
     }
 
     if (currentStep < STEPS.length - 1) {
-      setCurrentStep(prev => prev + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      // Persist step to database
+      if (employeeRecord) {
+        await supabase
+          .from('employee_onboarding')
+          .upsert({
+            employee_id: employeeRecord.id,
+            current_step: nextStep + 1 // 1-indexed in DB
+          }, { onConflict: 'employee_id' });
+      }
       window.scrollTo(0, 0);
     }
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
+      const prevStep = currentStep - 1;
+      setCurrentStep(prevStep);
+      // Persist step to database
+      if (employeeRecord) {
+        await supabase
+          .from('employee_onboarding')
+          .upsert({
+            employee_id: employeeRecord.id,
+            current_step: prevStep + 1 // 1-indexed in DB
+          }, { onConflict: 'employee_id' });
+      }
       window.scrollTo(0, 0);
+    }
+  };
+
+  const updateBasicDetails = async () => {
+    if (!employeeRecord) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          date_of_birth: formData.dateOfBirth || null,
+          address: formData.address,
+          job_title: formData.jobTitle,
+          department: formData.department,
+          join_date: formData.joinDate || null,
+          national_insurance_number: formData.nationalInsuranceNumber,
+          emergency_contact_name: formData.emergencyContactName,
+          emergency_contact_phone: formData.emergencyContactPhone,
+          emergency_contact_relationship: formData.emergencyContactRelationship || null,
+          organization_id: formData.organizationId,
+          branch_id: formData.branchId,
+          manager_id: formData.managerId || null
+        })
+        .eq('id', employeeRecord.id);
+
+      if (error) throw error;
+      toast.success('Details updated');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update details';
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -607,8 +684,8 @@ export default function AddEmployee() {
             />
           )}
 
-          {/* Navigation */}
-          {currentStepId !== 'contract' && (
+          {/* Navigation - only show on basic and documents steps, forms have their own buttons */}
+          {(currentStepId === 'basic' || currentStepId === 'documents') && (
             <div className="flex justify-between mt-8 pt-6 border-t">
               <Button 
                 variant="outline" 
@@ -633,12 +710,10 @@ export default function AddEmployee() {
                   </Button>
                 )}
                 
-                {currentStepId !== 'approval' && (
-                  <Button onClick={handleNext} disabled={loading} className="gap-2">
-                    {loading ? 'Saving...' : 'Next'}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button onClick={handleNext} disabled={loading} className="gap-2">
+                  {loading ? 'Saving...' : 'Save & Continue'}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           )}
