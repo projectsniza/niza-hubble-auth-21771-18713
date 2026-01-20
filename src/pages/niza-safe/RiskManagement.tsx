@@ -498,14 +498,18 @@ export default function RiskManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {riskAssessments.length === 0 ? (
+                {riskAssessments.filter(item => 
+                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No risk assessments found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  riskAssessments.map((item) => (
+                  riskAssessments.filter(item => 
+                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
                       <TableCell>
@@ -876,9 +880,8 @@ export default function RiskManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
+            <DialogTitle>
               {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
-              <Button variant="ghost" size="icon" onClick={() => setShowViewDialog(false)}><X className="h-4 w-4" /></Button>
             </DialogTitle>
           </DialogHeader>
           {selectedItem && (

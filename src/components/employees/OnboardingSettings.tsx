@@ -206,7 +206,10 @@ export default function OnboardingSettings() {
           .from('onboarding_form_settings')
           .insert({ form_type: formType, enabled, form_order: formSettings.length + 1 });
       }
-      setFormSettings(prev => prev.map(s => s.form_type === formType ? { ...s, enabled } : s));
+      const updatedSettings = existing 
+        ? formSettings.map(s => s.form_type === formType ? { ...s, enabled } : s)
+        : [...formSettings, { id: '', form_type: formType, enabled, form_order: formSettings.length + 1, is_locked: false, organization_id: null, branch_id: null, created_at: '', updated_at: '' }];
+      setFormSettings(updatedSettings);
       toast.success(`${formType.replace('_', ' ')} form ${enabled ? 'enabled' : 'disabled'}`);
     } catch (error: any) {
       toast.error(error.message);
