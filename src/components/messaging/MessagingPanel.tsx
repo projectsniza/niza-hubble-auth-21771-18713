@@ -634,27 +634,25 @@ export default function MessagingPanel() {
         {/* Message Input */}
         <div className="p-4 border-t bg-background">
           <div className="flex items-center gap-2 max-w-4xl mx-auto">
-            {settings['allow_file_attachments'] === 'true' && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                />
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="shrink-0"
-                  onClick={() => fileInputRef.current?.click()} 
-                  disabled={uploading}
-                >
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-              </>
-            )}
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="shrink-0"
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={uploading}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
+            </>
             <Input
               placeholder="Type your message..."
               value={newMessage}
