@@ -278,6 +278,10 @@ export default function Documents() {
   const docsToFilter = isGlobalFilter ? allDocuments : documents;
   
   const filteredDocuments = docsToFilter.filter(doc => {
+    const matchesSearch = !searchQuery || 
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.file_name.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
     if (activeTab === 'overdue') return getDocumentStatus(doc) === 'overdue';
     if (activeTab === 'upcoming') return getDocumentStatus(doc) === 'upcoming';
     return true;

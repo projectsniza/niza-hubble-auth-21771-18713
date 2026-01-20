@@ -625,10 +625,10 @@ export default function ELearning() {
                 variant="outline" 
                 size="sm" 
                 className="w-full"
-                onClick={async () => {
+                onClick={() => {
                   setSelectedTraining(training);
-                  await fetchTrainingDocuments(training.id);
                   setShowDetailsDialog(true);
+                  fetchTrainingDocuments(training.id);
                 }}
               >
                 <Eye className="h-4 w-4 mr-1" />
