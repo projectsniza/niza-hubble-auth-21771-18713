@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
-  Download, Loader2, Users, Plus, Search, Printer, Calendar, Edit
+  Download, Loader2, Users, Plus, Search, Calendar, Clock,
+  FileSpreadsheet, Edit3, CheckCircle2, XCircle
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths, getWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 
@@ -58,14 +62,13 @@ interface Timesheet {
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-// Get month weeks (up to 6 weeks per month as in Excel)
 const getMonthWeeks = (month: Date) => {
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
   const weeks = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 });
-  return weeks.slice(0, 6); // Max 6 weeks
+  return weeks.slice(0, 6);
 };
 
 export function TimesheetView() {
@@ -80,7 +83,7 @@ export function TimesheetView() {
   const [allMonthTimesheets, setAllMonthTimesheets] = useState<Timesheet[]>([]);
   const [selectedTimesheet, setSelectedTimesheet] = useState<Timesheet | null>(null);
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
-  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showEditPanel, setShowEditPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
@@ -88,10 +91,10 @@ export function TimesheetView() {
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
+  const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
-  // Calculate weeks in current month
   const monthWeeks = useMemo(() => getMonthWeeks(currentMonth), [currentMonth]);
   const currentWeekStart = monthWeeks[selectedWeekIndex] || monthWeeks[0];
   const weekEnd = currentWeekStart ? endOfWeek(currentWeekStart, { weekStartsOn: 1 }) : new Date();
@@ -126,7 +129,6 @@ export function TimesheetView() {
 
       setEmployees(employeesData || []);
 
-      // Fetch current week timesheets with entries
       const { data: weekTimesheetsData } = await supabase
         .from('timesheets')
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
@@ -144,7 +146,6 @@ export function TimesheetView() {
       );
       setTimesheets(timesheetsWithEntries);
 
-      // Fetch all month timesheets for consolidation view
       const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
@@ -153,7 +154,6 @@ export function TimesheetView() {
       
       setAllMonthTimesheets(monthTimesheetsData || []);
 
-      // Fetch previous month adjustment for (+/-) LAST MONTH column
       const prevMonthStart = startOfMonth(subMonths(currentMonth, 1));
       const prevMonthEnd = endOfMonth(subMonths(currentMonth, 1));
       const { data: prevMonthData } = await supabase
@@ -237,7 +237,7 @@ export function TimesheetView() {
 
     setSelectedTimesheet(timesheet);
     setEntries(entriesData || []);
-    setShowEditDialog(true);
+    setShowEditPanel(true);
   };
 
   const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
@@ -264,7 +264,6 @@ export function TimesheetView() {
     
     updated[index] = entry;
     
-    // Auto-calculate hours from start/end times (handles overnight shifts)
     if ((field === 'shift_start_time' || field === 'shift_end_time' || field === 'break_duration_minutes') 
         && updated[index].shift_start_time && updated[index].shift_end_time) {
       const start = updated[index].shift_start_time!;
@@ -273,7 +272,7 @@ export function TimesheetView() {
       const [startH, startM] = start.split(':').map(Number);
       const [endH, endM] = end.split(':').map(Number);
       let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
-      if (totalMins < 0) totalMins += 24 * 60; // Overnight shift handling
+      if (totalMins < 0) totalMins += 24 * 60;
       updated[index].actual_hours = Math.round(totalMins / 60 * 100) / 100;
     }
     setEntries(updated);
@@ -312,7 +311,7 @@ export function TimesheetView() {
       }).eq('id', selectedTimesheet.id);
 
       toast.success('Timesheet saved');
-      setShowEditDialog(false);
+      setShowEditPanel(false);
       fetchData();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save timesheet';
@@ -344,7 +343,68 @@ export function TimesheetView() {
     }
   };
 
-  // Filtering
+  // Inline time update
+  const handleInlineTimeChange = useCallback((timesheetId: string, dayOfWeek: string, field: 'start' | 'end', value: string) => {
+    setInlineEditing(prev => ({
+      ...prev,
+      [timesheetId]: {
+        ...prev[timesheetId],
+        [dayOfWeek]: {
+          ...(prev[timesheetId]?.[dayOfWeek] || { start: '', end: '' }),
+          [field]: value
+        }
+      }
+    }));
+  }, []);
+
+  const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
+    const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
+    if (!edit) return;
+
+    const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
+    if (!entry?.id) return;
+
+    const startTime = edit.start || entry.shift_start_time || null;
+    const endTime = edit.end || entry.shift_end_time || null;
+
+    let actualHours = 0;
+    if (startTime && endTime) {
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      let totalMins = (endH * 60 + endM) - (startH * 60 + startM);
+      if (totalMins < 0) totalMins += 24 * 60;
+      actualHours = Math.round(totalMins / 60 * 100) / 100;
+    }
+
+    await supabase.from('timesheet_entries').update({
+      shift_start_time: startTime,
+      shift_end_time: endTime,
+      actual_hours: actualHours
+    }).eq('id', entry.id);
+
+    // Recalculate totals
+    const allEntries = timesheet.entries || [];
+    const totalWorked = allEntries.reduce((sum, e) => {
+      if (e.day_of_week === dayOfWeek) return sum + actualHours;
+      return sum + (Number(e.actual_hours) || 0);
+    }, 0);
+
+    await supabase.from('timesheets').update({
+      total_worked_hours: totalWorked
+    }).eq('id', timesheet.id);
+
+    setInlineEditing(prev => {
+      const newState = { ...prev };
+      if (newState[timesheet.id]) {
+        delete newState[timesheet.id][dayOfWeek];
+      }
+      return newState;
+    });
+
+    toast.success('Time saved');
+    fetchData();
+  }, [inlineEditing]);
+
   const filteredEmployees = useMemo(() => employees.filter(emp => {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
@@ -369,7 +429,6 @@ export function TimesheetView() {
     return true;
   }), [timesheets, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
-  // Group by branch with SUMIF totals (matching Excel format)
   const groupedTimesheets = useMemo(() => {
     const grouped = filteredTimesheets.reduce((acc, ts) => {
       const branchName = ts.employee?.branch?.name || 'Unassigned';
@@ -389,7 +448,6 @@ export function TimesheetView() {
     return grouped;
   }, [filteredTimesheets]);
 
-  // Weekly totals from current week (for summary cards)
   const weeklyGrandTotals = useMemo(() => ({
     worked: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
     holiday: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0),
@@ -397,11 +455,10 @@ export function TimesheetView() {
     adj: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0)
   }), [filteredTimesheets]);
 
-  // Monthly consolidation data - matches Excel "NAME | WEEK 1 | WEEK 2 | ... | WEEK 6 | TOTAL | (+/-) LAST MONTH | TOTAL HRS | HOLIDAY HRS | SICK"
   const monthlyConsolidation = useMemo(() => {
     const consolidation: Record<string, {
       employee: Employee;
-      weeklyHours: (number)[];
+      weeklyHours: number[];
       totalHours: number;
       lastMonthAdj: number;
       totalHrs: number;
@@ -409,7 +466,6 @@ export function TimesheetView() {
       sickHrs: number;
     }> = {};
 
-    // Initialize for all filtered employees
     filteredEmployees.forEach(emp => {
       consolidation[emp.id] = {
         employee: emp,
@@ -422,7 +478,6 @@ export function TimesheetView() {
       };
     });
 
-    // Aggregate timesheets by week
     allMonthTimesheets.forEach(ts => {
       if (!consolidation[ts.employee_id]) return;
       
@@ -436,12 +491,10 @@ export function TimesheetView() {
       consolidation[ts.employee_id].sickHrs += Number(ts.total_sick_hours) || 0;
     });
 
-    // Calculate total hrs (total + last month adjustment)
     Object.values(consolidation).forEach(emp => {
       emp.totalHrs = emp.totalHours + emp.lastMonthAdj;
     });
 
-    // Group by branch
     const grouped: Record<string, typeof consolidation> = {};
     Object.entries(consolidation).forEach(([empId, data]) => {
       const branchName = data.employee.branch?.name || 'Unassigned';
@@ -452,7 +505,6 @@ export function TimesheetView() {
     return { consolidation, grouped };
   }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment]);
 
-  // Monthly grand totals
   const monthlyGrandTotals = useMemo(() => {
     const values = Object.values(monthlyConsolidation.consolidation);
     return {
@@ -465,14 +517,15 @@ export function TimesheetView() {
   }, [monthlyConsolidation, monthWeeks]);
 
   const exportToCSV = () => {
+    const headers = viewTab === 'weekly' 
+      ? ['', 'NAME', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL']
+      : ['', 'NAME', ...monthWeeks.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'];
+    
+    const rows: string[][] = [headers];
+    
     if (viewTab === 'weekly') {
-      // Weekly export with start/end times
-      const headers = ['', 'NAME', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL'];
-      const subHeaders = ['', '', ...weekDays.flatMap(d => [format(d, 'dd/MM/yyyy'), '']), '', '', '', '', ''];
-      const rows: string[][] = [headers, subHeaders];
-      
       Object.entries(groupedTimesheets).forEach(([branchName, data]) => {
-        rows.push([`${branchName}`, ...Array(headers.length - 1).fill('')]);
+        rows.push([branchName, ...Array(headers.length - 1).fill('')]);
         data.timesheets.forEach(t => {
           const dayEntries = t.entries || [];
           const total = Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours) + Number(t.total_adjustment_hours || 0);
@@ -483,36 +536,24 @@ export function TimesheetView() {
               const entry = dayEntries.find(e => e.day_of_week === day);
               return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
             }),
-            `$${t.total_worked_hours || 0}`,
-            t.total_holiday_hours ? `$${t.total_holiday_hours}` : '',
-            t.total_sick_hours ? `$${t.total_sick_hours}` : '',
-            t.total_adjustment_hours ? `$${t.total_adjustment_hours}` : '',
-            `$${total.toFixed(1)}`
+            String(t.total_worked_hours || 0),
+            t.total_holiday_hours ? String(t.total_holiday_hours) : '',
+            t.total_sick_hours ? String(t.total_sick_hours) : '',
+            t.total_adjustment_hours ? String(t.total_adjustment_hours) : '',
+            String(total.toFixed(1))
           ]);
         });
-        // Branch subtotal
-        rows.push([
-          '', '', ...Array(DAYS_SHORT.length * 2).fill(''),
-          `$${data.totals.worked.toFixed(1)}`,
-          `$${data.totals.holiday.toFixed(1)}`,
-          `$${data.totals.sick.toFixed(1)}`,
-          data.totals.adj ? `$${data.totals.adj.toFixed(1)}` : '',
-          `$${data.totals.total.toFixed(1)}`
+        rows.push(['', 'SUBTOTAL', ...Array(14).fill(''), 
+          String(data.totals.worked.toFixed(1)),
+          String(data.totals.holiday.toFixed(1)),
+          String(data.totals.sick.toFixed(1)),
+          String(data.totals.adj.toFixed(1)),
+          String(data.totals.total.toFixed(1))
         ]);
       });
-
-      const csv = rows.map(row => row.join(',')).join('\n');
-      downloadCSV(csv, `TimeSheet_Week${selectedWeekIndex + 1}_${format(currentMonth, 'MMM_yy')}.csv`);
     } else {
-      // Monthly consolidation export
-      const headers = ['', 'NAME', ...monthWeeks.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', '', 'SICK'];
-      const rows: string[][] = [headers];
-      
       Object.entries(monthlyConsolidation.grouped).forEach(([branchName, branchData]) => {
         rows.push([branchName, ...Array(headers.length - 1).fill('')]);
-        
-        const branchTotals = { weeks: monthWeeks.map(() => 0), total: 0, lastMonth: 0, totalHrs: 0, holiday: 0, sick: 0 };
-        
         Object.values(branchData).forEach(emp => {
           rows.push([
             '',
@@ -521,65 +562,32 @@ export function TimesheetView() {
             emp.totalHours.toFixed(1),
             emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-',
             emp.totalHrs.toFixed(1),
-            emp.holidayHrs > 0 ? `$${emp.holidayHrs.toFixed(1)}` : '-',
-            '',
-            emp.sickHrs > 0 ? `$${emp.sickHrs.toFixed(1)}` : '-'
+            emp.holidayHrs > 0 ? emp.holidayHrs.toFixed(1) : '-',
+            emp.sickHrs > 0 ? emp.sickHrs.toFixed(1) : '-'
           ]);
-          emp.weeklyHours.forEach((h, i) => branchTotals.weeks[i] += h);
-          branchTotals.total += emp.totalHours;
-          branchTotals.lastMonth += emp.lastMonthAdj;
-          branchTotals.totalHrs += emp.totalHrs;
-          branchTotals.holiday += emp.holidayHrs;
-          branchTotals.sick += emp.sickHrs;
         });
-        
-        // Branch subtotal row
-        rows.push([
-          '', `SUBTOTAL`,
-          ...branchTotals.weeks.map(w => w.toFixed(1)),
-          branchTotals.total.toFixed(1),
-          branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-',
-          branchTotals.totalHrs.toFixed(1),
-          branchTotals.holiday > 0 ? `$${branchTotals.holiday.toFixed(1)}` : '-',
-          '',
-          branchTotals.sick > 0 ? `$${branchTotals.sick.toFixed(1)}` : '-'
-        ]);
       });
-
-      // Grand total
-      rows.push([
-        '', 'GRAND TOTAL',
-        ...monthlyGrandTotals.weeklyTotals.map(w => w.toFixed(1)),
-        monthlyGrandTotals.totalHours.toFixed(1),
-        '-',
-        monthlyGrandTotals.totalHrs.toFixed(1),
-        monthlyGrandTotals.holidayHrs > 0 ? `$${monthlyGrandTotals.holidayHrs.toFixed(1)}` : '-',
-        '',
-        monthlyGrandTotals.sickHrs > 0 ? `$${monthlyGrandTotals.sickHrs.toFixed(1)}` : '-'
-      ]);
-
-      const csv = rows.map(row => row.join(',')).join('\n');
-      downloadCSV(csv, `TimeSheet_${format(currentMonth, 'MMMM_yyyy')}_Consolidated.csv`);
     }
-    toast.success('Exported to CSV');
-  };
 
-  const downloadCSV = (csv: string, filename: string) => {
+    const csv = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = viewTab === 'weekly' 
+      ? `TimeSheet_Week${selectedWeekIndex + 1}_${format(currentMonth, 'MMM_yy')}.csv`
+      : `TimeSheet_${format(currentMonth, 'MMMM_yyyy')}_Consolidated.csv`;
     a.click();
+    toast.success('Exported to CSV');
   };
 
-  const handlePrint = () => window.print();
-
-  // Format time for display (matching Excel AM/PM format)
-  const formatTime = (time: string | null) => {
+  const formatTimeDisplay = (time: string | null) => {
     if (!time) return '';
     try {
-      return format(parseISO(`2000-01-01T${time}`), 'h:mm a');
+      const [h, m] = time.split(':').map(Number);
+      const period = h >= 12 ? 'PM' : 'AM';
+      const hour12 = h % 12 || 12;
+      return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
     } catch {
       return time;
     }
@@ -587,59 +595,58 @@ export function TimesheetView() {
 
   return (
     <div className="space-y-6">
-      {/* Header - matching Excel "Staff Attendance Details" title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Calendar className="h-6 w-6 text-primary" />
-            Staff Attendance Details
-          </h2>
-          <p className="text-muted-foreground">
-            For the month of {format(currentMonth, 'MMMM yy')}
-          </p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={viewTab} onValueChange={(v) => setViewTab(v as 'weekly' | 'monthly')}>
-            <TabsList>
-              <TabsTrigger value="weekly">Weekly Entry</TabsTrigger>
-              <TabsTrigger value="monthly">Monthly Consolidation</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {/* Month Navigation */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => { setCurrentMonth(subMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium min-w-[120px]">
-              {format(currentMonth, 'MMMM yyyy')}
+      {/* Premium Header */}
+      <Card className="border-0 bg-gradient-to-r from-primary/5 via-primary/10 to-accent/5">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <FileSpreadsheet className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Staff Attendance Details</h1>
+                <p className="text-muted-foreground">For the month of {format(currentMonth, 'MMMM yyyy')}</p>
+              </div>
             </div>
-            <Button variant="outline" size="icon" onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <Tabs value={viewTab} onValueChange={(v) => setViewTab(v as 'weekly' | 'monthly')} className="bg-background rounded-lg p-1 shadow-sm">
+                <TabsList className="grid grid-cols-2 gap-1">
+                  <TabsTrigger value="weekly" className="text-sm">Weekly Entry</TabsTrigger>
+                  <TabsTrigger value="monthly" className="text-sm">Monthly</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <div className="flex items-center gap-1 bg-background rounded-lg p-1 shadow-sm">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCurrentMonth(subMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="px-3 text-sm font-medium min-w-[100px] text-center">{format(currentMonth, 'MMM yyyy')}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {viewTab === 'weekly' && (
+                <Select value={String(selectedWeekIndex)} onValueChange={(v) => setSelectedWeekIndex(Number(v))}>
+                  <SelectTrigger className="w-28 bg-background shadow-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthWeeks.map((_, idx) => (
+                      <SelectItem key={idx} value={String(idx)}>WEEK {idx + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              
+              <Button variant="outline" size="sm" onClick={exportToCSV} className="shadow-sm">
+                <Download className="h-4 w-4 mr-2" />Export
+              </Button>
+            </div>
           </div>
-          
-          {/* Week selector for weekly view */}
-          {viewTab === 'weekly' && (
-            <Select value={String(selectedWeekIndex)} onValueChange={(v) => setSelectedWeekIndex(Number(v))}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Select week" />
-              </SelectTrigger>
-              <SelectContent>
-                {monthWeeks.map((week, idx) => (
-                  <SelectItem key={idx} value={String(idx)}>
-                    WEEK {idx + 1}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
-          <Button variant="outline" onClick={exportToCSV}><Download className="h-4 w-4 mr-2" />Export</Button>
-          <Button variant="outline" onClick={handlePrint}><Printer className="h-4 w-4 mr-2" />Print</Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {canViewFilters && (
         <OrgBranchFilter 
@@ -656,63 +663,69 @@ export function TimesheetView() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Users className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Staff Count</p>
-              <p className="text-2xl font-bold">{filteredEmployees.length}</p>
+              <p className="text-xs text-muted-foreground font-medium">Staff</p>
+              <p className="text-xl font-bold">{filteredEmployees.length}</p>
             </div>
-          </div>
+          </CardContent>
         </Card>
-        <Card className="p-4 bg-blue-50 dark:bg-blue-950/30">
-          <div className="text-center">
-            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">HOURS</p>
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wide">Hours</p>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-              {viewTab === 'weekly' ? weeklyGrandTotals.worked.toFixed(1) : monthlyGrandTotals.totalHours.toFixed(1)}
+              {(viewTab === 'weekly' ? weeklyGrandTotals.worked : monthlyGrandTotals.totalHours).toFixed(1)}
             </p>
-          </div>
+          </CardContent>
         </Card>
-        <Card className="p-4 bg-orange-50 dark:bg-orange-950/30">
-          <div className="text-center">
-            <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">HOLIDAY</p>
-            <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-              {viewTab === 'weekly' ? weeklyGrandTotals.holiday.toFixed(1) : monthlyGrandTotals.holidayHrs.toFixed(1)}
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold uppercase tracking-wide">Holiday</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              {(viewTab === 'weekly' ? weeklyGrandTotals.holiday : monthlyGrandTotals.holidayHrs).toFixed(1)}
             </p>
-          </div>
+          </CardContent>
         </Card>
-        <Card className="p-4 bg-red-50 dark:bg-red-950/30">
-          <div className="text-center">
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">SICK</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-300">
-              {viewTab === 'weekly' ? weeklyGrandTotals.sick.toFixed(1) : monthlyGrandTotals.sickHrs.toFixed(1)}
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-50 to-rose-100 dark:from-rose-950 dark:to-rose-900">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold uppercase tracking-wide">Sick</p>
+            <p className="text-2xl font-bold text-rose-700 dark:text-rose-300">
+              {(viewTab === 'weekly' ? weeklyGrandTotals.sick : monthlyGrandTotals.sickHrs).toFixed(1)}
             </p>
-          </div>
+          </CardContent>
         </Card>
-        <Card className="p-4 bg-green-50 dark:bg-green-950/30">
-          <div className="text-center">
-            <p className="text-sm text-green-600 dark:text-green-400 font-medium">TOTAL</p>
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {viewTab === 'weekly' 
-                ? (weeklyGrandTotals.worked + weeklyGrandTotals.holiday + weeklyGrandTotals.sick + weeklyGrandTotals.adj).toFixed(1)
-                : monthlyGrandTotals.totalHrs.toFixed(1)
-              }
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Total</p>
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+              {(viewTab === 'weekly' 
+                ? (weeklyGrandTotals.worked + weeklyGrandTotals.holiday + weeklyGrandTotals.sick + weeklyGrandTotals.adj)
+                : monthlyGrandTotals.totalHrs
+              ).toFixed(1)}
             </p>
-          </div>
+          </CardContent>
         </Card>
       </div>
 
       {/* Search and Actions */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="relative max-w-md w-full">
+        <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search employees..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input 
+            placeholder="Search employees..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            className="pl-10 bg-background shadow-sm" 
+          />
         </div>
         {viewTab === 'weekly' && employeesWithoutTimesheet.length > 0 && (
-          <Button onClick={createAllTimesheets}>
-            <Plus className="h-4 w-4 mr-2" />Create All ({employeesWithoutTimesheet.length})
+          <Button onClick={createAllTimesheets} className="shadow-sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Create All ({employeesWithoutTimesheet.length})
           </Button>
         )}
       </div>
@@ -722,101 +735,129 @@ export function TimesheetView() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : viewTab === 'weekly' ? (
-        /* Weekly View - Excel Format with WEEK # header, Start/End times for each day */
-        <Card className="overflow-hidden print:shadow-none">
-          <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <h3 className="font-bold text-sm">
-              WEEK {selectedWeekIndex + 1} • {currentWeekStart ? format(currentWeekStart, 'EEEE dd/MM/yyyy') : ''} to {weekEnd ? format(weekEnd, 'EEEE dd/MM/yyyy') : ''}
-            </h3>
-          </div>
+        /* Weekly View */
+        <Card className="overflow-hidden shadow-sm">
+          <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              WEEK {selectedWeekIndex + 1} • {currentWeekStart && format(currentWeekStart, 'dd MMM')} - {weekEnd && format(weekEnd, 'dd MMM yyyy')}
+            </CardTitle>
+          </CardHeader>
           <ScrollArea className="w-full">
-            <div className="min-w-[1600px]">
+            <div className="min-w-[1400px]">
               <Table className="text-xs">
                 <TableHeader>
-                  {/* Header Row 1: Day names */}
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="sticky left-0 bg-muted/50 z-10 w-8"></TableHead>
-                    <TableHead className="sticky left-8 bg-muted/50 z-10 text-center font-bold">WEEK {selectedWeekIndex + 1}</TableHead>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="w-40 sticky left-0 bg-muted/30 z-10 font-bold">NAME</TableHead>
                     {weekDays.map((day, i) => (
-                      <TableHead key={i} colSpan={2} className="text-center font-bold border-x bg-muted/30">
-                        {DAYS_OF_WEEK[i].toUpperCase()}
+                      <TableHead key={i} colSpan={2} className="text-center border-x bg-muted/20 min-w-[100px]">
+                        <div className="font-bold">{DAYS_SHORT[i]}</div>
+                        <div className="text-[10px] text-muted-foreground font-normal">{format(day, 'dd/MM')}</div>
                       </TableHead>
                     ))}
-                    <TableHead className="text-center bg-blue-100 dark:bg-blue-900/50 font-bold w-16"></TableHead>
-                    <TableHead className="text-center bg-blue-100 dark:bg-blue-900/50 font-bold">HOURS</TableHead>
-                    <TableHead className="text-center bg-orange-100 dark:bg-orange-900/50 font-bold">HOLIDAY</TableHead>
-                    <TableHead className="text-center bg-red-100 dark:bg-red-900/50 font-bold">SICK</TableHead>
-                    <TableHead className="text-center bg-purple-100 dark:bg-purple-900/50 font-bold">ADJ+/-</TableHead>
-                    <TableHead className="text-center bg-green-100 dark:bg-green-900/50 font-bold">TOTAL</TableHead>
-                    <TableHead className="text-center font-bold print:hidden">Actions</TableHead>
-                  </TableRow>
-                  {/* Header Row 2: Dates */}
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="sticky left-0 bg-muted/30 z-10"></TableHead>
-                    <TableHead className="sticky left-8 bg-muted/30 z-10"></TableHead>
-                    {weekDays.map((day, i) => (
-                      <TableHead key={i} colSpan={2} className="text-center text-[10px] font-normal text-muted-foreground border-x">
-                        {format(day, 'dd/MM/yyyy')}
-                      </TableHead>
-                    ))}
-                    <TableHead colSpan={7} className="print:hidden"></TableHead>
+                    <TableHead className="text-center bg-blue-50 dark:bg-blue-950/50 font-bold min-w-[60px]">HOURS</TableHead>
+                    <TableHead className="text-center bg-amber-50 dark:bg-amber-950/50 font-bold min-w-[60px]">HOLIDAY</TableHead>
+                    <TableHead className="text-center bg-rose-50 dark:bg-rose-950/50 font-bold min-w-[60px]">SICK</TableHead>
+                    <TableHead className="text-center bg-purple-50 dark:bg-purple-950/50 font-bold min-w-[60px]">ADJ+/-</TableHead>
+                    <TableHead className="text-center bg-emerald-50 dark:bg-emerald-950/50 font-bold min-w-[60px]">TOTAL</TableHead>
+                    <TableHead className="text-center min-w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Object.entries(groupedTimesheets).map(([branchName, data]) => (
                     <React.Fragment key={branchName}>
-                      {/* Branch separator row */}
-                      <TableRow className="bg-primary/5">
-                        <TableCell colSpan={24} className="font-medium text-primary py-1 text-[11px]">
-                          {branchName} ({data.timesheets.length} staff)
+                      {/* Branch Header */}
+                      <TableRow className="bg-primary/5 hover:bg-primary/10">
+                        <TableCell colSpan={21} className="py-2 font-semibold text-primary text-xs sticky left-0">
+                          📍 {branchName} <Badge variant="secondary" className="ml-2 text-[10px]">{data.timesheets.length} staff</Badge>
                         </TableCell>
                       </TableRow>
-                      {data.timesheets.map((ts) => {
-                        const dayEntries = ts.entries || [];
+                      {/* Employee Rows */}
+                      {data.timesheets.map((ts, idx) => {
                         const total = Number(ts.total_worked_hours) + Number(ts.total_holiday_hours) + Number(ts.total_sick_hours) + Number(ts.total_adjustment_hours || 0);
                         return (
-                          <TableRow key={ts.id} className="hover:bg-muted/30">
-                            <TableCell className="sticky left-0 bg-background z-10"></TableCell>
-                            <TableCell className="sticky left-8 bg-background z-10 font-bold text-[11px]">
+                          <TableRow key={ts.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                            <TableCell className="sticky left-0 bg-inherit z-10 font-medium">
                               {ts.employee?.first_name?.toUpperCase()}
                             </TableCell>
                             {DAYS_OF_WEEK.map((day, dayIdx) => {
-                              const entry = dayEntries.find(e => e.day_of_week === day);
+                              const entry = ts.entries?.find(e => e.day_of_week === day);
+                              const editingDay = inlineEditing[ts.id]?.[day];
+                              const hasEdit = !!editingDay;
                               return (
                                 <React.Fragment key={dayIdx}>
-                                  <TableCell className="text-center text-[10px] border-l px-1">
-                                    {formatTime(entry?.shift_start_time || null)}
+                                  <TableCell className="text-center px-1 border-l text-[10px]">
+                                    {hasEdit ? (
+                                      <Input
+                                        type="time"
+                                        value={editingDay?.start || entry?.shift_start_time || ''}
+                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'start', e.target.value)}
+                                        className="h-6 text-[10px] p-1 w-full"
+                                        onBlur={() => saveInlineTime(ts, day)}
+                                      />
+                                    ) : (
+                                      <span 
+                                        className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
+                                        onClick={() => handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '')}
+                                      >
+                                        {formatTimeDisplay(entry?.shift_start_time || null) || '-'}
+                                      </span>
+                                    )}
                                   </TableCell>
-                                  <TableCell className="text-center text-[10px] border-r px-1">
-                                    {formatTime(entry?.shift_end_time || null)}
+                                  <TableCell className="text-center px-1 border-r text-[10px]">
+                                    {hasEdit ? (
+                                      <Input
+                                        type="time"
+                                        value={editingDay?.end || entry?.shift_end_time || ''}
+                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
+                                        className="h-6 text-[10px] p-1 w-full"
+                                        onBlur={() => saveInlineTime(ts, day)}
+                                      />
+                                    ) : (
+                                      <span 
+                                        className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
+                                        onClick={() => handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '')}
+                                      >
+                                        {formatTimeDisplay(entry?.shift_end_time || null) || '-'}
+                                      </span>
+                                    )}
                                   </TableCell>
                                 </React.Fragment>
                               );
                             })}
-                            <TableCell className="text-center"></TableCell>
-                            <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30">
-                              ${ts.total_worked_hours > 0 ? ts.total_worked_hours : 0}
+                            <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
+                              {ts.total_worked_hours > 0 ? ts.total_worked_hours : 0}
                             </TableCell>
-                            <TableCell className="text-center font-bold bg-orange-50/50 dark:bg-orange-950/30 text-orange-600">
-                              {ts.total_holiday_hours > 0 ? `$${ts.total_holiday_hours}` : ''}
+                            <TableCell className="text-center font-bold bg-amber-50/50 dark:bg-amber-950/30 text-amber-600">
+                              {ts.total_holiday_hours > 0 ? ts.total_holiday_hours : ''}
                             </TableCell>
-                            <TableCell className="text-center font-bold bg-red-50/50 dark:bg-red-950/30 text-red-600">
-                              {ts.total_sick_hours > 0 ? `$${ts.total_sick_hours}` : ''}
+                            <TableCell className="text-center font-bold bg-rose-50/50 dark:bg-rose-950/30 text-rose-600">
+                              {ts.total_sick_hours > 0 ? ts.total_sick_hours : ''}
                             </TableCell>
-                            <TableCell className={`text-center font-bold bg-purple-50/50 dark:bg-purple-950/30 ${(ts.total_adjustment_hours || 0) < 0 ? 'text-red-600' : (ts.total_adjustment_hours || 0) > 0 ? 'text-green-600' : ''}`}>
-                              {ts.total_adjustment_hours ? `$${ts.total_adjustment_hours}` : ''}
+                            <TableCell className="text-center font-bold bg-purple-50/50 dark:bg-purple-950/30 text-purple-600">
+                              {ts.total_adjustment_hours ? ts.total_adjustment_hours : ''}
                             </TableCell>
-                            <TableCell className="text-center font-bold bg-green-50/50 dark:bg-green-950/30">
-                              ${total.toFixed(1)}
+                            <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">
+                              {total.toFixed(1)}
                             </TableCell>
-                            <TableCell className="text-center print:hidden">
+                            <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openTimesheetEditor(ts)}>
-                                  <Edit className="h-3 w-3" />
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6"
+                                  onClick={() => openTimesheetEditor(ts)}
+                                >
+                                  <Edit3 className="h-3 w-3" />
                                 </Button>
                                 {ts.status !== 'approved' && (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-green-600" onClick={() => approveTimesheet(ts.id)}>
-                                    <Check className="h-3 w-3" />
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 text-emerald-600"
+                                    onClick={() => approveTimesheet(ts.id)}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
                                   </Button>
                                 )}
                               </div>
@@ -824,26 +865,16 @@ export function TimesheetView() {
                           </TableRow>
                         );
                       })}
-                      {/* Week subtotal row (SUMIF for branch) */}
-                      <TableRow className="bg-muted/50 font-bold">
-                        <TableCell className="sticky left-0 bg-muted/50 z-10"></TableCell>
-                        <TableCell colSpan={15} className="sticky left-8 bg-muted/50 z-10"></TableCell>
-                        <TableCell className="text-center bg-blue-100 dark:bg-blue-900/50">
-                          ${data.totals.worked.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center bg-orange-100 dark:bg-orange-900/50 text-orange-600">
-                          ${data.totals.holiday.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center bg-red-100 dark:bg-red-900/50 text-red-600">
-                          ${data.totals.sick.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="text-center bg-purple-100 dark:bg-purple-900/50">
-                          {data.totals.adj !== 0 ? `$${data.totals.adj.toFixed(1)}` : ''}
-                        </TableCell>
-                        <TableCell className="text-center bg-green-100 dark:bg-green-900/50">
-                          ${data.totals.total.toFixed(1)}
-                        </TableCell>
-                        <TableCell className="print:hidden"></TableCell>
+                      {/* Branch Subtotal */}
+                      <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
+                        <TableCell className="sticky left-0 bg-muted/50 z-10 text-xs">SUBTOTAL</TableCell>
+                        <TableCell colSpan={14} />
+                        <TableCell className="text-center bg-blue-100/50 dark:bg-blue-900/30">{data.totals.worked.toFixed(1)}</TableCell>
+                        <TableCell className="text-center bg-amber-100/50 dark:bg-amber-900/30">{data.totals.holiday.toFixed(1)}</TableCell>
+                        <TableCell className="text-center bg-rose-100/50 dark:bg-rose-900/30">{data.totals.sick.toFixed(1)}</TableCell>
+                        <TableCell className="text-center bg-purple-100/50 dark:bg-purple-900/30">{data.totals.adj.toFixed(1)}</TableCell>
+                        <TableCell className="text-center bg-emerald-100/50 dark:bg-emerald-900/30">{data.totals.total.toFixed(1)}</TableCell>
+                        <TableCell />
                       </TableRow>
                     </React.Fragment>
                   ))}
@@ -854,42 +885,40 @@ export function TimesheetView() {
           </ScrollArea>
         </Card>
       ) : (
-        /* Monthly Consolidation View - Excel Format: NAME | WEEK 1-6 | TOTAL | (+/-) LAST MONTH | TOTAL HRS | HOLIDAY HRS | SICK */
-        <Card className="overflow-hidden print:shadow-none">
-          <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <h3 className="font-bold text-sm">
-              MONTHLY CONSOLIDATION - {format(currentMonth, 'MMMM yyyy').toUpperCase()}
-            </h3>
-          </div>
+        /* Monthly Consolidation View */
+        <Card className="overflow-hidden shadow-sm">
+          <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-primary" />
+              Monthly Consolidation - {format(currentMonth, 'MMMM yyyy')}
+            </CardTitle>
+          </CardHeader>
           <ScrollArea className="w-full">
-            <div className="min-w-[1100px]">
+            <div className="min-w-[1200px]">
               <Table className="text-xs">
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="sticky left-0 bg-muted/50 z-10 w-8"></TableHead>
-                    <TableHead className="sticky left-8 bg-muted/50 z-10 min-w-[120px] font-bold">NAME</TableHead>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="w-40 sticky left-0 bg-muted/30 z-10 font-bold">NAME</TableHead>
                     {monthWeeks.map((_, i) => (
-                      <TableHead key={i} className="text-center font-bold w-20">WEEK {i + 1}</TableHead>
+                      <TableHead key={i} className="text-center font-bold min-w-[70px]">WEEK {i + 1}</TableHead>
                     ))}
-                    <TableHead className="text-center font-bold bg-blue-100 dark:bg-blue-900/50">TOTAL</TableHead>
-                    <TableHead className="text-center font-bold bg-purple-100 dark:bg-purple-900/50">(+/-) LAST MONTH</TableHead>
-                    <TableHead className="text-center font-bold bg-green-100 dark:bg-green-900/50">TOTAL HRS</TableHead>
-                    <TableHead className="text-center font-bold bg-orange-100 dark:bg-orange-900/50">HOLIDAY HRS</TableHead>
-                    <TableHead className="text-center font-bold"></TableHead>
-                    <TableHead className="text-center font-bold bg-red-100 dark:bg-red-900/50">SICK</TableHead>
+                    <TableHead className="text-center font-bold bg-slate-100 dark:bg-slate-800">TOTAL</TableHead>
+                    <TableHead className="text-center font-bold bg-purple-50 dark:bg-purple-950/50">(+/-) LAST MONTH</TableHead>
+                    <TableHead className="text-center font-bold bg-emerald-50 dark:bg-emerald-950/50">TOTAL HRS</TableHead>
+                    <TableHead className="text-center font-bold bg-amber-50 dark:bg-amber-950/50">HOLIDAY HRS</TableHead>
+                    <TableHead className="text-center font-bold bg-rose-50 dark:bg-rose-950/50">SICK</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Object.entries(monthlyConsolidation.grouped).map(([branchName, branchData]) => {
-                    const branchTotals = { 
-                      weeks: monthWeeks.map(() => 0), 
-                      total: 0, 
-                      lastMonth: 0, 
-                      totalHrs: 0, 
-                      holiday: 0, 
-                      sick: 0 
+                    const branchTotals = {
+                      weeks: monthWeeks.map(() => 0),
+                      total: 0,
+                      lastMonth: 0,
+                      totalHrs: 0,
+                      holiday: 0,
+                      sick: 0
                     };
-                    
                     Object.values(branchData).forEach(emp => {
                       emp.weeklyHours.forEach((h, i) => branchTotals.weeks[i] += h);
                       branchTotals.total += emp.totalHours;
@@ -901,16 +930,14 @@ export function TimesheetView() {
 
                     return (
                       <React.Fragment key={branchName}>
-                        {/* Branch separator */}
-                        <TableRow className="bg-primary/5">
-                          <TableCell colSpan={10 + monthWeeks.length} className="font-medium text-primary py-1 text-[11px]">
-                            {branchName} ({Object.keys(branchData).length} staff)
+                        <TableRow className="bg-primary/5 hover:bg-primary/10">
+                          <TableCell colSpan={12} className="py-2 font-semibold text-primary text-xs sticky left-0">
+                            📍 {branchName}
                           </TableCell>
                         </TableRow>
-                        {Object.values(branchData).map((emp) => (
-                          <TableRow key={emp.employee.id} className="hover:bg-muted/30">
-                            <TableCell className="sticky left-0 bg-background z-10"></TableCell>
-                            <TableCell className="sticky left-8 bg-background z-10 font-bold text-[11px]">
+                        {Object.values(branchData).map((emp, idx) => (
+                          <TableRow key={emp.employee.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                            <TableCell className="sticky left-0 bg-inherit z-10 font-medium">
                               {emp.employee.first_name?.toUpperCase()}
                             </TableCell>
                             {emp.weeklyHours.map((h, i) => (
@@ -918,76 +945,49 @@ export function TimesheetView() {
                                 {h > 0 ? h.toFixed(1) : '-'}
                               </TableCell>
                             ))}
-                            <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30">
+                            <TableCell className="text-center font-bold bg-slate-50 dark:bg-slate-800/50">
                               {emp.totalHours.toFixed(1)}
                             </TableCell>
                             <TableCell className="text-center bg-purple-50/50 dark:bg-purple-950/30">
                               {emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-'}
                             </TableCell>
-                            <TableCell className="text-center font-bold bg-green-50/50 dark:bg-green-950/30">
+                            <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">
                               {emp.totalHrs.toFixed(1)}
                             </TableCell>
-                            <TableCell className="text-center font-bold bg-orange-50/50 dark:bg-orange-950/30 text-orange-600">
-                              {emp.holidayHrs > 0 ? `$${emp.holidayHrs.toFixed(1)}` : '-'}
+                            <TableCell className="text-center bg-amber-50/50 dark:bg-amber-950/30 text-amber-600">
+                              {emp.holidayHrs > 0 ? emp.holidayHrs.toFixed(1) : '-'}
                             </TableCell>
-                            <TableCell></TableCell>
-                            <TableCell className="text-center font-bold bg-red-50/50 dark:bg-red-950/30 text-red-600">
-                              {emp.sickHrs > 0 ? `$${emp.sickHrs.toFixed(1)}` : '-'}
+                            <TableCell className="text-center bg-rose-50/50 dark:bg-rose-950/30 text-rose-600">
+                              {emp.sickHrs > 0 ? emp.sickHrs.toFixed(1) : '-'}
                             </TableCell>
                           </TableRow>
                         ))}
-                        {/* Branch subtotal (SUMIF) */}
-                        <TableRow className="bg-muted/50 font-bold">
-                          <TableCell className="sticky left-0 bg-muted/50 z-10"></TableCell>
-                          <TableCell className="sticky left-8 bg-muted/50 z-10"></TableCell>
+                        {/* Branch Subtotal */}
+                        <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
+                          <TableCell className="sticky left-0 bg-muted/50 z-10 text-xs">SUBTOTAL</TableCell>
                           {branchTotals.weeks.map((w, i) => (
-                            <TableCell key={i} className="text-center">
-                              {w > 0 ? w.toFixed(1) : '-'}
-                            </TableCell>
+                            <TableCell key={i} className="text-center">{w.toFixed(1)}</TableCell>
                           ))}
-                          <TableCell className="text-center bg-blue-100 dark:bg-blue-900/50">
-                            {branchTotals.total.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="text-center bg-purple-100 dark:bg-purple-900/50">
-                            {branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}
-                          </TableCell>
-                          <TableCell className="text-center bg-green-100 dark:bg-green-900/50">
-                            {branchTotals.totalHrs.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="text-center bg-orange-100 dark:bg-orange-900/50 text-orange-600">
-                            {branchTotals.holiday > 0 ? `$${branchTotals.holiday.toFixed(1)}` : '-'}
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell className="text-center bg-red-100 dark:bg-red-900/50 text-red-600">
-                            {branchTotals.sick > 0 ? `$${branchTotals.sick.toFixed(1)}` : '-'}
-                          </TableCell>
+                          <TableCell className="text-center bg-slate-100/50">{branchTotals.total.toFixed(1)}</TableCell>
+                          <TableCell className="text-center bg-purple-100/50">{branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}</TableCell>
+                          <TableCell className="text-center bg-emerald-100/50">{branchTotals.totalHrs.toFixed(1)}</TableCell>
+                          <TableCell className="text-center bg-amber-100/50">{branchTotals.holiday.toFixed(1)}</TableCell>
+                          <TableCell className="text-center bg-rose-100/50">{branchTotals.sick.toFixed(1)}</TableCell>
                         </TableRow>
                       </React.Fragment>
                     );
                   })}
-                  {/* Grand total row */}
-                  <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
-                    <TableCell className="sticky left-0 bg-primary/20 z-10"></TableCell>
-                    <TableCell className="sticky left-8 bg-primary/20 z-10 text-sm">GRAND TOTAL</TableCell>
+                  {/* Grand Total */}
+                  <TableRow className="bg-primary/10 font-bold hover:bg-primary/10">
+                    <TableCell className="sticky left-0 bg-primary/10 z-10">GRAND TOTAL</TableCell>
                     {monthlyGrandTotals.weeklyTotals.map((w, i) => (
-                      <TableCell key={i} className="text-center text-sm">
-                        {w.toFixed(1)}
-                      </TableCell>
+                      <TableCell key={i} className="text-center">{w.toFixed(1)}</TableCell>
                     ))}
-                    <TableCell className="text-center text-sm bg-blue-200 dark:bg-blue-800">
-                      {monthlyGrandTotals.totalHours.toFixed(1)}
-                    </TableCell>
-                    <TableCell className="text-center bg-purple-200 dark:bg-purple-800">-</TableCell>
-                    <TableCell className="text-center text-sm bg-green-200 dark:bg-green-800">
-                      {monthlyGrandTotals.totalHrs.toFixed(1)}
-                    </TableCell>
-                    <TableCell className="text-center text-sm bg-orange-200 dark:bg-orange-800 text-orange-700">
-                      ${monthlyGrandTotals.holidayHrs.toFixed(1)}
-                    </TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-center text-sm bg-red-200 dark:bg-red-800 text-red-700">
-                      ${monthlyGrandTotals.sickHrs.toFixed(1)}
-                    </TableCell>
+                    <TableCell className="text-center">{monthlyGrandTotals.totalHours.toFixed(1)}</TableCell>
+                    <TableCell className="text-center">-</TableCell>
+                    <TableCell className="text-center text-emerald-700 dark:text-emerald-300">{monthlyGrandTotals.totalHrs.toFixed(1)}</TableCell>
+                    <TableCell className="text-center text-amber-600">{monthlyGrandTotals.holidayHrs.toFixed(1)}</TableCell>
+                    <TableCell className="text-center text-rose-600">{monthlyGrandTotals.sickHrs.toFixed(1)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -997,148 +997,101 @@ export function TimesheetView() {
         </Card>
       )}
 
-      {/* Edit Dialog - for entering times */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              Edit Timesheet - {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Edit Side Panel */}
+      <Sheet open={showEditPanel} onOpenChange={setShowEditPanel}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Edit Timesheet
+            </SheetTitle>
+            <SheetDescription>
+              {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name} • Week {selectedWeekIndex + 1}
+            </SheetDescription>
+          </SheetHeader>
           
-          <div className="space-y-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Day</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead>End</TableHead>
-                  <TableHead>Break (min)</TableHead>
-                  <TableHead>Hours</TableHead>
-                  <TableHead>Holiday</TableHead>
-                  <TableHead>Sick</TableHead>
-                  <TableHead>ADJ+/-</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-medium">{entry.day_of_week}</TableCell>
-                    <TableCell className="text-muted-foreground">{format(parseISO(entry.entry_date), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell>
-                      <Input
-                        type="time"
-                        value={entry.shift_start_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value || null)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="time"
-                        value={entry.shift_end_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value || null)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={entry.break_duration_minutes || ''}
-                        onChange={(e) => updateEntry(idx, 'break_duration_minutes', Number(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.25"
-                        value={entry.actual_hours || ''}
-                        onChange={(e) => updateEntry(idx, 'actual_hours', Number(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={entry.holiday_hours || ''}
-                        onChange={(e) => updateEntry(idx, 'holiday_hours', Number(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={entry.sick_hours || ''}
-                        onChange={(e) => updateEntry(idx, 'sick_hours', Number(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={entry.adjustment_hours || ''}
-                        onChange={(e) => updateEntry(idx, 'adjustment_hours', Number(e.target.value) || 0)}
-                        className="w-16"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {/* Week totals */}
-            <div className="flex gap-4 p-4 bg-muted rounded-lg">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Hours</p>
-                <p className="text-xl font-bold text-blue-600">
-                  {entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0).toFixed(1)}
-                </p>
+          <div className="py-6 space-y-6">
+            {entries.map((entry, idx) => (
+              <div key={idx} className="space-y-3 p-4 rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm">{entry.day_of_week}</span>
+                  <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Start Time</Label>
+                    <Input 
+                      type="time" 
+                      value={entry.shift_start_time || ''} 
+                      onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">End Time</Label>
+                    <Input 
+                      type="time" 
+                      value={entry.shift_end_time || ''} 
+                      onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <Label className="text-xs">Hours</Label>
+                    <Input 
+                      type="number" 
+                      step="0.5"
+                      value={entry.actual_hours || 0} 
+                      onChange={(e) => updateEntry(idx, 'actual_hours', parseFloat(e.target.value) || 0)}
+                      className="mt-1 text-center"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Holiday</Label>
+                    <Input 
+                      type="number" 
+                      step="0.5"
+                      value={entry.holiday_hours || 0} 
+                      onChange={(e) => updateEntry(idx, 'holiday_hours', parseFloat(e.target.value) || 0)}
+                      className="mt-1 text-center"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Sick</Label>
+                    <Input 
+                      type="number" 
+                      step="0.5"
+                      value={entry.sick_hours || 0} 
+                      onChange={(e) => updateEntry(idx, 'sick_hours', parseFloat(e.target.value) || 0)}
+                      className="mt-1 text-center"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">ADJ+/-</Label>
+                    <Input 
+                      type="number" 
+                      step="0.5"
+                      value={entry.adjustment_hours || 0} 
+                      onChange={(e) => updateEntry(idx, 'adjustment_hours', parseFloat(e.target.value) || 0)}
+                      className="mt-1 text-center"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Holiday</p>
-                <p className="text-xl font-bold text-orange-600">
-                  {entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0).toFixed(1)}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Sick</p>
-                <p className="text-xl font-bold text-red-600">
-                  {entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0).toFixed(1)}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Adjustment</p>
-                <p className="text-xl font-bold text-purple-600">
-                  {entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0).toFixed(1)}
-                </p>
-              </div>
-              <div className="text-center border-l pl-4">
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-xl font-bold text-green-600">
-                  {entries.reduce((sum, e) => 
-                    sum + (Number(e.actual_hours) || 0) + (Number(e.holiday_hours) || 0) + 
-                    (Number(e.sick_hours) || 0) + (Number(e.adjustment_hours) || 0), 0
-                  ).toFixed(1)}
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+          <SheetFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowEditPanel(false)}>Cancel</Button>
             <Button onClick={saveTimesheet} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Timesheet
+              Save Changes
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
