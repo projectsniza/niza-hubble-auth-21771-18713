@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
-  Calendar, Clock, Umbrella, RefreshCw, Search, TrendingUp, Loader2, Download, FileSpreadsheet
+  Calendar, RefreshCw, Search, Loader2, Download, FileSpreadsheet
 } from 'lucide-react';
 import { format, parseISO, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { toast } from 'sonner';
@@ -29,36 +29,37 @@ interface MonthlyBreakdown {
   month: string;
   actual: number;
   holiday: number;
-  sick: number;
-  adj: number;
 }
 
 interface EmployeeBalance {
   employee: Employee;
-  employee_ref?: string;
+  globalRef: number;
+  employeeRef: number;
   weekly_contracted_hours: number;
   contract_type: string;
   holiday_entitlement_days: number;
   total_worked_hours: number;
-  total_sick_hours: number;
-  total_adjustment_hours: number;
   total_worked_with_holiday: number;
   weeks_worked: number;
-  hours_per_day: number;
-  total_holiday_hours_per_year: number;
-  holiday_hours_earned: number;
+  holiday_entitlement: number;
   holiday_hours_taken: number;
   holiday_hours_remaining: number;
-  carry_forward: number;
-  annum_per_hour: number;
-  difference: number;
-  monthly_data: MonthlyBreakdown[];
+  annum_per_hour: string;
   notes: string;
+  monthly_actual: number[];
+  monthly_holiday: number[];
+  actualTotal: number;
+  holidayTotal: number;
+  // SUMIF columns
+  sumif_actual: number;
+  sumif_differences_actual: number;
+  sumif_holiday: number;
+  sumif_differences_holiday: number;
 }
 
 // UK Fiscal Year months (April - March)
-const MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
-const MONTHS_FULL = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
+const MONTHS = ['April', 'May', 'June', 'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+const MONTHS_SHORT = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 const DEFAULT_WEEKLY_HOURS = 40;
 const DEFAULT_HOLIDAY_DAYS = 28;
 const WEEKS_PER_YEAR = 52;
@@ -71,8 +72,8 @@ export function HolidayBalance() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedYear, setSelectedYear] = useState('2025-04-01');
   const [viewMode, setViewMode] = useState<'ref' | 'monthly'>('ref');
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [filterViewMode, setFilterViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -83,7 +84,7 @@ export function HolidayBalance() {
   const getFiscalYearLabel = () => {
     const yearStart = parseISO(selectedYear);
     const yearEnd = addMonths(yearStart, 11);
-    return `${format(yearStart, 'MMMM yyyy')} to ${format(yearEnd, 'MMMM yyyy')}`;
+    return `From ${format(yearStart, 'MMMM yyyy')} to ${format(yearEnd, 'MMMM yyyy')}`;
   };
 
   useEffect(() => {
@@ -141,79 +142,101 @@ export function HolidayBalance() {
       const contractMap = new Map(contracts?.map(c => [c.employee_id, c]) || []);
       const carryForwardMap = new Map(holidayBalances?.map(h => [h.employee_id, h.carry_forward_hours || 0]) || []);
 
-      const calculatedBalances: EmployeeBalance[] = employees.map((emp, index) => {
-        const empTimesheets = timesheets?.filter(t => t.employee_id === emp.id) || [];
-        const contract = contractMap.get(emp.id);
-        const weeklyHours = contract?.weekly_contracted_hours || DEFAULT_WEEKLY_HOURS;
-        const holidayDays = contract?.holiday_entitlement_days || DEFAULT_HOLIDAY_DAYS;
-        const contractType = contract?.contract_type || (weeklyHours >= 35 ? 'Full-Time' : 'Part-Time');
-        const carryForward = carryForwardMap.get(emp.id) || 0;
-        
-        const totalWorkedHours = empTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0);
-        const totalHolidayTaken = empTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0);
-        const totalSickHours = empTimesheets.reduce((sum, t) => sum + (Number(t.total_sick_hours) || 0), 0);
-        const totalAdjustmentHours = empTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0);
-        
-        // Total worked hours WITH holiday (for SUMIF calculation)
-        const totalWorkedWithHoliday = totalWorkedHours + totalHolidayTaken;
-        
-        const hoursPerDay = weeklyHours / 5;
-        const totalHolidayHoursPerYear = holidayDays * hoursPerDay;
-        
-        // Weeks worked = Total hours / Weekly contracted hours
-        const weeksWorked = weeklyHours > 0 ? totalWorkedWithHoliday / weeklyHours : 0;
-        
-        // Holiday earned = (Annual Holiday Hours / 52) × Weeks Worked
-        const holidayEarned = (totalHolidayHoursPerYear / WEEKS_PER_YEAR) * weeksWorked;
-        
-        // Holiday remaining = Earned + Carry Forward - Taken
-        const holidayRemaining = holidayEarned + carryForward - totalHolidayTaken;
-        
-        // Annum per hour rate (for payroll reference)
-        const annumPerHour = totalHolidayHoursPerYear > 0 ? totalWorkedHours / totalHolidayHoursPerYear : 0;
+      // Group employees by branch for employee REF numbering
+      const branchGroups: Record<string, Employee[]> = {};
+      employees.forEach(emp => {
+        const branchName = emp.branch?.name || 'Unassigned';
+        if (!branchGroups[branchName]) branchGroups[branchName] = [];
+        branchGroups[branchName].push(emp as Employee);
+      });
 
-        // Monthly breakdown
-        const monthlyData: MonthlyBreakdown[] = MONTHS.map((monthName, idx) => {
-          const monthDate = addMonths(yearStart, idx);
-          const monthStart = startOfMonth(monthDate);
-          const monthEnd = endOfMonth(monthDate);
+      let globalRef = 1;
+      const calculatedBalances: EmployeeBalance[] = [];
+
+      Object.entries(branchGroups).forEach(([branchName, branchEmployees]) => {
+        branchEmployees.forEach((emp, empIdx) => {
+          const empTimesheets = timesheets?.filter(t => t.employee_id === emp.id) || [];
+          const contract = contractMap.get(emp.id);
+          const weeklyHours = contract?.weekly_contracted_hours || DEFAULT_WEEKLY_HOURS;
+          const holidayDays = contract?.holiday_entitlement_days || DEFAULT_HOLIDAY_DAYS;
+          const contractType = contract?.contract_type || (weeklyHours >= 35 ? 'Full-Time' : 'Part-Time');
+          const carryForward = carryForwardMap.get(emp.id) || 0;
           
-          const monthTimesheets = empTimesheets.filter(t => {
-            const weekStart = parseISO(t.week_start_date);
-            return weekStart >= monthStart && weekStart <= monthEnd;
+          // Monthly breakdown (fiscal year Apr-Mar)
+          const monthly_actual: number[] = MONTHS.map((_, idx) => {
+            const monthDate = addMonths(yearStart, idx);
+            const monthStart = startOfMonth(monthDate);
+            const monthEnd = endOfMonth(monthDate);
+            
+            return empTimesheets.filter(t => {
+              const weekStart = parseISO(t.week_start_date);
+              return weekStart >= monthStart && weekStart <= monthEnd;
+            }).reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0);
           });
 
-          return {
-            month: monthName,
-            actual: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
-            holiday: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0),
-            sick: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_sick_hours) || 0), 0),
-            adj: monthTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0)
-          };
-        });
+          const monthly_holiday: number[] = MONTHS.map((_, idx) => {
+            const monthDate = addMonths(yearStart, idx);
+            const monthStart = startOfMonth(monthDate);
+            const monthEnd = endOfMonth(monthDate);
+            
+            return empTimesheets.filter(t => {
+              const weekStart = parseISO(t.week_start_date);
+              return weekStart >= monthStart && weekStart <= monthEnd;
+            }).reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0);
+          });
 
-        return {
-          employee: emp as Employee,
-          employee_ref: `${index + 1}`,
-          weekly_contracted_hours: weeklyHours,
-          contract_type: contractType,
-          holiday_entitlement_days: holidayDays,
-          total_worked_hours: totalWorkedHours,
-          total_sick_hours: totalSickHours,
-          total_adjustment_hours: totalAdjustmentHours,
-          total_worked_with_holiday: totalWorkedWithHoliday,
-          weeks_worked: weeksWorked,
-          hours_per_day: hoursPerDay,
-          total_holiday_hours_per_year: totalHolidayHoursPerYear,
-          holiday_hours_earned: holidayEarned,
-          holiday_hours_taken: totalHolidayTaken,
-          holiday_hours_remaining: holidayRemaining,
-          carry_forward: carryForward,
-          annum_per_hour: annumPerHour,
-          difference: holidayRemaining,
-          monthly_data: monthlyData,
-          notes: ''
-        };
+          const actualTotal = monthly_actual.reduce((sum, v) => sum + v, 0);
+          const holidayTotal = monthly_holiday.reduce((sum, v) => sum + v, 0);
+          
+          // Total worked hours WITH holiday (for No of Weeks calculation)
+          const totalWorkedWithHoliday = actualTotal + holidayTotal;
+          
+          const hoursPerDay = weeklyHours / 5;
+          const totalHolidayHoursPerYear = holidayDays * hoursPerDay;
+          
+          // Weeks worked = Total hours with holiday / Weekly contracted hours
+          const weeksWorked = weeklyHours > 0 ? totalWorkedWithHoliday / weeklyHours : 0;
+          
+          // Holiday entitlement = (Annual Holiday Hours / 52) × Weeks Worked
+          const holidayEntitlement = (totalHolidayHoursPerYear / WEEKS_PER_YEAR) * weeksWorked;
+          
+          // Holiday remaining = Entitlement + Carry Forward - Taken
+          const holidayRemaining = holidayEntitlement + carryForward - holidayTotal;
+          
+          // Annum per hour (salary reference)
+          const annumPerHour = weeklyHours >= 35 ? `£${(weeklyHours * 52 * 12).toLocaleString()}.00` : '';
+
+          // SUMIF columns (matching Excel)
+          const sumif_actual = actualTotal;
+          const sumif_differences_actual = 0; // Difference tracking
+          const sumif_holiday = holidayTotal;
+          const sumif_differences_holiday = 0;
+
+          calculatedBalances.push({
+            employee: emp as Employee,
+            globalRef: globalRef++,
+            employeeRef: empIdx + 1,
+            weekly_contracted_hours: weeklyHours,
+            contract_type: contractType,
+            holiday_entitlement_days: holidayDays,
+            total_worked_hours: actualTotal,
+            total_worked_with_holiday: totalWorkedWithHoliday,
+            weeks_worked: weeksWorked,
+            holiday_entitlement: holidayEntitlement,
+            holiday_hours_taken: holidayTotal,
+            holiday_hours_remaining: holidayRemaining,
+            annum_per_hour: annumPerHour,
+            notes: '',
+            monthly_actual,
+            monthly_holiday,
+            actualTotal,
+            holidayTotal,
+            sumif_actual,
+            sumif_differences_actual,
+            sumif_holiday,
+            sumif_differences_holiday
+          });
+        });
       });
 
       setBalances(calculatedBalances);
@@ -255,113 +278,147 @@ export function HolidayBalance() {
   const totals = useMemo(() => ({
     worked: filteredBalances.reduce((sum, b) => sum + b.total_worked_hours, 0),
     workedWithHoliday: filteredBalances.reduce((sum, b) => sum + b.total_worked_with_holiday, 0),
-    earned: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_earned, 0),
+    entitlement: filteredBalances.reduce((sum, b) => sum + b.holiday_entitlement, 0),
     taken: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_taken, 0),
     remaining: filteredBalances.reduce((sum, b) => sum + b.holiday_hours_remaining, 0),
-    sick: filteredBalances.reduce((sum, b) => sum + b.total_sick_hours, 0),
-    carryForward: filteredBalances.reduce((sum, b) => sum + b.carry_forward, 0),
+    // Monthly totals
+    monthlyActual: MONTHS.map((_, i) => filteredBalances.reduce((sum, b) => sum + b.monthly_actual[i], 0)),
+    monthlyHoliday: MONTHS.map((_, i) => filteredBalances.reduce((sum, b) => sum + b.monthly_holiday[i], 0))
   }), [filteredBalances]);
 
   const exportToCSV = () => {
     if (viewMode === 'ref') {
-      // REF view export (simple summary)
+      // REF view export (matching Excel Page 2)
       const headers = ['REF', 'Employee REF', 'EMPLOYEE NAME', 'SHOP NAME', 'TOTAL HOURS', 'HOLIDAY HOURS', 'ANNUM / PER HOUR', 'NOTES'];
-      const rows: (string | number)[][] = [];
-      let refNum = 1;
+      const rows: string[][] = [headers];
       
       Object.entries(groupedByBranch).forEach(([branchName, branchBalances]) => {
-        branchBalances.forEach((b, idx) => {
+        branchBalances.forEach((b) => {
           rows.push([
-            refNum++,
-            idx + 1,
+            String(b.globalRef),
+            String(b.employeeRef),
             `${b.employee.first_name} ${b.employee.last_name}`,
             branchName,
-            b.total_worked_hours.toFixed(1),
-            b.holiday_hours_taken.toFixed(1),
-            b.annum_per_hour > 0 ? `£${(b.annum_per_hour * 10).toFixed(2)}` : '',
+            b.total_worked_hours > 0 ? b.total_worked_hours.toFixed(1) : '',
+            b.holiday_hours_taken > 0 ? b.holiday_hours_taken.toFixed(1) : '',
+            b.annum_per_hour,
             b.notes
           ]);
         });
       });
 
-      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Holiday_Hours_REF_${format(parseISO(selectedYear), 'yyyy')}.csv`;
-      a.click();
+      const csv = rows.map(row => row.join(',')).join('\n');
+      downloadCSV(csv, `Holiday_Hours_REF_${format(parseISO(selectedYear), 'yyyy')}.csv`);
     } else {
-      // Monthly view export (full breakdown)
+      // Monthly view export (matching Excel Page 1)
       const headers = [
-        'No', 'Staff Name', 'Location', 'Contract Type', 
+        'No', 'Staff Name', 'Location', 'Contract Type',
         'Total Worked Hours With Holiday Hours', 'No of Weeks', 'Holiday Entitlement',
-        ...MONTHS.map(m => m), 'Total', // Actual Working Hours
-        ...MONTHS.map(m => m), 'Total', // Holiday Hours Taken
-        'Holiday Hours Remaining'
+        ...MONTHS_SHORT, 'Total', // Actual Working Hours
+        ...MONTHS_SHORT, 'Total', // Holiday Hours Taken
+        'Holiday Hours Remaining', '', 'SUMIF', '', '', ''
       ];
       
-      const rows: (string | number)[][] = [];
+      const subHeaders = [
+        '', '', '', '',
+        '', '', '',
+        ...MONTHS_SHORT.map(() => ''), '', // Actual
+        ...MONTHS_SHORT.map(() => ''), '', // Holiday
+        '', '', 'Actual Hours', 'Differences', 'Holiday Hours', 'Differences'
+      ];
+
+      const rows: string[][] = [headers, subHeaders];
       let rowNum = 1;
       
       Object.entries(groupedByBranch).forEach(([branchName, branchBalances]) => {
-        rows.push([`📍 ${branchName}`, ...Array(headers.length - 1).fill('')]);
+        // Branch header row
+        rows.push([branchName, ...Array(headers.length - 1).fill('')]);
+        
+        const branchTotals = {
+          workedWithHoliday: 0,
+          weeks: 0,
+          entitlement: 0,
+          monthlyActual: MONTHS.map(() => 0),
+          actualTotal: 0,
+          monthlyHoliday: MONTHS.map(() => 0),
+          holidayTotal: 0,
+          remaining: 0
+        };
         
         branchBalances.forEach(b => {
           rows.push([
-            rowNum++,
+            String(rowNum++),
             `${b.employee.first_name} ${b.employee.last_name}`,
             branchName,
-            b.contract_type,
+            b.contract_type === 'Full-Time' ? '' : 'PT',
             b.total_worked_with_holiday.toFixed(2),
             b.weeks_worked.toFixed(2),
-            b.holiday_hours_earned.toFixed(2),
-            ...b.monthly_data.map(m => m.actual > 0 ? m.actual.toFixed(1) : '-'),
-            b.total_worked_hours.toFixed(1),
-            ...b.monthly_data.map(m => m.holiday > 0 ? m.holiday.toFixed(1) : '-'),
-            b.holiday_hours_taken.toFixed(1),
-            b.holiday_hours_remaining.toFixed(2)
+            b.holiday_entitlement.toFixed(2),
+            ...b.monthly_actual.map(v => v > 0 ? v.toFixed(1) : ''),
+            b.actualTotal.toFixed(1),
+            ...b.monthly_holiday.map(v => v > 0 ? v.toFixed(1) : ''),
+            b.holidayTotal.toFixed(1),
+            b.holiday_hours_remaining.toFixed(2),
+            '',
+            b.sumif_actual > 0 ? b.sumif_actual.toFixed(1) : '-',
+            '-',
+            b.sumif_holiday > 0 ? b.sumif_holiday.toFixed(1) : '-',
+            '-'
           ]);
+          
+          branchTotals.workedWithHoliday += b.total_worked_with_holiday;
+          branchTotals.weeks += b.weeks_worked;
+          branchTotals.entitlement += b.holiday_entitlement;
+          b.monthly_actual.forEach((v, i) => branchTotals.monthlyActual[i] += v);
+          branchTotals.actualTotal += b.actualTotal;
+          b.monthly_holiday.forEach((v, i) => branchTotals.monthlyHoliday[i] += v);
+          branchTotals.holidayTotal += b.holidayTotal;
+          branchTotals.remaining += b.holiday_hours_remaining;
         });
+        
+        // Empty rows after branch (matching Excel spacing)
+        rows.push(Array(headers.length).fill(''));
       });
 
       // Grand total row
-      const grandMonthlyActual = MONTHS.map((_, idx) => filteredBalances.reduce((sum, b) => sum + b.monthly_data[idx].actual, 0));
-      const grandMonthlyHoliday = MONTHS.map((_, idx) => filteredBalances.reduce((sum, b) => sum + b.monthly_data[idx].holiday, 0));
-      
       rows.push([
-        '', 'GRAND TOTAL', '', '',
+        'Grand Total', '', '', '',
         totals.workedWithHoliday.toFixed(2),
         '',
-        totals.earned.toFixed(2),
-        ...grandMonthlyActual.map(v => v.toFixed(1)),
+        totals.entitlement.toFixed(2),
+        ...totals.monthlyActual.map(v => v.toFixed(1)),
         totals.worked.toFixed(1),
-        ...grandMonthlyHoliday.map(v => v.toFixed(1)),
+        ...totals.monthlyHoliday.map(v => v.toFixed(1)),
         totals.taken.toFixed(1),
-        totals.remaining.toFixed(2)
+        totals.remaining.toFixed(2),
+        '', '', '', '', ''
       ]);
 
-      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Holiday_Hours_Working_${format(parseISO(selectedYear), 'yyyy')}_Full.csv`;
-      a.click();
+      const csv = rows.map(row => row.join(',')).join('\n');
+      downloadCSV(csv, `Holiday_Hours_Working_${format(parseISO(selectedYear), 'yyyy')}_Full.csv`);
     }
     toast.success('Exported to CSV');
   };
 
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header - matching Excel "Staff Holiday Working" title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <FileSpreadsheet className="h-6 w-6 text-primary" />
             Staff Holiday Working
           </h2>
-          <p className="text-muted-foreground">From {getFiscalYearLabel()}</p>
+          <p className="text-muted-foreground">{getFiscalYearLabel()}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'ref' | 'monthly')}>
@@ -399,7 +456,7 @@ export function HolidayBalance() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="p-4 bg-blue-50 dark:bg-blue-950/30">
           <div className="text-center">
             <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Total Worked</p>
@@ -414,8 +471,8 @@ export function HolidayBalance() {
         </Card>
         <Card className="p-4 bg-green-50 dark:bg-green-950/30">
           <div className="text-center">
-            <p className="text-sm text-green-600 dark:text-green-400 font-medium">Earned</p>
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{totals.earned.toFixed(1)}h</p>
+            <p className="text-sm text-green-600 dark:text-green-400 font-medium">Entitlement</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{totals.entitlement.toFixed(1)}h</p>
           </div>
         </Card>
         <Card className="p-4 bg-orange-50 dark:bg-orange-950/30">
@@ -428,12 +485,6 @@ export function HolidayBalance() {
           <div className="text-center">
             <p className="text-sm text-teal-600 dark:text-teal-400 font-medium">Remaining</p>
             <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{totals.remaining.toFixed(1)}h</p>
-          </div>
-        </Card>
-        <Card className="p-4 bg-red-50 dark:bg-red-950/30">
-          <div className="text-center">
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">Total Sick</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{totals.sick.toFixed(0)}h</p>
           </div>
         </Card>
       </div>
@@ -449,10 +500,13 @@ export function HolidayBalance() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : viewMode === 'ref' ? (
-        /* REF Summary View - Simple table like Excel Page 2 */
+        /* REF Summary View - Matching Excel Page 2 format */
         <Card className="overflow-hidden">
-          <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <h3 className="font-bold text-sm">HOLIDAY HOURS REFERENCE - {format(new Date(), 'EEEE, MMMM d, yyyy')}</h3>
+          <div className="p-3 border-b bg-gradient-to-r from-yellow-100 to-yellow-50 dark:from-yellow-900/30 dark:to-yellow-950/30">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-sm">HOLIDAY HOURS REFERENCE</h3>
+              <p className="text-sm text-muted-foreground">DATE: {format(new Date(), 'dd/MM/yyyy')}</p>
+            </div>
           </div>
           <ScrollArea className="w-full">
             <div className="min-w-[900px]">
@@ -466,45 +520,34 @@ export function HolidayBalance() {
                     <TableHead className="font-bold text-center">TOTAL HOURS</TableHead>
                     <TableHead className="font-bold text-center">HOLIDAY HOURS</TableHead>
                     <TableHead className="font-bold text-center">ANNUM / PER HOUR</TableHead>
-                    <TableHead className="font-bold min-w-[150px]">NOTES</TableHead>
+                    <TableHead className="font-bold min-w-[200px]">NOTES</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(() => {
-                    let globalRef = 1;
-                    return Object.entries(groupedByBranch).map(([branchName, branchBalances]) => (
-                      <React.Fragment key={branchName}>
-                        <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                          <TableCell colSpan={8} className="font-bold text-primary py-2">
-                            📍 {branchName} ({branchBalances.length} staff)
+                  {Object.entries(groupedByBranch).map(([branchName, branchBalances]) => (
+                    <React.Fragment key={branchName}>
+                      {branchBalances.map((b) => (
+                        <TableRow key={b.employee.id} className="hover:bg-muted/30">
+                          <TableCell className="text-center font-medium">{b.globalRef}</TableCell>
+                          <TableCell className="text-center">{b.employeeRef}</TableCell>
+                          <TableCell className="font-medium">
+                            {b.employee.first_name} {b.employee.last_name}
                           </TableCell>
+                          <TableCell>{branchName}</TableCell>
+                          <TableCell className="text-center font-bold">
+                            {b.total_worked_hours > 0 ? b.total_worked_hours.toFixed(1) : ''}
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-orange-600">
+                            {b.holiday_hours_taken > 0 ? b.holiday_hours_taken.toFixed(1) : ''}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {b.annum_per_hour}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{b.notes}</TableCell>
                         </TableRow>
-                        {branchBalances.map((b, idx) => {
-                          const ref = globalRef++;
-                          return (
-                            <TableRow key={b.employee.id} className="hover:bg-muted/30">
-                              <TableCell className="text-center font-medium">{ref}</TableCell>
-                              <TableCell className="text-center">{idx + 1}</TableCell>
-                              <TableCell className="font-medium">
-                                {b.employee.first_name} {b.employee.last_name}
-                              </TableCell>
-                              <TableCell>{branchName}</TableCell>
-                              <TableCell className="text-center font-bold">
-                                {b.total_worked_hours > 0 ? b.total_worked_hours.toFixed(1) : '-'}
-                              </TableCell>
-                              <TableCell className="text-center font-bold text-orange-600">
-                                {b.holiday_hours_taken > 0 ? b.holiday_hours_taken.toFixed(1) : '-'}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {b.annum_per_hour > 0 ? `£${(b.weekly_contracted_hours * 52 * 12).toLocaleString()}.00` : ''}
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">{b.notes}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </React.Fragment>
-                    ));
-                  })()}
+                      ))}
+                    </React.Fragment>
+                  ))}
                   {/* Grand Total */}
                   {filteredBalances.length > 0 && (
                     <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
@@ -521,65 +564,69 @@ export function HolidayBalance() {
           </ScrollArea>
         </Card>
       ) : (
-        /* Full Monthly View - Complete breakdown like Excel Page 1 */
+        /* Full Monthly View - Matching Excel Page 1 format exactly */
         <Card className="overflow-hidden">
           <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <h3 className="font-bold text-sm">HOLIDAY HOURS WORKING - {getFiscalYearLabel().toUpperCase()}</h3>
+            <h3 className="font-bold text-sm">{getFiscalYearLabel().toUpperCase()}</h3>
           </div>
           <ScrollArea className="w-full">
-            <div className="min-w-[2400px]">
+            <div className="min-w-[2600px]">
               <Table className="text-[10px]">
                 <TableHeader>
-                  {/* Header Row 1 - Category Headers */}
+                  {/* Header Row 1 - Main category headers */}
                   <TableRow className="bg-muted/70 border-b-2">
-                    <TableHead className="sticky left-0 bg-muted/70 z-20 w-10 text-center" rowSpan={2}>No</TableHead>
-                    <TableHead className="sticky left-10 bg-muted/70 z-20 min-w-[130px]" rowSpan={2}>Staff Name</TableHead>
-                    <TableHead className="bg-muted/70 min-w-[100px]" rowSpan={2}>Location</TableHead>
-                    <TableHead className="text-center bg-muted/70" rowSpan={2}>Contract Type</TableHead>
-                    <TableHead className="text-center bg-purple-100 dark:bg-purple-900" rowSpan={2}>Total Worked Hours With Holiday Hours</TableHead>
-                    <TableHead className="text-center bg-muted/70" rowSpan={2}>No of Weeks</TableHead>
-                    <TableHead className="text-center bg-yellow-100 dark:bg-yellow-900" rowSpan={2}>Holiday Entitlement</TableHead>
+                    <TableHead className="sticky left-0 bg-muted/70 z-20 w-10 text-center font-bold" rowSpan={2}>No</TableHead>
+                    <TableHead className="sticky left-10 bg-muted/70 z-20 min-w-[150px] font-bold" rowSpan={2}>Staff Name</TableHead>
+                    <TableHead className="bg-muted/70 min-w-[100px] font-bold" rowSpan={2}>Location</TableHead>
+                    <TableHead className="text-center bg-muted/70 font-bold" rowSpan={2}>Contract Type</TableHead>
+                    <TableHead className="text-center bg-purple-100 dark:bg-purple-900 font-bold" rowSpan={2}>Total Worked Hours With Holiday Hours</TableHead>
+                    <TableHead className="text-center bg-muted/70 font-bold" rowSpan={2}>No of Weeks</TableHead>
+                    <TableHead className="text-center bg-yellow-100 dark:bg-yellow-900 font-bold" rowSpan={2}>Holiday Entitlement</TableHead>
                     <TableHead colSpan={MONTHS.length} className="text-center bg-blue-100 dark:bg-blue-900 font-bold border-x">Actual Working Hours</TableHead>
                     <TableHead className="text-center bg-blue-200 dark:bg-blue-800 font-bold" rowSpan={2}>Total</TableHead>
                     <TableHead colSpan={MONTHS.length} className="text-center bg-orange-100 dark:bg-orange-900 font-bold border-x">Holiday Hours Taken</TableHead>
                     <TableHead className="text-center bg-orange-200 dark:bg-orange-800 font-bold" rowSpan={2}>Total</TableHead>
                     <TableHead className="text-center bg-green-200 dark:bg-green-800 font-bold" rowSpan={2}>Holiday Hours Remaining</TableHead>
+                    <TableHead className="w-4" rowSpan={2}></TableHead>
+                    <TableHead colSpan={4} className="text-center bg-gray-200 dark:bg-gray-700 font-bold">SUMIF</TableHead>
                   </TableRow>
-                  {/* Header Row 2 - Month Headers */}
+                  {/* Header Row 2 - Month headers */}
                   <TableRow className="bg-muted/50">
-                    {MONTHS.map(m => <TableHead key={`a-${m}`} className="text-center bg-blue-50 dark:bg-blue-950 font-semibold w-14">{m}</TableHead>)}
-                    {MONTHS.map(m => <TableHead key={`h-${m}`} className="text-center bg-orange-50 dark:bg-orange-950 font-semibold w-14">{m}</TableHead>)}
+                    {MONTHS_SHORT.map(m => <TableHead key={`a-${m}`} className="text-center bg-blue-50 dark:bg-blue-950 font-semibold w-14">{m}</TableHead>)}
+                    {MONTHS_SHORT.map(m => <TableHead key={`h-${m}`} className="text-center bg-orange-50 dark:bg-orange-950 font-semibold w-14">{m}</TableHead>)}
+                    <TableHead className="text-center bg-gray-100 dark:bg-gray-800 font-semibold w-16">Actual Hours</TableHead>
+                    <TableHead className="text-center bg-gray-100 dark:bg-gray-800 font-semibold w-16">Differences</TableHead>
+                    <TableHead className="text-center bg-gray-100 dark:bg-gray-800 font-semibold w-16">Holiday Hours</TableHead>
+                    <TableHead className="text-center bg-gray-100 dark:bg-gray-800 font-semibold w-16">Differences</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Object.entries(groupedByBranch).map(([branchName, branchBalances]) => {
                     // Calculate branch SUMIF totals
                     const branchTotals = {
-                      workedWithHoliday: 0, weeks: 0, entitlement: 0, worked: 0, taken: 0, remaining: 0,
+                      workedWithHoliday: 0,
+                      weeks: 0,
+                      entitlement: 0,
                       monthlyActual: MONTHS.map(() => 0),
-                      monthlyHoliday: MONTHS.map(() => 0)
+                      actualTotal: 0,
+                      monthlyHoliday: MONTHS.map(() => 0),
+                      holidayTotal: 0,
+                      remaining: 0
                     };
                     
                     branchBalances.forEach(b => {
                       branchTotals.workedWithHoliday += b.total_worked_with_holiday;
                       branchTotals.weeks += b.weeks_worked;
-                      branchTotals.entitlement += b.holiday_hours_earned;
-                      branchTotals.worked += b.total_worked_hours;
-                      branchTotals.taken += b.holiday_hours_taken;
+                      branchTotals.entitlement += b.holiday_entitlement;
+                      branchTotals.actualTotal += b.actualTotal;
+                      branchTotals.holidayTotal += b.holidayTotal;
                       branchTotals.remaining += b.holiday_hours_remaining;
-                      b.monthly_data.forEach((m, idx) => {
-                        branchTotals.monthlyActual[idx] += m.actual;
-                        branchTotals.monthlyHoliday[idx] += m.holiday;
-                      });
+                      b.monthly_actual.forEach((v, i) => branchTotals.monthlyActual[i] += v);
+                      b.monthly_holiday.forEach((v, i) => branchTotals.monthlyHoliday[i] += v);
                     });
 
                     return (
                       <React.Fragment key={branchName}>
-                        <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                          <TableCell colSpan={7 + MONTHS.length * 2 + 3} className="font-bold text-primary py-2">
-                            📍 {branchName} ({branchBalances.length} staff)
-                          </TableCell>
-                        </TableRow>
                         {branchBalances.map((b, idx) => (
                           <TableRow key={b.employee.id} className="hover:bg-muted/30">
                             <TableCell className="sticky left-0 bg-background z-10 text-center">{idx + 1}</TableCell>
@@ -588,122 +635,92 @@ export function HolidayBalance() {
                             </TableCell>
                             <TableCell className="text-muted-foreground">{branchName}</TableCell>
                             <TableCell className="text-center">
-                              <Badge variant="outline" className="text-[9px] px-1">
-                                {b.contract_type === 'Full-Time' ? 'FT' : 'PT'}
-                              </Badge>
+                              {b.contract_type !== 'Full-Time' && (
+                                <Badge variant="outline" className="text-[9px] px-1">PT</Badge>
+                              )}
                             </TableCell>
                             <TableCell className="text-center bg-purple-50/50 dark:bg-purple-950/30 font-bold">
                               {b.total_worked_with_holiday.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-center">{b.weeks_worked.toFixed(2)}</TableCell>
                             <TableCell className="text-center bg-yellow-50/50 dark:bg-yellow-950/30 font-bold">
-                              {b.holiday_hours_earned.toFixed(2)}
+                              {b.holiday_entitlement.toFixed(2)}
                             </TableCell>
-                            {b.monthly_data.map(m => (
-                              <TableCell key={`a-${m.month}`} className="text-center bg-blue-50/30 dark:bg-blue-950/30">
-                                {m.actual > 0 ? m.actual.toFixed(1) : '-'}
+                            {b.monthly_actual.map((v, i) => (
+                              <TableCell key={`a-${i}`} className="text-center bg-blue-50/30 dark:bg-blue-950/30">
+                                {v > 0 ? v.toFixed(1) : ''}
                               </TableCell>
                             ))}
                             <TableCell className="text-center font-bold bg-blue-100/70 dark:bg-blue-900/70">
-                              {b.total_worked_hours.toFixed(1)}
+                              {b.actualTotal.toFixed(1)}
                             </TableCell>
-                            {b.monthly_data.map(m => (
-                              <TableCell key={`h-${m.month}`} className="text-center bg-orange-50/30 dark:bg-orange-950/30">
-                                {m.holiday > 0 ? m.holiday.toFixed(1) : '-'}
+                            {b.monthly_holiday.map((v, i) => (
+                              <TableCell key={`h-${i}`} className="text-center bg-orange-50/30 dark:bg-orange-950/30">
+                                {v > 0 ? v.toFixed(1) : ''}
                               </TableCell>
                             ))}
                             <TableCell className="text-center font-bold bg-orange-100/70 dark:bg-orange-900/70 text-orange-700">
-                              {b.holiday_hours_taken.toFixed(1)}
+                              {b.holidayTotal.toFixed(1)}
                             </TableCell>
                             <TableCell className={`text-center font-bold ${b.holiday_hours_remaining >= 0 ? 'bg-green-100/70 dark:bg-green-900/70 text-green-700' : 'bg-red-100/70 dark:bg-red-900/70 text-red-700'}`}>
                               {b.holiday_hours_remaining.toFixed(2)}
                             </TableCell>
+                            <TableCell></TableCell>
+                            <TableCell className="text-center bg-gray-50 dark:bg-gray-900">
+                              {b.sumif_actual > 0 ? b.sumif_actual.toFixed(1) : '-'}
+                            </TableCell>
+                            <TableCell className="text-center bg-gray-50 dark:bg-gray-900">-</TableCell>
+                            <TableCell className="text-center bg-gray-50 dark:bg-gray-900">
+                              {b.sumif_holiday > 0 ? b.sumif_holiday.toFixed(1) : '-'}
+                            </TableCell>
+                            <TableCell className="text-center bg-gray-50 dark:bg-gray-900">-</TableCell>
                           </TableRow>
                         ))}
-                        {/* Branch SUMIF Subtotal */}
-                        <TableRow className="bg-muted/60 border-b-2 font-bold">
-                          <TableCell></TableCell>
-                          <TableCell className="sticky left-10 bg-muted/60 z-10 text-primary text-[11px]">
-                            SUBTOTAL - {branchName}
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell></TableCell>
-                          <TableCell className="text-center bg-purple-100 dark:bg-purple-800">
-                            {branchTotals.workedWithHoliday.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-center">{branchTotals.weeks.toFixed(2)}</TableCell>
-                          <TableCell className="text-center bg-yellow-100 dark:bg-yellow-800">
-                            {branchTotals.entitlement.toFixed(2)}
-                          </TableCell>
-                          {branchTotals.monthlyActual.map((v, i) => (
-                            <TableCell key={i} className="text-center bg-blue-100 dark:bg-blue-800">
-                              {v > 0 ? v.toFixed(1) : '-'}
-                            </TableCell>
-                          ))}
-                          <TableCell className="text-center bg-blue-200 dark:bg-blue-700">
-                            {branchTotals.worked.toFixed(1)}
-                          </TableCell>
-                          {branchTotals.monthlyHoliday.map((v, i) => (
-                            <TableCell key={i} className="text-center bg-orange-100 dark:bg-orange-800">
-                              {v > 0 ? v.toFixed(1) : '-'}
-                            </TableCell>
-                          ))}
-                          <TableCell className="text-center bg-orange-200 dark:bg-orange-700 text-orange-700">
-                            {branchTotals.taken.toFixed(1)}
-                          </TableCell>
-                          <TableCell className={`text-center ${branchTotals.remaining >= 0 ? 'bg-green-200 dark:bg-green-700 text-green-700' : 'bg-red-200 dark:bg-red-700 text-red-700'}`}>
-                            {branchTotals.remaining.toFixed(2)}
-                          </TableCell>
+                        {/* Empty rows after each branch (matching Excel spacing) */}
+                        <TableRow className="h-2">
+                          <TableCell colSpan={7 + MONTHS.length * 2 + 6}></TableCell>
                         </TableRow>
                       </React.Fragment>
                     );
                   })}
-                  {/* Grand Total */}
-                  {filteredBalances.length > 0 && (() => {
-                    const grandMonthlyActual = MONTHS.map((_, idx) => filteredBalances.reduce((sum, b) => sum + b.monthly_data[idx].actual, 0));
-                    const grandMonthlyHoliday = MONTHS.map((_, idx) => filteredBalances.reduce((sum, b) => sum + b.monthly_data[idx].holiday, 0));
-                    const grandWeeks = filteredBalances.reduce((sum, b) => sum + b.weeks_worked, 0);
-                    
-                    return (
-                      <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
-                        <TableCell></TableCell>
-                        <TableCell className="sticky left-10 bg-primary/20 z-10 text-sm">GRAND TOTAL</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-center text-sm bg-purple-200 dark:bg-purple-700">
-                          {totals.workedWithHoliday.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-center">{grandWeeks.toFixed(2)}</TableCell>
-                        <TableCell className="text-center text-sm bg-yellow-200 dark:bg-yellow-700">
-                          {totals.earned.toFixed(2)}
-                        </TableCell>
-                        {grandMonthlyActual.map((v, i) => (
-                          <TableCell key={i} className="text-center bg-blue-200 dark:bg-blue-700">
-                            {v > 0 ? v.toFixed(1) : '-'}
-                          </TableCell>
-                        ))}
-                        <TableCell className="text-center text-sm bg-blue-300 dark:bg-blue-600">
-                          {totals.worked.toFixed(1)}
-                        </TableCell>
-                        {grandMonthlyHoliday.map((v, i) => (
-                          <TableCell key={i} className="text-center bg-orange-200 dark:bg-orange-700">
-                            {v > 0 ? v.toFixed(1) : '-'}
-                          </TableCell>
-                        ))}
-                        <TableCell className="text-center text-sm bg-orange-300 dark:bg-orange-600">
-                          {totals.taken.toFixed(1)}
-                        </TableCell>
-                        <TableCell className={`text-center text-sm ${totals.remaining >= 0 ? 'bg-green-300 dark:bg-green-600' : 'bg-red-300 dark:bg-red-600'}`}>
-                          {totals.remaining.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })()}
-                  {filteredBalances.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7 + MONTHS.length * 2 + 3} className="text-center py-8 text-muted-foreground">
-                        No employees found
+                  {/* Grand Total Row */}
+                  {filteredBalances.length > 0 && (
+                    <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
+                      <TableCell></TableCell>
+                      <TableCell className="sticky left-10 bg-primary/20 z-10 text-sm">Grand Total</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-center text-sm bg-purple-200 dark:bg-purple-700">
+                        {totals.workedWithHoliday.toFixed(2)}
                       </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-center text-sm bg-yellow-200 dark:bg-yellow-700">
+                        {totals.entitlement.toFixed(2)}
+                      </TableCell>
+                      {totals.monthlyActual.map((v, i) => (
+                        <TableCell key={i} className="text-center bg-blue-200 dark:bg-blue-700">
+                          {v > 0 ? v.toFixed(1) : '-'}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-center text-sm bg-blue-300 dark:bg-blue-600">
+                        {totals.worked.toFixed(1)}
+                      </TableCell>
+                      {totals.monthlyHoliday.map((v, i) => (
+                        <TableCell key={i} className="text-center bg-orange-200 dark:bg-orange-700">
+                          {v > 0 ? v.toFixed(1) : '-'}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-center text-sm bg-orange-300 dark:bg-orange-600">
+                        {totals.taken.toFixed(1)}
+                      </TableCell>
+                      <TableCell className={`text-center text-sm ${totals.remaining >= 0 ? 'bg-green-300 dark:bg-green-600' : 'bg-red-300 dark:bg-red-600'}`}>
+                        {totals.remaining.toFixed(2)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-center bg-gray-200 dark:bg-gray-700"></TableCell>
+                      <TableCell className="text-center bg-gray-200 dark:bg-gray-700"></TableCell>
+                      <TableCell className="text-center bg-gray-200 dark:bg-gray-700">{totals.taken.toFixed(1)}</TableCell>
+                      <TableCell className="text-center bg-gray-200 dark:bg-gray-700"></TableCell>
                     </TableRow>
                   )}
                 </TableBody>
