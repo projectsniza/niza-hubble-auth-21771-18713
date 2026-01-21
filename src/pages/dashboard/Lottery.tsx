@@ -10,14 +10,15 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
   Plus, Trash2, Save, Download, Ticket, Calculator, Calendar, TrendingUp, 
-  Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2
+  Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
+  LayoutGrid, CalendarDays, FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, addDays, subDays, isToday } from 'date-fns';
 
 // Types
 interface LotteryGame {
@@ -50,6 +51,9 @@ interface EditingState {
     [date: string]: GameDailyData;
   };
 }
+
+// Sheet types for the two Excel formats
+type SheetType = 'monthly' | 'daily';
 
 // Sub-components for cleaner code
 const StatCard = ({ 
@@ -87,7 +91,10 @@ export default function Lottery() {
   const { branches } = useOrgBranch();
   const queryClient = useQueryClient();
   
+  // Sheet selection state
+  const [activeSheet, setActiveSheet] = useState<SheetType>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => new Date()); // For daily view
   const [showAddGameDialog, setShowAddGameDialog] = useState(false);
   const [showEditGameDialog, setShowEditGameDialog] = useState(false);
   const [editingGame, setEditingGame] = useState<LotteryGame | null>(null);
@@ -95,7 +102,7 @@ export default function Lottery() {
   const [editingData, setEditingData] = useState<EditingState>({});
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [physicalStock, setPhysicalStock] = useState<{ [date: string]: number | '' }>({});
-  const [activeTab, setActiveTab] = useState<'daily' | 'summary' | 'games'>('daily');
+  const [activeTab, setActiveTab] = useState<'records' | 'summary' | 'games'>('records');
   
   const effectiveBranchId = user?.role === 'manager' ? user?.branchId : selectedBranchId;
 
@@ -720,28 +727,52 @@ export default function Lottery() {
             />
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex items-center gap-2 p-1 bg-card rounded-xl shadow-sm border border-primary/10 w-fit">
-            {[
-              { id: 'daily', label: 'Daily Records', icon: Calendar },
-              { id: 'summary', label: 'Monthly Summary', icon: Calculator },
-              { id: 'games', label: 'Manage Games', icon: Ticket },
-            ].map(tab => (
+          {/* Sheet Type Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-2 p-1 bg-gradient-to-r from-primary/10 to-accent/10 rounded-xl shadow-sm border border-primary/20">
               <Button
-                key={tab.id}
-                variant={activeTab === tab.id ? 'default' : 'ghost'}
+                variant={activeSheet === 'monthly' ? 'default' : 'ghost'}
                 size="sm"
-                className={`gap-2 rounded-lg ${activeTab === tab.id ? '' : 'hover:bg-primary/10'}`}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`gap-2 rounded-lg ${activeSheet === 'monthly' ? '' : 'hover:bg-card'}`}
+                onClick={() => setActiveSheet('monthly')}
               >
-                <tab.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
+                <LayoutGrid className="h-4 w-4" />
+                <span>Sheet 1: Monthly</span>
               </Button>
-            ))}
+              <Button
+                variant={activeSheet === 'daily' ? 'default' : 'ghost'}
+                size="sm"
+                className={`gap-2 rounded-lg ${activeSheet === 'daily' ? '' : 'hover:bg-card'}`}
+                onClick={() => setActiveSheet('daily')}
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span>Sheet 2: Daily</span>
+              </Button>
+            </div>
+
+            {/* Sub-tabs for each sheet */}
+            <div className="flex items-center gap-2 p-1 bg-card rounded-xl shadow-sm border border-primary/10 w-fit">
+              {[
+                { id: 'records', label: activeSheet === 'monthly' ? 'Monthly Records' : 'Daily Entry', icon: FileSpreadsheet },
+                { id: 'summary', label: 'Summary', icon: Calculator },
+                { id: 'games', label: 'Manage Games', icon: Ticket },
+              ].map(tab => (
+                <Button
+                  key={tab.id}
+                  variant={activeTab === tab.id ? 'default' : 'ghost'}
+                  size="sm"
+                  className={`gap-2 rounded-lg ${activeTab === tab.id ? '' : 'hover:bg-primary/10'}`}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </Button>
+              ))}
+            </div>
           </div>
 
-          {/* Daily Records Tab */}
-          {activeTab === 'daily' && (
+          {/* SHEET 1: MONTHLY RECONCILIATION - Records Tab */}
+          {activeSheet === 'monthly' && activeTab === 'records' && (
             <Card className="border-0 shadow-lg overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1135,7 +1166,259 @@ export default function Lottery() {
             </Card>
           )}
 
-          {/* Monthly Summary Tab */}
+          {/* SHEET 2: SIMPLE DAILY RECONCILIATION - Records Tab */}
+          {activeSheet === 'daily' && activeTab === 'records' && (
+            <Card className="border-0 shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-br from-accent/10 to-primary/5 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <CalendarDays className="h-5 w-5 text-accent" />
+                      Simple Daily Reconciliation
+                    </CardTitle>
+                    <CardDescription>Quick daily entry for single-day tracking (Sheet 2)</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Date Navigation */}
+                    <div className="flex items-center gap-1 bg-card rounded-xl p-1 shadow-sm border border-primary/10">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-9 w-9 rounded-lg hover:bg-primary/10"
+                        onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="px-4 py-2 min-w-[160px] text-center">
+                        <span className={`font-semibold ${isToday(selectedDate) ? 'text-primary' : ''}`}>
+                          {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEE, dd MMM yyyy')}
+                        </span>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-9 w-9 rounded-lg hover:bg-primary/10"
+                        onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                        disabled={isToday(selectedDate)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add Game
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : games.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+                      <Ticket className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No Games Configured</h3>
+                    <p className="text-muted-foreground mb-4">Add your first scratchcard game to start tracking.</p>
+                    <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add First Game
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Daily Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {(() => {
+                        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                        let totalSales = 0;
+                        let totalSold = 0;
+                        let totalStock = 0;
+                        games.forEach(game => {
+                          const calc = getDayCalculations(game.id, dateStr, game);
+                          if (calc.salesValue) totalSales += calc.salesValue;
+                          if (calc.ticketsSold) totalSold += calc.ticketsSold;
+                          if (calc.stockEnd) totalStock += calc.stockEnd;
+                        });
+                        return (
+                          <>
+                            <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200/50">
+                              <p className="text-sm text-green-700 dark:text-green-400 font-medium">Day's Sales</p>
+                              <p className="text-3xl font-bold text-green-700 dark:text-green-400">£{totalSales.toFixed(2)}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50">
+                              <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">Tickets Sold</p>
+                              <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">{totalSold}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50">
+                              <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">Closing Stock</p>
+                              <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{totalStock}</p>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Game Cards - Vertical Layout for Daily Entry */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {games.map((game) => {
+                        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                        const calc = getDayCalculations(game.id, dateStr, game);
+                        const hasUnsavedChanges = !!editingData[game.id]?.[dateStr];
+                        
+                        return (
+                          <Card key={game.id} className={`overflow-hidden transition-all ${hasUnsavedChanges ? 'ring-2 ring-amber-400' : ''}`}>
+                            <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-accent/5">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-lg font-bold shadow-lg">
+                                    £{game.ticket_price}
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-lg">{game.game_name}</CardTitle>
+                                    <CardDescription>£{game.ticket_price.toFixed(2)} per ticket</CardDescription>
+                                  </div>
+                                </div>
+                                {hasUnsavedChanges && (
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => saveGameData(game.id)}
+                                    className="gap-1"
+                                  >
+                                    <Save className="h-3 w-3" />
+                                    Save
+                                  </Button>
+                                )}
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-4">
+                              {/* Input Fields */}
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Stock Begin</Label>
+                                  <Input
+                                    type="number"
+                                    className="h-10 text-center font-semibold"
+                                    value={getCellValue(game.id, dateStr, 'stockBegin') ?? ''}
+                                    onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Activated</Label>
+                                  <Input
+                                    type="number"
+                                    className="h-10 text-center font-semibold"
+                                    value={getCellValue(game.id, dateStr, 'activatedTickets') ?? ''}
+                                    onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Stock End</Label>
+                                  <Input
+                                    type="number"
+                                    className="h-10 text-center font-semibold"
+                                    value={getCellValue(game.id, dateStr, 'stockEnd') ?? ''}
+                                    onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
+                                    placeholder="0"
+                                  />
+                                </div>
+                              </div>
+                              
+                              {/* Calculated Values */}
+                              <div className="grid grid-cols-3 gap-3 pt-3 border-t">
+                                <div className="text-center p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                                  <p className="text-xs text-blue-600 dark:text-blue-400">Total Stock</p>
+                                  <p className="text-lg font-bold text-blue-700 dark:text-blue-400">
+                                    {calc.totalStock || '-'}
+                                  </p>
+                                </div>
+                                <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+                                  <p className="text-xs text-amber-600 dark:text-amber-400">Tickets Sold</p>
+                                  <p className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                                    {calc.ticketsSold ?? '-'}
+                                  </p>
+                                </div>
+                                <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-950/30">
+                                  <p className="text-xs text-green-600 dark:text-green-400">Sales Value</p>
+                                  <p className="text-lg font-bold text-green-700 dark:text-green-400">
+                                    {calc.salesValue !== null ? `£${calc.salesValue.toFixed(2)}` : '-'}
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Daily Physical Stock & Difference */}
+                    <Card className="bg-gradient-to-r from-muted/30 to-muted/10">
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Working Stock (Calculated)</Label>
+                            <div className="h-10 px-3 rounded-lg bg-card border flex items-center justify-center font-bold text-lg">
+                              {dailyTotals[format(selectedDate, 'yyyy-MM-dd')]?.closingStock || 0}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Physical Count</Label>
+                            <Input
+                              type="number"
+                              className="h-10 text-center font-semibold"
+                              placeholder="Enter count"
+                              value={physicalStock[format(selectedDate, 'yyyy-MM-dd')] ?? ''}
+                              onChange={(e) => setPhysicalStock(prev => ({
+                                ...prev,
+                                [format(selectedDate, 'yyyy-MM-dd')]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
+                              }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Difference</Label>
+                            {(() => {
+                              const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                              const working = dailyTotals[dateStr]?.closingStock || 0;
+                              const physical = physicalStock[dateStr];
+                              const diff = physical !== undefined && physical !== '' ? working - (physical as number) : null;
+                              
+                              return (
+                                <div className={`h-10 px-3 rounded-lg border flex items-center justify-center font-bold text-lg ${
+                                  diff === null ? 'bg-muted' :
+                                  diff === 0 ? 'bg-green-100 text-green-700 border-green-300' :
+                                  'bg-destructive/10 text-destructive border-destructive/30'
+                                }`}>
+                                  {diff !== null ? (
+                                    diff === 0 ? (
+                                      <span className="flex items-center gap-1">
+                                        <CheckCircle2 className="h-4 w-4" /> 0
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        {diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}
+                                      </span>
+                                    )
+                                  ) : '—'}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Summary Tab - Works for both sheets */}
           {activeTab === 'summary' && (
             <Card className="border-0 shadow-lg">
               <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
