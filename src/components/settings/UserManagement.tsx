@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Building2, Loader2, Edit, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, Users } from 'lucide-react';
+import { Shield, Building2, Loader2, Edit, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, Users, Link2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useUsers } from '@/hooks/useUsers';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
@@ -283,6 +283,49 @@ export default function UserManagement() {
     }
   };
 
+  const handleLinkEmployeeRecord = async (targetUser: any) => {
+    try {
+      if (!targetUser?.email) {
+        toast.error('User email missing');
+        return;
+      }
+
+      const query = supabase
+        .from('employees')
+        .select('id, user_id, account_activated, status, organization_id, branch_id')
+        .eq('email', targetUser.email)
+        .limit(1);
+
+      // Narrow match when we have scope data
+      const scopedQuery = targetUser.organization_id ? query.eq('organization_id', targetUser.organization_id) : query;
+      const scopedQuery2 = targetUser.branch_id ? scopedQuery.eq('branch_id', targetUser.branch_id) : scopedQuery;
+
+      const { data: employeeRows, error: empError } = await scopedQuery2;
+      if (empError) throw empError;
+
+      const employee = employeeRows?.[0];
+      if (!employee) {
+        toast.error('No matching employee record found for this user email');
+        return;
+      }
+
+      const { error: linkError } = await supabase
+        .from('employees')
+        .update({
+          user_id: targetUser.id,
+          account_activated: true,
+          status: 'active',
+        })
+        .eq('id', employee.id);
+
+      if (linkError) throw linkError;
+
+      toast.success('Employee record linked successfully');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to link employee record');
+    }
+  };
+
   const openResetPasswordDialog = (user: any) => {
     setResetPasswordUser(user);
     setNewPassword('');
@@ -468,6 +511,16 @@ export default function UserManagement() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {user.role === 'employee' && (currentUser?.role === 'super_admin' || currentUser?.role === 'hr' || currentUser?.role === 'manager') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleLinkEmployeeRecord(user)}
+              title="Link employee record"
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => openEditDialog(user)} title="Edit user">
             <Edit className="h-4 w-4" />
           </Button>
