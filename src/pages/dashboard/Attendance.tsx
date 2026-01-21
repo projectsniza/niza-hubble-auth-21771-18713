@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Plus, Check, X, Settings, Trash2, BarChart3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Plus, Check, X, Settings, Trash2, BarChart3, Upload, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
@@ -27,8 +27,10 @@ interface LeaveRequest {
   reason: string | null;
   status: string;
   created_at: string;
+  supporting_document_path: string | null;
+  supporting_document_name: string | null;
   employee?: { first_name: string; last_name: string };
-  leave_type?: { name: string };
+  leave_type?: { name: string; requires_supporting_document?: boolean | null };
 }
 
 interface LeaveType {
@@ -37,6 +39,7 @@ interface LeaveType {
   days_allowed: number | null;
   is_paid: boolean | null;
   description: string | null;
+  requires_supporting_document: boolean | null;
 }
 
 interface MandatoryLeave {
@@ -77,7 +80,8 @@ export default function Attendance() {
     leaveTypeId: '',
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    supportingDocument: null as File | null
   });
 
   const [newMandatory, setNewMandatory] = useState({
@@ -107,7 +111,7 @@ export default function Attendance() {
         supabase.from('leave_requests').select(`
           *,
           employee:employees(first_name, last_name, organization_id, branch_id),
-          leave_type:leave_types(name)
+          leave_type:leave_types(name, requires_supporting_document)
         `).order('created_at', { ascending: false }),
         supabase.from('leave_types').select('*').order('name'),
         supabase.from('mandatory_leave').select('*').order('start_date'),
@@ -150,7 +154,37 @@ export default function Attendance() {
       return;
     }
 
+    // Check if selected leave type requires document
+    const selectedLeaveType = leaveTypes.find(lt => lt.id === newLeave.leaveTypeId);
+    if (selectedLeaveType?.requires_supporting_document && !newLeave.supportingDocument) {
+      toast.error('This leave type requires a supporting document');
+      return;
+    }
+
     try {
+      let documentPath: string | null = null;
+      let documentName: string | null = null;
+
+      // Upload supporting document if provided
+      if (newLeave.supportingDocument) {
+        const file = newLeave.supportingDocument;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${newLeave.employeeId}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('leave-documents')
+          .upload(fileName, file);
+        
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast.error('Failed to upload document');
+          return;
+        }
+        
+        documentPath = fileName;
+        documentName = file.name;
+      }
+
       const { error } = await supabase.from('leave_requests').insert({
         employee_id: newLeave.employeeId,
         leave_type_id: newLeave.leaveTypeId,
@@ -159,13 +193,15 @@ export default function Attendance() {
         reason: newLeave.reason || null,
         status: user?.role === 'super_admin' ? 'approved' : 'pending',
         approved_by: user?.role === 'super_admin' ? user?.id : null,
-        approved_at: user?.role === 'super_admin' ? new Date().toISOString() : null
+        approved_at: user?.role === 'super_admin' ? new Date().toISOString() : null,
+        supporting_document_path: documentPath,
+        supporting_document_name: documentName
       });
 
       if (error) throw error;
       toast.success('Time off added successfully');
       setShowAddTimeOff(false);
-      setNewLeave({ employeeId: '', leaveTypeId: '', startDate: '', endDate: '', reason: '' });
+      setNewLeave({ employeeId: '', leaveTypeId: '', startDate: '', endDate: '', reason: '', supportingDocument: null });
       fetchData();
     } catch (error: any) {
       toast.error(error.message);
@@ -221,6 +257,7 @@ export default function Attendance() {
         days_allowed: newLeaveType.daysAllowed ? parseInt(newLeaveType.daysAllowed) : null,
         is_paid: newLeaveType.isPaid,
         description: newLeaveType.description || null,
+        requires_supporting_document: newLeaveType.requiresDocument,
         created_by: user?.id
       });
 
@@ -312,12 +349,20 @@ export default function Attendance() {
     leaveTypeId: '',
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    supportingDocument: null as File | null
   });
 
   const handleEmployeeLeaveRequest = async () => {
     if (!employeeLeaveForm.leaveTypeId || !employeeLeaveForm.startDate || !employeeLeaveForm.endDate) {
       toast.error('Please fill all required fields');
+      return;
+    }
+
+    // Check if selected leave type requires document
+    const selectedLeaveType = leaveTypes.find(lt => lt.id === employeeLeaveForm.leaveTypeId);
+    if (selectedLeaveType?.requires_supporting_document && !employeeLeaveForm.supportingDocument) {
+      toast.error('This leave type requires a supporting document');
       return;
     }
 
@@ -334,19 +379,44 @@ export default function Attendance() {
         return;
       }
 
+      let documentPath: string | null = null;
+      let documentName: string | null = null;
+
+      // Upload supporting document if provided
+      if (employeeLeaveForm.supportingDocument) {
+        const file = employeeLeaveForm.supportingDocument;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${empData.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('leave-documents')
+          .upload(fileName, file);
+        
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast.error('Failed to upload document');
+          return;
+        }
+        
+        documentPath = fileName;
+        documentName = file.name;
+      }
+
       const { error } = await supabase.from('leave_requests').insert({
         employee_id: empData.id,
         leave_type_id: employeeLeaveForm.leaveTypeId,
         start_date: employeeLeaveForm.startDate,
         end_date: employeeLeaveForm.endDate,
         reason: employeeLeaveForm.reason || null,
-        status: 'pending'
+        status: 'pending',
+        supporting_document_path: documentPath,
+        supporting_document_name: documentName
       });
 
       if (error) throw error;
       toast.success('Leave request submitted successfully');
       setShowEmployeeLeaveRequest(false);
-      setEmployeeLeaveForm({ leaveTypeId: '', startDate: '', endDate: '', reason: '' });
+      setEmployeeLeaveForm({ leaveTypeId: '', startDate: '', endDate: '', reason: '', supportingDocument: null });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to submit leave request');
@@ -610,6 +680,58 @@ export default function Attendance() {
                   rows={3}
                 />
               </div>
+              {/* Show file upload if leave type requires document */}
+              {(() => {
+                const selectedType = leaveTypes.find(lt => lt.id === employeeLeaveForm.leaveTypeId);
+                if (selectedType?.requires_supporting_document) {
+                  return (
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        Supporting Document *
+                        <Badge variant="secondary" className="text-xs">Required</Badge>
+                      </Label>
+                      <div className="border-2 border-dashed border-muted rounded-lg p-4">
+                        {employeeLeaveForm.supportingDocument ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{employeeLeaveForm.supportingDocument.name}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEmployeeLeaveForm(prev => ({ ...prev, supportingDocument: null }))}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center gap-2 cursor-pointer">
+                            <Upload className="h-8 w-8 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Click to upload document</span>
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setEmployeeLeaveForm(prev => ({ ...prev, supportingDocument: file }));
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Upload a supporting document (PDF, images, Word documents)
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowEmployeeLeaveRequest(false)}>Cancel</Button>
@@ -831,12 +953,37 @@ export default function Attendance() {
                 {pendingRequests.map(req => (
                   <Card key={req.id} className="p-4">
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex-1">
                         <p className="font-semibold">{req.employee?.first_name} {req.employee?.last_name}</p>
                         <p className="text-sm text-muted-foreground">
                           {req.leave_type?.name} • {format(new Date(req.start_date), 'dd MMM')} - {format(new Date(req.end_date), 'dd MMM yyyy')}
                         </p>
                         {req.reason && <p className="text-sm mt-1">{req.reason}</p>}
+                        {/* Show supporting document if uploaded */}
+                        {req.supporting_document_path && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <FileText className="h-4 w-4 text-primary" />
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="p-0 h-auto text-primary"
+                              onClick={async () => {
+                                const { data } = supabase.storage
+                                  .from('leave-documents')
+                                  .getPublicUrl(req.supporting_document_path!);
+                                window.open(data.publicUrl, '_blank');
+                              }}
+                            >
+                              {req.supporting_document_name || 'View Document'}
+                            </Button>
+                          </div>
+                        )}
+                        {/* Indicator if document was required but not provided */}
+                        {req.leave_type?.requires_supporting_document && !req.supporting_document_path && (
+                          <Badge variant="destructive" className="mt-2 text-xs">
+                            Missing required document
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" onClick={() => handleApproveReject(req.id, 'approved')}>
@@ -957,6 +1104,58 @@ export default function Attendance() {
               <Label>Notes</Label>
               <Textarea value={newLeave.reason} onChange={(e) => setNewLeave({ ...newLeave, reason: e.target.value })} placeholder="Optional notes" />
             </div>
+            {/* Show file upload if leave type requires document */}
+            {(() => {
+              const selectedType = leaveTypes.find(lt => lt.id === newLeave.leaveTypeId);
+              if (selectedType?.requires_supporting_document) {
+                return (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      Supporting Document *
+                      <Badge variant="secondary" className="text-xs">Required</Badge>
+                    </Label>
+                    <div className="border-2 border-dashed border-muted rounded-lg p-4">
+                      {newLeave.supportingDocument ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{newLeave.supportingDocument.name}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setNewLeave({ ...newLeave, supportingDocument: null })}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center gap-2 cursor-pointer">
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Click to upload document</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setNewLeave({ ...newLeave, supportingDocument: file });
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Upload a supporting document (PDF, images, Word documents)
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddTimeOff(false)}>Cancel</Button>

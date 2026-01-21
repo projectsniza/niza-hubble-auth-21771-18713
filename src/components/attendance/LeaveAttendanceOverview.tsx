@@ -27,6 +27,8 @@ interface LeaveRequest {
   end_date: string;
   status: string;
   reason: string | null;
+  supporting_document_path: string | null;
+  supporting_document_name: string | null;
   employee?: { first_name: string; last_name: string };
   leave_type?: { name: string };
 }
@@ -349,12 +351,13 @@ export default function LeaveAttendanceOverview() {
                   <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead>Document</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredLeave.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No leave requests found
                     </TableCell>
                   </TableRow>
@@ -369,6 +372,21 @@ export default function LeaveAttendanceOverview() {
                       <TableCell>{format(parseISO(leave.end_date), 'dd MMM yyyy')}</TableCell>
                       <TableCell>{getStatusBadge(leave.status)}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{leave.reason || '-'}</TableCell>
+                      <TableCell>
+                        {leave.supporting_document_path ? (
+                          <a
+                            href={supabase.storage.from('leave-documents').getPublicUrl(leave.supporting_document_path).data.publicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:underline text-sm"
+                          >
+                            <FileText className="h-4 w-4" />
+                            View
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
