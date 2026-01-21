@@ -1199,6 +1199,47 @@ export type Database = {
           },
         ]
       }
+      employee_payroll_notes: {
+        Row: {
+          annum_per_hour: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          month_date: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          annum_per_hour?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          month_date: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          annum_per_hour?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          month_date?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_payroll_notes_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           account_activated: boolean | null
