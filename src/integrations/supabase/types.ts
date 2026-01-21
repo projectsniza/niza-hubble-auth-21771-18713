@@ -4877,6 +4877,7 @@ export type Database = {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      link_my_employee_record: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "super_admin" | "hr" | "manager" | "employee"

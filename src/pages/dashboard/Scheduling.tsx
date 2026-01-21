@@ -35,11 +35,22 @@ export default function Scheduling() {
   const fetchEmployeeShifts = async () => {
     setLoading(true);
     try {
-      const { data: empRecord } = await supabase
+      let { data: empRecord } = await supabase
         .from('employees')
         .select('id')
         .eq('user_id', user?.id)
         .maybeSingle();
+
+      if (!empRecord) {
+        // Attempt to auto-link the employee record (server-side) then retry
+        await supabase.rpc('link_my_employee_record');
+        const retry = await supabase
+          .from('employees')
+          .select('id')
+          .eq('user_id', user?.id)
+          .maybeSingle();
+        empRecord = retry.data || null;
+      }
 
       if (!empRecord) {
         setEmployeeShifts([]);

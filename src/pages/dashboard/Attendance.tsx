@@ -382,28 +382,25 @@ export default function Attendance() {
 
       let employeeId = empData?.id;
 
-      // 2) Repair path: if employeeId missing, try to find by email and auto-link
-      if (!employeeId && user.email) {
-        const { data: empByEmail, error: emailErr } = await supabase
-          .from('employees')
-          .select('id, user_id')
-          .eq('email', user.email)
-          .limit(1)
-          .maybeSingle();
+      // 2) Repair path: attempt safe server-side link via SECURITY DEFINER function
+      // (required because employees do not have broad UPDATE permissions on employees)
+      if (!employeeId) {
+        const { data: linkedEmployeeId, error: linkRpcError } = await supabase.rpc('link_my_employee_record');
+        if (linkRpcError) {
+          // If linking fails, continue to show the original error
+          console.warn('link_my_employee_record failed', linkRpcError);
+        }
 
-        if (emailErr) throw emailErr;
-
-        if (empByEmail?.id) {
-          // If not already linked, link it now
-          if (!empByEmail.user_id) {
-            const { error: linkErr } = await supabase
-              .from('employees')
-              .update({ user_id: user.id, account_activated: true, status: 'active' })
-              .eq('id', empByEmail.id);
-
-            if (linkErr) throw linkErr;
-          }
-          employeeId = empByEmail.id;
+        if (linkedEmployeeId) {
+          employeeId = linkedEmployeeId as unknown as string;
+        } else {
+          // Re-check in case it was already linked by another process
+          const { data: empRetry } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          employeeId = empRetry?.id;
         }
       }
 
