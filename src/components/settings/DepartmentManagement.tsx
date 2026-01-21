@@ -65,25 +65,35 @@ export default function DepartmentManagement() {
       return;
     }
 
+    if (!user?.id) {
+      toast.error('You must be logged in to add departments');
+      return;
+    }
+
     setSaving(true);
     try {
       const organizationIdToSave = selectedOrg === ALL_ORGS_VALUE ? null : selectedOrg;
 
-      const { error } = await supabase.from('departments').insert({
+      const { data, error } = await supabase.from('departments').insert({
         name: newDepartment.trim(),
         organization_id: organizationIdToSave,
-        created_by: user?.id,
+        created_by: user.id,
         is_active: true
-      });
+      }).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Department insert error:', error);
+        throw error;
+      }
 
+      console.log('Department created:', data);
       toast.success('Department added successfully');
       setNewDepartment('');
       setSelectedOrg(ALL_ORGS_VALUE);
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to add department');
+      console.error('Failed to add department:', error);
+      toast.error(error.message || 'Failed to add department. Are you a Super Admin?');
     } finally {
       setSaving(false);
     }
