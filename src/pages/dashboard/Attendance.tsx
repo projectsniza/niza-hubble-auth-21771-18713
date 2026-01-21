@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
+import { getErrorMessage } from "@/lib/errorUtils";
 
 interface LeaveRequest {
   id: string;
@@ -367,14 +368,50 @@ export default function Attendance() {
     }
 
     try {
-      // Get employee record for current user
+      if (!user?.id) {
+        toast.error('Not logged in');
+        return;
+      }
+
+      // 1) Normal path: employee row linked by user_id
       const { data: empData, error: empError } = await supabase
         .from('employees')
         .select('id')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
-      if (empError || !empData) {
+      let employeeId = empData?.id;
+
+      // 2) Repair path: if employeeId missing, try to find by email and auto-link
+      if (!employeeId && user.email) {
+        const { data: empByEmail, error: emailErr } = await supabase
+          .from('employees')
+          .select('id, user_id')
+          .eq('email', user.email)
+          .limit(1)
+          .maybeSingle();
+
+        if (emailErr) throw emailErr;
+
+        if (empByEmail?.id) {
+          // If not already linked, link it now
+          if (!empByEmail.user_id) {
+            const { error: linkErr } = await supabase
+              .from('employees')
+              .update({ user_id: user.id, account_activated: true, status: 'active' })
+              .eq('id', empByEmail.id);
+
+            if (linkErr) throw linkErr;
+          }
+          employeeId = empByEmail.id;
+        }
+      }
+
+      if (empError && empError.code !== 'PGRST116') {
+        throw empError;
+      }
+
+      if (!employeeId) {
         toast.error('Employee record not found');
         return;
       }
@@ -386,7 +423,8 @@ export default function Attendance() {
       if (employeeLeaveForm.supportingDocument) {
         const file = employeeLeaveForm.supportingDocument;
         const fileExt = file.name.split('.').pop();
-        const fileName = `${empData.id}/${Date.now()}.${fileExt}`;
+        const safeExt = fileExt || 'bin';
+        const fileName = `${employeeId}/${Date.now()}.${safeExt}`;
         
         const { error: uploadError } = await supabase.storage
           .from('leave-documents')
@@ -403,7 +441,7 @@ export default function Attendance() {
       }
 
       const { error } = await supabase.from('leave_requests').insert({
-        employee_id: empData.id,
+        employee_id: employeeId,
         leave_type_id: employeeLeaveForm.leaveTypeId,
         start_date: employeeLeaveForm.startDate,
         end_date: employeeLeaveForm.endDate,
@@ -418,8 +456,8 @@ export default function Attendance() {
       setShowEmployeeLeaveRequest(false);
       setEmployeeLeaveForm({ leaveTypeId: '', startDate: '', endDate: '', reason: '', supportingDocument: null });
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to submit leave request');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to submit leave request'));
     }
   };
 
