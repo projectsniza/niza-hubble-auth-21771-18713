@@ -362,8 +362,8 @@ export default function Lottery() {
     }) => {
       if (!effectiveBranchId) throw new Error('No branch selected');
       
-      // Calculate tickets sold
-      const ticketsSold = stockEnd !== null ? Math.max(0, stockBegin + activatedTickets - stockEnd) : null;
+      // Note: tickets_sold is a generated column in the database, calculated automatically
+      // Formula: tickets_sold = GREATEST(0, stock_begin + activated_tickets - COALESCE(stock_end, 0))
       
       const { error } = await supabase
         .from('lottery_daily_records')
@@ -374,7 +374,6 @@ export default function Lottery() {
           stock_begin: stockBegin,
           activated_tickets: activatedTickets,
           stock_end: stockEnd,
-          tickets_sold: ticketsSold,
           created_by: user?.id,
         }, {
           onConflict: 'game_id,record_date'
