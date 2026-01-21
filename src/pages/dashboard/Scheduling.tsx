@@ -18,6 +18,8 @@ interface Shift {
   rota?: { name: string } | null;
 }
 
+const getTodayLocal = () => format(new Date(), 'yyyy-MM-dd');
+
 export default function Scheduling() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('timesheets');
@@ -44,16 +46,60 @@ export default function Scheduling() {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase
+      const today = getTodayLocal();
+
+      // Primary source: rota_shifts (when using rota scheduling)
+      const { data: rotaShifts } = await supabase
         .from('rota_shifts')
         .select('id, shift_date, start_time, end_time, status, rota:rotas(name)')
         .eq('employee_id', empRecord.id)
         .gte('shift_date', today)
         .order('shift_date', { ascending: true })
         .limit(20);
-      
-      setEmployeeShifts(data || []);
+
+      if (rotaShifts && rotaShifts.length > 0) {
+        setEmployeeShifts(rotaShifts as any);
+        return;
+      }
+
+      // Fallback source: timesheet_entries (when shifts are entered in Timesheets)
+      const { data: tsIdsRows, error: tsIdsError } = await supabase
+        .from('timesheets')
+        .select('id')
+        .eq('employee_id', empRecord.id)
+        .gte('week_end_date', today)
+        .limit(12);
+
+      if (tsIdsError) throw tsIdsError;
+
+      const tsIds = (tsIdsRows || []).map(r => r.id);
+      if (tsIds.length === 0) {
+        setEmployeeShifts([]);
+        return;
+      }
+
+      const { data: tsEntries, error: tsEntriesError } = await supabase
+        .from('timesheet_entries')
+        .select('id, entry_date, shift_start_time, shift_end_time')
+        .in('timesheet_id', tsIds)
+        .gte('entry_date', today)
+        .not('shift_start_time', 'is', null)
+        .not('shift_end_time', 'is', null)
+        .order('entry_date', { ascending: true })
+        .limit(20);
+
+      if (tsEntriesError) throw tsEntriesError;
+
+      const mapped: Shift[] = (tsEntries || []).map((e: any) => ({
+        id: e.id,
+        shift_date: e.entry_date,
+        start_time: e.shift_start_time,
+        end_time: e.shift_end_time,
+        status: 'scheduled',
+        rota: null,
+      }));
+
+      setEmployeeShifts(mapped);
     } catch (error) {
       console.error('Error fetching shifts:', error);
     } finally {
@@ -63,7 +109,7 @@ export default function Scheduling() {
 
   // Employee View - show their schedule and timesheets
   if (user?.role === 'employee') {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayLocal();
     const todayShifts = employeeShifts.filter(s => s.shift_date === todayStr);
     const upcomingShifts = employeeShifts.filter(s => s.shift_date !== todayStr);
 
