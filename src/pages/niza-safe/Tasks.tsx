@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, CheckCircle2, Plus, Clock, AlertTriangle, CheckCheck } from "lucide-react";
+import { Search, CheckCircle2, Plus, Clock, AlertTriangle, CheckCheck, Paperclip, X, FileText, Download, Eye } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -24,6 +24,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from '@/lib/utils';
 
+interface TaskAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 interface SafetyTask {
   id: string;
   title: string;
@@ -38,6 +45,8 @@ interface SafetyTask {
   organization_id: string;
   branch_id: string;
   created_at: string | null;
+  attachments?: any;
+  completion_attachments?: any;
   assignee?: { name: string; email: string };
   assigner?: { name: string; email: string };
   branch?: { name: string } | null;
@@ -46,14 +55,17 @@ interface SafetyTask {
 export default function Tasks() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<SafetyTask[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<SafetyTask | null>(null);
   const [activeTab, setActiveTab] = useState('assigned');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -88,7 +100,7 @@ export default function Tasks() {
         .limit(100);
 
       if (error) throw error;
-      setTasks(data || []);
+      setTasks((data || []) as SafetyTask[]);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -122,6 +134,34 @@ export default function Tasks() {
     setBranches(data || []);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setCreateFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (index: number) => {
+    setCreateFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDownloadFile = async (attachment: TaskAttachment) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(attachment.path);
+      
+      if (error) throw error;
+      
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast({ title: "Error", description: "Failed to download file", variant: "destructive" });
+    }
+  };
+
   const handleCreate = async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -143,6 +183,26 @@ export default function Tasks() {
         return;
       }
 
+      // Upload attachments if any
+      const uploadedAttachments: TaskAttachment[] = [];
+      for (const file of createFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `safety-tasks/${authUser?.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        uploadedAttachments.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type
+        });
+      }
+
       const { error } = await supabase.from('safety_tasks').insert({
         title: formData.title,
         description: formData.description,
@@ -153,12 +213,15 @@ export default function Tasks() {
         assigned_by: authUser?.id,
         organization_id: branchData.organization_id,
         branch_id: formData.branch_id,
-      });
+        status: 'assigned',
+        attachments: uploadedAttachments.length > 0 ? JSON.stringify(uploadedAttachments) : null,
+      } as any);
 
       if (error) throw error;
 
       toast({ title: "Success", description: "Task created successfully" });
       setShowCreateDialog(false);
+      setCreateFiles([]);
       setFormData({
         title: '',
         description: '',
@@ -347,12 +410,18 @@ export default function Tasks() {
                 <TableHead>Type</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Due Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTasks.map((task) => (
+              <TableHead>Attachments</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredTasks.map((task) => {
+              const attachments = task.attachments ? (typeof task.attachments === 'string' ? JSON.parse(task.attachments) : task.attachments) : [];
+              const completionAttachments = task.completion_attachments ? (typeof task.completion_attachments === 'string' ? JSON.parse(task.completion_attachments) : task.completion_attachments) : [];
+              const totalAttachments = (Array.isArray(attachments) ? attachments.length : 0) + (Array.isArray(completionAttachments) ? completionAttachments.length : 0);
+              
+              return (
                 <TableRow key={task.id}>
                   <TableCell>
                     <div>
@@ -373,30 +442,55 @@ export default function Tasks() {
                       </span>
                     ) : '-'}
                   </TableCell>
-                  <TableCell>{getStatusBadge(task.status)}</TableCell>
                   <TableCell>
-                    {task.status !== 'completed' && (
-                      <Select 
-                        value={task.status} 
-                        onValueChange={(v) => handleStatusUpdate(task.id, v)}
+                    {totalAttachments > 0 ? (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => { setSelectedTask(task); setShowViewDialog(true); }}
+                        className="gap-1"
                       >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="assigned">Assigned</SelectItem>
-                          <SelectItem value="in_progress">In Progress</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <Paperclip className="h-3 w-3" />
+                        {totalAttachments}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
                     )}
                   </TableCell>
+                  <TableCell>{getStatusBadge(task.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => { setSelectedTask(task); setShowViewDialog(true); }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {task.status !== 'completed' && (
+                        <Select 
+                          value={task.status} 
+                          onValueChange={(v) => handleStatusUpdate(task.id, v)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="assigned">Assigned</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+    )}
 
       {/* Create Task Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -490,11 +584,141 @@ export default function Tasks() {
                 </Select>
               </div>
             )}
+            {/* File Attachments */}
+            <div className="space-y-2">
+              <Label>Attachments (optional)</Label>
+              <div className="flex items-center gap-4">
+                <label htmlFor="task-files" className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+                    <Paperclip className="h-4 w-4" />
+                    <span className="text-sm">Choose Files</span>
+                  </div>
+                  <input
+                    id="task-files"
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+                {createFiles.length > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {createFiles.length} file(s) selected
+                  </span>
+                )}
+              </div>
+              {createFiles.length > 0 && (
+                <div className="space-y-1 mt-2">
+                  {createFiles.map((file, idx) => (
+                    <div key={idx} className="text-sm text-muted-foreground flex items-center gap-2 justify-between bg-muted p-2 rounded">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-3 w-3" />
+                        {file.name}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => removeFile(idx)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setCreateFiles([]); }}>Cancel</Button>
             <Button onClick={handleCreate} disabled={!formData.title}>Create Task</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Task Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Task Details</DialogTitle>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4 py-4">
+              <div>
+                <Label className="text-muted-foreground text-xs">Title</Label>
+                <p className="font-medium">{selectedTask.title}</p>
+              </div>
+              {selectedTask.description && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Description</Label>
+                  <p className="text-sm">{selectedTask.description}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Type</Label>
+                  <p className="capitalize">{selectedTask.task_type?.replace('_', ' ') || 'General'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Priority</Label>
+                  <div className="mt-1">{getPriorityBadge(selectedTask.priority || 'medium')}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Due Date</Label>
+                  <p>{selectedTask.due_date ? format(new Date(selectedTask.due_date), 'PPP') : '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <div className="mt-1">{getStatusBadge(selectedTask.status || 'assigned')}</div>
+                </div>
+              </div>
+
+              {/* Task Attachments (from admin) */}
+              {(() => {
+                const attachments = selectedTask.attachments 
+                  ? (typeof selectedTask.attachments === 'string' ? JSON.parse(selectedTask.attachments) : selectedTask.attachments)
+                  : [];
+                return Array.isArray(attachments) && attachments.length > 0 ? (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Task Attachments</Label>
+                    <div className="space-y-1 mt-2">
+                      {attachments.map((att: TaskAttachment, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between bg-muted p-2 rounded">
+                          <div className="flex items-center gap-2 text-sm">
+                            <FileText className="h-4 w-4" />
+                            {att.name}
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(att)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Completion Attachments (from employee) */}
+              {(() => {
+                const completionAttachments = selectedTask.completion_attachments 
+                  ? (typeof selectedTask.completion_attachments === 'string' ? JSON.parse(selectedTask.completion_attachments) : selectedTask.completion_attachments)
+                  : [];
+                return Array.isArray(completionAttachments) && completionAttachments.length > 0 ? (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Completion Evidence (from Employee)</Label>
+                    <div className="space-y-1 mt-2">
+                      {completionAttachments.map((att: TaskAttachment, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800">
+                          <div className="flex items-center gap-2 text-sm">
+                            <FileText className="h-4 w-4 text-green-600" />
+                            {att.name}
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(att)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

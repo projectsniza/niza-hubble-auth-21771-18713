@@ -3561,8 +3561,10 @@ export type Database = {
         Row: {
           assigned_by: string | null
           assigned_to: string
+          attachments: Json | null
           branch_id: string
           completed_at: string | null
+          completion_attachments: Json | null
           created_at: string | null
           description: string | null
           due_date: string | null
@@ -3582,8 +3584,10 @@ export type Database = {
         Insert: {
           assigned_by?: string | null
           assigned_to: string
+          attachments?: Json | null
           branch_id: string
           completed_at?: string | null
+          completion_attachments?: Json | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null
@@ -3603,8 +3607,10 @@ export type Database = {
         Update: {
           assigned_by?: string | null
           assigned_to?: string
+          attachments?: Json | null
           branch_id?: string
           completed_at?: string | null
+          completion_attachments?: Json | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null

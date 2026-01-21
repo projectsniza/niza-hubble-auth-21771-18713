@@ -156,6 +156,16 @@ export default function DailyReports() {
       return;
     }
 
+    // Validate custom type name when "other" is selected
+    if (reportType === 'other' && !customTypeName.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide a custom type name",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!user?.organizationId || !user?.branchId) {
       toast({
         title: "Error",
