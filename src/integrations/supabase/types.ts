@@ -2029,6 +2029,8 @@ export type Database = {
           reason: string | null
           start_date: string
           status: string | null
+          supporting_document_name: string | null
+          supporting_document_path: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2042,6 +2044,8 @@ export type Database = {
           reason?: string | null
           start_date: string
           status?: string | null
+          supporting_document_name?: string | null
+          supporting_document_path?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2055,6 +2059,8 @@ export type Database = {
           reason?: string | null
           start_date?: string
           status?: string | null
+          supporting_document_name?: string | null
+          supporting_document_path?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2134,6 +2140,7 @@ export type Database = {
           is_paid: boolean | null
           name: string
           organization_id: string | null
+          requires_supporting_document: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -2145,6 +2152,7 @@ export type Database = {
           is_paid?: boolean | null
           name: string
           organization_id?: string | null
+          requires_supporting_document?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -2156,6 +2164,7 @@ export type Database = {
           is_paid?: boolean | null
           name?: string
           organization_id?: string | null
+          requires_supporting_document?: boolean | null
           updated_at?: string | null
         }
         Relationships: [
