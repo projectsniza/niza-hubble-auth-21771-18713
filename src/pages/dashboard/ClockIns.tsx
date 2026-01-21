@@ -150,6 +150,17 @@ export default function ClockIns() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch user's employee record to get their branch_id
+      let userBranchId: string | null = null;
+      if (user?.role === 'employee') {
+        const { data: empData } = await supabase
+          .from('employees')
+          .select('branch_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        userBranchId = empData?.branch_id || null;
+      }
+
       const [locationsRes, clockInsRes, branchesRes, orgsRes] = await Promise.all([
         supabase.from('locations').select('*').order('name'),
         supabase.from('clock_ins').select('*').order('clock_in_time', { ascending: false }).limit(50),
@@ -157,7 +168,13 @@ export default function ClockIns() {
         supabase.from('organizations').select('*').order('name')
       ]);
 
-      setLocations(locationsRes.data || []);
+      // Filter locations for employees - they only see their branch's locations
+      let filteredLocations = locationsRes.data || [];
+      if (user?.role === 'employee' && userBranchId) {
+        filteredLocations = filteredLocations.filter(l => l.branch_id === userBranchId);
+      }
+
+      setLocations(filteredLocations);
       setClockIns(clockInsRes.data || []);
       setBranches(branchesRes.data || []);
       setOrganizations(orgsRes.data || []);

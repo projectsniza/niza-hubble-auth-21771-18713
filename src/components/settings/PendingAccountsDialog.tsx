@@ -68,15 +68,18 @@ export default function PendingAccountsDialog({
   const fetchPendingEmployees = async () => {
     setIsLoading(true);
     try {
+      // Fetch employees where account is not activated AND user_id is null (no auth account created)
       const { data, error } = await supabase
         .from('employees')
-        .select('id, first_name, last_name, email, organization_id, branch_id, created_by, account_activated')
+        .select('id, first_name, last_name, email, organization_id, branch_id, created_by, account_activated, user_id, status')
         .eq('branch_id', manager.branch_id)
-        .eq('account_activated', false)
+        .is('user_id', null) // Only show employees without an auth account
         .not('status', 'eq', 'terminated');
 
       if (error) throw error;
-      setPendingEmployees(data || []);
+      // Filter out any that might have account_activated = true
+      const pending = (data || []).filter(e => !e.account_activated);
+      setPendingEmployees(pending);
     } catch (err) {
       console.error('Error fetching pending employees:', err);
       toast.error('Failed to load pending employees');

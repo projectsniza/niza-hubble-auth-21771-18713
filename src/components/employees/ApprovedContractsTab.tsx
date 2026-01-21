@@ -114,28 +114,37 @@ export default function ApprovedContractsTab() {
     // Try to download from storage first
     if (filePath) {
       try {
-        const { data, error } = await supabase.storage
-          .from('documents')
-          .createSignedUrl(filePath, 60);
+        // Try multiple storage buckets
+        const buckets = ['documents', 'contracts', 'employee-documents'];
+        for (const bucket of buckets) {
+          const { data, error } = await supabase.storage
+            .from(bucket)
+            .createSignedUrl(filePath, 300);
 
-        if (!error && data?.signedUrl) {
-          window.open(data.signedUrl, '_blank');
-          return;
+          if (!error && data?.signedUrl) {
+            window.open(data.signedUrl, '_blank');
+            return;
+          }
         }
+        console.log('File not found in any bucket, generating PDF...');
       } catch (error) {
-        console.log('Storage file not found, generating PDF...');
+        console.log('Storage file not found, generating PDF...', error);
       }
     }
     
     // Generate full contract PDF using contract_content
     if (contract.contract_content && contract.employee) {
-      generateFullContractPDF(contract);
-    } else if (contract.employee) {
-      // Fallback to basic PDF if no contract_content
-      generateBasicContractPDF(contract);
-    } else {
-      toast.error('No contract data available');
+      await generateFullContractPDF(contract);
+      return;
     }
+    
+    // Fallback to basic PDF if we have employee data
+    if (contract.employee) {
+      generateBasicContractPDF(contract);
+      return;
+    }
+    
+    toast.error('No contract data available to download');
   };
 
   const generateFullContractPDF = async (contract: ApprovedContract) => {

@@ -10,6 +10,7 @@ import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, 
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
+import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
 
 export default function EmployeeProfile() {
   const { id } = useParams();
@@ -110,13 +111,7 @@ export default function EmployeeProfile() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      active: 'default',
-      onboarding: 'secondary',
-      pending: 'outline',
-      terminated: 'destructive'
-    };
-    return <Badge variant={variants[status] || 'outline'}>{status}</Badge>;
+    return <EmployeeStatusBadge status={status} />;
   };
 
   const calculateNetSalary = () => {

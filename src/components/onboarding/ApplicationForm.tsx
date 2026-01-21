@@ -81,11 +81,10 @@ export default function ApplicationForm({
 }: ApplicationFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
-  const selectedBranchForInit = branches.find(b => b.id === employeeData.branch_id);
   const [formData, setFormData] = useState<FormData>({
     organization_id: employeeData.organization_id,
     branch_id: employeeData.branch_id,
-    branch_address: selectedBranchForInit?.address || '',
+    branch_address: '',
     position: '',
     closing_date: '',
     title: '',
@@ -121,6 +120,14 @@ export default function ApplicationForm({
     signature_date: ''
   });
 
+  // Set branch_address when branches change or form data changes
+  useEffect(() => {
+    const selectedBranch = branches.find(b => b.id === formData.branch_id);
+    if (selectedBranch?.address && !formData.branch_address) {
+      setFormData(prev => ({ ...prev, branch_address: selectedBranch.address || '' }));
+    }
+  }, [branches, formData.branch_id]);
+
   useEffect(() => {
     loadSavedData();
   }, [employeeId]);
@@ -134,7 +141,13 @@ export default function ApplicationForm({
       .maybeSingle();
 
     if (data?.form_data) {
-      setFormData(prev => ({ ...prev, ...(data.form_data as unknown as FormData) }));
+      const savedData = data.form_data as unknown as FormData;
+      // If branch_address is not in saved data, try to get it from the selected branch
+      if (!savedData.branch_address) {
+        const selectedBranch = branches.find(b => b.id === savedData.branch_id || b.id === employeeData.branch_id);
+        savedData.branch_address = selectedBranch?.address || '';
+      }
+      setFormData(prev => ({ ...prev, ...savedData }));
     }
   };
 
@@ -145,13 +158,6 @@ export default function ApplicationForm({
   const selectedOrg = organizations.find(o => o.id === formData.organization_id);
   const selectedBranch = branches.find(b => b.id === formData.branch_id);
   const branchAddress = formData.branch_address || selectedBranch?.address || '';
-  
-  // Update branch_address when branch changes
-  useEffect(() => {
-    if (selectedBranch?.address && !formData.branch_address) {
-      updateField('branch_address', selectedBranch.address);
-    }
-  }, [formData.branch_id, selectedBranch]);
 
   const handleSave = async (): Promise<boolean> => {
     setLoading(true);
@@ -246,6 +252,19 @@ export default function ApplicationForm({
       doc.line(margin, startY, pageWidth - margin, startY);
     };
 
+    // Helper to draw checkbox (checked or unchecked)
+    const drawCheckbox = (x: number, yPos: number, checked: boolean) => {
+      const size = 3;
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.3);
+      doc.rect(x, yPos - size, size, size);
+      if (checked) {
+        // Draw checkmark
+        doc.line(x + 0.5, yPos - size / 2, x + size / 2, yPos - 0.5);
+        doc.line(x + size / 2, yPos - 0.5, x + size - 0.5, yPos - size + 0.5);
+      }
+    };
+
     const drawDottedLine = (x: number, y: number, width: number) => {
       const dots = '.' .repeat(Math.floor(width / 1.5));
       doc.text(dots, x, y);
@@ -306,7 +325,11 @@ export default function ApplicationForm({
 
     y += 2;
     doc.text(`Are you eligible to work in the U.K. (Evidence will be required)?`, margin, y);
-    doc.text(`Yes ${formData.eligible_to_work_uk === true ? '☑' : '☐'}   No ${formData.eligible_to_work_uk === false ? '☑' : '☐'}`, margin + 120, y);
+    const eligibleX = margin + 110;
+    doc.text('Yes', eligibleX, y);
+    drawCheckbox(eligibleX + 10, y, formData.eligible_to_work_uk === true);
+    doc.text('No', eligibleX + 20, y);
+    drawCheckbox(eligibleX + 28, y, formData.eligible_to_work_uk === false);
     y += lineHeight + 2;
     doc.text(`When can you start work?: ${formData.start_date || '............................'}`, margin, y);
     y += sectionGap + 4;
@@ -342,7 +365,11 @@ export default function ApplicationForm({
     y += 10;
 
     doc.text(`Are you required to work any period of notice?`, margin, y);
-    doc.text(`Yes ${formData.notice_required === true ? '☑' : '☐'}   No ${formData.notice_required === false ? '☑' : '☐'}`, margin + 80, y);
+    const noticeX = margin + 80;
+    doc.text('Yes', noticeX, y);
+    drawCheckbox(noticeX + 10, y, formData.notice_required === true);
+    doc.text('No', noticeX + 20, y);
+    drawCheckbox(noticeX + 28, y, formData.notice_required === false);
     y += lineHeight;
     doc.text(`Length of notice: ${formData.notice_length || '............................'}`, margin, y);
     y += sectionGap;
@@ -431,7 +458,11 @@ export default function ApplicationForm({
     doc.text(`${selectedOrg?.name || 'The Company'} is an equal opportunities employer. The sole criterion for selection is the suitability of an applicant for the job.`, margin, y, { maxWidth: contentWidth });
     y += lineHeight * 2;
     doc.text(`Do you consider yourself to have a disability?`, margin, y);
-    doc.text(`Yes ${formData.has_disability === true ? '☑' : '☐'}   No ${formData.has_disability === false ? '☑' : '☐'}`, margin + 80, y);
+    const disabilityX = margin + 80;
+    doc.text('Yes', disabilityX, y);
+    drawCheckbox(disabilityX + 10, y, formData.has_disability === true);
+    doc.text('No', disabilityX + 20, y);
+    drawCheckbox(disabilityX + 28, y, formData.has_disability === false);
     y += lineHeight + 2;
     doc.text(`Please tell us if there are any 'reasonable adjustments' we can make to assist you:`, margin, y, { maxWidth: contentWidth });
     y += lineHeight;
@@ -449,7 +480,11 @@ export default function ApplicationForm({
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(`Do you have any unspent criminal convictions or cautions?`, margin, y);
-    doc.text(`Yes ${formData.has_convictions === true ? '☑' : '☐'}   No ${formData.has_convictions === false ? '☑' : '☐'}`, margin + 90, y);
+    const convictionsX = margin + 90;
+    doc.text('Yes', convictionsX, y);
+    drawCheckbox(convictionsX + 10, y, formData.has_convictions === true);
+    doc.text('No', convictionsX + 20, y);
+    drawCheckbox(convictionsX + 28, y, formData.has_convictions === false);
     y += sectionGap;
 
     // Section 8: References
