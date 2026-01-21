@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [isInitialized, fetchUserProfile]);
 
   const login = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -182,8 +182,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: error.message };
     }
 
+    // Check if user is deactivated after successful login
+    if (data.user) {
+      const result = await fetchUserProfile(data.user.id);
+      if (result === 'deactivated') {
+        // Sign out the deactivated user immediately
+        await supabase.auth.signOut();
+        return { error: 'Your account has been deactivated. Please contact your administrator.' };
+      }
+    }
+
     return { error: null };
-  }, []);
+  }, [fetchUserProfile]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();

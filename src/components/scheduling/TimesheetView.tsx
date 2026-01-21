@@ -71,13 +71,27 @@ const getMonthWeeks = (month: Date) => {
   return weeks.slice(0, 6);
 };
 
+// Get the current week index within a month's weeks
+const getCurrentWeekIndex = (monthWeeks: Date[]) => {
+  const today = new Date();
+  const todayStart = startOfWeek(today, { weekStartsOn: 1 });
+  const index = monthWeeks.findIndex(week => 
+    format(week, 'yyyy-MM-dd') === format(todayStart, 'yyyy-MM-dd')
+  );
+  return index >= 0 ? index : 0;
+};
+
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
+    // Initialize with current week index
+    const monthWeeks = getMonthWeeks(new Date());
+    return getCurrentWeekIndex(monthWeeks);
+  });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [allMonthTimesheets, setAllMonthTimesheets] = useState<Timesheet[]>([]);

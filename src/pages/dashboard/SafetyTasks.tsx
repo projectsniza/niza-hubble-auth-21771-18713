@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Search, CheckCircle2, Clock, AlertTriangle, CheckCheck, Play, Square } from "lucide-react";
+import { Search, CheckCircle2, Clock, AlertTriangle, CheckCheck, Play, Paperclip, FileText, X, Download, Eye } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,11 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+interface TaskAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
 
 interface SafetyTask {
   id: string;
@@ -33,9 +41,11 @@ interface SafetyTask {
   organization_id: string;
   branch_id: string;
   created_at: string | null;
+  attachments?: any;
+  completion_attachments?: any;
   branch?: { name: string } | null;
   assigner?: { name: string } | null;
-  [key: string]: any; // Allow additional properties from DB
+  [key: string]: any;
 }
 
 export default function SafetyTasks() {
@@ -45,6 +55,11 @@ export default function SafetyTasks() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<SafetyTask | null>(null);
+  const [completionFiles, setCompletionFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Debounce ref to prevent excessive refetches
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -133,21 +148,74 @@ export default function SafetyTasks() {
     }
   };
 
-  const handleStatusUpdate = async (taskId: string, newStatus: string) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setCompletionFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (index: number) => {
+    setCompletionFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDownloadFile = async (attachment: TaskAttachment) => {
     try {
-      const updates: any = { status: newStatus };
-      if (newStatus === 'completed') {
-        updates.completed_at = new Date().toISOString();
+      const { data, error } = await supabase.storage.from('documents').download(attachment.path);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Error", description: "Failed to download file", variant: "destructive" });
+    }
+  };
+
+  const handleCompleteWithAttachment = async () => {
+    if (!selectedTask) return;
+    setIsSubmitting(true);
+    try {
+      const uploadedFiles: TaskAttachment[] = [];
+      for (const file of completionFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `safety-tasks/completion/${user?.id}/${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file);
+        if (uploadError) throw uploadError;
+        uploadedFiles.push({ name: file.name, path: filePath, size: file.size, type: file.type });
       }
 
-      const { error } = await supabase
-        .from('safety_tasks')
-        .update(updates)
-        .eq('id', taskId);
+      const { error } = await supabase.from('safety_tasks').update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        completion_attachments: uploadedFiles.length > 0 ? JSON.stringify(uploadedFiles) : null,
+      } as any).eq('id', selectedTask.id);
 
       if (error) throw error;
+      toast({ title: "Success", description: "Task completed successfully" });
+      setShowCompleteDialog(false);
+      setCompletionFiles([]);
+      setSelectedTask(null);
+      fetchTasks();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      toast({ title: "Success", description: `Task ${newStatus === 'in_progress' ? 'started' : newStatus === 'completed' ? 'completed' : 'updated'}` });
+  const handleStatusUpdate = async (taskId: string, newStatus: string) => {
+    if (newStatus === 'completed') {
+      const task = tasks.find(t => t.id === taskId);
+      setSelectedTask(task || null);
+      setShowCompleteDialog(true);
+      return;
+    }
+    
+    try {
+      const { error } = await supabase.from('safety_tasks').update({ status: newStatus }).eq('id', taskId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Task started" });
       fetchTasks();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update task';
@@ -354,6 +422,71 @@ export default function SafetyTasks() {
           </Table>
         </Card>
       )}
+
+      {/* Complete Task Dialog */}
+      <Dialog open={showCompleteDialog} onOpenChange={(open) => { setShowCompleteDialog(open); if (!open) { setCompletionFiles([]); setSelectedTask(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Task</DialogTitle>
+            <DialogDescription>Attach evidence files before marking as complete (optional)</DialogDescription>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="font-medium">{selectedTask.title}</p>
+                {selectedTask.description && <p className="text-sm text-muted-foreground">{selectedTask.description}</p>}
+              </div>
+
+              {/* Show task attachments from admin */}
+              {(() => {
+                const attachments = selectedTask.attachments ? (typeof selectedTask.attachments === 'string' ? JSON.parse(selectedTask.attachments) : selectedTask.attachments) : [];
+                return Array.isArray(attachments) && attachments.length > 0 ? (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Reference Documents</Label>
+                    <div className="space-y-1 mt-1">
+                      {attachments.map((att: TaskAttachment, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between bg-muted p-2 rounded text-sm">
+                          <div className="flex items-center gap-2"><FileText className="h-3 w-3" />{att.name}</div>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(att)}><Download className="h-3 w-3" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              <div className="space-y-2">
+                <Label>Upload Evidence (optional)</Label>
+                <div className="flex items-center gap-4">
+                  <label htmlFor="completion-files" className="cursor-pointer">
+                    <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+                      <Paperclip className="h-4 w-4" /><span className="text-sm">Choose Files</span>
+                    </div>
+                    <input id="completion-files" type="file" multiple onChange={handleFileUpload} className="hidden" />
+                  </label>
+                  {completionFiles.length > 0 && <span className="text-sm text-muted-foreground">{completionFiles.length} file(s)</span>}
+                </div>
+                {completionFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {completionFiles.map((file, idx) => (
+                      <div key={idx} className="text-sm flex items-center justify-between bg-muted p-2 rounded">
+                        <div className="flex items-center gap-2"><FileText className="h-3 w-3" />{file.name}</div>
+                        <Button variant="ghost" size="sm" onClick={() => removeFile(idx)}><X className="h-3 w-3" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>Cancel</Button>
+                <Button onClick={handleCompleteWithAttachment} disabled={isSubmitting} className="bg-green-600 hover:bg-green-700">
+                  {isSubmitting ? 'Completing...' : 'Mark Complete'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
