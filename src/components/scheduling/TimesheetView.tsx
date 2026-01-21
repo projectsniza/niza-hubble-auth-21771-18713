@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
-  Download, Loader2, Users, Plus, Search, Printer, Calendar
+  Download, Loader2, Users, Plus, Search, Printer, Calendar, Edit
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths, getWeek } from 'date-fns';
 import { toast } from 'sonner';
@@ -60,29 +60,24 @@ interface Timesheet {
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Get UK fiscal year (April - March)
-const getFiscalYear = (date: Date = new Date()) => {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  if (month < 3) {
-    return { start: year - 1, end: year, startDate: new Date(year - 1, 3, 1), endDate: new Date(year, 2, 31) };
-  }
-  return { start: year, end: year + 1, startDate: new Date(year, 3, 1), endDate: new Date(year + 1, 2, 31) };
+// Get month weeks (up to 6 weeks per month as in Excel)
+const getMonthWeeks = (month: Date) => {
+  const monthStart = startOfMonth(month);
+  const monthEnd = endOfMonth(month);
+  const weeks = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 });
+  return weeks.slice(0, 6); // Max 6 weeks
 };
-
-// Get month name for fiscal year (Apr=0, Mar=11)
-const FISCAL_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
-  const [monthlyTimesheets, setMonthlyTimesheets] = useState<Timesheet[]>([]);
+  const [allMonthTimesheets, setAllMonthTimesheets] = useState<Timesheet[]>([]);
   const [selectedTimesheet, setSelectedTimesheet] = useState<Timesheet | null>(null);
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -95,15 +90,17 @@ export function TimesheetView() {
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
-  const fiscalYear = getFiscalYear(currentMonth);
-  const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
-  const weekDays = eachDayOfInterval({ start: currentWeekStart, end: weekEnd });
+  
+  // Calculate weeks in current month
+  const monthWeeks = useMemo(() => getMonthWeeks(currentMonth), [currentMonth]);
+  const currentWeekStart = monthWeeks[selectedWeekIndex] || monthWeeks[0];
+  const weekEnd = currentWeekStart ? endOfWeek(currentWeekStart, { weekStartsOn: 1 }) : new Date();
+  const weekDays = currentWeekStart ? eachDayOfInterval({ start: currentWeekStart, end: weekEnd }) : [];
 
   useEffect(() => {
-    if (viewTab === 'weekly') fetchWeeklyData();
-    else fetchMonthlyData();
+    fetchData();
     if (canViewFilters) fetchOrganizationsAndBranches();
-  }, [currentWeekStart, currentMonth, viewTab]);
+  }, [currentMonth, selectedWeekIndex]);
 
   const fetchOrganizationsAndBranches = async () => {
     const [orgsRes, branchesRes] = await Promise.all([
@@ -114,48 +111,10 @@ export function TimesheetView() {
     setBranches(branchesRes.data || []);
   };
 
-  const fetchWeeklyData = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-
-      const { data: employeesData } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
-        .in('status', ['active', 'onboarding'])
-        .order('first_name');
-
-      setEmployees(employeesData || []);
-
-      const { data: timesheetsData } = await supabase
-        .from('timesheets')
-        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .eq('week_start_date', weekStartStr);
-
-      // Fetch entries for each timesheet
-      const timesheetsWithEntries = await Promise.all(
-        (timesheetsData || []).map(async (ts) => {
-          const { data: entriesData } = await supabase
-            .from('timesheet_entries')
-            .select('*')
-            .eq('timesheet_id', ts.id)
-            .order('entry_date');
-          return { ...ts, entries: entriesData || [] };
-        })
-      );
-
-      setTimesheets(timesheetsWithEntries);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to fetch timesheet data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMonthlyData = async () => {
-    setLoading(true);
-    try {
       const monthStart = startOfMonth(currentMonth);
       const monthEnd = endOfMonth(currentMonth);
 
@@ -167,15 +126,34 @@ export function TimesheetView() {
 
       setEmployees(employeesData || []);
 
-      const { data: timesheetsData } = await supabase
+      // Fetch current week timesheets with entries
+      const { data: weekTimesheetsData } = await supabase
+        .from('timesheets')
+        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+        .eq('week_start_date', weekStartStr);
+
+      const timesheetsWithEntries = await Promise.all(
+        (weekTimesheetsData || []).map(async (ts) => {
+          const { data: entriesData } = await supabase
+            .from('timesheet_entries')
+            .select('*')
+            .eq('timesheet_id', ts.id)
+            .order('entry_date');
+          return { ...ts, entries: entriesData || [] };
+        })
+      );
+      setTimesheets(timesheetsWithEntries);
+
+      // Fetch all month timesheets for consolidation view
+      const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .gte('week_start_date', format(monthStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(monthEnd, 'yyyy-MM-dd'));
+      
+      setAllMonthTimesheets(monthTimesheetsData || []);
 
-      setMonthlyTimesheets(timesheetsData || []);
-
-      // Fetch previous month data for (+/-) LAST MONTH column
+      // Fetch previous month adjustment for (+/-) LAST MONTH column
       const prevMonthStart = startOfMonth(subMonths(currentMonth, 1));
       const prevMonthEnd = endOfMonth(subMonths(currentMonth, 1));
       const { data: prevMonthData } = await supabase
@@ -189,9 +167,10 @@ export function TimesheetView() {
         adjustments[t.employee_id] = (adjustments[t.employee_id] || 0) + (Number(t.total_adjustment_hours) || 0);
       });
       setLastMonthAdjustment(adjustments);
+
     } catch (error) {
-      console.error('Error fetching monthly data:', error);
-      toast.error('Failed to fetch monthly data');
+      console.error('Error fetching data:', error);
+      toast.error('Failed to fetch timesheet data');
     } finally {
       setLoading(false);
     }
@@ -228,11 +207,11 @@ export function TimesheetView() {
       }));
 
       await supabase.from('timesheet_entries').insert(entryInserts);
-      toast.success('Timesheet created');
-      fetchWeeklyData();
+      return true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to create timesheet';
       toast.error(message);
+      return false;
     }
   };
 
@@ -240,10 +219,13 @@ export function TimesheetView() {
     const employeesWithoutTimesheet = filteredEmployees.filter(
       emp => !timesheets.some(t => t.employee_id === emp.id)
     );
+    let count = 0;
     for (const emp of employeesWithoutTimesheet) {
-      await createTimesheetForEmployee(emp);
+      const success = await createTimesheetForEmployee(emp);
+      if (success) count++;
     }
-    toast.success(`Created ${employeesWithoutTimesheet.length} timesheets`);
+    toast.success(`Created ${count} timesheets`);
+    fetchData();
   };
 
   const openTimesheetEditor = async (timesheet: Timesheet) => {
@@ -282,7 +264,7 @@ export function TimesheetView() {
     
     updated[index] = entry;
     
-    // Auto-calculate hours from start/end times
+    // Auto-calculate hours from start/end times (handles overnight shifts)
     if ((field === 'shift_start_time' || field === 'shift_end_time' || field === 'break_duration_minutes') 
         && updated[index].shift_start_time && updated[index].shift_end_time) {
       const start = updated[index].shift_start_time!;
@@ -291,7 +273,7 @@ export function TimesheetView() {
       const [startH, startM] = start.split(':').map(Number);
       const [endH, endM] = end.split(':').map(Number);
       let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
-      if (totalMins < 0) totalMins += 24 * 60; // Overnight shift
+      if (totalMins < 0) totalMins += 24 * 60; // Overnight shift handling
       updated[index].actual_hours = Math.round(totalMins / 60 * 100) / 100;
     }
     setEntries(updated);
@@ -331,7 +313,7 @@ export function TimesheetView() {
 
       toast.success('Timesheet saved');
       setShowEditDialog(false);
-      fetchWeeklyData();
+      fetchData();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save timesheet';
       toast.error(message);
@@ -350,23 +332,15 @@ export function TimesheetView() {
 
       const timesheet = timesheets.find(t => t.id === timesheetId);
       if (timesheet) {
-        await supabase.rpc('calculate_holiday_balance', { p_employee_id: timesheet.employee_id });
+        try {
+          await supabase.rpc('calculate_holiday_balance', { p_employee_id: timesheet.employee_id });
+        } catch {}
       }
       toast.success('Timesheet approved');
-      fetchWeeklyData();
+      fetchData();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to approve timesheet';
       toast.error(message);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'draft': return <Badge variant="secondary">Draft</Badge>;
-      case 'submitted': return <Badge variant="outline" className="border-blue-500 text-blue-600">Submitted</Badge>;
-      case 'approved': return <Badge className="bg-green-500">Approved</Badge>;
-      case 'rejected': return <Badge variant="destructive">Rejected</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -395,197 +369,225 @@ export function TimesheetView() {
     return true;
   }), [timesheets, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
-  // Group by branch with SUMIF totals
-  const groupedTimesheets = useMemo(() => filteredTimesheets.reduce((acc, ts) => {
-    const branchName = ts.employee?.branch?.name || 'Unassigned';
-    if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0 } };
-    acc[branchName].timesheets.push(ts);
-    acc[branchName].totals.worked += Number(ts.total_worked_hours) || 0;
-    acc[branchName].totals.holiday += Number(ts.total_holiday_hours) || 0;
-    acc[branchName].totals.sick += Number(ts.total_sick_hours) || 0;
-    acc[branchName].totals.adj += Number(ts.total_adjustment_hours) || 0;
-    return acc;
-  }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number } }>), [filteredTimesheets]);
+  // Group by branch with SUMIF totals (matching Excel format)
+  const groupedTimesheets = useMemo(() => {
+    const grouped = filteredTimesheets.reduce((acc, ts) => {
+      const branchName = ts.employee?.branch?.name || 'Unassigned';
+      if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
+      acc[branchName].timesheets.push(ts);
+      const worked = Number(ts.total_worked_hours) || 0;
+      const holiday = Number(ts.total_holiday_hours) || 0;
+      const sick = Number(ts.total_sick_hours) || 0;
+      const adj = Number(ts.total_adjustment_hours) || 0;
+      acc[branchName].totals.worked += worked;
+      acc[branchName].totals.holiday += holiday;
+      acc[branchName].totals.sick += sick;
+      acc[branchName].totals.adj += adj;
+      acc[branchName].totals.total += worked + holiday + sick + adj;
+      return acc;
+    }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number; total: number } }>);
+    return grouped;
+  }, [filteredTimesheets]);
 
-  // Grand totals
-  const grandTotals = useMemo(() => ({
+  // Weekly totals from current week (for summary cards)
+  const weeklyGrandTotals = useMemo(() => ({
     worked: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
     holiday: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0),
     sick: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_sick_hours) || 0), 0),
     adj: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0)
   }), [filteredTimesheets]);
 
-  // Monthly view data - matching Excel format
-  const getMonthlyEmployeeData = useMemo(() => {
-    const monthStart = startOfMonth(currentMonth);
-    const weeksInMonth = eachWeekOfInterval(
-      { start: monthStart, end: endOfMonth(currentMonth) },
-      { weekStartsOn: 1 }
-    );
-
-    const aggregated: Record<string, { 
-      employee: Employee; 
-      weeklyHours: (number | null)[];
+  // Monthly consolidation data - matches Excel "NAME | WEEK 1 | WEEK 2 | ... | WEEK 6 | TOTAL | (+/-) LAST MONTH | TOTAL HRS | HOLIDAY HRS | SICK"
+  const monthlyConsolidation = useMemo(() => {
+    const consolidation: Record<string, {
+      employee: Employee;
+      weeklyHours: (number)[];
       totalHours: number;
-      totalHoliday: number;
-      totalSick: number;
       lastMonthAdj: number;
-      grandTotal: number;
+      totalHrs: number;
+      holidayHrs: number;
+      sickHrs: number;
     }> = {};
 
-    monthlyTimesheets.forEach(ts => {
-      if (!ts.employee) return;
-      const empId = ts.employee_id;
-      
-      if (!aggregated[empId]) {
-        aggregated[empId] = {
-          employee: ts.employee,
-          weeklyHours: weeksInMonth.map(() => null),
-          totalHours: 0,
-          totalHoliday: 0,
-          totalSick: 0,
-          lastMonthAdj: lastMonthAdjustment[empId] || 0,
-          grandTotal: 0
-        };
-      }
-
-      const weekIdx = weeksInMonth.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
-      if (weekIdx >= 0) {
-        aggregated[empId].weeklyHours[weekIdx] = Number(ts.total_worked_hours) || 0;
-      }
-      
-      aggregated[empId].totalHours += Number(ts.total_worked_hours) || 0;
-      aggregated[empId].totalHoliday += Number(ts.total_holiday_hours) || 0;
-      aggregated[empId].totalSick += Number(ts.total_sick_hours) || 0;
+    // Initialize for all filtered employees
+    filteredEmployees.forEach(emp => {
+      consolidation[emp.id] = {
+        employee: emp,
+        weeklyHours: monthWeeks.map(() => 0),
+        totalHours: 0,
+        lastMonthAdj: lastMonthAdjustment[emp.id] || 0,
+        totalHrs: 0,
+        holidayHrs: 0,
+        sickHrs: 0
+      };
     });
 
-    // Calculate grand totals
-    Object.values(aggregated).forEach(emp => {
-      emp.grandTotal = emp.totalHours + emp.lastMonthAdj;
+    // Aggregate timesheets by week
+    allMonthTimesheets.forEach(ts => {
+      if (!consolidation[ts.employee_id]) return;
+      
+      const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
+      if (weekIdx >= 0) {
+        consolidation[ts.employee_id].weeklyHours[weekIdx] = Number(ts.total_worked_hours) || 0;
+      }
+      
+      consolidation[ts.employee_id].totalHours += Number(ts.total_worked_hours) || 0;
+      consolidation[ts.employee_id].holidayHrs += Number(ts.total_holiday_hours) || 0;
+      consolidation[ts.employee_id].sickHrs += Number(ts.total_sick_hours) || 0;
+    });
+
+    // Calculate total hrs (total + last month adjustment)
+    Object.values(consolidation).forEach(emp => {
+      emp.totalHrs = emp.totalHours + emp.lastMonthAdj;
     });
 
     // Group by branch
-    const grouped: Record<string, typeof aggregated> = {};
-    Object.entries(aggregated).forEach(([empId, data]) => {
+    const grouped: Record<string, typeof consolidation> = {};
+    Object.entries(consolidation).forEach(([empId, data]) => {
       const branchName = data.employee.branch?.name || 'Unassigned';
       if (!grouped[branchName]) grouped[branchName] = {};
       grouped[branchName][empId] = data;
     });
 
-    return { aggregated, grouped, weeksInMonth };
-  }, [monthlyTimesheets, currentMonth, lastMonthAdjustment]);
+    return { consolidation, grouped };
+  }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment]);
 
-  const weekTotals = useMemo(() => ({
-    worked: entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0),
-    holiday: entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0),
-    sick: entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0),
-    adj: entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0)
-  }), [entries]);
+  // Monthly grand totals
+  const monthlyGrandTotals = useMemo(() => {
+    const values = Object.values(monthlyConsolidation.consolidation);
+    return {
+      weeklyTotals: monthWeeks.map((_, i) => values.reduce((sum, v) => sum + v.weeklyHours[i], 0)),
+      totalHours: values.reduce((sum, v) => sum + v.totalHours, 0),
+      totalHrs: values.reduce((sum, v) => sum + v.totalHrs, 0),
+      holidayHrs: values.reduce((sum, v) => sum + v.holidayHrs, 0),
+      sickHrs: values.reduce((sum, v) => sum + v.sickHrs, 0)
+    };
+  }, [monthlyConsolidation, monthWeeks]);
 
   const exportToCSV = () => {
     if (viewTab === 'weekly') {
-      const headers = ['No', 'Staff Name', 'Location', ...DAYS_SHORT.flatMap(d => [`${d} Start`, `${d} End`]), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL', 'Status'];
-      const rows: (string | number)[][] = [];
-      let rowNum = 1;
+      // Weekly export with start/end times
+      const headers = ['', 'NAME', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL'];
+      const subHeaders = ['', '', ...weekDays.flatMap(d => [format(d, 'dd/MM/yyyy'), '']), '', '', '', '', ''];
+      const rows: string[][] = [headers, subHeaders];
       
       Object.entries(groupedTimesheets).forEach(([branchName, data]) => {
-        rows.push([`📍 ${branchName}`, '', '', ...Array(DAYS_SHORT.length * 2 + 5).fill('')]);
+        rows.push([`${branchName}`, ...Array(headers.length - 1).fill('')]);
         data.timesheets.forEach(t => {
           const dayEntries = t.entries || [];
           const total = Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours) + Number(t.total_adjustment_hours || 0);
           rows.push([
-            rowNum++, 
-            `${t.employee?.first_name} ${t.employee?.last_name}`, 
-            branchName,
-            ...DAYS_SHORT.flatMap((_, i) => {
-              const entry = dayEntries[i];
-              return [entry?.shift_start_time || '-', entry?.shift_end_time || '-'];
+            '', 
+            `${t.employee?.first_name} ${t.employee?.last_name}`.toUpperCase(),
+            ...DAYS_OF_WEEK.flatMap((day) => {
+              const entry = dayEntries.find(e => e.day_of_week === day);
+              return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
             }),
-            t.total_worked_hours, 
-            t.total_holiday_hours, 
-            t.total_sick_hours, 
-            t.total_adjustment_hours || 0, 
-            total.toFixed(1), 
-            t.status
+            `$${t.total_worked_hours || 0}`,
+            t.total_holiday_hours ? `$${t.total_holiday_hours}` : '',
+            t.total_sick_hours ? `$${t.total_sick_hours}` : '',
+            t.total_adjustment_hours ? `$${t.total_adjustment_hours}` : '',
+            `$${total.toFixed(1)}`
           ]);
         });
         // Branch subtotal
         rows.push([
-          '', `SUBTOTAL - ${branchName}`, '', ...Array(DAYS_SHORT.length * 2).fill(''),
-          data.totals.worked.toFixed(1), data.totals.holiday.toFixed(1), data.totals.sick.toFixed(1), data.totals.adj.toFixed(1),
-          (data.totals.worked + data.totals.holiday + data.totals.sick + data.totals.adj).toFixed(1), ''
+          '', '', ...Array(DAYS_SHORT.length * 2).fill(''),
+          `$${data.totals.worked.toFixed(1)}`,
+          `$${data.totals.holiday.toFixed(1)}`,
+          `$${data.totals.sick.toFixed(1)}`,
+          data.totals.adj ? `$${data.totals.adj.toFixed(1)}` : '',
+          `$${data.totals.total.toFixed(1)}`
         ]);
       });
-      // Grand total
-      rows.push([
-        '', 'GRAND TOTAL', '', ...Array(DAYS_SHORT.length * 2).fill(''),
-        grandTotals.worked.toFixed(1), grandTotals.holiday.toFixed(1), grandTotals.sick.toFixed(1), grandTotals.adj.toFixed(1),
-        (grandTotals.worked + grandTotals.holiday + grandTotals.sick + grandTotals.adj).toFixed(1), ''
-      ]);
 
-      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `TimeSheet_${format(currentWeekStart, 'yyyy-MM-dd')}.csv`;
-      a.click();
+      const csv = rows.map(row => row.join(',')).join('\n');
+      downloadCSV(csv, `TimeSheet_Week${selectedWeekIndex + 1}_${format(currentMonth, 'MMM_yy')}.csv`);
     } else {
-      // Monthly consolidation export matching Excel format
-      const { grouped, weeksInMonth } = getMonthlyEmployeeData;
-      const headers = ['NAME', ...weeksInMonth.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'];
-      const rows: (string | number)[][] = [];
+      // Monthly consolidation export
+      const headers = ['', 'NAME', ...monthWeeks.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', '', 'SICK'];
+      const rows: string[][] = [headers];
       
-      Object.entries(grouped).forEach(([branchName, branchData]) => {
-        rows.push([`📍 ${branchName}`, ...Array(weeksInMonth.length + 5).fill('')]);
-        const branchTotals = { weeks: weeksInMonth.map(() => 0), total: 0, lastMonth: 0, holiday: 0, sick: 0 };
+      Object.entries(monthlyConsolidation.grouped).forEach(([branchName, branchData]) => {
+        rows.push([branchName, ...Array(headers.length - 1).fill('')]);
+        
+        const branchTotals = { weeks: monthWeeks.map(() => 0), total: 0, lastMonth: 0, totalHrs: 0, holiday: 0, sick: 0 };
         
         Object.values(branchData).forEach(emp => {
           rows.push([
-            `${emp.employee.first_name} ${emp.employee.last_name}`,
-            ...emp.weeklyHours.map(h => h !== null ? h.toFixed(1) : '-'),
+            '',
+            `${emp.employee.first_name} ${emp.employee.last_name}`.toUpperCase(),
+            ...emp.weeklyHours.map(h => h > 0 ? h.toFixed(1) : '-'),
             emp.totalHours.toFixed(1),
             emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-',
-            emp.grandTotal.toFixed(1),
-            emp.totalHoliday > 0 ? emp.totalHoliday.toFixed(1) : '-',
-            emp.totalSick > 0 ? emp.totalSick.toFixed(1) : '-'
+            emp.totalHrs.toFixed(1),
+            emp.holidayHrs > 0 ? `$${emp.holidayHrs.toFixed(1)}` : '-',
+            '',
+            emp.sickHrs > 0 ? `$${emp.sickHrs.toFixed(1)}` : '-'
           ]);
-          emp.weeklyHours.forEach((h, i) => { if (h) branchTotals.weeks[i] += h; });
+          emp.weeklyHours.forEach((h, i) => branchTotals.weeks[i] += h);
           branchTotals.total += emp.totalHours;
           branchTotals.lastMonth += emp.lastMonthAdj;
-          branchTotals.holiday += emp.totalHoliday;
-          branchTotals.sick += emp.totalSick;
+          branchTotals.totalHrs += emp.totalHrs;
+          branchTotals.holiday += emp.holidayHrs;
+          branchTotals.sick += emp.sickHrs;
         });
         
+        // Branch subtotal row
         rows.push([
-          `SUBTOTAL - ${branchName}`,
+          '', `SUBTOTAL`,
           ...branchTotals.weeks.map(w => w.toFixed(1)),
           branchTotals.total.toFixed(1),
           branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-',
-          (branchTotals.total + branchTotals.lastMonth).toFixed(1),
-          branchTotals.holiday.toFixed(1),
-          branchTotals.sick.toFixed(1)
+          branchTotals.totalHrs.toFixed(1),
+          branchTotals.holiday > 0 ? `$${branchTotals.holiday.toFixed(1)}` : '-',
+          '',
+          branchTotals.sick > 0 ? `$${branchTotals.sick.toFixed(1)}` : '-'
         ]);
       });
 
-      const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `TimeSheet_${format(currentMonth, 'MMMM_yyyy')}_Consolidated.csv`;
-      a.click();
+      // Grand total
+      rows.push([
+        '', 'GRAND TOTAL',
+        ...monthlyGrandTotals.weeklyTotals.map(w => w.toFixed(1)),
+        monthlyGrandTotals.totalHours.toFixed(1),
+        '-',
+        monthlyGrandTotals.totalHrs.toFixed(1),
+        monthlyGrandTotals.holidayHrs > 0 ? `$${monthlyGrandTotals.holidayHrs.toFixed(1)}` : '-',
+        '',
+        monthlyGrandTotals.sickHrs > 0 ? `$${monthlyGrandTotals.sickHrs.toFixed(1)}` : '-'
+      ]);
+
+      const csv = rows.map(row => row.join(',')).join('\n');
+      downloadCSV(csv, `TimeSheet_${format(currentMonth, 'MMMM_yyyy')}_Consolidated.csv`);
     }
     toast.success('Exported to CSV');
   };
 
-  const handlePrint = () => {
-    window.print();
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+  };
+
+  const handlePrint = () => window.print();
+
+  // Format time for display (matching Excel AM/PM format)
+  const formatTime = (time: string | null) => {
+    if (!time) return '';
+    try {
+      return format(parseISO(`2000-01-01T${time}`), 'h:mm a');
+    } catch {
+      return time;
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header - matching Excel "Staff Attendance Details" title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -593,10 +595,7 @@ export function TimesheetView() {
             Staff Attendance Details
           </h2>
           <p className="text-muted-foreground">
-            {viewTab === 'weekly' 
-              ? `For the month of ${format(currentWeekStart, 'MMMM yy')}`
-              : `Monthly Consolidation - ${format(currentMonth, 'MMMM yyyy')}`
-            }
+            For the month of {format(currentMonth, 'MMMM yy')}
           </p>
         </div>
         
@@ -608,31 +607,33 @@ export function TimesheetView() {
             </TabsList>
           </Tabs>
 
-          {viewTab === 'weekly' ? (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium min-w-[180px]">
-                WEEK {getWeek(currentWeekStart)} • {format(currentWeekStart, 'dd/MM')} - {format(weekEnd, 'dd/MM/yyyy')}
-              </div>
-              <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>Today</Button>
+          {/* Month Navigation */}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => { setCurrentMonth(subMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium min-w-[120px]">
+              {format(currentMonth, 'MMMM yyyy')}
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="px-3 py-2 bg-muted rounded-md text-center text-sm font-medium min-w-[140px]">
-                {format(currentMonth, 'MMMM yyyy')}
-              </div>
-              <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button variant="outline" size="icon" onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* Week selector for weekly view */}
+          {viewTab === 'weekly' && (
+            <Select value={String(selectedWeekIndex)} onValueChange={(v) => setSelectedWeekIndex(Number(v))}>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Select week" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthWeeks.map((week, idx) => (
+                  <SelectItem key={idx} value={String(idx)}>
+                    WEEK {idx + 1}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           
           <Button variant="outline" onClick={exportToCSV}><Download className="h-4 w-4 mr-2" />Export</Button>
@@ -661,7 +662,7 @@ export function TimesheetView() {
               <Users className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Staff</p>
+              <p className="text-sm text-muted-foreground">Staff Count</p>
               <p className="text-2xl font-bold">{filteredEmployees.length}</p>
             </div>
           </div>
@@ -669,26 +670,35 @@ export function TimesheetView() {
         <Card className="p-4 bg-blue-50 dark:bg-blue-950/30">
           <div className="text-center">
             <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">HOURS</p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{grandTotals.worked.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+              {viewTab === 'weekly' ? weeklyGrandTotals.worked.toFixed(1) : monthlyGrandTotals.totalHours.toFixed(1)}
+            </p>
           </div>
         </Card>
         <Card className="p-4 bg-orange-50 dark:bg-orange-950/30">
           <div className="text-center">
             <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">HOLIDAY</p>
-            <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{grandTotals.holiday.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
+              {viewTab === 'weekly' ? weeklyGrandTotals.holiday.toFixed(1) : monthlyGrandTotals.holidayHrs.toFixed(1)}
+            </p>
           </div>
         </Card>
         <Card className="p-4 bg-red-50 dark:bg-red-950/30">
           <div className="text-center">
             <p className="text-sm text-red-600 dark:text-red-400 font-medium">SICK</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{grandTotals.sick.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-red-700 dark:text-red-300">
+              {viewTab === 'weekly' ? weeklyGrandTotals.sick.toFixed(1) : monthlyGrandTotals.sickHrs.toFixed(1)}
+            </p>
           </div>
         </Card>
         <Card className="p-4 bg-green-50 dark:bg-green-950/30">
           <div className="text-center">
             <p className="text-sm text-green-600 dark:text-green-400 font-medium">TOTAL</p>
             <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {(grandTotals.worked + grandTotals.holiday + grandTotals.sick + grandTotals.adj).toFixed(1)}
+              {viewTab === 'weekly' 
+                ? (weeklyGrandTotals.worked + weeklyGrandTotals.holiday + weeklyGrandTotals.sick + weeklyGrandTotals.adj).toFixed(1)
+                : monthlyGrandTotals.totalHrs.toFixed(1)
+              }
             </p>
           </div>
         </Card>
@@ -712,26 +722,27 @@ export function TimesheetView() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : viewTab === 'weekly' ? (
-        /* Weekly View - Excel Format */
+        /* Weekly View - Excel Format with WEEK # header, Start/End times for each day */
         <Card className="overflow-hidden print:shadow-none">
           <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
             <h3 className="font-bold text-sm">
-              WEEK {getWeek(currentWeekStart)} • {format(currentWeekStart, 'EEEE dd/MM/yyyy')} to {format(weekEnd, 'EEEE dd/MM/yyyy')}
+              WEEK {selectedWeekIndex + 1} • {currentWeekStart ? format(currentWeekStart, 'EEEE dd/MM/yyyy') : ''} to {weekEnd ? format(weekEnd, 'EEEE dd/MM/yyyy') : ''}
             </h3>
           </div>
           <ScrollArea className="w-full">
-            <div className="min-w-[1400px]">
+            <div className="min-w-[1600px]">
               <Table className="text-xs">
                 <TableHeader>
+                  {/* Header Row 1: Day names */}
                   <TableRow className="bg-muted/50">
-                    <TableHead className="sticky left-0 bg-muted/50 z-10 w-8 font-bold text-center">#</TableHead>
-                    <TableHead className="sticky left-8 bg-muted/50 z-10 min-w-[130px] font-bold">NAME</TableHead>
+                    <TableHead className="sticky left-0 bg-muted/50 z-10 w-8"></TableHead>
+                    <TableHead className="sticky left-8 bg-muted/50 z-10 text-center font-bold">WEEK {selectedWeekIndex + 1}</TableHead>
                     {weekDays.map((day, i) => (
                       <TableHead key={i} colSpan={2} className="text-center font-bold border-x bg-muted/30">
-                        <div>{DAYS_SHORT[i].toUpperCase()}</div>
-                        <div className="text-[10px] font-normal text-muted-foreground">{format(day, 'dd/MM/yyyy')}</div>
+                        {DAYS_OF_WEEK[i].toUpperCase()}
                       </TableHead>
                     ))}
+                    <TableHead className="text-center bg-blue-100 dark:bg-blue-900/50 font-bold w-16"></TableHead>
                     <TableHead className="text-center bg-blue-100 dark:bg-blue-900/50 font-bold">HOURS</TableHead>
                     <TableHead className="text-center bg-orange-100 dark:bg-orange-900/50 font-bold">HOLIDAY</TableHead>
                     <TableHead className="text-center bg-red-100 dark:bg-red-900/50 font-bold">SICK</TableHead>
@@ -739,40 +750,52 @@ export function TimesheetView() {
                     <TableHead className="text-center bg-green-100 dark:bg-green-900/50 font-bold">TOTAL</TableHead>
                     <TableHead className="text-center font-bold print:hidden">Actions</TableHead>
                   </TableRow>
+                  {/* Header Row 2: Dates */}
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="sticky left-0 bg-muted/30 z-10"></TableHead>
+                    <TableHead className="sticky left-8 bg-muted/30 z-10"></TableHead>
+                    {weekDays.map((day, i) => (
+                      <TableHead key={i} colSpan={2} className="text-center text-[10px] font-normal text-muted-foreground border-x">
+                        {format(day, 'dd/MM/yyyy')}
+                      </TableHead>
+                    ))}
+                    <TableHead colSpan={7} className="print:hidden"></TableHead>
+                  </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Object.entries(groupedTimesheets).map(([branchName, data]) => (
                     <React.Fragment key={branchName}>
-                      {/* Branch Header */}
-                      <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                        <TableCell colSpan={22} className="font-bold text-primary py-2">
-                          📍 {branchName} ({data.timesheets.length} staff)
+                      {/* Branch separator row */}
+                      <TableRow className="bg-primary/5">
+                        <TableCell colSpan={24} className="font-medium text-primary py-1 text-[11px]">
+                          {branchName} ({data.timesheets.length} staff)
                         </TableCell>
                       </TableRow>
-                      {data.timesheets.map((ts, idx) => {
+                      {data.timesheets.map((ts) => {
                         const dayEntries = ts.entries || [];
                         const total = Number(ts.total_worked_hours) + Number(ts.total_holiday_hours) + Number(ts.total_sick_hours) + Number(ts.total_adjustment_hours || 0);
                         return (
                           <TableRow key={ts.id} className="hover:bg-muted/30">
-                            <TableCell className="sticky left-0 bg-background z-10 text-center font-medium">{idx + 1}</TableCell>
-                            <TableCell className="sticky left-8 bg-background z-10 font-bold">
-                              {ts.employee?.first_name?.toUpperCase()} {ts.employee?.last_name?.toUpperCase()}
+                            <TableCell className="sticky left-0 bg-background z-10"></TableCell>
+                            <TableCell className="sticky left-8 bg-background z-10 font-bold text-[11px]">
+                              {ts.employee?.first_name?.toUpperCase()}
                             </TableCell>
-                            {weekDays.map((_, dayIdx) => {
-                              const entry = dayEntries.find(e => e.day_of_week === DAYS_OF_WEEK[dayIdx]);
+                            {DAYS_OF_WEEK.map((day, dayIdx) => {
+                              const entry = dayEntries.find(e => e.day_of_week === day);
                               return (
                                 <React.Fragment key={dayIdx}>
-                                  <TableCell className="text-center text-[10px] border-l">
-                                    {entry?.shift_start_time ? format(parseISO(`2000-01-01T${entry.shift_start_time}`), 'h:mm a') : ''}
+                                  <TableCell className="text-center text-[10px] border-l px-1">
+                                    {formatTime(entry?.shift_start_time || null)}
                                   </TableCell>
-                                  <TableCell className="text-center text-[10px] border-r">
-                                    {entry?.shift_end_time ? format(parseISO(`2000-01-01T${entry.shift_end_time}`), 'h:mm a') : ''}
+                                  <TableCell className="text-center text-[10px] border-r px-1">
+                                    {formatTime(entry?.shift_end_time || null)}
                                   </TableCell>
                                 </React.Fragment>
                               );
                             })}
+                            <TableCell className="text-center"></TableCell>
                             <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30">
-                              {ts.total_worked_hours > 0 ? `$${ts.total_worked_hours}` : '$0'}
+                              ${ts.total_worked_hours > 0 ? ts.total_worked_hours : 0}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-orange-50/50 dark:bg-orange-950/30 text-orange-600">
                               {ts.total_holiday_hours > 0 ? `$${ts.total_holiday_hours}` : ''}
@@ -788,9 +811,11 @@ export function TimesheetView() {
                             </TableCell>
                             <TableCell className="text-center print:hidden">
                               <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" variant="outline" onClick={() => openTimesheetEditor(ts)}>Edit</Button>
+                                <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openTimesheetEditor(ts)}>
+                                  <Edit className="h-3 w-3" />
+                                </Button>
                                 {ts.status !== 'approved' && (
-                                  <Button size="sm" variant="default" onClick={() => approveTimesheet(ts.id)}>
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-green-600" onClick={() => approveTimesheet(ts.id)}>
                                     <Check className="h-3 w-3" />
                                   </Button>
                                 )}
@@ -799,53 +824,29 @@ export function TimesheetView() {
                           </TableRow>
                         );
                       })}
-                      {/* Branch Subtotal */}
-                      <TableRow className="bg-muted/60 border-b-2 font-bold">
-                        <TableCell></TableCell>
-                        <TableCell className="sticky left-8 bg-muted/60 z-10"></TableCell>
-                        <TableCell colSpan={14}></TableCell>
-                        <TableCell className="text-center bg-blue-100 dark:bg-blue-800">${data.totals.worked.toFixed(1)}</TableCell>
-                        <TableCell className="text-center bg-orange-100 dark:bg-orange-800 text-orange-700">${data.totals.holiday.toFixed(1)}</TableCell>
-                        <TableCell className="text-center bg-red-100 dark:bg-red-800 text-red-700">${data.totals.sick.toFixed(1)}</TableCell>
-                        <TableCell className="text-center bg-purple-100 dark:bg-purple-800">${data.totals.adj.toFixed(1)}</TableCell>
-                        <TableCell className="text-center bg-green-100 dark:bg-green-800">
-                          ${(data.totals.worked + data.totals.holiday + data.totals.sick + data.totals.adj).toFixed(1)}
+                      {/* Week subtotal row (SUMIF for branch) */}
+                      <TableRow className="bg-muted/50 font-bold">
+                        <TableCell className="sticky left-0 bg-muted/50 z-10"></TableCell>
+                        <TableCell colSpan={15} className="sticky left-8 bg-muted/50 z-10"></TableCell>
+                        <TableCell className="text-center bg-blue-100 dark:bg-blue-900/50">
+                          ${data.totals.worked.toFixed(1)}
+                        </TableCell>
+                        <TableCell className="text-center bg-orange-100 dark:bg-orange-900/50 text-orange-600">
+                          ${data.totals.holiday.toFixed(1)}
+                        </TableCell>
+                        <TableCell className="text-center bg-red-100 dark:bg-red-900/50 text-red-600">
+                          ${data.totals.sick.toFixed(1)}
+                        </TableCell>
+                        <TableCell className="text-center bg-purple-100 dark:bg-purple-900/50">
+                          {data.totals.adj !== 0 ? `$${data.totals.adj.toFixed(1)}` : ''}
+                        </TableCell>
+                        <TableCell className="text-center bg-green-100 dark:bg-green-900/50">
+                          ${data.totals.total.toFixed(1)}
                         </TableCell>
                         <TableCell className="print:hidden"></TableCell>
                       </TableRow>
                     </React.Fragment>
                   ))}
-                  
-                  {/* Employees without timesheets */}
-                  {employeesWithoutTimesheet.map((emp) => (
-                    <TableRow key={emp.id} className="bg-muted/30">
-                      <TableCell></TableCell>
-                      <TableCell className="font-medium text-muted-foreground">{emp.first_name} {emp.last_name}</TableCell>
-                      <TableCell colSpan={18} className="text-center text-muted-foreground italic">No timesheet created</TableCell>
-                      <TableCell className="text-center print:hidden">
-                        <Button size="sm" variant="outline" onClick={() => createTimesheetForEmployee(emp)}>
-                          <Plus className="h-3 w-3 mr-1" />Create
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  
-                  {/* Grand Total */}
-                  {filteredTimesheets.length > 0 && (
-                    <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
-                      <TableCell></TableCell>
-                      <TableCell className="sticky left-8 bg-primary/20 z-10 text-lg">GRAND TOTAL</TableCell>
-                      <TableCell colSpan={14}></TableCell>
-                      <TableCell className="text-center text-lg bg-blue-200 dark:bg-blue-700">${grandTotals.worked.toFixed(1)}</TableCell>
-                      <TableCell className="text-center text-lg bg-orange-200 dark:bg-orange-700">${grandTotals.holiday.toFixed(1)}</TableCell>
-                      <TableCell className="text-center text-lg bg-red-200 dark:bg-red-700">${grandTotals.sick.toFixed(1)}</TableCell>
-                      <TableCell className="text-center text-lg bg-purple-200 dark:bg-purple-700">${grandTotals.adj.toFixed(1)}</TableCell>
-                      <TableCell className="text-center text-lg bg-green-200 dark:bg-green-700">
-                        ${(grandTotals.worked + grandTotals.holiday + grandTotals.sick + grandTotals.adj).toFixed(1)}
-                      </TableCell>
-                      <TableCell className="print:hidden"></TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </div>
@@ -853,242 +854,287 @@ export function TimesheetView() {
           </ScrollArea>
         </Card>
       ) : (
-        /* Monthly Consolidation View - matching Excel format */
+        /* Monthly Consolidation View - Excel Format: NAME | WEEK 1-6 | TOTAL | (+/-) LAST MONTH | TOTAL HRS | HOLIDAY HRS | SICK */
         <Card className="overflow-hidden print:shadow-none">
           <div className="p-3 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <h3 className="font-bold text-sm">MONTHLY CONSOLIDATION - {format(currentMonth, 'MMMM yyyy').toUpperCase()}</h3>
+            <h3 className="font-bold text-sm">
+              MONTHLY CONSOLIDATION - {format(currentMonth, 'MMMM yyyy').toUpperCase()}
+            </h3>
           </div>
           <ScrollArea className="w-full">
-            <div className="min-w-[1200px]">
-              {(() => {
-                const { grouped, weeksInMonth } = getMonthlyEmployeeData;
-                const monthlyGrandTotals = { weeks: weeksInMonth.map(() => 0), total: 0, lastMonth: 0, grandTotal: 0, holiday: 0, sick: 0 };
-                
-                return (
-                  <Table className="text-xs">
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="sticky left-0 bg-muted/50 z-10 min-w-[160px] font-bold">NAME</TableHead>
-                        {weeksInMonth.map((w, idx) => (
-                          <TableHead key={idx} className="text-center font-bold min-w-[70px]">
-                            <div>WEEK {idx + 1}</div>
-                          </TableHead>
-                        ))}
-                        <TableHead className="text-center bg-blue-100 dark:bg-blue-900/50 font-bold">TOTAL</TableHead>
-                        <TableHead className="text-center bg-yellow-100 dark:bg-yellow-900/50 font-bold">(+/-) LAST MONTH</TableHead>
-                        <TableHead className="text-center bg-green-100 dark:bg-green-900/50 font-bold">TOTAL HRS</TableHead>
-                        <TableHead className="text-center bg-orange-100 dark:bg-orange-900/50 font-bold">HOLIDAY HRS</TableHead>
-                        <TableHead className="text-center bg-red-100 dark:bg-red-900/50 font-bold">SICK</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Object.entries(grouped).map(([branchName, branchData]) => {
-                        const branchTotals = { weeks: weeksInMonth.map(() => 0), total: 0, lastMonth: 0, grandTotal: 0, holiday: 0, sick: 0 };
-                        const dataArray = Object.values(branchData);
-                        
-                        dataArray.forEach(d => {
-                          d.weeklyHours.forEach((h, i) => { if (h) branchTotals.weeks[i] += h; });
-                          branchTotals.total += d.totalHours;
-                          branchTotals.lastMonth += d.lastMonthAdj;
-                          branchTotals.grandTotal += d.grandTotal;
-                          branchTotals.holiday += d.totalHoliday;
-                          branchTotals.sick += d.totalSick;
-                        });
-                        
-                        monthlyGrandTotals.weeks.forEach((_, i) => { monthlyGrandTotals.weeks[i] += branchTotals.weeks[i]; });
-                        monthlyGrandTotals.total += branchTotals.total;
-                        monthlyGrandTotals.lastMonth += branchTotals.lastMonth;
-                        monthlyGrandTotals.grandTotal += branchTotals.grandTotal;
-                        monthlyGrandTotals.holiday += branchTotals.holiday;
-                        monthlyGrandTotals.sick += branchTotals.sick;
+            <div className="min-w-[1100px]">
+              <Table className="text-xs">
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="sticky left-0 bg-muted/50 z-10 w-8"></TableHead>
+                    <TableHead className="sticky left-8 bg-muted/50 z-10 min-w-[120px] font-bold">NAME</TableHead>
+                    {monthWeeks.map((_, i) => (
+                      <TableHead key={i} className="text-center font-bold w-20">WEEK {i + 1}</TableHead>
+                    ))}
+                    <TableHead className="text-center font-bold bg-blue-100 dark:bg-blue-900/50">TOTAL</TableHead>
+                    <TableHead className="text-center font-bold bg-purple-100 dark:bg-purple-900/50">(+/-) LAST MONTH</TableHead>
+                    <TableHead className="text-center font-bold bg-green-100 dark:bg-green-900/50">TOTAL HRS</TableHead>
+                    <TableHead className="text-center font-bold bg-orange-100 dark:bg-orange-900/50">HOLIDAY HRS</TableHead>
+                    <TableHead className="text-center font-bold"></TableHead>
+                    <TableHead className="text-center font-bold bg-red-100 dark:bg-red-900/50">SICK</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(monthlyConsolidation.grouped).map(([branchName, branchData]) => {
+                    const branchTotals = { 
+                      weeks: monthWeeks.map(() => 0), 
+                      total: 0, 
+                      lastMonth: 0, 
+                      totalHrs: 0, 
+                      holiday: 0, 
+                      sick: 0 
+                    };
+                    
+                    Object.values(branchData).forEach(emp => {
+                      emp.weeklyHours.forEach((h, i) => branchTotals.weeks[i] += h);
+                      branchTotals.total += emp.totalHours;
+                      branchTotals.lastMonth += emp.lastMonthAdj;
+                      branchTotals.totalHrs += emp.totalHrs;
+                      branchTotals.holiday += emp.holidayHrs;
+                      branchTotals.sick += emp.sickHrs;
+                    });
 
-                        return (
-                          <React.Fragment key={branchName}>
-                            <TableRow className="bg-primary/10 border-t-2 border-primary/30">
-                              <TableCell colSpan={weeksInMonth.length + 6} className="font-bold text-primary py-2">
-                                📍 {branchName} ({dataArray.length} staff)
+                    return (
+                      <React.Fragment key={branchName}>
+                        {/* Branch separator */}
+                        <TableRow className="bg-primary/5">
+                          <TableCell colSpan={10 + monthWeeks.length} className="font-medium text-primary py-1 text-[11px]">
+                            {branchName} ({Object.keys(branchData).length} staff)
+                          </TableCell>
+                        </TableRow>
+                        {Object.values(branchData).map((emp) => (
+                          <TableRow key={emp.employee.id} className="hover:bg-muted/30">
+                            <TableCell className="sticky left-0 bg-background z-10"></TableCell>
+                            <TableCell className="sticky left-8 bg-background z-10 font-bold text-[11px]">
+                              {emp.employee.first_name?.toUpperCase()}
+                            </TableCell>
+                            {emp.weeklyHours.map((h, i) => (
+                              <TableCell key={i} className="text-center">
+                                {h > 0 ? h.toFixed(1) : '-'}
                               </TableCell>
-                            </TableRow>
-                            {dataArray.map((emp, idx) => (
-                              <TableRow key={emp.employee.id} className="hover:bg-muted/30">
-                                <TableCell className="sticky left-0 bg-background z-10 font-bold">
-                                  {emp.employee.first_name?.toUpperCase()} {emp.employee.last_name?.toUpperCase()}
-                                </TableCell>
-                                {emp.weeklyHours.map((h, i) => (
-                                  <TableCell key={i} className="text-center">
-                                    {h !== null && h > 0 ? h.toFixed(1) : '-'}
-                                  </TableCell>
-                                ))}
-                                <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30">
-                                  {emp.totalHours.toFixed(1)}
-                                </TableCell>
-                                <TableCell className="text-center bg-yellow-50/50 dark:bg-yellow-950/30">
-                                  {emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-'}
-                                </TableCell>
-                                <TableCell className="text-center font-bold bg-green-50/50 dark:bg-green-950/30">
-                                  {emp.grandTotal.toFixed(1)}
-                                </TableCell>
-                                <TableCell className="text-center bg-orange-50/50 dark:bg-orange-950/30 text-orange-600">
-                                  {emp.totalHoliday > 0 ? emp.totalHoliday.toFixed(1) : '-'}
-                                </TableCell>
-                                <TableCell className="text-center bg-red-50/50 dark:bg-red-950/30 text-red-600">
-                                  {emp.totalSick > 0 ? emp.totalSick.toFixed(1) : '-'}
-                                </TableCell>
-                              </TableRow>
                             ))}
-                            {/* Branch Subtotal */}
-                            <TableRow className="bg-muted/60 border-b-2 font-bold">
-                              <TableCell className="sticky left-0 bg-muted/60 z-10 text-primary">SUBTOTAL</TableCell>
-                              {branchTotals.weeks.map((w, i) => (
-                                <TableCell key={i} className="text-center">{w.toFixed(1)}</TableCell>
-                              ))}
-                              <TableCell className="text-center bg-blue-100 dark:bg-blue-800">{branchTotals.total.toFixed(1)}</TableCell>
-                              <TableCell className="text-center bg-yellow-100 dark:bg-yellow-800">
-                                {branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}
-                              </TableCell>
-                              <TableCell className="text-center bg-green-100 dark:bg-green-800">{branchTotals.grandTotal.toFixed(1)}</TableCell>
-                              <TableCell className="text-center bg-orange-100 dark:bg-orange-800">{branchTotals.holiday.toFixed(1)}</TableCell>
-                              <TableCell className="text-center bg-red-100 dark:bg-red-800">{branchTotals.sick.toFixed(1)}</TableCell>
-                            </TableRow>
-                          </React.Fragment>
-                        );
-                      })}
-                      {/* Grand Total */}
-                      <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
-                        <TableCell className="sticky left-0 bg-primary/20 z-10 text-lg">GRAND TOTAL</TableCell>
-                        {monthlyGrandTotals.weeks.map((w, i) => (
-                          <TableCell key={i} className="text-center text-lg">{w.toFixed(1)}</TableCell>
+                            <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30">
+                              {emp.totalHours.toFixed(1)}
+                            </TableCell>
+                            <TableCell className="text-center bg-purple-50/50 dark:bg-purple-950/30">
+                              {emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-'}
+                            </TableCell>
+                            <TableCell className="text-center font-bold bg-green-50/50 dark:bg-green-950/30">
+                              {emp.totalHrs.toFixed(1)}
+                            </TableCell>
+                            <TableCell className="text-center font-bold bg-orange-50/50 dark:bg-orange-950/30 text-orange-600">
+                              {emp.holidayHrs > 0 ? `$${emp.holidayHrs.toFixed(1)}` : '-'}
+                            </TableCell>
+                            <TableCell></TableCell>
+                            <TableCell className="text-center font-bold bg-red-50/50 dark:bg-red-950/30 text-red-600">
+                              {emp.sickHrs > 0 ? `$${emp.sickHrs.toFixed(1)}` : '-'}
+                            </TableCell>
+                          </TableRow>
                         ))}
-                        <TableCell className="text-center text-lg bg-blue-200 dark:bg-blue-700">{monthlyGrandTotals.total.toFixed(1)}</TableCell>
-                        <TableCell className="text-center text-lg bg-yellow-200 dark:bg-yellow-700">
-                          {monthlyGrandTotals.lastMonth !== 0 ? monthlyGrandTotals.lastMonth.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="text-center text-lg bg-green-200 dark:bg-green-700">{monthlyGrandTotals.grandTotal.toFixed(1)}</TableCell>
-                        <TableCell className="text-center text-lg bg-orange-200 dark:bg-orange-700">{monthlyGrandTotals.holiday.toFixed(1)}</TableCell>
-                        <TableCell className="text-center text-lg bg-red-200 dark:bg-red-700">{monthlyGrandTotals.sick.toFixed(1)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                );
-              })()}
+                        {/* Branch subtotal (SUMIF) */}
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell className="sticky left-0 bg-muted/50 z-10"></TableCell>
+                          <TableCell className="sticky left-8 bg-muted/50 z-10"></TableCell>
+                          {branchTotals.weeks.map((w, i) => (
+                            <TableCell key={i} className="text-center">
+                              {w > 0 ? w.toFixed(1) : '-'}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-center bg-blue-100 dark:bg-blue-900/50">
+                            {branchTotals.total.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-center bg-purple-100 dark:bg-purple-900/50">
+                            {branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}
+                          </TableCell>
+                          <TableCell className="text-center bg-green-100 dark:bg-green-900/50">
+                            {branchTotals.totalHrs.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-center bg-orange-100 dark:bg-orange-900/50 text-orange-600">
+                            {branchTotals.holiday > 0 ? `$${branchTotals.holiday.toFixed(1)}` : '-'}
+                          </TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-center bg-red-100 dark:bg-red-900/50 text-red-600">
+                            {branchTotals.sick > 0 ? `$${branchTotals.sick.toFixed(1)}` : '-'}
+                          </TableCell>
+                        </TableRow>
+                      </React.Fragment>
+                    );
+                  })}
+                  {/* Grand total row */}
+                  <TableRow className="bg-primary/20 border-t-4 border-primary font-bold text-primary">
+                    <TableCell className="sticky left-0 bg-primary/20 z-10"></TableCell>
+                    <TableCell className="sticky left-8 bg-primary/20 z-10 text-sm">GRAND TOTAL</TableCell>
+                    {monthlyGrandTotals.weeklyTotals.map((w, i) => (
+                      <TableCell key={i} className="text-center text-sm">
+                        {w.toFixed(1)}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-center text-sm bg-blue-200 dark:bg-blue-800">
+                      {monthlyGrandTotals.totalHours.toFixed(1)}
+                    </TableCell>
+                    <TableCell className="text-center bg-purple-200 dark:bg-purple-800">-</TableCell>
+                    <TableCell className="text-center text-sm bg-green-200 dark:bg-green-800">
+                      {monthlyGrandTotals.totalHrs.toFixed(1)}
+                    </TableCell>
+                    <TableCell className="text-center text-sm bg-orange-200 dark:bg-orange-800 text-orange-700">
+                      ${monthlyGrandTotals.holidayHrs.toFixed(1)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                    <TableCell className="text-center text-sm bg-red-200 dark:bg-red-800 text-red-700">
+                      ${monthlyGrandTotals.sickHrs.toFixed(1)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </Card>
       )}
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog - for entering times */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Edit Timesheet - {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                Week of {selectedTimesheet ? format(parseISO(selectedTimesheet.week_start_date), 'dd/MM/yyyy') : ''}
-              </span>
             </DialogTitle>
           </DialogHeader>
           
-          <ScrollArea className="flex-1">
-            <Table className="text-sm">
+          <div className="space-y-4">
+            <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-bold">Day</TableHead>
-                  <TableHead className="font-bold">Date</TableHead>
-                  <TableHead className="text-center font-bold">Start Time</TableHead>
-                  <TableHead className="text-center font-bold">End Time</TableHead>
-                  <TableHead className="text-center font-bold">Break (min)</TableHead>
-                  <TableHead className="text-center bg-blue-100 dark:bg-blue-900 font-bold">Hours</TableHead>
-                  <TableHead className="text-center bg-orange-100 dark:bg-orange-900 font-bold">Holiday</TableHead>
-                  <TableHead className="text-center bg-red-100 dark:bg-red-900 font-bold">Sick</TableHead>
-                  <TableHead className="text-center bg-purple-100 dark:bg-purple-900 font-bold">ADJ+/-</TableHead>
+                <TableRow>
+                  <TableHead>Day</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
+                  <TableHead>Break (min)</TableHead>
+                  <TableHead>Hours</TableHead>
+                  <TableHead>Holiday</TableHead>
+                  <TableHead>Sick</TableHead>
+                  <TableHead>ADJ+/-</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.map((entry, idx) => (
-                  <TableRow key={entry.id || idx} className="hover:bg-muted/30">
+                  <TableRow key={idx}>
                     <TableCell className="font-medium">{entry.day_of_week}</TableCell>
-                    <TableCell>{format(parseISO(entry.entry_date), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-muted-foreground">{format(parseISO(entry.entry_date), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>
                       <Input
                         type="time"
                         value={entry.shift_start_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value)}
-                        className="w-28 text-center"
+                        onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value || null)}
+                        className="w-24"
                       />
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell>
                       <Input
                         type="time"
                         value={entry.shift_end_time || ''}
-                        onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value)}
-                        className="w-28 text-center"
+                        onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value || null)}
+                        className="w-24"
                       />
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell>
                       <Input
                         type="number"
-                        value={entry.break_duration_minutes || 0}
-                        onChange={(e) => updateEntry(idx, 'break_duration_minutes', Number(e.target.value))}
-                        className="w-20 text-center"
-                        min={0}
+                        min="0"
+                        value={entry.break_duration_minutes || ''}
+                        onChange={(e) => updateEntry(idx, 'break_duration_minutes', Number(e.target.value) || 0)}
+                        className="w-16"
                       />
                     </TableCell>
-                    <TableCell className="text-center bg-blue-50/50 dark:bg-blue-950/30">
+                    <TableCell>
                       <Input
                         type="number"
-                        value={entry.actual_hours || 0}
-                        onChange={(e) => updateEntry(idx, 'actual_hours', Number(e.target.value))}
-                        className="w-20 text-center font-bold"
                         step="0.25"
+                        value={entry.actual_hours || ''}
+                        onChange={(e) => updateEntry(idx, 'actual_hours', Number(e.target.value) || 0)}
+                        className="w-16"
                       />
                     </TableCell>
-                    <TableCell className="text-center bg-orange-50/50 dark:bg-orange-950/30">
+                    <TableCell>
                       <Input
                         type="number"
-                        value={entry.holiday_hours || 0}
-                        onChange={(e) => updateEntry(idx, 'holiday_hours', Number(e.target.value))}
-                        className="w-20 text-center"
-                        step="0.25"
+                        step="0.5"
+                        value={entry.holiday_hours || ''}
+                        onChange={(e) => updateEntry(idx, 'holiday_hours', Number(e.target.value) || 0)}
+                        className="w-16"
                       />
                     </TableCell>
-                    <TableCell className="text-center bg-red-50/50 dark:bg-red-950/30">
+                    <TableCell>
                       <Input
                         type="number"
-                        value={entry.sick_hours || 0}
-                        onChange={(e) => updateEntry(idx, 'sick_hours', Number(e.target.value))}
-                        className="w-20 text-center"
-                        step="0.25"
+                        step="0.5"
+                        value={entry.sick_hours || ''}
+                        onChange={(e) => updateEntry(idx, 'sick_hours', Number(e.target.value) || 0)}
+                        className="w-16"
                       />
                     </TableCell>
-                    <TableCell className="text-center bg-purple-50/50 dark:bg-purple-950/30">
+                    <TableCell>
                       <Input
                         type="number"
-                        value={entry.adjustment_hours || 0}
-                        onChange={(e) => updateEntry(idx, 'adjustment_hours', Number(e.target.value))}
-                        className="w-20 text-center"
-                        step="0.25"
+                        step="0.5"
+                        value={entry.adjustment_hours || ''}
+                        onChange={(e) => updateEntry(idx, 'adjustment_hours', Number(e.target.value) || 0)}
+                        className="w-16"
                       />
                     </TableCell>
                   </TableRow>
                 ))}
-                {/* Week Totals */}
-                <TableRow className="bg-primary/10 font-bold">
-                  <TableCell colSpan={5} className="text-right">WEEK TOTALS:</TableCell>
-                  <TableCell className="text-center bg-blue-100 dark:bg-blue-800">{weekTotals.worked.toFixed(1)}</TableCell>
-                  <TableCell className="text-center bg-orange-100 dark:bg-orange-800">{weekTotals.holiday.toFixed(1)}</TableCell>
-                  <TableCell className="text-center bg-red-100 dark:bg-red-800">{weekTotals.sick.toFixed(1)}</TableCell>
-                  <TableCell className="text-center bg-purple-100 dark:bg-purple-800">{weekTotals.adj.toFixed(1)}</TableCell>
-                </TableRow>
               </TableBody>
             </Table>
-          </ScrollArea>
-          
-          <DialogFooter className="mt-4">
+
+            {/* Week totals */}
+            <div className="flex gap-4 p-4 bg-muted rounded-lg">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Hours</p>
+                <p className="text-xl font-bold text-blue-600">
+                  {entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0).toFixed(1)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Holiday</p>
+                <p className="text-xl font-bold text-orange-600">
+                  {entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0).toFixed(1)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Sick</p>
+                <p className="text-xl font-bold text-red-600">
+                  {entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0).toFixed(1)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Adjustment</p>
+                <p className="text-xl font-bold text-purple-600">
+                  {entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0).toFixed(1)}
+                </p>
+              </div>
+              <div className="text-center border-l pl-4">
+                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="text-xl font-bold text-green-600">
+                  {entries.reduce((sum, e) => 
+                    sum + (Number(e.actual_hours) || 0) + (Number(e.holiday_hours) || 0) + 
+                    (Number(e.sick_hours) || 0) + (Number(e.adjustment_hours) || 0), 0
+                  ).toFixed(1)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
             <Button onClick={saveTimesheet} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Changes
+              Save Timesheet
             </Button>
           </DialogFooter>
         </DialogContent>
