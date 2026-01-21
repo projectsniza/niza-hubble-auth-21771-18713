@@ -2509,6 +2509,38 @@ export type Database = {
           },
         ]
       }
+      message_mentions: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          mentioned_user_id: string
+          message_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          mentioned_user_id: string
+          message_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          mentioned_user_id?: string
+          message_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_mentions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_read_receipts: {
         Row: {
           id: string
@@ -2576,7 +2608,11 @@ export type Database = {
           id: string
           is_deleted: boolean | null
           is_edited: boolean | null
+          is_pinned: boolean | null
           message_type: string | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -2589,7 +2625,11 @@ export type Database = {
           id?: string
           is_deleted?: boolean | null
           is_edited?: boolean | null
+          is_pinned?: boolean | null
           message_type?: string | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -2602,7 +2642,11 @@ export type Database = {
           id?: string
           is_deleted?: boolean | null
           is_edited?: boolean | null
+          is_pinned?: boolean | null
           message_type?: string | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reply_to_id?: string | null
           sender_id?: string
         }
         Relationships: [
@@ -2611,6 +2655,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -4714,6 +4765,38 @@ export type Database = {
             columns: ["custom_role_id"]
             isOneToOne: false
             referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_presence: {
+        Row: {
+          is_typing_in: string | null
+          last_seen: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          is_typing_in?: string | null
+          last_seen?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          is_typing_in?: string | null
+          last_seen?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_presence_is_typing_in_fkey"
+            columns: ["is_typing_in"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
