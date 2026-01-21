@@ -439,11 +439,11 @@ export default function MessagingPanel() {
   const getAvatarColor = (role?: string) => {
     switch (role) {
       case 'super_admin':
-        return 'bg-red-500 text-white';
+        return 'bg-destructive/10 text-destructive';
       case 'hr':
-        return 'bg-blue-500 text-white';
+        return 'bg-primary/10 text-primary';
       case 'manager':
-        return 'bg-green-500 text-white';
+        return 'bg-accent/30 text-accent-foreground';
       default:
         return 'bg-muted';
     }
@@ -490,12 +490,19 @@ export default function MessagingPanel() {
     
     setDeletingMessages(true);
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .in('id', Array.from(selectedMessages));
+      const messageIds = Array.from(selectedMessages);
+
+      const { data, error } = await supabase.functions.invoke('bulk-delete-messages', {
+        body: {
+          messageIds,
+          conversationId,
+        },
+      });
 
       if (error) throw error;
+      if (data?.success !== true) {
+        throw new Error(data?.error || 'Failed to delete messages');
+      }
 
       toast.success(`${selectedMessages.size} message(s) deleted`);
       setSelectedMessages(new Set());
@@ -680,14 +687,16 @@ export default function MessagingPanel() {
                     {/* Checkbox in selection mode */}
                     {selectionMode && (
                       <div className="flex items-center pr-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleMessageSelection(msg.id)}
-                          className="h-5 w-5"
-                        />
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleMessageSelection(msg.id)}
+                            className="h-5 w-5"
+                          />
+                        </div>
                       </div>
                     )}
-                    <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''} ${isSelected ? 'opacity-60' : ''}`}>
+                    <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                       {showAvatar && !isOwn ? (
                         <Avatar className={`h-8 w-8 ${getAvatarColor(msg.sender?.role)}`}>
                           <AvatarFallback className="text-xs bg-transparent">
