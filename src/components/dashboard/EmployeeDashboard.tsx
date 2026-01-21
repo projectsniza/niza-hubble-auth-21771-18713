@@ -35,6 +35,8 @@ interface Shift {
   status: string;
 }
 
+const getTodayLocal = () => format(new Date(), 'yyyy-MM-dd');
+
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -50,7 +52,7 @@ export default function EmployeeDashboard() {
     
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayLocal();
 
       // Fetch employee profile and clock-in in parallel
       const [employeeResult, clockInResult] = await Promise.all([
@@ -99,20 +101,52 @@ export default function EmployeeDashboard() {
         }
         
         if (employee.id) {
-          const { data: shifts } = await supabase
+          // Primary source: rota_shifts
+          const { data: rotaShifts } = await supabase
             .from('rota_shifts')
             .select('shift_date, start_time, end_time, status')
             .eq('employee_id', employee.id)
             .gte('shift_date', today)
             .order('shift_date', { ascending: true })
             .limit(10);
-          
-          if (shifts) {
-            const todayShifts = shifts.filter((s: Shift) => s.shift_date === today);
-            const futureShifts = shifts.filter((s: Shift) => s.shift_date !== today);
-            setTodaysShifts(todayShifts);
-            setUpcomingShifts(futureShifts.slice(0, 5));
+
+          let shifts: Shift[] = (rotaShifts as any) || [];
+
+          // Fallback: timesheet_entries (when shifts are entered via Timesheets)
+          if (!shifts || shifts.length === 0) {
+            const { data: tsIdsRows } = await supabase
+              .from('timesheets')
+              .select('id')
+              .eq('employee_id', employee.id)
+              .gte('week_end_date', today)
+              .limit(12);
+
+            const tsIds = (tsIdsRows || []).map(r => r.id);
+
+            if (tsIds.length > 0) {
+              const { data: tsEntries } = await supabase
+                .from('timesheet_entries')
+                .select('entry_date, shift_start_time, shift_end_time')
+                .in('timesheet_id', tsIds)
+                .gte('entry_date', today)
+                .not('shift_start_time', 'is', null)
+                .not('shift_end_time', 'is', null)
+                .order('entry_date', { ascending: true })
+                .limit(10);
+
+              shifts = (tsEntries || []).map((e: any) => ({
+                shift_date: e.entry_date,
+                start_time: e.shift_start_time,
+                end_time: e.shift_end_time,
+                status: 'scheduled',
+              }));
+            }
           }
+
+          const todayShifts = (shifts || []).filter((s: Shift) => s.shift_date === today);
+          const futureShifts = (shifts || []).filter((s: Shift) => s.shift_date !== today);
+          setTodaysShifts(todayShifts);
+          setUpcomingShifts(futureShifts.slice(0, 5));
         }
       } else {
         // Fallback: fetch from profile if no employee record linked
