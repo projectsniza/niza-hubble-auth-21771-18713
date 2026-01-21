@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   MessageSquare, Send, Users, CheckCheck, 
-  Paperclip, X, Image, File, Download, Loader2, Shield, Building2, UserCog
+  Paperclip, X, Image, File, Download, Loader2, Shield, Building2, UserCog, Trash2, CheckSquare
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,8 +59,13 @@ export default function MessagingPanel() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+  const [deletingMessages, setDeletingMessages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const isEmployee = user?.role === 'employee';
   // Only restrict employees - all other roles (super_admin, hr, manager) can always use messaging
@@ -456,6 +462,59 @@ export default function MessagingPanel() {
     }
   };
 
+  // Toggle message selection
+  const toggleMessageSelection = (messageId: string) => {
+    setSelectedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all messages
+  const selectAllMessages = () => {
+    if (selectedMessages.size === messages.length) {
+      setSelectedMessages(new Set());
+    } else {
+      setSelectedMessages(new Set(messages.map(m => m.id)));
+    }
+  };
+
+  // Bulk delete messages (soft delete)
+  const handleBulkDelete = async () => {
+    if (selectedMessages.size === 0) return;
+    
+    setDeletingMessages(true);
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ is_deleted: true })
+        .in('id', Array.from(selectedMessages));
+
+      if (error) throw error;
+
+      toast.success(`${selectedMessages.size} message(s) deleted`);
+      setSelectedMessages(new Set());
+      setSelectionMode(false);
+      fetchMessages();
+    } catch (error) {
+      console.error('Error deleting messages:', error);
+      toast.error('Failed to delete messages');
+    } finally {
+      setDeletingMessages(false);
+    }
+  };
+
+  // Cancel selection mode
+  const cancelSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedMessages(new Set());
+  };
+
   // Group messages by date
   const groupedMessages = messages.reduce((acc, msg, idx) => {
     const msgDate = new Date(msg.created_at);
@@ -498,21 +557,84 @@ export default function MessagingPanel() {
         {/* Chat Header */}
         <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Organization Chat</h3>
-                <p className="text-xs text-muted-foreground">
-                  {onlineUsers.length} members • All organizations
-                </p>
-              </div>
-            </div>
-            <Badge variant="outline" className="hidden md:flex">
-              <Users className="h-3 w-3 mr-1" />
-              Group Chat
-            </Badge>
+            {selectionMode ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <CheckSquare className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{selectedMessages.size} Selected</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Click messages to select/deselect
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={selectAllMessages}
+                    className="gap-1"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                    {selectedMessages.size === messages.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={selectedMessages.size === 0 || deletingMessages}
+                    className="gap-1"
+                  >
+                    {deletingMessages ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Delete ({selectedMessages.size})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={cancelSelectionMode}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Organization Chat</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {onlineUsers.length} members • All organizations
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isSuperAdmin && messages.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectionMode(true)}
+                      className="gap-1"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Bulk Delete
+                    </Button>
+                  )}
+                  <Badge variant="outline" className="hidden md:flex">
+                    <Users className="h-3 w-3 mr-1" />
+                    Group Chat
+                  </Badge>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -547,9 +669,25 @@ export default function MessagingPanel() {
                   (prevItem?.type === 'message' && prevItem.message.sender_id !== msg.sender_id)
                 );
 
+                const isSelected = selectedMessages.has(msg.id);
+
                 return (
-                  <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''}`}>
+                  <div 
+                    key={msg.id} 
+                    className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${selectionMode ? 'cursor-pointer' : ''}`}
+                    onClick={selectionMode ? () => toggleMessageSelection(msg.id) : undefined}
+                  >
+                    {/* Checkbox in selection mode */}
+                    {selectionMode && (
+                      <div className="flex items-center pr-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleMessageSelection(msg.id)}
+                          className="h-5 w-5"
+                        />
+                      </div>
+                    )}
+                    <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''} ${isSelected ? 'opacity-60' : ''}`}>
                       {showAvatar && !isOwn ? (
                         <Avatar className={`h-8 w-8 ${getAvatarColor(msg.sender?.role)}`}>
                           <AvatarFallback className="text-xs bg-transparent">
@@ -570,7 +708,7 @@ export default function MessagingPanel() {
                           isOwn 
                             ? 'bg-primary text-primary-foreground rounded-br-md' 
                             : 'bg-muted rounded-bl-md'
-                        }`}>
+                        } ${isSelected ? 'ring-2 ring-destructive ring-offset-2' : ''}`}>
                           {msg.content && (
                             <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                           )}
@@ -582,7 +720,12 @@ export default function MessagingPanel() {
                                   className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${
                                     isOwn ? 'bg-primary-foreground/10' : 'bg-background'
                                   }`}
-                                  onClick={() => handleDownloadAttachment(att)}
+                                  onClick={(e) => {
+                                    if (!selectionMode) {
+                                      handleDownloadAttachment(att);
+                                    }
+                                    e.stopPropagation();
+                                  }}
                                 >
                                   {att.type.startsWith('image/') ? (
                                     <Image className="h-4 w-4 shrink-0" />
