@@ -55,7 +55,7 @@ export default function EmployeeDashboard() {
       const today = getTodayLocal();
 
       // Fetch employee profile and clock-in in parallel
-      const [employeeResult, clockInResult] = await Promise.all([
+       const [employeeResult, clockInResult] = await Promise.all([
         supabase
           .from('employees')
           .select(`
@@ -84,8 +84,31 @@ export default function EmployeeDashboard() {
 
       setTodayClockIn(clockInResult.data);
 
-      if (employeeResult.data) {
-        const employee = employeeResult.data;
+       let employeeRow = employeeResult.data;
+
+       // If employee record isn't linked yet, try to link it server-side and re-fetch once
+       if (!employeeRow) {
+         await supabase.rpc('link_my_employee_record');
+         const { data: retryEmployee } = await supabase
+           .from('employees')
+           .select(`
+             id,
+             first_name,
+             last_name,
+             job_title,
+             department,
+             manager_id,
+             branch:branches(name),
+             organization:organizations(name),
+             team:teams(name)
+           `)
+           .eq('user_id', user.id)
+           .maybeSingle();
+         employeeRow = retryEmployee;
+       }
+
+       if (employeeRow) {
+         const employee = employeeRow;
         setEmployeeData(employee);
 
         // Fetch manager and shifts
