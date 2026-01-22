@@ -6,15 +6,20 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award } from 'lucide-react';
+import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+
+interface CriteriaRating {
+  criteriaId: string;
+  rating: number;
+}
 
 export default function Performance() {
   const { user } = useAuth();
@@ -25,6 +30,7 @@ export default function Performance() {
     branch_id: string;
     organization_id: string;
     job_title?: string | null;
+    user_id?: string | null;
     organization?: { name: string } | null;
     branch?: { name: string } | null;
   }>>([]);
@@ -39,6 +45,7 @@ export default function Performance() {
     goals: string | null;
     goals_progress: number | null;
     created_at: string;
+    criteria_ratings?: any;
   }>>([]);
   const [criteria, setCriteria] = useState<Array<{ id: string; name: string; description: string | null; weight: number }>>([]);
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string }>>([]);
@@ -50,6 +57,8 @@ export default function Performance() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [showAddReview, setShowAddReview] = useState(false);
   const [showAddCriteria, setShowAddCriteria] = useState(false);
+  const [showDeleteCriteria, setShowDeleteCriteria] = useState(false);
+  const [criteriaToDelete, setCriteriaToDelete] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   
   const [newReview, setNewReview] = useState({
@@ -59,7 +68,8 @@ export default function Performance() {
     feedback: '',
     goals: '',
     goalsProgress: 50,
-    overallRating: 3
+    overallRating: 3,
+    criteriaRatings: [] as CriteriaRating[]
   });
 
   const [newCriteria, setNewCriteria] = useState({
@@ -67,6 +77,9 @@ export default function Performance() {
     description: '',
     weight: 1
   });
+
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
+  const isEmployee = user?.role === 'employee';
 
   const fetchBranchesMemoized = useCallback(async (orgId: string) => {
     const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
@@ -86,6 +99,16 @@ export default function Performance() {
     }
   }, [selectedOrg, fetchBranchesMemoized]);
 
+  // Initialize criteria ratings when criteria loads or dialog opens
+  useEffect(() => {
+    if (showAddReview && criteria.length > 0) {
+      setNewReview(prev => ({
+        ...prev,
+        criteriaRatings: criteria.map(c => ({ criteriaId: c.id, rating: 3 }))
+      }));
+    }
+  }, [showAddReview, criteria]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -104,6 +127,9 @@ export default function Performance() {
         // 'full' access level sees all employees
       } else if (user?.role === 'manager') {
         employeesQuery = employeesQuery.eq('branch_id', user.branchId);
+      } else if (user?.role === 'employee') {
+        // Employee only sees their own record
+        employeesQuery = employeesQuery.eq('user_id', user.id);
       }
 
       const [employeesRes, reviewsRes, criteriaRes, orgsRes] = await Promise.all([
@@ -124,11 +150,6 @@ export default function Performance() {
     }
   };
 
-  const fetchBranches = async (orgId: string) => {
-    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
-    setBranches(data || []);
-  };
-
   const handleAddReview = async () => {
     if (!newReview.employeeId) {
       toast.error('Please select an employee');
@@ -136,6 +157,17 @@ export default function Performance() {
     }
 
     try {
+      // Calculate weighted average from criteria ratings
+      let calculatedRating = newReview.overallRating;
+      if (criteria.length > 0 && newReview.criteriaRatings.length > 0) {
+        const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+        const weightedSum = newReview.criteriaRatings.reduce((sum, cr) => {
+          const crit = criteria.find(c => c.id === cr.criteriaId);
+          return sum + (cr.rating * (crit?.weight || 1));
+        }, 0);
+        calculatedRating = Math.round(weightedSum / totalWeight);
+      }
+
       const { error } = await supabase.from('performance_reviews').insert({
         employee_id: newReview.employeeId,
         reviewer_id: user?.id,
@@ -144,7 +176,8 @@ export default function Performance() {
         feedback: newReview.feedback || null,
         goals: newReview.goals || null,
         goals_progress: newReview.goalsProgress,
-        overall_rating: newReview.overallRating,
+        overall_rating: calculatedRating,
+        criteria_ratings: newReview.criteriaRatings,
         status: 'draft'
       });
 
@@ -152,7 +185,16 @@ export default function Performance() {
 
       toast.success('Review added successfully');
       setShowAddReview(false);
-      setNewReview({ employeeId: '', periodStart: '', periodEnd: '', feedback: '', goals: '', goalsProgress: 50, overallRating: 3 });
+      setNewReview({ 
+        employeeId: '', 
+        periodStart: '', 
+        periodEnd: '', 
+        feedback: '', 
+        goals: '', 
+        goalsProgress: 50, 
+        overallRating: 3,
+        criteriaRatings: []
+      });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add review');
@@ -176,12 +218,40 @@ export default function Performance() {
       if (error) throw error;
 
       toast.success('Criteria added successfully');
-      setShowAddCriteria(false);
       setNewCriteria({ name: '', description: '', weight: 1 });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to add criteria');
     }
+  };
+
+  const handleDeleteCriteria = async () => {
+    if (!criteriaToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('performance_criteria')
+        .update({ is_active: false })
+        .eq('id', criteriaToDelete.id);
+
+      if (error) throw error;
+
+      toast.success('Criteria deleted successfully');
+      setShowDeleteCriteria(false);
+      setCriteriaToDelete(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete criteria');
+    }
+  };
+
+  const updateCriteriaRating = (criteriaId: string, rating: number) => {
+    setNewReview(prev => ({
+      ...prev,
+      criteriaRatings: prev.criteriaRatings.map(cr => 
+        cr.criteriaId === criteriaId ? { ...cr, rating } : cr
+      )
+    }));
   };
 
   // Memoized filter for employees based on view mode
@@ -228,10 +298,21 @@ export default function Performance() {
   }, [filteredEmployees, reviews]);
 
   const filteredReviews = useMemo(() => {
-    if (activeTab === 'pending') return filteredReviewsAll.filter(r => r.status === 'draft');
-    if (activeTab === 'completed') return filteredReviewsAll.filter(r => r.status === 'completed');
-    return filteredReviewsAll;
-  }, [filteredReviewsAll, activeTab]);
+    let result = filteredReviewsAll;
+    if (activeTab === 'pending') result = filteredReviewsAll.filter(r => r.status === 'draft');
+    if (activeTab === 'completed') result = filteredReviewsAll.filter(r => r.status === 'completed');
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(r => {
+        const emp = employees.find(e => e.id === r.employee_id);
+        return emp && (`${emp.first_name} ${emp.last_name}`.toLowerCase().includes(query));
+      });
+    }
+    
+    return result;
+  }, [filteredReviewsAll, activeTab, searchQuery, employees]);
 
   const { averageRating, completedReviews, avgGoalsProgress } = useMemo(() => {
     const avg = filteredReviewsAll.length > 0 
@@ -253,6 +334,139 @@ export default function Performance() {
     return <span className="text-muted-foreground font-medium">#{index + 1}</span>;
   };
 
+  // Employee view - simplified UI showing only their reviews
+  if (isEmployee) {
+    return (
+      <div className="p-8 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">My Performance Reviews</h1>
+          <p className="text-muted-foreground">View your performance reviews and progress.</p>
+        </div>
+
+        {/* Employee Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Average Rating
+              </CardTitle>
+              <Star className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-bold">{averageRating}</span>
+                <div className="flex">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <Star 
+                      key={n} 
+                      className={`h-4 w-4 ${n <= parseFloat(averageRating) ? 'text-yellow-500 fill-yellow-500' : 'text-muted'}`} 
+                    />
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Reviews
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{filteredReviewsAll.length}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Goals Progress
+              </CardTitle>
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{avgGoalsProgress}%</div>
+              <Progress value={avgGoalsProgress} className="mt-2" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* My Reviews List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>My Reviews</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center h-40">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : filteredReviewsAll.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <Star className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">No reviews yet</h3>
+                <p className="text-muted-foreground">Your performance reviews will appear here.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead>Goals Progress</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Feedback</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReviewsAll.map(review => (
+                    <TableRow key={review.id}>
+                      <TableCell>
+                        {review.review_period_start && review.review_period_end 
+                          ? `${format(new Date(review.review_period_start), 'MMM yyyy')} - ${format(new Date(review.review_period_end), 'MMM yyyy')}`
+                          : '-'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <Star 
+                              key={n} 
+                              className={`h-4 w-4 ${n <= (review.overall_rating || 0) ? 'text-yellow-500 fill-yellow-500' : 'text-muted'}`} 
+                            />
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={review.goals_progress || 0} className="w-20" />
+                          <span className="text-sm">{review.goals_progress || 0}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={review.status === 'completed' ? 'default' : 'secondary'}>
+                          {review.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {review.feedback || '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Admin/Manager/HR view
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -264,15 +478,14 @@ export default function Performance() {
 
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            {(user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager') && (
-              <Dialog open={showAddReview} onOpenChange={setShowAddReview}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Review
-                  </Button>
-                </DialogTrigger>
-              <DialogContent>
+            <Dialog open={showAddReview} onOpenChange={setShowAddReview}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Review
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add Performance Review</DialogTitle>
                 </DialogHeader>
@@ -306,20 +519,60 @@ export default function Performance() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Overall Rating (1-5)</Label>
-                    <Select 
-                      value={newReview.overallRating.toString()} 
-                      onValueChange={(v) => setNewReview({ ...newReview, overallRating: parseInt(v) })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+
+                  {/* Performance Criteria Ratings */}
+                  {criteria.length > 0 && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Performance Criteria Ratings</Label>
+                      <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                        {criteria.map(c => {
+                          const rating = newReview.criteriaRatings.find(cr => cr.criteriaId === c.id)?.rating || 3;
+                          return (
+                            <div key={c.id} className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <p className="font-medium">{c.name}</p>
+                                {c.description && (
+                                  <p className="text-xs text-muted-foreground">{c.description}</p>
+                                )}
+                                <Badge variant="outline" className="mt-1">Weight: {c.weight}</Badge>
+                              </div>
+                              <Select 
+                                value={rating.toString()} 
+                                onValueChange={(v) => updateCriteriaRating(c.id, parseInt(v))}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[1, 2, 3, 4, 5].map(n => (
+                                    <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {criteria.length === 0 && (
+                    <div className="space-y-2">
+                      <Label>Overall Rating (1-5)</Label>
+                      <Select 
+                        value={newReview.overallRating.toString()} 
+                        onValueChange={(v) => setNewReview({ ...newReview, overallRating: parseInt(v) })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label>Goals</Label>
                     <Textarea 
@@ -350,9 +603,8 @@ export default function Performance() {
                 </div>
               </DialogContent>
             </Dialog>
-            )}
             
-            {user?.role === 'super_admin' && (
+            {(user?.role === 'super_admin' || user?.role === 'hr') && (
               <Dialog open={showAddCriteria} onOpenChange={setShowAddCriteria}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="gap-2">
@@ -360,9 +612,9 @@ export default function Performance() {
                     Manage Criteria
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-lg">
                   <DialogHeader>
-                    <DialogTitle>Add Performance Criteria</DialogTitle>
+                    <DialogTitle>Manage Performance Criteria</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
@@ -386,20 +638,41 @@ export default function Performance() {
                       <Input 
                         type="number"
                         step="0.1"
+                        min="0.1"
                         value={newCriteria.weight}
                         onChange={(e) => setNewCriteria({ ...newCriteria, weight: parseFloat(e.target.value) })}
                       />
                     </div>
-                    <Button onClick={handleAddCriteria} className="w-full">Add Criteria</Button>
+                    <Button onClick={handleAddCriteria} className="w-full" disabled={!newCriteria.name}>
+                      Add Criteria
+                    </Button>
                     
                     {criteria.length > 0 && (
                       <div className="mt-4">
                         <h4 className="font-medium mb-2">Existing Criteria</h4>
-                        <div className="space-y-2">
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
                           {criteria.map(c => (
-                            <div key={c.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                              <span>{c.name}</span>
-                              <Badge variant="secondary">Weight: {c.weight}</Badge>
+                            <div key={c.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                              <div>
+                                <p className="font-medium">{c.name}</p>
+                                {c.description && (
+                                  <p className="text-xs text-muted-foreground">{c.description}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">Weight: {c.weight}</Badge>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    setCriteriaToDelete({ id: c.id, name: c.name });
+                                    setShowDeleteCriteria(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -417,63 +690,85 @@ export default function Performance() {
         </div>
       </div>
 
+      {/* Delete Criteria Confirmation */}
+      <Dialog open={showDeleteCriteria} onOpenChange={setShowDeleteCriteria}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Criteria</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{criteriaToDelete?.name}"? This will not affect existing reviews.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowDeleteCriteria(false); setCriteriaToDelete(null); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteCriteria}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* View Mode Filters */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <Label className="font-medium">View By:</Label>
-          <div className="flex gap-2">
-            <Button 
-              variant={viewMode === 'all' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => { setViewMode('all'); setSelectedOrg(''); setSelectedBranch(''); }}
-            >
-              All Company
-            </Button>
-            <Button 
-              variant={viewMode === 'organization' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setViewMode('organization')}
-            >
-              <Building2 className="h-4 w-4 mr-1" />
-              By Organization
-            </Button>
-            <Button 
-              variant={viewMode === 'branch' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setViewMode('branch')}
-            >
-              <MapPin className="h-4 w-4 mr-1" />
-              By Branch
-            </Button>
+      {user?.role === 'super_admin' && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <Label className="font-medium">View By:</Label>
+            <div className="flex gap-2">
+              <Button 
+                variant={viewMode === 'all' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => { setViewMode('all'); setSelectedOrg(''); setSelectedBranch(''); }}
+              >
+                All Company
+              </Button>
+              <Button 
+                variant={viewMode === 'organization' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setViewMode('organization')}
+              >
+                <Building2 className="h-4 w-4 mr-1" />
+                By Organization
+              </Button>
+              <Button 
+                variant={viewMode === 'branch' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setViewMode('branch')}
+              >
+                <MapPin className="h-4 w-4 mr-1" />
+                By Branch
+              </Button>
+            </div>
+
+            {(viewMode === 'organization' || viewMode === 'branch') && (
+              <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSelectedBranch(''); }}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizations.map(org => (
+                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {viewMode === 'branch' && selectedOrg && (
+              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map(branch => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
-
-          {(viewMode === 'organization' || viewMode === 'branch') && (
-            <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSelectedBranch(''); }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Select Organization" />
-              </SelectTrigger>
-              <SelectContent>
-                {organizations.map(org => (
-                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {viewMode === 'branch' && selectedOrg && (
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Select Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map(branch => (
-                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
