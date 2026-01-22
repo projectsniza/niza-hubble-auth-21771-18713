@@ -55,7 +55,7 @@ export default function RemindersSidebar({ open, onClose }: RemindersSidebarProp
     const { data, error } = await supabase
       .from('reminders')
       .select('*')
-      .eq('created_by', user.id)
+      .or(`created_by.eq.${user.id},assigned_to.eq.${user.id}`)
       .order('reminder_date', { ascending: true });
 
     if (error) {
