@@ -1,15 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Trash2, CheckSquare, Clock, Calendar, Loader2 } from 'lucide-react';
-import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Trash2, CheckSquare, Calendar, Loader2, ChevronDown, ChevronRight, Circle } from 'lucide-react';
+import { format, isToday, isTomorrow, isPast, parseISO, isYesterday } from 'date-fns';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Reminder {
   id: string;
@@ -30,6 +30,8 @@ export default function Reminders() {
   const [newDate, setNewDate] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
 
   const fetchReminders = useCallback(async () => {
     if (!user?.id) return;
@@ -57,50 +59,59 @@ export default function Reminders() {
   const addReminder = async () => {
     if (!newTask.trim() || !user?.id) return;
 
+    setIsAdding(true);
     const { error } = await supabase
       .from('reminders')
       .insert({
-        title: newTask,
+        title: newTask.trim(),
         reminder_date: newDate || new Date().toISOString().split('T')[0],
         created_by: user.id,
+        assigned_to: user.id,
         is_completed: false,
         priority: 'medium',
       });
 
     if (error) {
-      toast.error('Failed to add reminder');
+      console.error('Insert error:', error);
+      toast.error('Failed to add task');
     } else {
-      toast.success('Reminder added');
+      toast.success('Task added');
       setNewTask('');
       setNewDate('');
       fetchReminders();
     }
+    setIsAdding(false);
   };
 
   const toggleComplete = async (id: string, currentStatus: boolean) => {
+    // Optimistic update
+    setReminders(prev => prev.map(r => 
+      r.id === id ? { ...r, is_completed: !currentStatus } : r
+    ));
+
     const { error } = await supabase
       .from('reminders')
       .update({ is_completed: !currentStatus })
       .eq('id', id);
 
     if (error) {
-      toast.error('Failed to update reminder');
-    } else {
-      fetchReminders();
+      toast.error('Failed to update task');
+      fetchReminders(); // Revert on error
     }
   };
 
   const deleteReminder = async (id: string) => {
+    // Optimistic update
+    setReminders(prev => prev.filter(r => r.id !== id));
+
     const { error } = await supabase
       .from('reminders')
       .delete()
       .eq('id', id);
 
     if (error) {
-      toast.error('Failed to delete reminder');
-    } else {
-      toast.success('Reminder deleted');
-      fetchReminders();
+      toast.error('Failed to delete task');
+      fetchReminders(); // Revert on error
     }
   };
 
@@ -112,11 +123,11 @@ export default function Reminders() {
 
     const { error } = await supabase
       .from('reminders')
-      .update({ title: editingTitle })
+      .update({ title: editingTitle.trim() })
       .eq('id', id);
 
     if (error) {
-      toast.error('Failed to update reminder');
+      toast.error('Failed to update task');
     } else {
       fetchReminders();
     }
@@ -127,14 +138,15 @@ export default function Reminders() {
     const date = parseISO(dateStr);
     if (isToday(date)) return 'Today';
     if (isTomorrow(date)) return 'Tomorrow';
-    return format(date, 'MMM d');
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'EEE, MMM d');
   };
 
-  const getDateColor = (dateStr: string, isCompleted: boolean) => {
+  const getDateStyles = (dateStr: string, isCompleted: boolean) => {
     if (isCompleted) return 'text-muted-foreground';
     const date = parseISO(dateStr);
     if (isPast(date) && !isToday(date)) return 'text-destructive';
-    if (isToday(date)) return 'text-amber-500';
+    if (isToday(date)) return 'text-primary font-medium';
     return 'text-muted-foreground';
   };
 
@@ -150,168 +162,165 @@ export default function Reminders() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-          <CheckSquare className="h-6 w-6 text-white" />
+      <div className="flex items-center gap-3 mb-6">
+        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+          <CheckSquare className="h-5 w-5 text-primary" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">My Reminders</h1>
-          <p className="text-muted-foreground">Keep track of your tasks and deadlines</p>
-        </div>
+        <h1 className="text-xl font-semibold">My Tasks</h1>
       </div>
 
-      {/* Add New Reminder */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add New Reminder
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="What do you need to remember?"
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addReminder()}
-              className="flex-1"
-            />
-            <Input
-              type="date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-              className="w-full sm:w-40"
-            />
-            <Button onClick={addReminder} disabled={!newTask.trim()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </Button>
+      {/* Add Task Input - Google Tasks style */}
+      <Card className="mb-4 border-dashed border-2 hover:border-primary/50 transition-colors">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-3">
+            <Circle className="h-5 w-5 text-muted-foreground/50 flex-shrink-0" />
+            <div className="flex-1 flex flex-col sm:flex-row gap-2">
+              <Input
+                placeholder="Add a task"
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !isAdding && addReminder()}
+                className="border-0 shadow-none focus-visible:ring-0 px-0 h-auto text-base placeholder:text-muted-foreground/60"
+                disabled={isAdding}
+              />
+              {newTask.trim() && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-36 h-8 text-sm"
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={addReminder} 
+                    disabled={isAdding || !newTask.trim()}
+                  >
+                    {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Reminders List */}
-      <Tabs defaultValue="active" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="active" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Active ({activeReminders.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-2">
-            <CheckSquare className="h-4 w-4" />
-            Completed ({completedReminders.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active" className="mt-4">
-          <Card>
-            <CardContent className="p-4">
-              {activeReminders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No active reminders</p>
-                  <p className="text-sm">Add a reminder to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {activeReminders.map((reminder) => (
-                    <div
-                      key={reminder.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-card/50 hover:bg-card/80 transition-colors border border-border/50"
+      {/* Tasks List */}
+      <ScrollArea className="h-[calc(100vh-280px)]">
+        {/* Active Tasks */}
+        {activeReminders.length === 0 && completedReminders.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <CheckSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
+            <p className="text-lg font-medium">No tasks yet</p>
+            <p className="text-sm">Add a task above to get started</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {activeReminders.map((reminder) => (
+              <div
+                key={reminder.id}
+                className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors group"
+              >
+                <Checkbox
+                  checked={reminder.is_completed}
+                  onCheckedChange={() => toggleComplete(reminder.id, reminder.is_completed)}
+                  className="mt-0.5 h-5 w-5 rounded-full border-2"
+                />
+                <div className="flex-1 min-w-0">
+                  {editingId === reminder.id ? (
+                    <Input
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={() => updateTitle(reminder.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') updateTitle(reminder.id);
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                      autoFocus
+                      className="h-7 px-1 border-0 shadow-none focus-visible:ring-1"
+                    />
+                  ) : (
+                    <p
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => {
+                        setEditingId(reminder.id);
+                        setEditingTitle(reminder.title);
+                      }}
                     >
-                      <Checkbox
-                        checked={reminder.is_completed}
-                        onCheckedChange={() => toggleComplete(reminder.id, reminder.is_completed)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        {editingId === reminder.id ? (
-                          <Input
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            onBlur={() => updateTitle(reminder.id)}
-                            onKeyDown={(e) => e.key === 'Enter' && updateTitle(reminder.id)}
-                            autoFocus
-                            className="h-8"
-                          />
-                        ) : (
-                          <p
-                            className="font-medium truncate cursor-pointer hover:text-primary"
-                            onClick={() => {
-                              setEditingId(reminder.id);
-                              setEditingTitle(reminder.title);
-                            }}
-                          >
-                            {reminder.title}
-                          </p>
-                        )}
-                      </div>
-                      <Badge variant="outline" className={getDateColor(reminder.reminder_date, false)}>
-                        <Calendar className="h-3 w-3 mr-1" />
-                        {formatDueDate(reminder.reminder_date)}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => deleteReminder(reminder.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                      {reminder.title}
+                    </p>
+                  )}
+                  <div className={cn("flex items-center gap-1 text-xs mt-1", getDateStyles(reminder.reminder_date, false))}>
+                    <Calendar className="h-3 w-3" />
+                    {formatDueDate(reminder.reminder_date)}
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                  onClick={() => deleteReminder(reminder.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <TabsContent value="completed" className="mt-4">
-          <Card>
-            <CardContent className="p-4">
-              {completedReminders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No completed reminders</p>
-                </div>
+        {/* Completed Section */}
+        {completedReminders.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowCompleted(!showCompleted)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2 px-3"
+            >
+              {showCompleted ? (
+                <ChevronDown className="h-4 w-4" />
               ) : (
-                <div className="space-y-2">
-                  {completedReminders.map((reminder) => (
-                    <div
-                      key={reminder.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-card/50 hover:bg-card/80 transition-colors border border-border/50 opacity-60"
-                    >
-                      <Checkbox
-                        checked={reminder.is_completed}
-                        onCheckedChange={() => toggleComplete(reminder.id, reminder.is_completed)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate line-through">
-                          {reminder.title}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-muted-foreground">
-                        <Calendar className="h-3 w-3 mr-1" />
-                        {formatDueDate(reminder.reminder_date)}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => deleteReminder(reminder.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                <ChevronRight className="h-4 w-4" />
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              Completed ({completedReminders.length})
+            </button>
+            
+            {showCompleted && (
+              <div className="space-y-1">
+                {completedReminders.map((reminder) => (
+                  <div
+                    key={reminder.id}
+                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors group opacity-60"
+                  >
+                    <Checkbox
+                      checked={reminder.is_completed}
+                      onCheckedChange={() => toggleComplete(reminder.id, reminder.is_completed)}
+                      className="mt-0.5 h-5 w-5 rounded-full border-2"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="line-through text-muted-foreground">
+                        {reminder.title}
+                      </p>
+                      <div className="flex items-center gap-1 text-xs mt-1 text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDueDate(reminder.reminder_date)}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteReminder(reminder.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </ScrollArea>
     </div>
   );
 }
