@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, CheckCircle2, Plus, Clock, AlertTriangle, CheckCheck, Paperclip, X, FileText, Download, Eye } from "lucide-react";
+import { Search, CheckCircle2, Plus, Clock, AlertTriangle, CheckCheck, Paperclip, X, FileText, Download, Eye, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -61,6 +61,8 @@ export default function Tasks() {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<SafetyTask | null>(null);
   const [selectedTask, setSelectedTask] = useState<SafetyTask | null>(null);
   const [activeTab, setActiveTab] = useState('assigned');
   const [searchTerm, setSearchTerm] = useState('');
@@ -252,6 +254,41 @@ export default function Tasks() {
       if (error) throw error;
 
       toast({ title: "Success", description: "Task updated" });
+      fetchTasks();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!taskToDelete) return;
+    try {
+      // Delete associated files from storage
+      const attachments = taskToDelete.attachments 
+        ? (typeof taskToDelete.attachments === 'string' ? JSON.parse(taskToDelete.attachments) : taskToDelete.attachments)
+        : [];
+      const completionAttachments = taskToDelete.completion_attachments 
+        ? (typeof taskToDelete.completion_attachments === 'string' ? JSON.parse(taskToDelete.completion_attachments) : taskToDelete.completion_attachments)
+        : [];
+      
+      const allAttachments = [...(Array.isArray(attachments) ? attachments : []), ...(Array.isArray(completionAttachments) ? completionAttachments : [])];
+      
+      for (const att of allAttachments) {
+        if (att.path) {
+          await supabase.storage.from('documents').remove([att.path]);
+        }
+      }
+
+      const { error } = await supabase
+        .from('safety_tasks')
+        .delete()
+        .eq('id', taskToDelete.id);
+
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Task deleted successfully" });
+      setShowDeleteDialog(false);
+      setTaskToDelete(null);
       fetchTasks();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -481,6 +518,16 @@ export default function Tasks() {
                             <SelectItem value="completed">Completed</SelectItem>
                           </SelectContent>
                         </Select>
+                      )}
+                      {isAdmin && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => { setTaskToDelete(task); setShowDeleteDialog(true); }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
                   </TableCell>
@@ -719,6 +766,26 @@ export default function Tasks() {
               })()}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{taskToDelete?.title}"? This action cannot be undone and will also remove all associated attachments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setTaskToDelete(null); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete Task
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
