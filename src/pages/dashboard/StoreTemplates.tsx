@@ -17,6 +17,7 @@ export default function StoreTemplates() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [templateType, setTemplateType] = useState('general');
+  const [customType, setCustomType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,19 +29,24 @@ export default function StoreTemplates() {
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
+    if (templateType === 'other' && !customType.trim()) return;
 
     setIsSubmitting(true);
     try {
+      // Use custom type if "other" is selected
+      const finalType = templateType === 'other' ? customType.trim().toLowerCase().replace(/\s+/g, '_') : templateType;
+      
       await createStoreTemplate({
         title: title.trim(),
         description: description.trim() || null,
-        template_type: templateType,
+        template_type: finalType,
       }, file || undefined);
 
       // Reset form
       setTitle('');
       setDescription('');
       setTemplateType('general');
+      setCustomType('');
       setFile(null);
       setDialogOpen(false);
     } finally {
@@ -241,9 +247,22 @@ export default function StoreTemplates() {
                   <SelectItem value="invoice">Invoice</SelectItem>
                   <SelectItem value="letter">Letter</SelectItem>
                   <SelectItem value="form">Form</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {templateType === 'other' && (
+              <div className="space-y-2">
+                <Label htmlFor="customType">Custom Type Name *</Label>
+                <Input
+                  id="customType"
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  placeholder="Enter custom type name"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Template File (Optional)</Label>
@@ -278,7 +297,7 @@ export default function StoreTemplates() {
               </Button>
               <Button 
                 onClick={handleSubmit} 
-                disabled={!title.trim() || isSubmitting}
+                disabled={!title.trim() || (templateType === 'other' && !customType.trim()) || isSubmitting}
               >
                 {isSubmitting ? 'Creating...' : 'Create Template'}
               </Button>
