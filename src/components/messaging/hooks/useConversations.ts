@@ -132,23 +132,10 @@ export function useConversations() {
         .eq('is_group', true)
         .maybeSingle();
 
+      let conversationId: string;
+
       if (existingConvo) {
-        // Check if user is participant
-        const { data: participation } = await supabase
-          .from('conversation_participants')
-          .select('id')
-          .eq('conversation_id', existingConvo.id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!participation) {
-          await supabase.from('conversation_participants').insert({
-            conversation_id: existingConvo.id,
-            user_id: user.id,
-          });
-        }
-
-        return existingConvo.id;
+        conversationId = existingConvo.id;
       } else {
         // Create new org-wide conversation
         const { data: newConvo, error } = await supabase
@@ -162,14 +149,39 @@ export function useConversations() {
           .single();
 
         if (error) throw error;
-
-        await supabase.from('conversation_participants').insert({
-          conversation_id: newConvo.id,
-          user_id: user.id,
-        });
-
-        return newConvo.id;
+        conversationId = newConvo.id;
       }
+
+      // Sync all users with credentials to the org chat
+      // Get all users with valid profiles (only those with credentials/accounts)
+      const { data: allProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .not('name', 'is', null);
+
+      if (allProfiles && allProfiles.length > 0) {
+        // Get existing participants
+        const { data: existingParticipants } = await supabase
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+
+        const existingUserIds = new Set(existingParticipants?.map(p => p.user_id) || []);
+
+        // Add missing users to the conversation
+        const newParticipants = allProfiles
+          .filter(p => !existingUserIds.has(p.id))
+          .map(p => ({
+            conversation_id: conversationId,
+            user_id: p.id,
+          }));
+
+        if (newParticipants.length > 0) {
+          await supabase.from('conversation_participants').insert(newParticipants);
+        }
+      }
+
+      return conversationId;
     } catch (error) {
       console.error('Error initializing org chat:', error);
       return null;
