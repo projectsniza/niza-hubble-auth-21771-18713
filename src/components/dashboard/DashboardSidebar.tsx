@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ const getMenuItems = (role: string) => {
       { title: 'My Dashboard', icon: Home, path: '/dashboard' },
       { title: 'My Profile', icon: User, path: '/dashboard/my-profile' },
       { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
+      { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Clock In/Out', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'My Schedule', icon: Calendar, path: '/dashboard/scheduling' },
       { title: 'Attendance & Leave', icon: Clock, path: '/dashboard/attendance' },
@@ -36,6 +37,7 @@ const getMenuItems = (role: string) => {
       { title: 'Home', icon: Home, path: '/dashboard' },
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
+      { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
@@ -58,6 +60,7 @@ const getMenuItems = (role: string) => {
       { title: 'Home', icon: Home, path: '/dashboard' },
       { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
       { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
+      { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
@@ -79,6 +82,7 @@ const getMenuItems = (role: string) => {
     { title: 'Home', icon: Home, path: '/dashboard' },
     { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
     { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
+    { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
     { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
