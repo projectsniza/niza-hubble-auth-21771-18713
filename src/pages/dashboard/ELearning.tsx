@@ -8,10 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin, Search, Eye, Filter } from 'lucide-react';
+import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin, Search, Eye, Filter, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, isValid } from 'date-fns';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface Training {
   id: string;
@@ -53,6 +54,7 @@ export default function ELearning() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [selectedTraining, setSelectedTraining] = useState<Training | null>(null);
+  const [trainingToDelete, setTrainingToDelete] = useState<Training | null>(null);
   const [selectedTrainingDocs, setSelectedTrainingDocs] = useState<TrainingDocument[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [closingFiles, setClosingFiles] = useState<File[]>([]);
@@ -457,6 +459,37 @@ export default function ELearning() {
         title: 'Error',
         description: 'Failed to download document',
         variant: 'destructive'
+      });
+    }
+  };
+
+  const canDeleteTraining = (training: Training) => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if (user.role === 'hr') return true;
+    if (user.role === 'manager' && user.branchId && training.branch_id === user.branchId) return true;
+    return false;
+  };
+
+  const handleDeleteTraining = async (training: Training) => {
+    try {
+      const { error } = await supabase.from('trainings').delete().eq('id', training.id);
+      if (error) throw error;
+
+      toast({
+        title: 'Deleted',
+        description: 'Training record deleted successfully.',
+      });
+
+      setTrainingToDelete(null);
+      setShowDetailsDialog(false);
+      setSelectedTraining(null);
+      fetchTrainings();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to delete training',
+        variant: 'destructive',
       });
     }
   };
@@ -1096,6 +1129,18 @@ export default function ELearning() {
               <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
                 Close
               </Button>
+
+              {canDeleteTraining(selectedTraining) && (
+                <Button
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setTrainingToDelete(selectedTraining)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              )}
+
               {isManager && selectedTraining.status === 'pending' && selectedTraining.assigned_to === user?.id && (
                 <Button onClick={handleStartTraining}>
                   <Clock className="h-4 w-4 mr-2" />
@@ -1112,6 +1157,26 @@ export default function ELearning() {
           </DialogContent>
         </Dialog>
       )}
+
+      <AlertDialog open={!!trainingToDelete} onOpenChange={(open) => !open && setTrainingToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete training?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the training record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => trainingToDelete && handleDeleteTraining(trainingToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
