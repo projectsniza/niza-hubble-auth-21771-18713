@@ -226,18 +226,27 @@ export default function AddEmployee() {
   };
 
   const fetchDepartments = async (orgId?: string) => {
-    let query = supabase
-      .from('departments')
-      .select('*')
-      .eq('is_active', true)
-      .order('name');
-    
-    if (orgId) {
-      query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
+    try {
+      let query = supabase
+        .from('departments')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      
+      // If an organization is selected, filter by that org OR global departments (null org_id)
+      if (orgId) {
+        query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
+      }
+      
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching departments:', error);
+        return;
+      }
+      setDepartments(data || []);
+    } catch (err) {
+      console.error('Exception fetching departments:', err);
     }
-    
-    const { data } = await query;
-    if (data) setDepartments(data);
   };
 
   const updateFormData = (updates: Partial<FormData>) => {
