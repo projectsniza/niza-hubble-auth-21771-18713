@@ -285,7 +285,7 @@ export default function StoreTemplates() {
                     type="file"
                     className="hidden"
                     onChange={handleFileChange}
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    accept="*/*"
                   />
                 </label>
               )}

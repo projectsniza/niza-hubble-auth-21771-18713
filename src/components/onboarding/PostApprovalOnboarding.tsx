@@ -236,7 +236,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
                   <input
                     type="file"
                     id="signed-contract"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept="*/*"
                     className="hidden"
                     onChange={(e) => setSignedContractFile(e.target.files?.[0] || null)}
                   />

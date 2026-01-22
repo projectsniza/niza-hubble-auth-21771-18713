@@ -462,7 +462,7 @@ export default function SafetyTasks() {
                     <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
                       <Paperclip className="h-4 w-4" /><span className="text-sm">Choose Files</span>
                     </div>
-                    <input id="completion-files" type="file" multiple onChange={handleFileUpload} className="hidden" />
+                    <input id="completion-files" type="file" multiple accept="*/*" onChange={handleFileUpload} className="hidden" />
                   </label>
                   {completionFiles.length > 0 && <span className="text-sm text-muted-foreground">{completionFiles.length} file(s)</span>}
                 </div>

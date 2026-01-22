@@ -886,7 +886,7 @@ export default function ELearning() {
                       const files = Array.from(e.target.files || []);
                       setUploadedFiles(prev => [...prev, ...files]);
                     }}
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                    accept="*/*"
                   />
                 </label>
               </div>
@@ -1028,7 +1028,7 @@ export default function ELearning() {
                             const files = Array.from(e.target.files || []);
                             setClosingFiles(prev => [...prev, ...files]);
                           }}
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          accept="*/*"
                         />
                       </label>
                     </div>

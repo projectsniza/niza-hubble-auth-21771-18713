@@ -748,7 +748,7 @@ export default function Attendance() {
                             <input
                               type="file"
                               className="hidden"
-                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              accept="*/*"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {

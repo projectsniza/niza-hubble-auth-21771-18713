@@ -356,6 +356,7 @@ export default function DailyReports() {
                         id="files"
                         type="file"
                         multiple
+                        accept="*/*"
                         onChange={handleFileUpload}
                         className="hidden"
                       />

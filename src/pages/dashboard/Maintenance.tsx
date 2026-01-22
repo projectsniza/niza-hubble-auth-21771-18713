@@ -401,7 +401,7 @@ export default function Maintenance() {
                         id="images"
                         type="file"
                         multiple
-                        accept="image/*,.pdf,.doc,.docx"
+                        accept="*/*"
                         onChange={handleImageUpload}
                         className="hidden"
                       />
