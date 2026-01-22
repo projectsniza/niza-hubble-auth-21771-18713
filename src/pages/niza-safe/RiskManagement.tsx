@@ -425,7 +425,7 @@ export default function RiskManagement() {
         folderPath={`safety/${dialogType}`}
         maxFiles={dialogType === 'coshh' ? 1 : 10}
         label={labels[dialogType]}
-        accept="image/*,.pdf,.doc,.docx"
+        accept="*/*"
       />
     );
   };

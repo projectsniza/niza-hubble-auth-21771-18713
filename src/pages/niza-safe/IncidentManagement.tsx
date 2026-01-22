@@ -504,7 +504,7 @@ export default function IncidentManagement() {
               folderPath="incidents"
               maxFiles={10}
               label="Attach Evidence/Documents"
-              accept="image/*,.pdf,.doc,.docx"
+              accept="*/*"
             />
           </div>
           <div className="flex justify-end gap-2">

@@ -644,6 +644,7 @@ export default function Tasks() {
                     id="task-files"
                     type="file"
                     multiple
+                    accept="*/*"
                     onChange={handleFileUpload}
                     className="hidden"
                   />

@@ -376,7 +376,7 @@ export default function BulkUploadedEmployees() {
                                   id={`file-${requirement.id}`}
                                   className="hidden"
                                   onChange={(e) => handleFileSelect(requirement.id, e.target.files?.[0] || null)}
-                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                  accept="*/*"
                                 />
                                 <Label 
                                   htmlFor={`file-${requirement.id}`}

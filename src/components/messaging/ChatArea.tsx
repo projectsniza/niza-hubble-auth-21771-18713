@@ -807,7 +807,7 @@ export default function ChatArea({
             multiple
             className="hidden"
             onChange={handleFileSelect}
-            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            accept="*/*"
           />
           <Button
             variant="ghost"
