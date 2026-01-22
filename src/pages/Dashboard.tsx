@@ -4,9 +4,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
 import TaskReminderListener from '@/components/reminders/TaskReminderListener';
+import RemindersSidebar from '@/components/reminders/RemindersSidebar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Loader2, Menu } from 'lucide-react';
+import { Loader2, Menu, CheckSquare } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Dashboard() {
@@ -14,6 +15,7 @@ export default function Dashboard() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [remindersSidebarOpen, setRemindersSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
 
   if (isLoading) {
@@ -71,7 +73,24 @@ export default function Dashboard() {
             )}
             <AppsDialog />
           </div>
+
+          {/* Reminders Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setRemindersSidebarOpen(true)}
+            className="relative"
+            title="My Reminders"
+          >
+            <CheckSquare className="h-5 w-5" />
+          </Button>
         </header>
+
+        {/* Reminders Sidebar */}
+        <RemindersSidebar
+          open={remindersSidebarOpen}
+          onClose={() => setRemindersSidebarOpen(false)}
+        />
 
         <div className="flex-1 overflow-y-auto">
           <Outlet />

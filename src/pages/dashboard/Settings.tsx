@@ -6,12 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import OrganizationManagement from '@/components/settings/OrganizationManagement';
 import UserManagement from '@/components/settings/UserManagement';
-import ReminderSettingsPanel from '@/components/settings/ReminderSettingsPanel';
 import MessageSettingsPanel from '@/components/messaging/MessageSettingsPanel';
 import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
 import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
 import DepartmentManagement from '@/components/settings/DepartmentManagement';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, Bell, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -93,7 +92,6 @@ export default function Settings() {
   // Check if user has access to organization/user management
   const canManageOrgs = user?.role === 'super_admin';
   const canManageUsers = user?.role === 'super_admin';
-  const canManageReminders = user?.role === 'super_admin';
   const canManageMessages = user?.role === 'super_admin';
   const canManageCustomRoles = user?.role === 'super_admin';
   const canManageDocuments = user?.role === 'super_admin';
@@ -141,12 +139,6 @@ export default function Settings() {
             <TabsTrigger value="custom-roles" className="gap-2">
               <Shield className="h-4 w-4" />
               Custom Roles
-            </TabsTrigger>
-          )}
-          {canManageReminders && (
-            <TabsTrigger value="reminders" className="gap-2">
-              <Bell className="h-4 w-4" />
-              Reminders
             </TabsTrigger>
           )}
           {canManageMessages && (
@@ -304,12 +296,6 @@ export default function Settings() {
         {canManageCustomRoles && (
           <TabsContent value="custom-roles" forceMount className="data-[state=inactive]:hidden">
             <CustomRolesManagement />
-          </TabsContent>
-        )}
-
-        {canManageReminders && (
-          <TabsContent value="reminders" forceMount className="data-[state=inactive]:hidden">
-            <ReminderSettingsPanel />
           </TabsContent>
         )}
 
