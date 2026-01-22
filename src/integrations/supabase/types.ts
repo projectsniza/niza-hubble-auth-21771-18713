@@ -3052,6 +3052,7 @@ export type Database = {
       performance_reviews: {
         Row: {
           created_at: string | null
+          criteria_ratings: Json | null
           employee_id: string
           feedback: string | null
           goals: string | null
@@ -3067,6 +3068,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          criteria_ratings?: Json | null
           employee_id: string
           feedback?: string | null
           goals?: string | null
@@ -3082,6 +3084,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          criteria_ratings?: Json | null
           employee_id?: string
           feedback?: string | null
           goals?: string | null
