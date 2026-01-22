@@ -2679,6 +2679,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          attachments: Json | null
           branch_id: string
           created_at: string | null
           created_by: string | null
@@ -2696,6 +2697,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          attachments?: Json | null
           branch_id: string
           created_at?: string | null
           created_by?: string | null
@@ -2713,6 +2715,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          attachments?: Json | null
           branch_id?: string
           created_at?: string | null
           created_by?: string | null

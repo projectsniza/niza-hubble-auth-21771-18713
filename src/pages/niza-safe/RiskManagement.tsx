@@ -229,7 +229,7 @@ export default function RiskManagement() {
           ({ error } = await supabase.from('method_statements').update({
             title: formData.title,
             responsibilities: formData.responsibilities,
-            attachments: attachedFiles,
+            attachments: attachedFiles as any,
           }).eq('id', selectedItem.id));
           break;
       }
