@@ -6,8 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X } from 'lucide-react';
+import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { useToast } from '@/hooks/use-toast';
@@ -44,6 +45,7 @@ export default function DailyReports() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [viewingReport, setViewingReport] = useState<DailyReport | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<DailyReport | null>(null);
   
   // Use centralized org/branch data
   const { organizations, branches } = useOrgBranch();
@@ -253,6 +255,36 @@ export default function DailyReports() {
         title: "Error",
         description: "Failed to download file",
         variant: "destructive",
+      });
+    }
+  };
+
+  const canDeleteReport = useCallback((report: DailyReport) => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if ((user.role === 'manager' || user.role === 'hr') && report.submitted_by === user.id) return true;
+    return false;
+  }, [user]);
+
+  const handleDeleteReport = async (report: DailyReport) => {
+    try {
+      const { error } = await supabase.from('daily_reports').delete().eq('id', report.id);
+      if (error) throw error;
+
+      toast({
+        title: 'Deleted',
+        description: 'Daily report deleted successfully.',
+      });
+
+      setViewingReport((prev) => (prev?.id === report.id ? null : prev));
+      setReportToDelete(null);
+      fetchReports();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete report';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
       });
     }
   };
@@ -493,15 +525,47 @@ export default function DailyReports() {
                     </div>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}>
-                  <Eye className="h-4 w-4 mr-1" />
-                  View Details
-                </Button>
+                <div className="flex items-center gap-2">
+                  {canDeleteReport(report) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setReportToDelete(report)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}>
+                    <Eye className="h-4 w-4 mr-1" />
+                    View Details
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete report?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the report record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => reportToDelete && handleDeleteReport(reportToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* View Report Dialog */}
       <Dialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>

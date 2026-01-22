@@ -7,13 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertCircle, Clock, CheckCircle, Upload, Image as ImageIcon, X, Building2, MapPin, User, Eye, Download } from 'lucide-react';
+import { Search, Plus, AlertCircle, Clock, CheckCircle, Upload, Image as ImageIcon, X, Building2, MapPin, User, Eye, Download, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface MaintenanceTicket {
   id: string;
@@ -47,6 +48,7 @@ export default function Maintenance() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
+  const [ticketToDelete, setTicketToDelete] = useState<MaintenanceTicket | null>(null);
   
   // Use centralized org/branch data
   const { organizations, branches } = useOrgBranch();
@@ -275,6 +277,36 @@ export default function Maintenance() {
         title: "Error",
         description: "Failed to download image",
         variant: "destructive",
+      });
+    }
+  };
+
+  const canDeleteTicket = useCallback((ticket: MaintenanceTicket) => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if ((user.role === 'manager' || user.role === 'hr') && ticket.reported_by === user.id) return true;
+    return false;
+  }, [user]);
+
+  const handleDeleteTicket = async (ticket: MaintenanceTicket) => {
+    try {
+      const { error } = await supabase.from('maintenance_tickets').delete().eq('id', ticket.id);
+      if (error) throw error;
+
+      toast({
+        title: 'Deleted',
+        description: 'Maintenance ticket deleted successfully.',
+      });
+
+      setViewingTicket((prev) => (prev?.id === ticket.id ? null : prev));
+      setTicketToDelete(null);
+      fetchTickets();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete ticket';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
       });
     }
   };
@@ -550,6 +582,26 @@ export default function Maintenance() {
         </div>
       )}
 
+      <AlertDialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ticket?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the maintenance ticket record. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => ticketToDelete && handleDeleteTicket(ticketToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* View Ticket Dialog */}
       <Dialog open={!!viewingTicket} onOpenChange={() => setViewingTicket(null)}>
         <DialogContent className="max-w-2xl">
@@ -634,6 +686,19 @@ export default function Maintenance() {
                   )}
                   <Button size="sm" variant="outline" onClick={() => handleUpdateStatus(viewingTicket.id, 'resolved')}>
                     Mark Resolved
+                  </Button>
+                </div>
+              )}
+
+              {canDeleteTicket(viewingTicket) && (
+                <div className="flex justify-end pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setTicketToDelete(viewingTicket)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Ticket
                   </Button>
                 </div>
               )}
