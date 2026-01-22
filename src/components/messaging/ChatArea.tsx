@@ -82,6 +82,7 @@ export default function ChatArea({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [cursorPosition, setCursorPosition] = useState(0);
+  const [showPinnedMessages, setShowPinnedMessages] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -515,13 +516,57 @@ export default function ChatArea({
 
       {/* Pinned Messages */}
       {pinnedMessages.length > 0 && (
-        <div className="px-4 py-2 border-b bg-amber-50/50 dark:bg-amber-950/20">
-          <div className="flex items-center gap-2 text-sm">
-            <Pin className="h-4 w-4 text-amber-600" />
-            <span className="font-medium text-amber-800 dark:text-amber-200">
-              {pinnedMessages.length} pinned message{pinnedMessages.length > 1 ? 's' : ''}
+        <div className="border-b bg-amber-50/50 dark:bg-amber-950/20">
+          <button
+            onClick={() => setShowPinnedMessages(!showPinnedMessages)}
+            className="w-full px-4 py-2 flex items-center justify-between hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm">
+              <Pin className="h-4 w-4 text-amber-600" />
+              <span className="font-medium text-amber-800 dark:text-amber-200">
+                {pinnedMessages.length} pinned message{pinnedMessages.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              {showPinnedMessages ? 'Hide' : 'Click to view'}
             </span>
-          </div>
+          </button>
+          {showPinnedMessages && (
+            <div className="px-4 pb-3 space-y-2 max-h-60 overflow-y-auto">
+              {pinnedMessages.map(msg => (
+                <div
+                  key={msg.id}
+                  className="p-3 rounded-lg bg-background border border-amber-200 dark:border-amber-800"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Avatar className={`h-6 w-6 ${getAvatarColor(msg.sender?.role)}`}>
+                        <AvatarFallback className="text-xs">
+                          {getInitials(msg.sender?.name || 'U')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">{msg.sender?.name || 'Unknown'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(msg.created_at), 'MMM d, HH:mm')}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onTogglePin(msg.id, false);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-foreground">{msg.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
