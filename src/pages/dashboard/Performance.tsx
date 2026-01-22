@@ -5,12 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award, Trash2 } from 'lucide-react';
+import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -20,6 +20,28 @@ interface CriteriaRating {
   criteriaId: string;
   rating: number;
 }
+
+interface ReviewFormData {
+  employeeId: string;
+  periodStart: string;
+  periodEnd: string;
+  feedback: string;
+  goals: string;
+  goalsProgress: number;
+  overallRating: number;
+  criteriaRatings: CriteriaRating[];
+}
+
+const initialReviewForm: ReviewFormData = {
+  employeeId: '',
+  periodStart: '',
+  periodEnd: '',
+  feedback: '',
+  goals: '',
+  goalsProgress: 50,
+  overallRating: 3,
+  criteriaRatings: []
+};
 
 export default function Performance() {
   const { user } = useAuth();
@@ -51,26 +73,20 @@ export default function Performance() {
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string }>>([]);
   const [branches, setBranches] = useState<Array<{ id: string; name: string; organization_id: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
   const [viewMode, setViewMode] = useState<'all' | 'company' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [showAddReview, setShowAddReview] = useState(false);
+  const [showEditReview, setShowEditReview] = useState(false);
+  const [showDeleteReview, setShowDeleteReview] = useState(false);
+  const [reviewToDelete, setReviewToDelete] = useState<{ id: string; employeeName: string } | null>(null);
+  const [editingReview, setEditingReview] = useState<any>(null);
   const [showAddCriteria, setShowAddCriteria] = useState(false);
   const [showDeleteCriteria, setShowDeleteCriteria] = useState(false);
   const [criteriaToDelete, setCriteriaToDelete] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [newReview, setNewReview] = useState({
-    employeeId: '',
-    periodStart: '',
-    periodEnd: '',
-    feedback: '',
-    goals: '',
-    goalsProgress: 50,
-    overallRating: 3,
-    criteriaRatings: [] as CriteriaRating[]
-  });
+  const [reviewForm, setReviewForm] = useState<ReviewFormData>(initialReviewForm);
 
   const [newCriteria, setNewCriteria] = useState({
     name: '',
@@ -101,13 +117,15 @@ export default function Performance() {
 
   // Initialize criteria ratings when criteria loads or dialog opens
   useEffect(() => {
-    if (showAddReview && criteria.length > 0) {
-      setNewReview(prev => ({
-        ...prev,
-        criteriaRatings: criteria.map(c => ({ criteriaId: c.id, rating: 3 }))
-      }));
+    if ((showAddReview || showEditReview) && criteria.length > 0) {
+      if (!editingReview) {
+        setReviewForm(prev => ({
+          ...prev,
+          criteriaRatings: criteria.map(c => ({ criteriaId: c.id, rating: 3 }))
+        }));
+      }
     }
-  }, [showAddReview, criteria]);
+  }, [showAddReview, showEditReview, criteria, editingReview]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -124,11 +142,9 @@ export default function Performance() {
         } else if (user.hrAccessLevel === 'organization') {
           employeesQuery = employeesQuery.eq('organization_id', user.organizationId);
         }
-        // 'full' access level sees all employees
       } else if (user?.role === 'manager') {
         employeesQuery = employeesQuery.eq('branch_id', user.branchId);
       } else if (user?.role === 'employee') {
-        // Employee only sees their own record
         employeesQuery = employeesQuery.eq('user_id', user.id);
       }
 
@@ -150,54 +166,93 @@ export default function Performance() {
     }
   };
 
-  const handleAddReview = async () => {
-    if (!newReview.employeeId) {
+  const handleSaveReview = async () => {
+    if (!reviewForm.employeeId) {
       toast.error('Please select an employee');
       return;
     }
 
     try {
       // Calculate weighted average from criteria ratings
-      let calculatedRating = newReview.overallRating;
-      if (criteria.length > 0 && newReview.criteriaRatings.length > 0) {
+      let calculatedRating = reviewForm.overallRating;
+      if (criteria.length > 0 && reviewForm.criteriaRatings.length > 0) {
         const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
-        const weightedSum = newReview.criteriaRatings.reduce((sum, cr) => {
+        const weightedSum = reviewForm.criteriaRatings.reduce((sum, cr) => {
           const crit = criteria.find(c => c.id === cr.criteriaId);
           return sum + (cr.rating * (crit?.weight || 1));
         }, 0);
         calculatedRating = Math.round(weightedSum / totalWeight);
       }
 
-      const { error } = await supabase.from('performance_reviews').insert({
-        employee_id: newReview.employeeId,
+      const reviewData = {
+        employee_id: reviewForm.employeeId,
         reviewer_id: user?.id,
-        review_period_start: newReview.periodStart || null,
-        review_period_end: newReview.periodEnd || null,
-        feedback: newReview.feedback || null,
-        goals: newReview.goals || null,
-        goals_progress: newReview.goalsProgress,
+        review_period_start: reviewForm.periodStart || null,
+        review_period_end: reviewForm.periodEnd || null,
+        feedback: reviewForm.feedback || null,
+        goals: reviewForm.goals || null,
+        goals_progress: reviewForm.goalsProgress,
         overall_rating: calculatedRating,
-        criteria_ratings: newReview.criteriaRatings,
-        status: 'draft'
-      });
+        criteria_ratings: reviewForm.criteriaRatings as any,
+        status: 'completed'
+      };
+
+      if (editingReview) {
+        const { error } = await supabase
+          .from('performance_reviews')
+          .update(reviewData)
+          .eq('id', editingReview.id);
+        if (error) throw error;
+        toast.success('Review updated successfully');
+        setShowEditReview(false);
+      } else {
+        const { error } = await supabase.from('performance_reviews').insert(reviewData);
+        if (error) throw error;
+        toast.success('Review added successfully');
+        setShowAddReview(false);
+      }
+
+      setReviewForm(initialReviewForm);
+      setEditingReview(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save review');
+    }
+  };
+
+  const handleEditReview = (review: any) => {
+    const employee = employees.find(e => e.id === review.employee_id);
+    setEditingReview(review);
+    setReviewForm({
+      employeeId: review.employee_id,
+      periodStart: review.review_period_start || '',
+      periodEnd: review.review_period_end || '',
+      feedback: review.feedback || '',
+      goals: review.goals || '',
+      goalsProgress: review.goals_progress || 50,
+      overallRating: review.overall_rating || 3,
+      criteriaRatings: review.criteria_ratings || criteria.map(c => ({ criteriaId: c.id, rating: 3 }))
+    });
+    setShowEditReview(true);
+  };
+
+  const handleDeleteReview = async () => {
+    if (!reviewToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('performance_reviews')
+        .delete()
+        .eq('id', reviewToDelete.id);
 
       if (error) throw error;
 
-      toast.success('Review added successfully');
-      setShowAddReview(false);
-      setNewReview({ 
-        employeeId: '', 
-        periodStart: '', 
-        periodEnd: '', 
-        feedback: '', 
-        goals: '', 
-        goalsProgress: 50, 
-        overallRating: 3,
-        criteriaRatings: []
-      });
+      toast.success('Review deleted successfully');
+      setShowDeleteReview(false);
+      setReviewToDelete(null);
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to add review');
+      toast.error(error.message || 'Failed to delete review');
     }
   };
 
@@ -246,12 +301,63 @@ export default function Performance() {
   };
 
   const updateCriteriaRating = (criteriaId: string, rating: number) => {
-    setNewReview(prev => ({
+    setReviewForm(prev => ({
       ...prev,
       criteriaRatings: prev.criteriaRatings.map(cr => 
         cr.criteriaId === criteriaId ? { ...cr, rating } : cr
       )
     }));
+  };
+
+  const handleExportReport = () => {
+    try {
+      const dataToExport = filteredReviews.map(review => {
+        const employee = employees.find(e => e.id === review.employee_id);
+        return {
+          'Employee Name': `${employee?.first_name || ''} ${employee?.last_name || ''}`,
+          'Organization': employee?.organization?.name || '-',
+          'Branch': employee?.branch?.name || '-',
+          'Period Start': review.review_period_start ? format(new Date(review.review_period_start), 'dd/MM/yyyy') : '-',
+          'Period End': review.review_period_end ? format(new Date(review.review_period_end), 'dd/MM/yyyy') : '-',
+          'Overall Rating': review.overall_rating || 0,
+          'Goals Progress': `${review.goals_progress || 0}%`,
+          'Goals': review.goals || '-',
+          'Feedback': review.feedback || '-',
+          'Created At': review.created_at ? format(new Date(review.created_at), 'dd/MM/yyyy') : '-'
+        };
+      });
+
+      if (dataToExport.length === 0) {
+        toast.error('No reviews to export');
+        return;
+      }
+
+      // Create CSV content
+      const headers = Object.keys(dataToExport[0]);
+      const csvContent = [
+        headers.join(','),
+        ...dataToExport.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row];
+            // Escape commas and quotes in values
+            const escaped = String(value).replace(/"/g, '""');
+            return `"${escaped}"`;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `performance_reviews_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      link.click();
+      
+      toast.success('Report exported successfully');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export report');
+    }
   };
 
   // Memoized filter for employees based on view mode
@@ -276,7 +382,7 @@ export default function Performance() {
   // Memoized performance rankings - expensive calculation
   const rankings = useMemo(() => {
     const employeeRatings = filteredEmployees.map(emp => {
-      const empReviews = reviews.filter(r => r.employee_id === emp.id && r.status === 'completed');
+      const empReviews = reviews.filter(r => r.employee_id === emp.id);
       const avgRating = empReviews.length > 0
         ? empReviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / empReviews.length
         : 0;
@@ -299,8 +405,6 @@ export default function Performance() {
 
   const filteredReviews = useMemo(() => {
     let result = filteredReviewsAll;
-    if (activeTab === 'pending') result = filteredReviewsAll.filter(r => r.status === 'draft');
-    if (activeTab === 'completed') result = filteredReviewsAll.filter(r => r.status === 'completed');
     
     // Apply search filter
     if (searchQuery) {
@@ -312,17 +416,16 @@ export default function Performance() {
     }
     
     return result;
-  }, [filteredReviewsAll, activeTab, searchQuery, employees]);
+  }, [filteredReviewsAll, searchQuery, employees]);
 
-  const { averageRating, completedReviews, avgGoalsProgress } = useMemo(() => {
+  const { averageRating, avgGoalsProgress } = useMemo(() => {
     const avg = filteredReviewsAll.length > 0 
       ? (filteredReviewsAll.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / filteredReviewsAll.length).toFixed(1)
       : '0.0';
-    const completed = filteredReviewsAll.filter(r => r.status === 'completed').length;
     const goals = filteredReviewsAll.length > 0
       ? Math.round(filteredReviewsAll.reduce((sum, r) => sum + (r.goals_progress || 0), 0) / filteredReviewsAll.length)
       : 0;
-    return { averageRating: avg, completedReviews: completed, avgGoalsProgress: goals };
+    return { averageRating: avg, avgGoalsProgress: goals };
   }, [filteredReviewsAll]);
 
   const topPerformers = useMemo(() => rankings.slice(0, 5), [rankings]);
@@ -333,6 +436,132 @@ export default function Performance() {
     if (index === 2) return <Award className="h-5 w-5 text-amber-600" />;
     return <span className="text-muted-foreground font-medium">#{index + 1}</span>;
   };
+
+  const ReviewFormDialog = ({ isOpen, onClose, isEdit = false }: { isOpen: boolean; onClose: () => void; isEdit?: boolean }) => (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Edit' : 'Add'} Performance Review</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Employee *</Label>
+            <Select 
+              value={reviewForm.employeeId} 
+              onValueChange={(v) => setReviewForm({ ...reviewForm, employeeId: v })}
+              disabled={isEdit}
+            >
+              <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+              <SelectContent>
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Period Start</Label>
+              <Input 
+                type="date"
+                value={reviewForm.periodStart}
+                onChange={(e) => setReviewForm({ ...reviewForm, periodStart: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Period End</Label>
+              <Input 
+                type="date"
+                value={reviewForm.periodEnd}
+                onChange={(e) => setReviewForm({ ...reviewForm, periodEnd: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Performance Criteria Ratings */}
+          {criteria.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Performance Criteria Ratings</Label>
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                {criteria.map(c => {
+                  const rating = reviewForm.criteriaRatings.find(cr => cr.criteriaId === c.id)?.rating || 3;
+                  return (
+                    <div key={c.id} className="flex items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="font-medium">{c.name}</p>
+                        {c.description && (
+                          <p className="text-xs text-muted-foreground">{c.description}</p>
+                        )}
+                        <Badge variant="outline" className="mt-1">Weight: {c.weight}</Badge>
+                      </div>
+                      <Select 
+                        value={rating.toString()} 
+                        onValueChange={(v) => updateCriteriaRating(c.id, parseInt(v))}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {criteria.length === 0 && (
+            <div className="space-y-2">
+              <Label>Overall Rating (1-5)</Label>
+              <Select 
+                value={reviewForm.overallRating.toString()} 
+                onValueChange={(v) => setReviewForm({ ...reviewForm, overallRating: parseInt(v) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Goals</Label>
+            <Textarea 
+              value={reviewForm.goals}
+              onChange={(e) => setReviewForm({ ...reviewForm, goals: e.target.value })}
+              placeholder="Employee goals..."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Goals Progress (%)</Label>
+            <Input 
+              type="number"
+              min="0"
+              max="100"
+              value={reviewForm.goalsProgress}
+              onChange={(e) => setReviewForm({ ...reviewForm, goalsProgress: parseInt(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Feedback</Label>
+            <Textarea 
+              value={reviewForm.feedback}
+              onChange={(e) => setReviewForm({ ...reviewForm, feedback: e.target.value })}
+              placeholder="Manager feedback..."
+            />
+          </div>
+          <Button onClick={handleSaveReview} className="w-full">Save Review</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Employee view - simplified UI showing only their reviews
   if (isEmployee) {
@@ -418,7 +647,6 @@ export default function Performance() {
                     <TableHead>Period</TableHead>
                     <TableHead>Rating</TableHead>
                     <TableHead>Goals Progress</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Feedback</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -447,11 +675,6 @@ export default function Performance() {
                           <span className="text-sm">{review.goals_progress || 0}%</span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={review.status === 'completed' ? 'default' : 'secondary'}>
-                          {review.status}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="max-w-xs truncate">
                         {review.feedback || '-'}
                       </TableCell>
@@ -478,131 +701,10 @@ export default function Performance() {
 
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Dialog open={showAddReview} onOpenChange={setShowAddReview}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Review
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add Performance Review</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Employee *</Label>
-                    <Select value={newReview.employeeId} onValueChange={(v) => setNewReview({ ...newReview, employeeId: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                      <SelectContent>
-                        {employees.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Period Start</Label>
-                      <Input 
-                        type="date"
-                        value={newReview.periodStart}
-                        onChange={(e) => setNewReview({ ...newReview, periodStart: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Period End</Label>
-                      <Input 
-                        type="date"
-                        value={newReview.periodEnd}
-                        onChange={(e) => setNewReview({ ...newReview, periodEnd: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Performance Criteria Ratings */}
-                  {criteria.length > 0 && (
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Performance Criteria Ratings</Label>
-                      <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                        {criteria.map(c => {
-                          const rating = newReview.criteriaRatings.find(cr => cr.criteriaId === c.id)?.rating || 3;
-                          return (
-                            <div key={c.id} className="flex items-center justify-between gap-4">
-                              <div className="flex-1">
-                                <p className="font-medium">{c.name}</p>
-                                {c.description && (
-                                  <p className="text-xs text-muted-foreground">{c.description}</p>
-                                )}
-                                <Badge variant="outline" className="mt-1">Weight: {c.weight}</Badge>
-                              </div>
-                              <Select 
-                                value={rating.toString()} 
-                                onValueChange={(v) => updateCriteriaRating(c.id, parseInt(v))}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {[1, 2, 3, 4, 5].map(n => (
-                                    <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {criteria.length === 0 && (
-                    <div className="space-y-2">
-                      <Label>Overall Rating (1-5)</Label>
-                      <Select 
-                        value={newReview.overallRating.toString()} 
-                        onValueChange={(v) => setNewReview({ ...newReview, overallRating: parseInt(v) })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Goals</Label>
-                    <Textarea 
-                      value={newReview.goals}
-                      onChange={(e) => setNewReview({ ...newReview, goals: e.target.value })}
-                      placeholder="Employee goals..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Goals Progress (%)</Label>
-                    <Input 
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={newReview.goalsProgress}
-                      onChange={(e) => setNewReview({ ...newReview, goalsProgress: parseInt(e.target.value) })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Feedback</Label>
-                    <Textarea 
-                      value={newReview.feedback}
-                      onChange={(e) => setNewReview({ ...newReview, feedback: e.target.value })}
-                      placeholder="Manager feedback..."
-                    />
-                  </div>
-                  <Button onClick={handleAddReview} className="w-full">Save Review</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button className="gap-2" onClick={() => { setReviewForm(initialReviewForm); setEditingReview(null); setShowAddReview(true); }}>
+              <Plus className="h-4 w-4" />
+              Add Review
+            </Button>
             
             {(user?.role === 'super_admin' || user?.role === 'hr') && (
               <Dialog open={showAddCriteria} onOpenChange={setShowAddCriteria}>
@@ -683,12 +785,45 @@ export default function Performance() {
               </Dialog>
             )}
           </div>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportReport}>
             <Download className="h-4 w-4" />
             Export Report
           </Button>
         </div>
       </div>
+
+      {/* Add Review Dialog */}
+      <ReviewFormDialog 
+        isOpen={showAddReview} 
+        onClose={() => { setShowAddReview(false); setReviewForm(initialReviewForm); }} 
+      />
+
+      {/* Edit Review Dialog */}
+      <ReviewFormDialog 
+        isOpen={showEditReview} 
+        onClose={() => { setShowEditReview(false); setReviewForm(initialReviewForm); setEditingReview(null); }} 
+        isEdit 
+      />
+
+      {/* Delete Review Confirmation */}
+      <Dialog open={showDeleteReview} onOpenChange={setShowDeleteReview}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Review</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the review for "{reviewToDelete?.employeeName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowDeleteReview(false); setReviewToDelete(null); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteReview}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Criteria Confirmation */}
       <Dialog open={showDeleteCriteria} onOpenChange={setShowDeleteCriteria}>
@@ -800,13 +935,12 @@ export default function Performance() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Reviews Completed
+              Total Reviews
             </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{completedReviews} / {filteredReviewsAll.length}</div>
-            <Progress value={filteredReviewsAll.length > 0 ? (completedReviews / filteredReviewsAll.length) * 100 : 0} className="mt-2" />
+            <div className="text-3xl font-bold">{filteredReviewsAll.length}</div>
           </CardContent>
         </Card>
 
@@ -905,97 +1039,111 @@ export default function Performance() {
       </div>
 
       {/* Reviews List */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All Reviews ({filteredReviewsAll.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending ({filteredReviewsAll.filter(r => r.status === 'draft').length})</TabsTrigger>
-          <TabsTrigger value="completed">Completed ({completedReviews})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="mt-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>All Reviews ({filteredReviews.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : filteredReviews.length === 0 ? (
-            <Card className="p-12 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Star className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-foreground mb-2">No performance reviews</h3>
-                  <p className="text-muted-foreground mb-4">Create your first performance review to track employee progress</p>
-                </div>
-                <Button onClick={() => setShowAddReview(true)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add First Review
-                </Button>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Star className="h-8 w-8 text-primary" />
               </div>
-            </Card>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No performance reviews</h3>
+              <p className="text-muted-foreground mb-4">Create your first performance review to track employee progress</p>
+              <Button onClick={() => setShowAddReview(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add First Review
+              </Button>
+            </div>
           ) : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Organization</TableHead>
-                    <TableHead>Branch</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Goals Progress</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReviews.map(review => {
-                    const employee = employees.find(e => e.id === review.employee_id);
-                    return (
-                      <TableRow key={review.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{employee?.first_name} {employee?.last_name}</p>
-                            <p className="text-sm text-muted-foreground">{employee?.job_title}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{employee?.organization?.name || '-'}</TableCell>
-                        <TableCell>{employee?.branch?.name || '-'}</TableCell>
-                        <TableCell>
-                          {review.review_period_start && review.review_period_end 
-                            ? `${format(new Date(review.review_period_start), 'MMM yyyy')} - ${format(new Date(review.review_period_end), 'MMM yyyy')}`
-                            : '-'
-                          }
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map(n => (
-                              <Star 
-                                key={n} 
-                                className={`h-4 w-4 ${n <= (review.overall_rating || 0) ? 'text-yellow-500 fill-yellow-500' : 'text-muted'}`} 
-                              />
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={review.goals_progress || 0} className="w-20" />
-                            <span className="text-sm">{review.goals_progress || 0}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={review.status === 'completed' ? 'default' : 'secondary'}>
-                            {review.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Rating</TableHead>
+                  <TableHead>Goals Progress</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredReviews.map(review => {
+                  const employee = employees.find(e => e.id === review.employee_id);
+                  return (
+                    <TableRow key={review.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{employee?.first_name} {employee?.last_name}</p>
+                          <p className="text-sm text-muted-foreground">{employee?.job_title}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{employee?.organization?.name || '-'}</TableCell>
+                      <TableCell>{employee?.branch?.name || '-'}</TableCell>
+                      <TableCell>
+                        {review.review_period_start && review.review_period_end 
+                          ? `${format(new Date(review.review_period_start), 'MMM yyyy')} - ${format(new Date(review.review_period_end), 'MMM yyyy')}`
+                          : '-'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <Star 
+                              key={n} 
+                              className={`h-4 w-4 ${n <= (review.overall_rating || 0) ? 'text-yellow-500 fill-yellow-500' : 'text-muted'}`} 
+                            />
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={review.goals_progress || 0} className="w-20" />
+                          <span className="text-sm">{review.goals_progress || 0}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditReview(review)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => {
+                                setReviewToDelete({ 
+                                  id: review.id, 
+                                  employeeName: `${employee?.first_name} ${employee?.last_name}` 
+                                });
+                                setShowDeleteReview(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
