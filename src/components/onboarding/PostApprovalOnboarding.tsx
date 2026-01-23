@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Check, Upload, Download, Printer, FileSignature } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Upload, FileSignature } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +13,6 @@ interface PostApprovalOnboardingProps {
 }
 
 const STEPS = [
-  { id: 'print', name: 'Print & Sign', icon: Printer },
   { id: 'upload', name: 'Upload Signed Contract', icon: Upload },
   { id: 'complete', name: 'Complete', icon: Check }
 ];
@@ -173,7 +172,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       <div className="space-y-4">
         <Progress value={progress} className="h-2" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {STEPS.map((step, index) => (
             <div key={step.id} className={`flex flex-col items-center gap-2 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
@@ -186,39 +185,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       </div>
 
       <Card className="p-6">
-        {/* Print & Sign Step */}
-        {currentStepId === 'print' && (
-          <div className="space-y-6">
-            <div className="text-center py-8">
-              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Printer className="h-10 w-10 text-primary" />
-              </div>
-              <h2 className="text-2xl font-semibold mb-2">Print Contract for Signing</h2>
-              <p className="text-muted-foreground max-w-md mx-auto mb-6">
-                Download the approved contract, print it, and get the employee's physical signature.
-              </p>
-              
-              <div className="flex flex-col items-center gap-4">
-                <Button size="lg" onClick={handleDownloadContract} className="gap-2">
-                  <Download className="h-5 w-5" />
-                  Download Approved Contract
-                </Button>
-                
-                <div className="bg-muted/50 rounded-lg p-4 max-w-md">
-                  <h3 className="font-medium mb-2">Instructions:</h3>
-                  <ol className="text-sm text-muted-foreground text-left list-decimal list-inside space-y-1">
-                    <li>Download the contract using the button above</li>
-                    <li>Print the contract document</li>
-                    <li>Have the employee read and sign the contract</li>
-                    <li>Scan or photograph the signed contract</li>
-                    <li>Proceed to upload the signed copy</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Upload Signed Contract Step */}
         {currentStepId === 'upload' && (
           <div className="space-y-6">
