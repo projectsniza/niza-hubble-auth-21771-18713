@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Users, Search, Timer, CalendarDays, FileText, Trash2, LayoutGrid, Clock, Briefcase, CalendarCheck } from 'lucide-react';
+import { Users, Search, Timer, CalendarDays, FileText, Trash2, LayoutGrid, Clock, CalendarCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -51,21 +51,11 @@ interface TimesheetEntry {
   };
 }
 
-interface RotaShift {
-  id: string;
-  employee_id: string;
-  shift_date: string;
-  start_time: string | null;
-  end_time: string | null;
-  employee?: { first_name: string; last_name: string; user_id?: string | null };
-}
-
 interface ComparisonRow {
   date: string;
   employeeId: string;
   employeeName: string;
   userId: string | null;
-  scheduledShift: string | null;
   timesheetHours: string | null;
   clockInHours: string | null;
   leaveType: string | null;
@@ -77,7 +67,6 @@ export default function LeaveAttendanceOverview() {
   const [clockIns, setClockIns] = useState<ClockIn[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
-  const [rotaShifts, setRotaShifts] = useState<RotaShift[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString());
@@ -98,7 +87,7 @@ export default function LeaveAttendanceOverview() {
       const monthStartStr = format(monthStart, 'yyyy-MM-dd');
       const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
 
-      const [clockInsRes, leaveRes, timesheetRes, rotaRes] = await Promise.all([
+      const [clockInsRes, leaveRes, timesheetRes] = await Promise.all([
         supabase
           .from('clock_ins')
           .select(`
@@ -127,16 +116,7 @@ export default function LeaveAttendanceOverview() {
           `)
           .gte('entry_date', monthStartStr)
           .lte('entry_date', monthEndStr)
-          .order('entry_date', { ascending: false }),
-        supabase
-          .from('rota_shifts')
-          .select(`
-            *,
-            employee:employees(first_name, last_name, user_id)
-          `)
-          .gte('shift_date', monthStartStr)
-          .lte('shift_date', monthEndStr)
-          .order('shift_date', { ascending: false })
+          .order('entry_date', { ascending: false })
       ]);
 
       // Fetch profile names for clock-ins
@@ -156,7 +136,6 @@ export default function LeaveAttendanceOverview() {
 
       setLeaveRequests(leaveRes.data || []);
       setTimesheetEntries(timesheetRes.data || []);
-      setRotaShifts(rotaRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -236,15 +215,6 @@ export default function LeaveAttendanceOverview() {
       }
     });
     
-    rotaShifts.forEach(rs => {
-      if (rs.employee) {
-        employeeMap.set(rs.employee_id, { 
-          name: `${rs.employee.first_name} ${rs.employee.last_name}`,
-          userId: rs.employee.user_id || null
-        });
-      }
-    });
-    
     leaveRequests.forEach(lr => {
       if (lr.employee) {
         employeeMap.set(lr.employee_id, { 
@@ -259,13 +229,6 @@ export default function LeaveAttendanceOverview() {
     employeeMap.forEach((empData, empId) => {
       allDays.forEach(day => {
         const dayStr = format(day, 'yyyy-MM-dd');
-        
-        // Find scheduled shift (rota)
-        const shift = rotaShifts.find(rs => rs.employee_id === empId && rs.shift_date === dayStr);
-        let scheduledShift: string | null = null;
-        if (shift?.start_time && shift?.end_time) {
-          scheduledShift = `${shift.start_time} - ${shift.end_time}`;
-        }
         
         // Find timesheet entry
         const tsEntry = timesheetEntries.find(te => te.timesheet?.employee_id === empId && te.entry_date === dayStr);
@@ -316,13 +279,12 @@ export default function LeaveAttendanceOverview() {
         });
         
         // Only include rows that have some data
-        if (scheduledShift || timesheetHours || clockInHours || leave) {
+        if (timesheetHours || clockInHours || leave) {
           rows.push({
             date: dayStr,
             employeeId: empId,
             employeeName: empData.name,
             userId: empData.userId,
-            scheduledShift,
             timesheetHours,
             clockInHours,
             leaveType: leave?.leave_type?.name || null,
@@ -340,7 +302,7 @@ export default function LeaveAttendanceOverview() {
     });
     
     return rows;
-  }, [selectedMonth, selectedYear, timesheetEntries, rotaShifts, clockIns, leaveRequests]);
+  }, [selectedMonth, selectedYear, timesheetEntries, clockIns, leaveRequests]);
 
   const filteredClockIns = clockIns.filter(c => {
     const name = c.profile?.display_name || c.profile?.name || '';
@@ -642,15 +604,11 @@ export default function LeaveAttendanceOverview() {
               </span>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Compare scheduled shifts, timesheet entries, clock-ins, and leave requests side by side.
+              Compare timesheet entries, clock-ins, and leave requests side by side.
             </p>
             
             {/* Legend */}
             <div className="flex flex-wrap gap-4 mb-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-blue-600" />
-                <span>Scheduled Shift (Rota)</span>
-              </div>
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-green-600" />
                 <span>Timesheet</span>
@@ -671,12 +629,6 @@ export default function LeaveAttendanceOverview() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Employee</TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-1">
-                        <Briefcase className="h-4 w-4 text-blue-600" />
-                        Scheduled
-                      </div>
-                    </TableHead>
                     <TableHead>
                       <div className="flex items-center gap-1">
                         <FileText className="h-4 w-4 text-green-600" />
@@ -700,7 +652,7 @@ export default function LeaveAttendanceOverview() {
                 <TableBody>
                   {filteredComparison.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         No attendance data found for this month
                       </TableCell>
                     </TableRow>
@@ -711,15 +663,6 @@ export default function LeaveAttendanceOverview() {
                           {format(parseISO(row.date), 'dd MMM yyyy')}
                         </TableCell>
                         <TableCell>{row.employeeName}</TableCell>
-                        <TableCell>
-                          {row.scheduledShift ? (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
-                              {row.scheduledShift}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
                         <TableCell>
                           {row.timesheetHours ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/20">
