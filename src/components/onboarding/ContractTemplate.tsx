@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, Save, Send, PenTool, Upload, Type } from 'lucide-react';
+import { Download, Save, Send, PenTool, Upload, Type, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
@@ -29,6 +29,7 @@ interface ContractTemplateProps {
   branches?: { id: string; name: string; address?: string | null }[];
   onSave: () => void;
   onSubmit: () => void;
+  onBack?: () => void;
   readOnly?: boolean;
   isApprovalMode?: boolean;
   contractApproval?: any;
@@ -58,6 +59,7 @@ export default function ContractTemplate({
   branches = [],
   onSave,
   onSubmit,
+  onBack,
   readOnly = false,
   isApprovalMode = false,
   contractApproval
@@ -1001,11 +1003,19 @@ export default function ContractTemplate({
 
         {/* Actions */}
         {!readOnly && !isApprovalMode && (
-          <div className="flex justify-between mt-8 print:hidden">
-            <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download / Print
-            </Button>
+          <div className="flex flex-wrap justify-between gap-4 mt-8 print:hidden">
+            <div className="flex gap-2">
+              {onBack && (
+                <Button variant="outline" onClick={onBack} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
+                <Download className="h-4 w-4" />
+                Download / Print
+              </Button>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
                 <Save className="h-4 w-4" />
