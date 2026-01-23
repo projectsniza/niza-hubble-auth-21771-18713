@@ -25,7 +25,7 @@ interface ContractTemplateProps {
     organization_id: string;
     branch_id: string;
   };
-  organizations: { id: string; name: string; vat_number?: string | null }[];
+  organizations: { id: string; name: string; vat_number?: string | null; registration_number?: string | null }[];
   branches?: { id: string; name: string; address?: string | null }[];
   onSave: () => void;
   onSubmit: () => void;
@@ -93,17 +93,25 @@ export default function ContractTemplate({
   const selectedOrg = organizations.find(o => o.id === contractData.organization_id);
   const selectedBranch = branches.find(b => b.id === employeeData.branch_id);
 
-  // Auto-fill VAT number when organization changes
+  // Auto-fill organization details when organization changes
   useEffect(() => {
     if (selectedOrg?.vat_number && !contractData.vat_number) {
       setContractData(prev => ({ ...prev, vat_number: selectedOrg.vat_number || '' }));
     }
+    if (selectedOrg?.registration_number && !contractData.registered_number) {
+      setContractData(prev => ({ ...prev, registered_number: selectedOrg.registration_number || '' }));
+    }
   }, [selectedOrg]);
 
-  // Auto-fill place of work from branch address
+  // Auto-fill place of work and registered office from branch address
   useEffect(() => {
-    if (selectedBranch?.address && !contractData.place_of_work) {
-      setContractData(prev => ({ ...prev, place_of_work: selectedBranch.address || '' }));
+    if (selectedBranch?.address) {
+      if (!contractData.place_of_work) {
+        setContractData(prev => ({ ...prev, place_of_work: selectedBranch.address || '' }));
+      }
+      if (!contractData.registered_office) {
+        setContractData(prev => ({ ...prev, registered_office: selectedBranch.address || '' }));
+      }
     }
   }, [selectedBranch]);
 
@@ -263,15 +271,28 @@ export default function ContractTemplate({
     }
   };
 
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    // Scale coordinates based on difference between canvas internal size and rendered size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
+    const { x, y } = getCanvasCoordinates(e);
     ctx.beginPath();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.moveTo(x, y);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -280,8 +301,8 @@ export default function ContractTemplate({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    const { x, y } = getCanvasCoordinates(e);
+    ctx.lineTo(x, y);
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.stroke();
