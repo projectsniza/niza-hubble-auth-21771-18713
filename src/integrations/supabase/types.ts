@@ -2963,6 +2963,100 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_categories: {
+        Row: {
+          category_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category_type: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll_items: {
+        Row: {
+          amount: number | null
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string | null
+          id: string
+          month: string
+          notes: string | null
+          payroll_record_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          month: string
+          notes?: string | null
+          payroll_record_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          month?: string
+          notes?: string | null
+          payroll_record_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_items_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_items_payroll_record_id_fkey"
+            columns: ["payroll_record_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_records: {
         Row: {
           basic_salary: number | null
