@@ -14,8 +14,8 @@ import { Label } from '@/components/ui/label';
 interface EditOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organization: { id: string; name: string; vat_number?: string | null } | null;
-  onSubmit: (id: string, name: string, vatNumber?: string) => Promise<void>;
+  organization: { id: string; name: string; vat_number?: string | null; registration_number?: string | null } | null;
+  onSubmit: (id: string, name: string, vatNumber?: string, registrationNumber?: string) => Promise<void>;
 }
 
 export default function EditOrganizationDialog({
@@ -26,12 +26,14 @@ export default function EditOrganizationDialog({
 }: EditOrganizationDialogProps) {
   const [name, setName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (organization) {
       setName(organization.name);
       setVatNumber(organization.vat_number || '');
+      setRegistrationNumber(organization.registration_number || '');
     }
   }, [organization]);
 
@@ -41,7 +43,7 @@ export default function EditOrganizationDialog({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(organization.id, name.trim(), vatNumber.trim() || undefined);
+      await onSubmit(organization.id, name.trim(), vatNumber.trim() || undefined, registrationNumber.trim() || undefined);
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
@@ -68,6 +70,18 @@ export default function EditOrganizationDialog({
                 placeholder="Enter organization name"
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="registration-number">Registration Number</Label>
+              <Input
+                id="registration-number"
+                value={registrationNumber}
+                onChange={(e) => setRegistrationNumber(e.target.value)}
+                placeholder="e.g., 12345678"
+              />
+              <p className="text-xs text-muted-foreground">
+                Company registration number - auto-filled in contracts
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="vat-number">VAT Number</Label>

@@ -2940,6 +2940,7 @@ export type Database = {
           created_by: string | null
           id: string
           name: string
+          registration_number: string | null
           updated_at: string | null
           vat_number: string | null
         }
@@ -2949,6 +2950,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name: string
+          registration_number?: string | null
           updated_at?: string | null
           vat_number?: string | null
         }
@@ -2958,6 +2960,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+          registration_number?: string | null
           updated_at?: string | null
           vat_number?: string | null
         }

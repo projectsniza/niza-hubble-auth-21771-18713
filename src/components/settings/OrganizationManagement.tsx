@@ -26,11 +26,11 @@ export default function OrganizationManagement() {
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const [deleteOrgId, setDeleteOrgId] = useState<string | null>(null);
   const [deleteBranchId, setDeleteBranchId] = useState<string | null>(null);
-  const [editOrg, setEditOrg] = useState<{ id: string; name: string; vat_number?: string | null } | null>(null);
+  const [editOrg, setEditOrg] = useState<{ id: string; name: string; vat_number?: string | null; registration_number?: string | null } | null>(null);
   const [editBranch, setEditBranch] = useState<{ id: string; name: string; address?: string | null } | null>(null);
 
-  const handleCreateOrganization = async (name: string, autoCreateFolder: boolean, vatNumber?: string) => {
-    await createOrganization(name, autoCreateFolder, vatNumber);
+  const handleCreateOrganization = async (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string) => {
+    await createOrganization(name, autoCreateFolder, vatNumber, registrationNumber);
     setCreateOrgOpen(false);
   };
 
@@ -54,8 +54,8 @@ export default function OrganizationManagement() {
     }
   };
 
-  const handleUpdateOrganization = async (id: string, name: string, vatNumber?: string) => {
-    await updateOrganization(id, name, vatNumber);
+  const handleUpdateOrganization = async (id: string, name: string, vatNumber?: string, registrationNumber?: string) => {
+    await updateOrganization(id, name, vatNumber, registrationNumber);
     setEditOrg(null);
   };
 
@@ -102,6 +102,7 @@ export default function OrganizationManagement() {
                     <h3 className="text-xl font-bold">{org.name}</h3>
                     <p className="text-sm text-muted-foreground">
                       {getBranchesForOrg(org.id).length} branches
+                      {org.registration_number && <span className="ml-2">• Reg: {org.registration_number}</span>}
                       {org.vat_number && <span className="ml-2">• VAT: {org.vat_number}</span>}
                     </p>
                   </div>
@@ -117,7 +118,7 @@ export default function OrganizationManagement() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setEditOrg({ id: org.id, name: org.name, vat_number: org.vat_number })}
+                  onClick={() => setEditOrg({ id: org.id, name: org.name, vat_number: org.vat_number, registration_number: org.registration_number })}
                   className="gap-2"
                 >
                   <Pencil className="h-4 w-4" />

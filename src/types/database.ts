@@ -10,6 +10,7 @@ export interface Organization {
   id: string;
   name: string;
   vat_number?: string | null;
+  registration_number?: string | null;
   created_by: string | null;
   auto_create_folder: boolean;
   created_at: string;

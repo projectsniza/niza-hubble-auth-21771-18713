@@ -8,12 +8,13 @@ import { Switch } from '@/components/ui/switch';
 interface CreateOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (name: string, autoCreateFolder: boolean, vatNumber?: string) => void;
+  onSubmit: (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string) => void;
 }
 
 export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit }: CreateOrganizationDialogProps) {
   const [name, setName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
   const [autoCreateFolder, setAutoCreateFolder] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,10 +23,11 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
     if (!name.trim()) return;
     
     setIsSubmitting(true);
-    await onSubmit(name.trim(), autoCreateFolder, vatNumber.trim() || undefined);
+    await onSubmit(name.trim(), autoCreateFolder, vatNumber.trim() || undefined, registrationNumber.trim() || undefined);
     setIsSubmitting(false);
     setName('');
     setVatNumber('');
+    setRegistrationNumber('');
     setAutoCreateFolder(true);
   };
 
@@ -46,6 +48,18 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
               required
               autoFocus
             />
+          </div>
+          <div>
+            <Label htmlFor="registration-number">Registration Number (Optional)</Label>
+            <Input
+              id="registration-number"
+              value={registrationNumber}
+              onChange={(e) => setRegistrationNumber(e.target.value)}
+              placeholder="e.g., 12345678"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Company registration number - auto-filled in contracts
+            </p>
           </div>
           <div>
             <Label htmlFor="vat-number">VAT Number (Optional)</Label>
