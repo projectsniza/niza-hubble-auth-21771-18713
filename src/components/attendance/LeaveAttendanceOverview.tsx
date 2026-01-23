@@ -591,15 +591,24 @@ export default function LeaveAttendanceOverview() {
                       <TableCell className="max-w-[200px] truncate">{leave.reason || '-'}</TableCell>
                       <TableCell>
                         {leave.supporting_document_path ? (
-                          <a
-                            href={supabase.storage.from('leave-documents').getPublicUrl(leave.supporting_document_path).data.publicUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-primary hover:underline text-sm"
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="p-0 h-auto flex items-center gap-1 text-primary hover:underline text-sm"
+                            onClick={async () => {
+                              const { data, error } = await supabase.storage
+                                .from('leave-documents')
+                                .createSignedUrl(leave.supporting_document_path!, 3600);
+                              if (data?.signedUrl) {
+                                window.open(data.signedUrl, '_blank');
+                              } else {
+                                console.error('Error getting signed URL:', error);
+                              }
+                            }}
                           >
                             <FileText className="h-4 w-4" />
                             View
-                          </a>
+                          </Button>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}

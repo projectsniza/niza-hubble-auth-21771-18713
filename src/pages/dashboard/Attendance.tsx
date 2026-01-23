@@ -1003,10 +1003,14 @@ export default function Attendance() {
                               size="sm"
                               className="p-0 h-auto text-primary"
                               onClick={async () => {
-                                const { data } = supabase.storage
+                                const { data, error } = await supabase.storage
                                   .from('leave-documents')
-                                  .getPublicUrl(req.supporting_document_path!);
-                                window.open(data.publicUrl, '_blank');
+                                  .createSignedUrl(req.supporting_document_path!, 3600);
+                                if (data?.signedUrl) {
+                                  window.open(data.signedUrl, '_blank');
+                                } else {
+                                  console.error('Error getting signed URL:', error);
+                                }
                               }}
                             >
                               {req.supporting_document_name || 'View Document'}
