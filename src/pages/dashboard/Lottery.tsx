@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -88,7 +89,7 @@ const StatCard = ({
 
 export default function Lottery() {
   const { user } = useAuth();
-  const { branches } = useOrgBranch();
+  const { organizations, branches } = useOrgBranch();
   const queryClient = useQueryClient();
   
   // Sheet selection state
@@ -100,11 +101,32 @@ export default function Lottery() {
   const [editingGame, setEditingGame] = useState<LotteryGame | null>(null);
   const [newGame, setNewGame] = useState({ name: '', ticketPrice: '1' });
   const [editingData, setEditingData] = useState<EditingState>({});
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [physicalStock, setPhysicalStock] = useState<{ [date: string]: number | '' }>({});
   const [activeTab, setActiveTab] = useState<'records' | 'summary' | 'games'>('records');
   
-  const effectiveBranchId = user?.role === 'manager' ? user?.branchId : selectedBranchId;
+  // Org/Branch filter state
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  
+  // For managers, lock to their branch
+  const isManager = user?.role === 'manager';
+  const effectiveBranchId = isManager ? user?.branchId : (viewMode === 'branch' && selectedBranch ? selectedBranch : null);
+  const effectiveOrgId = viewMode === 'organization' && selectedOrg ? selectedOrg : null;
+  
+  // Check if editing is allowed (only when single branch is selected)
+  const isSingleBranchSelected = isManager || (viewMode === 'branch' && !!selectedBranch);
+  
+  // Get filtered branch IDs for "all" or "organization" mode
+  const filteredBranchIds = useMemo(() => {
+    if (isManager) return user?.branchId ? [user.branchId] : [];
+    if (viewMode === 'branch' && selectedBranch) return [selectedBranch];
+    if (viewMode === 'organization' && selectedOrg) {
+      return branches.filter(b => b.organization_id === selectedOrg).map(b => b.id);
+    }
+    // "all" mode - return all branch IDs
+    return branches.map(b => b.id);
+  }, [isManager, user?.branchId, viewMode, selectedBranch, selectedOrg, branches]);
 
   // Get days of the month
   const daysInMonth = useMemo(() => {
@@ -114,44 +136,44 @@ export default function Lottery() {
     });
   }, [selectedMonth]);
 
-  // Fetch lottery games for the branch
+  // Fetch lottery games for the selected scope
   const { data: games = [], isLoading: gamesLoading } = useQuery({
-    queryKey: ['lottery-games', effectiveBranchId],
+    queryKey: ['lottery-games', filteredBranchIds, viewMode],
     queryFn: async () => {
-      if (!effectiveBranchId) return [];
+      if (filteredBranchIds.length === 0) return [];
       const { data, error } = await supabase
         .from('lottery_games')
         .select('*')
-        .eq('branch_id', effectiveBranchId)
+        .in('branch_id', filteredBranchIds)
         .eq('is_active', true)
         .order('game_name');
       if (error) throw error;
       return data as LotteryGame[];
     },
-    enabled: !!effectiveBranchId,
+    enabled: filteredBranchIds.length > 0,
   });
 
   // Fetch daily records for the month
   const { data: dailyRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['lottery-daily-records', effectiveBranchId, format(selectedMonth, 'yyyy-MM')],
+    queryKey: ['lottery-daily-records', filteredBranchIds, viewMode, format(selectedMonth, 'yyyy-MM')],
     queryFn: async () => {
-      if (!effectiveBranchId) return [];
+      if (filteredBranchIds.length === 0) return [];
       const startDate = format(selectedMonth, 'yyyy-MM-01');
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
       
       const { data, error } = await supabase
         .from('lottery_daily_records')
         .select('*')
-        .eq('branch_id', effectiveBranchId)
+        .in('branch_id', filteredBranchIds)
         .gte('record_date', startDate)
         .lte('record_date', endDate);
       if (error) throw error;
       return data as DailyRecord[];
     },
-    enabled: !!effectiveBranchId,
+    enabled: filteredBranchIds.length > 0,
   });
 
-  // Fetch monthly summary
+  // Fetch monthly summary (only when single branch is selected)
   const { data: monthlySummary } = useQuery({
     queryKey: ['lottery-monthly-summary', effectiveBranchId, format(selectedMonth, 'yyyy-MM')],
     queryFn: async () => {
@@ -629,25 +651,6 @@ export default function Lottery() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          {/* Branch selector for HR/Super Admin */}
-          {(user?.role === 'super_admin' || user?.role === 'hr') && (
-            <Select
-              value={selectedBranchId || ''}
-              onValueChange={(value) => setSelectedBranchId(value || null)}
-            >
-              <SelectTrigger className="w-[200px] bg-card border-primary/20">
-                <SelectValue placeholder="Select Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
           {/* Month Navigation */}
           <div className="flex items-center gap-1 bg-card rounded-xl p-1 shadow-sm border border-primary/10">
             <Button 
@@ -674,22 +677,21 @@ export default function Lottery() {
         </div>
       </div>
 
-      {/* No Branch Selected */}
-      {!effectiveBranchId && (user?.role === 'super_admin' || user?.role === 'hr') && (
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-secondary/30">
-          <CardContent className="py-16 text-center">
-            <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <Ticket className="h-10 w-10 text-primary" />
-            </div>
-            <h3 className="text-2xl font-bold mb-3">Select a Branch</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Please select a branch from the dropdown above to view and manage lottery reconciliation data.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Org/Branch Filter for Super Admin/HR */}
+      {!isManager && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setSelectedOrg}
+          onBranchChange={setSelectedBranch}
+        />
       )}
 
-      {effectiveBranchId && (
+      {filteredBranchIds.length > 0 && (
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -784,12 +786,22 @@ export default function Lottery() {
                       <Download className="h-4 w-4" />
                       Export CSV
                     </Button>
-                    <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add Game
-                    </Button>
+                    {isSingleBranchSelected && (
+                      <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Game
+                      </Button>
+                    )}
                   </div>
                 </div>
+                {!isSingleBranchSelected && (
+                  <div className="flex items-center gap-2 mt-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 dark:text-amber-400">
+                      Select a specific branch to add/edit games and records
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {isLoading ? (
@@ -802,11 +814,15 @@ export default function Lottery() {
                       <Ticket className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <h3 className="text-lg font-semibold mb-2">No Games Configured</h3>
-                    <p className="text-muted-foreground mb-4">Add your first scratchcard game to start tracking.</p>
-                    <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add First Game
-                    </Button>
+                    <p className="text-muted-foreground mb-4">
+                      {isSingleBranchSelected ? 'Add your first scratchcard game to start tracking.' : 'Select a specific branch to manage games.'}
+                    </p>
+                    {isSingleBranchSelected && (
+                      <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add First Game
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="divide-y">
@@ -842,7 +858,7 @@ export default function Lottery() {
                                 </p>
                                 <p className="text-xs text-muted-foreground">Total Sales</p>
                               </div>
-                              {hasUnsavedChanges && (
+                              {hasUnsavedChanges && isSingleBranchSelected && (
                                 <Button 
                                   size="sm" 
                                   onClick={() => saveGameData(game.id)}
@@ -892,6 +908,7 @@ export default function Lottery() {
                                             value={value ?? ''}
                                             onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
                                             placeholder="-"
+                                            disabled={!isSingleBranchSelected}
                                           />
                                         </td>
                                       );
@@ -917,6 +934,7 @@ export default function Lottery() {
                                             value={value ?? ''}
                                             onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
                                             placeholder="-"
+                                            disabled={!isSingleBranchSelected}
                                           />
                                         </td>
                                       );
@@ -961,6 +979,7 @@ export default function Lottery() {
                                             value={value ?? ''}
                                             onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
                                             placeholder="-"
+                                            disabled={!isSingleBranchSelected}
                                           />
                                         </td>
                                       );
@@ -1099,6 +1118,7 @@ export default function Lottery() {
                                             [dateStr]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
                                           }))}
                                           placeholder="-"
+                                          disabled={!isSingleBranchSelected}
                                         />
                                       </td>
                                     );
@@ -1147,16 +1167,18 @@ export default function Lottery() {
                           <ScrollBar orientation="horizontal" />
                         </ScrollArea>
                         
-                        <div className="mt-4 flex justify-end">
-                          <Button 
-                            onClick={() => saveMonthlySummaryMutation.mutate()} 
-                            disabled={saveMonthlySummaryMutation.isPending}
-                            className="gap-2"
-                          >
-                            <Save className="h-4 w-4" />
-                            Save Monthly Summary
-                          </Button>
-                        </div>
+                        {isSingleBranchSelected && (
+                          <div className="mt-4 flex justify-end">
+                            <Button 
+                              onClick={() => saveMonthlySummaryMutation.mutate()} 
+                              disabled={saveMonthlySummaryMutation.isPending}
+                              className="gap-2"
+                            >
+                              <Save className="h-4 w-4" />
+                              Save Monthly Summary
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1203,12 +1225,22 @@ export default function Lottery() {
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
-                    <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add Game
-                    </Button>
+                    {isSingleBranchSelected && (
+                      <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Game
+                      </Button>
+                    )}
                   </div>
                 </div>
+                {!isSingleBranchSelected && (
+                  <div className="flex items-center gap-2 mt-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 dark:text-amber-400">
+                      Select a specific branch to add/edit games and records
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-4">
                 {isLoading ? (
@@ -1221,11 +1253,15 @@ export default function Lottery() {
                       <Ticket className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <h3 className="text-lg font-semibold mb-2">No Games Configured</h3>
-                    <p className="text-muted-foreground mb-4">Add your first scratchcard game to start tracking.</p>
-                    <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add First Game
-                    </Button>
+                    <p className="text-muted-foreground mb-4">
+                      {isSingleBranchSelected ? 'Add your first scratchcard game to start tracking.' : 'Select a specific branch to manage games.'}
+                    </p>
+                    {isSingleBranchSelected && (
+                      <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add First Game
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1281,7 +1317,7 @@ export default function Lottery() {
                                     <CardDescription>£{game.ticket_price.toFixed(2)} per ticket</CardDescription>
                                   </div>
                                 </div>
-                                {hasUnsavedChanges && (
+                                {hasUnsavedChanges && isSingleBranchSelected && (
                                   <Button 
                                     size="sm" 
                                     onClick={() => saveGameData(game.id)}
@@ -1304,6 +1340,7 @@ export default function Lottery() {
                                     value={getCellValue(game.id, dateStr, 'stockBegin') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
                                     placeholder="0"
+                                    disabled={!isSingleBranchSelected}
                                   />
                                 </div>
                                 <div className="space-y-1.5">
@@ -1314,6 +1351,7 @@ export default function Lottery() {
                                     value={getCellValue(game.id, dateStr, 'activatedTickets') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
                                     placeholder="0"
+                                    disabled={!isSingleBranchSelected}
                                   />
                                 </div>
                                 <div className="space-y-1.5">
@@ -1324,6 +1362,7 @@ export default function Lottery() {
                                     value={getCellValue(game.id, dateStr, 'stockEnd') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
                                     placeholder="0"
+                                    disabled={!isSingleBranchSelected}
                                   />
                                 </div>
                               </div>
@@ -1376,6 +1415,7 @@ export default function Lottery() {
                                 ...prev,
                                 [format(selectedDate, 'yyyy-MM-dd')]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
                               }))}
+                              disabled={!isSingleBranchSelected}
                             />
                           </div>
                           <div className="space-y-2">
@@ -1467,6 +1507,7 @@ export default function Lottery() {
                           ...prev,
                           [format(endOfMonth(selectedMonth), 'yyyy-MM-dd')]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
                         }))}
+                        disabled={!isSingleBranchSelected}
                       />
                       <p className="text-sm text-muted-foreground mt-2">Count all physical lottery tickets at month end</p>
                     </div>
@@ -1573,11 +1614,21 @@ export default function Lottery() {
                     <CardTitle className="text-xl">Manage Scratchcard Games</CardTitle>
                     <CardDescription>Add, edit or remove games from lottery tracking</CardDescription>
                   </div>
-                  <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Game
-                  </Button>
+                  {isSingleBranchSelected && (
+                    <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add Game
+                    </Button>
+                  )}
                 </div>
+                {!isSingleBranchSelected && (
+                  <div className="flex items-center gap-2 mt-3 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 dark:text-amber-400">
+                      Select a specific branch to manage games
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {games.length === 0 ? (
@@ -1586,11 +1637,15 @@ export default function Lottery() {
                       <Ticket className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <h3 className="text-lg font-semibold mb-2">No Games Configured</h3>
-                    <p className="text-muted-foreground mb-4">Add scratchcard games to start tracking lottery sales.</p>
-                    <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add First Game
-                    </Button>
+                    <p className="text-muted-foreground mb-4">
+                      {isSingleBranchSelected ? 'Add scratchcard games to start tracking lottery sales.' : 'Select a specific branch to manage games.'}
+                    </p>
+                    {isSingleBranchSelected && (
+                      <Button onClick={() => setShowAddGameDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add First Game
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="divide-y">
@@ -1619,22 +1674,26 @@ export default function Lottery() {
                             <Badge variant={game.is_active ? 'default' : 'secondary'}>
                               {game.is_active ? 'Active' : 'Inactive'}
                             </Badge>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground hover:text-primary"
-                              onClick={() => openEditGame(game)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={() => deleteGameMutation.mutate(game.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isSingleBranchSelected && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground hover:text-primary"
+                                  onClick={() => openEditGame(game)}
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteGameMutation.mutate(game.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
