@@ -111,9 +111,12 @@ export function FileAttachment({
 
   const handlePreview = async (file: FileInfo) => {
     try {
-      const { data } = supabase.storage.from(bucket).getPublicUrl(file.path);
-      setPreviewUrl(data.publicUrl);
-      setPreviewFile(file);
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(file.path, 3600);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        setPreviewUrl(data.signedUrl);
+        setPreviewFile(file);
+      }
     } catch (error) {
       console.error('Error getting preview URL:', error);
       toast({
@@ -312,9 +315,12 @@ export function FileViewer({
 
   const handlePreview = async (file: FileInfo) => {
     try {
-      const { data } = supabase.storage.from(bucket).getPublicUrl(file.path);
-      setPreviewUrl(data.publicUrl);
-      setPreviewFile(file);
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(file.path, 3600);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        setPreviewUrl(data.signedUrl);
+        setPreviewFile(file);
+      }
     } catch (error) {
       console.error('Error getting preview URL:', error);
     }
