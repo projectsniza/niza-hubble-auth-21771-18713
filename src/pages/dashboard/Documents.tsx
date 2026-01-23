@@ -273,19 +273,25 @@ export default function Documents() {
     return 'normal';
   };
 
-  // When filtering by overdue/upcoming from URL, use all documents globally
-  const isGlobalFilter = searchParams.get('filter') === 'overdue' || searchParams.get('filter') === 'upcoming';
-  const docsToFilter = isGlobalFilter ? allDocuments : documents;
+  // When filtering by overdue/upcoming, use all documents globally
+  const isOverdueOrUpcoming = activeTab === 'overdue' || activeTab === 'upcoming';
+  const docsToFilter = isOverdueOrUpcoming ? allDocuments : documents;
   
   const filteredDocuments = docsToFilter.filter(doc => {
     const matchesSearch = !searchQuery || 
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.file_name.toLowerCase().includes(searchQuery.toLowerCase());
+      doc.file_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.employee && `${doc.employee.first_name} ${doc.employee.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
     if (activeTab === 'overdue') return getDocumentStatus(doc) === 'overdue';
     if (activeTab === 'upcoming') return getDocumentStatus(doc) === 'upcoming';
     return true;
   });
+
+  // Filter folders based on search query
+  const filteredFolders = folders.filter(folder => 
+    !searchQuery || folder.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Use allDocuments for global stats
   const globalOverdueCount = allDocuments.filter(d => getDocumentStatus(d) === 'overdue').length;
@@ -385,9 +391,12 @@ export default function Documents() {
           ))}
         </div>
 
-        {/* Stats */}
+        {/* Stats - Clickable to filter */}
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <Card className="p-4">
+          <Card 
+            className="p-4 cursor-pointer hover:bg-destructive/5 transition-colors"
+            onClick={() => setActiveTab('overdue')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -398,7 +407,10 @@ export default function Documents() {
               </div>
             </div>
           </Card>
-          <Card className="p-4">
+          <Card 
+            className="p-4 cursor-pointer hover:bg-yellow-500/5 transition-colors"
+            onClick={() => setActiveTab('upcoming')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
                 <Clock className="h-5 w-5 text-yellow-600" />
@@ -409,7 +421,10 @@ export default function Documents() {
               </div>
             </div>
           </Card>
-          <Card className="p-4">
+          <Card 
+            className="p-4 cursor-pointer hover:bg-primary/5 transition-colors"
+            onClick={() => setActiveTab('all')}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <FileText className="h-5 w-5 text-primary" />
@@ -456,12 +471,12 @@ export default function Documents() {
           </div>
         ) : (
           <>
-            {/* Folders */}
-            {folders.length > 0 && activeTab === 'all' && (
+            {/* Folders - only show on 'all' tab */}
+            {filteredFolders.length > 0 && activeTab === 'all' && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">Folders</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Folders ({filteredFolders.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {folders.map((folder) => {
+                  {filteredFolders.map((folder) => {
                     const isProtected = isProtectedFolder(folder);
                     return (
                       <Card
@@ -525,12 +540,25 @@ export default function Documents() {
             {/* Documents */}
             {filteredDocuments.length > 0 ? (
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">Documents</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                  Documents ({filteredDocuments.length})
+                  {isOverdueOrUpcoming && <span className="ml-2 text-xs">• Showing all {activeTab} documents</span>}
+                </h3>
                 <div className="space-y-2">
                   {filteredDocuments.map((doc) => {
                     const status = getDocumentStatus(doc);
                     return (
-                      <Card key={doc.id} className="p-4">
+                      <Card 
+                        key={doc.id} 
+                        className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => {
+                          // Navigate to the document's folder
+                          if (isOverdueOrUpcoming && doc.folder_id) {
+                            setCurrentFolderId(doc.folder_id);
+                            setActiveTab('all');
+                          }
+                        }}
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <File className="h-8 w-8 text-muted-foreground" />
@@ -542,7 +570,7 @@ export default function Documents() {
                                   <span className="text-sm text-primary">• {doc.employee.first_name} {doc.employee.last_name}</span>
                                 )}
                               </div>
-                              <div className="flex gap-2 mt-1">
+                              <div className="flex gap-2 mt-1 flex-wrap">
                                 {doc.follow_up_date && (
                                   <Badge variant={status === 'overdue' ? 'destructive' : status === 'upcoming' ? 'secondary' : 'outline'}>
                                     Follow-up: {format(new Date(doc.follow_up_date), 'dd MMM yyyy')}
@@ -551,6 +579,12 @@ export default function Documents() {
                                 {doc.expiry_date && (
                                   <Badge variant="outline">
                                     Expires: {format(new Date(doc.expiry_date), 'dd MMM yyyy')}
+                                  </Badge>
+                                )}
+                                {isOverdueOrUpcoming && doc.folder_id && (
+                                  <Badge variant="secondary" className="gap-1">
+                                    <Folder className="h-3 w-3" />
+                                    Click to view in folder
                                   </Badge>
                                 )}
                               </div>
@@ -597,7 +631,7 @@ export default function Documents() {
                   })}
                 </div>
               </div>
-            ) : folders.length === 0 ? (
+            ) : filteredFolders.length === 0 && activeTab === 'all' ? (
               <Card className="p-12 text-center">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
