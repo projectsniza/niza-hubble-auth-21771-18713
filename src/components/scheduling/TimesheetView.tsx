@@ -254,6 +254,89 @@ export function TimesheetView() {
     setShowEditPanel(true);
   };
 
+  // Open timesheet editor for a specific employee and week (for monthly view)
+  const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number) => {
+    const weekStart = monthWeeks[weekIdx];
+    if (!weekStart) return;
+
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    
+    // Find existing timesheet
+    const existingTimesheet = allMonthTimesheets.find(
+      ts => ts.employee_id === employeeId && ts.week_start_date === weekStartStr
+    );
+
+    if (existingTimesheet) {
+      // Open existing timesheet
+      const { data: entriesData } = await supabase
+        .from('timesheet_entries')
+        .select('*')
+        .eq('timesheet_id', existingTimesheet.id)
+        .order('entry_date');
+
+      setSelectedTimesheet(existingTimesheet);
+      setEntries(entriesData || []);
+      setShowEditPanel(true);
+    } else {
+      // Create timesheet for this week
+      const employee = employees.find(e => e.id === employeeId);
+      if (!employee) {
+        toast.error('Employee not found');
+        return;
+      }
+
+      const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      const wkDays = eachDayOfInterval({ start: weekStart, end: wkEnd });
+
+      try {
+        const { data: timesheet, error } = await supabase
+          .from('timesheets')
+          .insert({
+            employee_id: employee.id,
+            organization_id: employee.organization_id,
+            branch_id: employee.branch_id,
+            week_start_date: weekStartStr,
+            week_end_date: format(wkEnd, 'yyyy-MM-dd'),
+            status: 'draft',
+            created_by: user?.id
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const entryInserts = wkDays.map((day, idx) => ({
+          timesheet_id: timesheet.id,
+          entry_date: format(day, 'yyyy-MM-dd'),
+          day_of_week: DAYS_OF_WEEK[idx],
+          entry_type: 'work',
+          actual_hours: 0,
+          holiday_hours: 0,
+          sick_hours: 0,
+          adjustment_hours: 0,
+          break_duration_minutes: 0
+        }));
+
+        await supabase.from('timesheet_entries').insert(entryInserts);
+
+        // Fetch and open the new timesheet
+        const { data: newEntriesData } = await supabase
+          .from('timesheet_entries')
+          .select('*')
+          .eq('timesheet_id', timesheet.id)
+          .order('entry_date');
+
+        setSelectedTimesheet({ ...timesheet, employee });
+        setEntries(newEntriesData || []);
+        setShowEditPanel(true);
+        fetchData(); // Refresh data
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to create timesheet';
+        toast.error(message);
+      }
+    }
+  };
+
   const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
     const updated = [...entries];
     const entry = { ...updated[index] };
@@ -955,8 +1038,13 @@ export function TimesheetView() {
                               {emp.employee.first_name?.toUpperCase()}
                             </TableCell>
                             {emp.weeklyHours.map((h, i) => (
-                              <TableCell key={i} className="text-center">
-                                {h > 0 ? h.toFixed(1) : '-'}
+                              <TableCell 
+                                key={i} 
+                                className="text-center cursor-pointer hover:bg-primary/10 transition-colors"
+                                onClick={() => openTimesheetEditorForWeek(emp.employee.id, i)}
+                                title={`Click to edit Week ${i + 1}`}
+                              >
+                                {h > 0 ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
                               </TableCell>
                             ))}
                             <TableCell className="text-center font-bold bg-slate-50 dark:bg-slate-800/50">
@@ -1025,6 +1113,53 @@ export function TimesheetView() {
           </SheetHeader>
           
           <div className="py-6 space-y-6">
+            {/* Apply to All Days Button */}
+            {entries.length > 0 && entries[0]?.shift_start_time && entries[0]?.shift_end_time && (
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Apply to All Days</p>
+                    <p className="text-xs text-muted-foreground">
+                      Copy {entries[0].day_of_week}'s timing ({formatTimeDisplay(entries[0].shift_start_time)} - {formatTimeDisplay(entries[0].shift_end_time)}) to all days
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const firstEntry = entries[0];
+                      if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
+                      
+                      const updated = entries.map((entry, idx) => {
+                        if (idx === 0) return entry;
+                        
+                        const newEntry = { ...entry };
+                        newEntry.shift_start_time = firstEntry.shift_start_time;
+                        newEntry.shift_end_time = firstEntry.shift_end_time;
+                        newEntry.break_duration_minutes = firstEntry.break_duration_minutes;
+                        
+                        // Recalculate hours
+                        const start = newEntry.shift_start_time!;
+                        const end = newEntry.shift_end_time!;
+                        const breakMins = newEntry.break_duration_minutes || 0;
+                        const [startH, startM] = start.split(':').map(Number);
+                        const [endH, endM] = end.split(':').map(Number);
+                        let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
+                        if (totalMins < 0) totalMins += 24 * 60;
+                        newEntry.actual_hours = Math.round(totalMins / 60 * 100) / 100;
+                        
+                        return newEntry;
+                      });
+                      setEntries(updated);
+                      toast.success('Timing applied to all days');
+                    }}
+                  >
+                    Apply to All
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {entries.map((entry, idx) => (
               <div key={idx} className="space-y-3 p-4 rounded-lg bg-muted/30">
                 <div className="flex items-center justify-between">
