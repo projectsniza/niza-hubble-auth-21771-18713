@@ -580,7 +580,7 @@ export default function Payroll() {
 
   const openEditCategory = (cat: PayrollCategory) => {
     setEditingCategory(cat);
-    setCategoryForm({ name: cat.name, category_type: cat.category_type, description: cat.description || '' });
+    setCategoryForm({ name: cat.name, category_type: cat.category_type as 'addition' | 'deduction', description: cat.description || '' });
     setShowCategoryDialog(true);
   };
 
