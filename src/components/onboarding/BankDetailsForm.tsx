@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Download, Save } from 'lucide-react';
+import { Download, Save, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
@@ -19,6 +19,7 @@ interface BankDetailsFormProps {
   };
   onSave: () => void;
   onNext: () => void;
+  onBack?: () => void;
   readOnly?: boolean;
 }
 
@@ -41,6 +42,7 @@ export default function BankDetailsForm({
   employeeData,
   onSave,
   onNext,
+  onBack,
   readOnly = false
 }: BankDetailsFormProps) {
   const [loading, setLoading] = useState(false);
@@ -389,11 +391,19 @@ export default function BankDetailsForm({
 
         {/* Actions */}
         {!readOnly && (
-          <div className="flex justify-between mt-8 print:hidden">
-            <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download / Print
-            </Button>
+          <div className="flex flex-wrap justify-between gap-4 print:hidden">
+            <div className="flex gap-2">
+              {onBack && (
+                <Button variant="outline" onClick={onBack} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
+                <Download className="h-4 w-4" />
+                Download / Print
+              </Button>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
                 <Save className="h-4 w-4" />

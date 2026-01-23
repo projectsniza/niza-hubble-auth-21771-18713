@@ -642,8 +642,10 @@ export default function AddEmployee() {
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
               organizations={organizations}
+              branches={branches}
               onSave={() => {}}
               onNext={handleNext}
+              onBack={handlePrevious}
             />
           )}
 
@@ -654,6 +656,7 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               onSave={() => {}}
               onNext={handleNext}
+              onBack={handlePrevious}
             />
           )}
 
@@ -675,6 +678,7 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               onSave={() => {}}
               onNext={handleNext}
+              onBack={handlePrevious}
             />
           )}
 
@@ -686,6 +690,7 @@ export default function AddEmployee() {
               organizations={organizations}
               branches={branches}
               onSave={() => {}}
+              onBack={handlePrevious}
               onSubmit={() => {
                 toast.success('Contract submitted for approval. Continue in Approved Contracts tab after Super Admin approves.');
                 navigate('/dashboard/employees');

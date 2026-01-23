@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Save, Plus, Trash2 } from 'lucide-react';
+import { Download, Save, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
@@ -28,6 +28,7 @@ interface ApplicationFormProps {
   branches?: { id: string; name: string; address?: string }[];
   onSave: () => void;
   onNext: () => void;
+  onBack?: () => void;
   readOnly?: boolean;
 }
 
@@ -77,6 +78,7 @@ export default function ApplicationForm({
   branches = [],
   onSave,
   onNext,
+  onBack,
   readOnly = false
 }: ApplicationFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
@@ -123,10 +125,11 @@ export default function ApplicationForm({
   // Set branch_address when branches change or form data changes
   useEffect(() => {
     const selectedBranch = branches.find(b => b.id === formData.branch_id);
-    if (selectedBranch?.address && !formData.branch_address) {
+    // Auto-populate if branch has address and current branch_address is empty/unset
+    if (selectedBranch?.address && (!formData.branch_address || formData.branch_address.trim() === '')) {
       setFormData(prev => ({ ...prev, branch_address: selectedBranch.address || '' }));
     }
-  }, [branches, formData.branch_id]);
+  }, [branches, formData.branch_id, formData.branch_address]);
 
   useEffect(() => {
     loadSavedData();
@@ -1260,10 +1263,18 @@ export default function ApplicationForm({
         {/* Actions */}
         {!readOnly && (
           <div className="flex flex-wrap justify-between gap-4 print:hidden">
-            <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download / Print
-            </Button>
+            <div className="flex gap-2">
+              {onBack && (
+                <Button variant="outline" onClick={onBack} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
+                <Download className="h-4 w-4" />
+                Download / Print
+              </Button>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
                 <Save className="h-4 w-4" />
