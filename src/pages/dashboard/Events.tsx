@@ -275,9 +275,9 @@ export default function Events() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="announcement">Announcement</SelectItem>
-                        <SelectItem value="company">Company Event</SelectItem>
+                        <SelectItem value="company_event">Company Event</SelectItem>
                         <SelectItem value="training">Training</SelectItem>
-                        <SelectItem value="employee">Employee Event</SelectItem>
+                        <SelectItem value="employee_event">Employee Event</SelectItem>
                         <SelectItem value="urgent">Urgent</SelectItem>
                       </SelectContent>
                     </Select>
