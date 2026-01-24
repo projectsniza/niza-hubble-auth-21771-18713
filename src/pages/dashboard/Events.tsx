@@ -135,17 +135,20 @@ export default function Events() {
     }
 
     try {
-      const { error } = await supabase.from('events').insert({
+      // For managers, always include their organization_id alongside branch_id
+      const insertData = {
         title: newEvent.title,
         description: newEvent.description || null,
         event_type: newEvent.eventType,
         event_date: newEvent.eventDate || null,
         visibility: effectiveVisibility,
-        organization_id: effectiveOrgId || null,
-        branch_id: effectiveBranchId || null,
         is_pinned: newEvent.isPinned,
-        created_by: user?.id
-      });
+        created_by: user?.id,
+        organization_id: isManager ? user?.organizationId : (effectiveOrgId || null),
+        branch_id: isManager ? user?.branchId : (effectiveBranchId || null)
+      };
+
+      const { error } = await supabase.from('events').insert(insertData);
 
       if (error) throw error;
 
