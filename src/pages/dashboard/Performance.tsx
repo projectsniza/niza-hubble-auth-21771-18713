@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import ReviewFormDialog from '@/components/performance/ReviewFormDialog';
 
 interface CriteriaRating {
   criteriaId: string;
@@ -437,131 +438,7 @@ export default function Performance() {
     return <span className="text-muted-foreground font-medium">#{index + 1}</span>;
   };
 
-  const ReviewFormDialog = ({ isOpen, onClose, isEdit = false }: { isOpen: boolean; onClose: () => void; isEdit?: boolean }) => (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit' : 'Add'} Performance Review</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Employee *</Label>
-            <Select 
-              value={reviewForm.employeeId} 
-              onValueChange={(v) => setReviewForm({ ...reviewForm, employeeId: v })}
-              disabled={isEdit}
-            >
-              <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-              <SelectContent>
-                {employees.map(emp => (
-                  <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Period Start</Label>
-              <Input 
-                type="date"
-                value={reviewForm.periodStart}
-                onChange={(e) => setReviewForm({ ...reviewForm, periodStart: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Period End</Label>
-              <Input 
-                type="date"
-                value={reviewForm.periodEnd}
-                onChange={(e) => setReviewForm({ ...reviewForm, periodEnd: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Performance Criteria Ratings */}
-          {criteria.length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Performance Criteria Ratings</Label>
-              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                {criteria.map(c => {
-                  const rating = reviewForm.criteriaRatings.find(cr => cr.criteriaId === c.id)?.rating || 3;
-                  return (
-                    <div key={c.id} className="flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium">{c.name}</p>
-                        {c.description && (
-                          <p className="text-xs text-muted-foreground">{c.description}</p>
-                        )}
-                        <Badge variant="outline" className="mt-1">Weight: {c.weight}</Badge>
-                      </div>
-                      <Select 
-                        value={rating.toString()} 
-                        onValueChange={(v) => updateCriteriaRating(c.id, parseInt(v))}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {criteria.length === 0 && (
-            <div className="space-y-2">
-              <Label>Overall Rating (1-5)</Label>
-              <Select 
-                value={reviewForm.overallRating.toString()} 
-                onValueChange={(v) => setReviewForm({ ...reviewForm, overallRating: parseInt(v) })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <SelectItem key={n} value={n.toString()}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Goals</Label>
-            <Textarea 
-              value={reviewForm.goals}
-              onChange={(e) => setReviewForm({ ...reviewForm, goals: e.target.value })}
-              placeholder="Employee goals..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Goals Progress (%)</Label>
-            <Input 
-              type="number"
-              min="0"
-              max="100"
-              value={reviewForm.goalsProgress}
-              onChange={(e) => setReviewForm({ ...reviewForm, goalsProgress: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Feedback</Label>
-            <Textarea 
-              value={reviewForm.feedback}
-              onChange={(e) => setReviewForm({ ...reviewForm, feedback: e.target.value })}
-              placeholder="Manager feedback..."
-            />
-          </div>
-          <Button onClick={handleSaveReview} className="w-full">Save Review</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+  // ReviewFormDialog is now imported from @/components/performance/ReviewFormDialog
 
   // Employee view - simplified UI showing only their reviews
   if (isEmployee) {
@@ -795,14 +672,24 @@ export default function Performance() {
       {/* Add Review Dialog */}
       <ReviewFormDialog 
         isOpen={showAddReview} 
-        onClose={() => { setShowAddReview(false); setReviewForm(initialReviewForm); }} 
+        onClose={() => { setShowAddReview(false); setReviewForm(initialReviewForm); }}
+        reviewForm={reviewForm}
+        onFormChange={setReviewForm}
+        employees={employees}
+        criteria={criteria}
+        onSave={handleSaveReview}
       />
 
       {/* Edit Review Dialog */}
       <ReviewFormDialog 
         isOpen={showEditReview} 
         onClose={() => { setShowEditReview(false); setReviewForm(initialReviewForm); setEditingReview(null); }} 
-        isEdit 
+        isEdit
+        reviewForm={reviewForm}
+        onFormChange={setReviewForm}
+        employees={employees}
+        criteria={criteria}
+        onSave={handleSaveReview}
       />
 
       {/* Delete Review Confirmation */}
