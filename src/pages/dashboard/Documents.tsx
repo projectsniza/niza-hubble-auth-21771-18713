@@ -88,10 +88,11 @@ export default function Documents() {
   const [isRenaming, setIsRenaming] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<DocumentItem | null>(null);
   const [showDocumentDetails, setShowDocumentDetails] = useState(false);
+  const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
 
-  // Initialize with Company Documents root folder
+  // Initialize with Company Documents root folder and fetch follow-up settings
   useEffect(() => {
     const initializeRoot = async () => {
       const { data: rootFolder } = await supabase
@@ -108,6 +109,20 @@ export default function Documents() {
       }
     };
     initializeRoot();
+    
+    // Fetch configured follow-up intervals
+    const fetchFollowUpSettings = async () => {
+      const { data } = await supabase
+        .from('document_follow_up_settings')
+        .select('follow_up_intervals, is_active')
+        .is('organization_id', null)
+        .single();
+      
+      if (data?.is_active && data.follow_up_intervals?.length > 0) {
+        setFollowUpIntervals(data.follow_up_intervals);
+      }
+    };
+    fetchFollowUpSettings();
   }, []);
 
   // Fetch all documents for global stats
@@ -261,15 +276,28 @@ export default function Documents() {
   };
 
   const getDocumentStatus = (doc: DocumentItem) => {
-    if (!doc.follow_up_date && !doc.expiry_date) return 'normal';
+    // Check expiry date against configured intervals for "upcoming" status
+    if (doc.expiry_date) {
+      const daysUntilExpiry = differenceInDays(new Date(doc.expiry_date), new Date());
+      
+      // If expiry date has passed, it's overdue
+      if (daysUntilExpiry < 0) return 'overdue';
+      
+      // Check if within any of the configured follow-up intervals
+      // Use the max interval to determine "upcoming" threshold
+      const maxInterval = Math.max(...followUpIntervals);
+      if (daysUntilExpiry <= maxInterval) return 'upcoming';
+    }
     
-    const checkDate = doc.follow_up_date || doc.expiry_date;
-    if (!checkDate) return 'normal';
+    // Fallback: check follow_up_date directly if set
+    if (doc.follow_up_date) {
+      const daysUntilFollowUp = differenceInDays(new Date(doc.follow_up_date), new Date());
+      if (daysUntilFollowUp < 0) return 'overdue';
+      
+      const maxInterval = Math.max(...followUpIntervals);
+      if (daysUntilFollowUp <= maxInterval) return 'upcoming';
+    }
     
-    const daysUntil = differenceInDays(new Date(checkDate), new Date());
-    
-    if (daysUntil < 0) return 'overdue';
-    if (daysUntil <= 30) return 'upcoming';
     return 'normal';
   };
 
