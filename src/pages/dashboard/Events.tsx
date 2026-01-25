@@ -47,6 +47,7 @@ export default function Events() {
   const [selectedBranch, setSelectedBranch] = useState('');
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canCreateEvent = user?.role !== 'employee';
   
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -240,13 +241,14 @@ export default function Events() {
           <p className="text-muted-foreground">Stay updated with all company activities and important news</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={showCreate} onOpenChange={setShowCreate}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Event
-              </Button>
-            </DialogTrigger>
+          {canCreateEvent && (
+            <Dialog open={showCreate} onOpenChange={setShowCreate}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Event
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Event / Announcement</DialogTitle>
@@ -351,6 +353,7 @@ export default function Events() {
               </div>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
