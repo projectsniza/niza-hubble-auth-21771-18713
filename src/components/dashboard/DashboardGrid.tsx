@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { 
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
-  CalendarDays, GraduationCap, LucideIcon, ArrowRight, Settings, ClipboardList, Wrench
+  CalendarDays, GraduationCap, LucideIcon, ArrowRight, Settings, ClipboardList, Wrench, MessageSquare
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,15 +18,16 @@ const gridItems: GridItem[] = [
   { title: 'Overview', icon: Home, path: '/dashboard/overview', gradient: 'from-primary to-accent' },
   { title: 'Employee Hub', icon: Users, path: '/dashboard/employees', gradient: 'from-accent to-primary' },
   { title: 'Documents', icon: FileText, path: '/dashboard/documents', gradient: 'from-primary to-accent' },
-  { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning', gradient: 'from-accent to-primary' },
-  { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports', gradient: 'from-primary to-accent' },
-  { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance', gradient: 'from-accent to-primary' },
-  { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-primary to-accent' },
-  { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-accent to-primary' },
-  { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins', gradient: 'from-primary to-accent' },
-  { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-accent to-primary' },
-  { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll', gradient: 'from-primary to-accent' },
-  { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance', gradient: 'from-accent to-primary' },
+  { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages', gradient: 'from-accent to-primary' },
+  { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning', gradient: 'from-primary to-accent' },
+  { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports', gradient: 'from-accent to-primary' },
+  { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance', gradient: 'from-primary to-accent' },
+  { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-accent to-primary' },
+  { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-primary to-accent' },
+  { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins', gradient: 'from-accent to-primary' },
+  { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-primary to-accent' },
+  { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll', gradient: 'from-accent to-primary' },
+  { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance', gradient: 'from-primary to-accent' },
 ];
 
 export default function DashboardGrid() {
