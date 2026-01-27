@@ -21,6 +21,9 @@ interface ApplicationFormProps {
     phone?: string;
     address?: string;
     date_of_birth?: string;
+    national_insurance_number?: string;
+    job_title?: string;
+    join_date?: string;
     organization_id: string;
     branch_id: string;
   };
@@ -87,7 +90,7 @@ export default function ApplicationForm({
     organization_id: employeeData.organization_id,
     branch_id: employeeData.branch_id,
     branch_address: '',
-    position: '',
+    position: employeeData.job_title || '',
     closing_date: '',
     title: '',
     name: `${employeeData.first_name} ${employeeData.last_name}`,
@@ -96,7 +99,7 @@ export default function ApplicationForm({
     phone: employeeData.phone || '',
     email: employeeData.email || '',
     eligible_to_work_uk: null,
-    start_date: '',
+    start_date: employeeData.join_date || '',
     has_previous_employment: null,
     current_employer: '',
     current_job_title: '',
@@ -346,60 +349,72 @@ export default function ApplicationForm({
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    doc.text(`Previous Employment:`, margin, y);
-    y += lineHeight;
-    doc.text(`Job Title: ${formData.current_job_title || '............................'}`, margin, y);
-    y += lineHeight;
-    doc.text(`Name and Address of Employer: ${formData.employer_address || ''}`, margin, y, { maxWidth: contentWidth });
-    y += lineHeight + 2;
-    doc.text(`Date Employment Commenced: ${formData.employment_commenced || '............................'}`, margin, y);
-    y += lineHeight;
-    doc.text(`Previous Salary: ${formData.present_salary || '............................'}`, margin, y);
-    y += lineHeight + 4;
-
-    doc.text('Please provide a brief summary of your previous duties:', margin, y);
-    y += lineHeight;
-    doc.text(formData.current_duties || '', margin, y, { maxWidth: contentWidth });
-    y += Math.max(15, (formData.current_duties?.length || 0) / 80 * lineHeight);
-
-    doc.text('Reason for leaving:', margin, y);
-    y += lineHeight;
-    doc.text(formData.reason_leaving || '', margin, y, { maxWidth: contentWidth });
-    y += 10;
-
-    doc.text(`Are you required to work any period of notice?`, margin, y);
-    const noticeX = margin + 80;
-    doc.text('Yes', noticeX, y);
-    drawCheckbox(noticeX + 10, y, formData.notice_required === true);
-    doc.text('No', noticeX + 20, y);
-    drawCheckbox(noticeX + 28, y, formData.notice_required === false);
-    y += lineHeight;
-    doc.text(`Length of notice: ${formData.notice_length || '............................'}`, margin, y);
+    // Show the question about previous employment
+    doc.text(`Do you have previous employment to declare?`, margin, y);
+    const prevEmpX = margin + 80;
+    doc.text('Yes', prevEmpX, y);
+    drawCheckbox(prevEmpX + 10, y, formData.has_previous_employment === true);
+    doc.text('No', prevEmpX + 20, y);
+    drawCheckbox(prevEmpX + 28, y, formData.has_previous_employment === false);
     y += sectionGap;
 
-    // Employment History Table
-    checkNewPage(50);
-    doc.setFontSize(9);
-    doc.text('Please list in order the organisations you have worked for in the last 5 years:', margin, y, { maxWidth: contentWidth });
-    y += lineHeight + 2;
-
-    // Table header
-    doc.setFont('helvetica', 'bold');
-    doc.text('Name and address of employer', margin, y);
-    doc.text('Job Title', margin + 80, y);
-    doc.text('Dates employed', margin + 130, y);
-    y += lineHeight;
-    drawLine(y - 3);
-    
-    doc.setFont('helvetica', 'normal');
-    formData.employment_history.forEach((emp) => {
-      checkNewPage(10);
-      doc.text(emp.employer || '', margin, y, { maxWidth: 75 });
-      doc.text(emp.job_title || '', margin + 80, y, { maxWidth: 45 });
-      doc.text(emp.dates || '', margin + 130, y, { maxWidth: 40 });
+    // Only show employment details if has_previous_employment is true
+    if (formData.has_previous_employment === true) {
+      doc.text(`Previous Employment:`, margin, y);
+      y += lineHeight;
+      doc.text(`Job Title: ${formData.current_job_title || '............................'}`, margin, y);
+      y += lineHeight;
+      doc.text(`Name and Address of Employer: ${formData.employer_address || ''}`, margin, y, { maxWidth: contentWidth });
       y += lineHeight + 2;
-    });
-    y += sectionGap;
+      doc.text(`Date Employment Commenced: ${formData.employment_commenced || '............................'}`, margin, y);
+      y += lineHeight;
+      doc.text(`Previous Salary: ${formData.present_salary || '............................'}`, margin, y);
+      y += lineHeight + 4;
+
+      doc.text('Please provide a brief summary of your previous duties:', margin, y);
+      y += lineHeight;
+      doc.text(formData.current_duties || '', margin, y, { maxWidth: contentWidth });
+      y += Math.max(15, (formData.current_duties?.length || 0) / 80 * lineHeight);
+
+      doc.text('Reason for leaving:', margin, y);
+      y += lineHeight;
+      doc.text(formData.reason_leaving || '', margin, y, { maxWidth: contentWidth });
+      y += 10;
+
+      doc.text(`Are you required to work any period of notice?`, margin, y);
+      const noticeX = margin + 80;
+      doc.text('Yes', noticeX, y);
+      drawCheckbox(noticeX + 10, y, formData.notice_required === true);
+      doc.text('No', noticeX + 20, y);
+      drawCheckbox(noticeX + 28, y, formData.notice_required === false);
+      y += lineHeight;
+      doc.text(`Length of notice: ${formData.notice_length || '............................'}`, margin, y);
+      y += sectionGap;
+
+      // Employment History Table
+      checkNewPage(50);
+      doc.setFontSize(9);
+      doc.text('Please list in order the organisations you have worked for in the last 5 years:', margin, y, { maxWidth: contentWidth });
+      y += lineHeight + 2;
+
+      // Table header
+      doc.setFont('helvetica', 'bold');
+      doc.text('Name and address of employer', margin, y);
+      doc.text('Job Title', margin + 80, y);
+      doc.text('Dates employed', margin + 130, y);
+      y += lineHeight;
+      drawLine(y - 3);
+      
+      doc.setFont('helvetica', 'normal');
+      formData.employment_history.forEach((emp) => {
+        checkNewPage(10);
+        doc.text(emp.employer || '', margin, y, { maxWidth: 75 });
+        doc.text(emp.job_title || '', margin + 80, y, { maxWidth: 45 });
+        doc.text(emp.dates || '', margin + 130, y, { maxWidth: 40 });
+        y += lineHeight + 2;
+      });
+      y += sectionGap;
+    }
 
     // Section 4: Education
     checkNewPage(50);
@@ -762,7 +777,7 @@ export default function ApplicationForm({
             </div>
           </div>
           
-          {formData.has_previous_employment !== false && (
+          {formData.has_previous_employment === true && (
             <>
               <p className="text-sm text-muted-foreground mb-4">Previous Employment:</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -800,135 +815,135 @@ export default function ApplicationForm({
                   />
                 </div>
               </div>
+              <div className="mt-4 space-y-2">
+                <Label>Please provide a brief summary of your previous duties:</Label>
+                <Textarea
+                  value={formData.current_duties}
+                  onChange={(e) => updateField('current_duties', e.target.value)}
+                  disabled={readOnly}
+                  rows={4}
+                />
+              </div>
+              <div className="mt-4 space-y-2">
+                <Label>Reason for leaving:</Label>
+                <Textarea
+                  value={formData.reason_leaving}
+                  onChange={(e) => updateField('reason_leaving', e.target.value)}
+                  disabled={readOnly}
+                  rows={2}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-4">
+                <Label>Are you required to work any period of notice?</Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={formData.notice_required === true}
+                      onCheckedChange={() => updateField('notice_required', true)}
+                      disabled={readOnly}
+                    />
+                    Yes
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={formData.notice_required === false}
+                      onCheckedChange={() => updateField('notice_required', false)}
+                      disabled={readOnly}
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
+              {formData.notice_required && (
+                <div className="mt-2 space-y-2 max-w-xs">
+                  <Label>Length of notice:</Label>
+                  <Input
+                    value={formData.notice_length}
+                    onChange={(e) => updateField('notice_length', e.target.value)}
+                    placeholder="e.g., 2 weeks"
+                    disabled={readOnly}
+                  />
+                </div>
+              )}
+
+              {/* Employment History Table */}
+              <div className="mt-6">
+                <Label className="text-sm">
+                  Please list in order the organisations you have worked for in the last 5 years, full-time and part-time, paid and unpaid, including relevant voluntary work:
+                </Label>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full border-collapse border border-border">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="border border-border p-2 text-left text-sm font-medium">Name and address of employer</th>
+                        <th className="border border-border p-2 text-left text-sm font-medium">Job Title</th>
+                        <th className="border border-border p-2 text-left text-sm font-medium">Dates employed from and to</th>
+                        {!readOnly && <th className="border border-border p-2 w-10"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.employment_history.map((emp, index) => (
+                        <tr key={index}>
+                          <td className="border border-border p-1">
+                            <Input
+                              value={emp.employer}
+                              onChange={(e) => {
+                                const updated = [...formData.employment_history];
+                                updated[index].employer = e.target.value;
+                                updateField('employment_history', updated);
+                              }}
+                              className="border-0"
+                              disabled={readOnly}
+                            />
+                          </td>
+                          <td className="border border-border p-1">
+                            <Input
+                              value={emp.job_title}
+                              onChange={(e) => {
+                                const updated = [...formData.employment_history];
+                                updated[index].job_title = e.target.value;
+                                updateField('employment_history', updated);
+                              }}
+                              className="border-0"
+                              disabled={readOnly}
+                            />
+                          </td>
+                          <td className="border border-border p-1">
+                            <Input
+                              value={emp.dates}
+                              onChange={(e) => {
+                                const updated = [...formData.employment_history];
+                                updated[index].dates = e.target.value;
+                                updateField('employment_history', updated);
+                              }}
+                              className="border-0"
+                              placeholder="e.g., Jan 2020 - Dec 2022"
+                              disabled={readOnly}
+                            />
+                          </td>
+                          {!readOnly && (
+                            <td className="border border-border p-1">
+                              {formData.employment_history.length > 1 && (
+                                <Button variant="ghost" size="icon" onClick={() => removeEmploymentHistory(index)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!readOnly && (
+                  <Button variant="outline" size="sm" onClick={addEmploymentHistory} className="mt-2 gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Row
+                  </Button>
+                )}
+              </div>
             </>
           )}
-          <div className="mt-4 space-y-2">
-            <Label>Please provide a brief summary of your previous duties:</Label>
-            <Textarea
-              value={formData.current_duties}
-              onChange={(e) => updateField('current_duties', e.target.value)}
-              disabled={readOnly}
-              rows={4}
-            />
-          </div>
-          <div className="mt-4 space-y-2">
-            <Label>Reason for leaving:</Label>
-            <Textarea
-              value={formData.reason_leaving}
-              onChange={(e) => updateField('reason_leaving', e.target.value)}
-              disabled={readOnly}
-              rows={2}
-            />
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <Label>Are you required to work any period of notice?</Label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={formData.notice_required === true}
-                  onCheckedChange={() => updateField('notice_required', true)}
-                  disabled={readOnly}
-                />
-                Yes
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={formData.notice_required === false}
-                  onCheckedChange={() => updateField('notice_required', false)}
-                  disabled={readOnly}
-                />
-                No
-              </label>
-            </div>
-          </div>
-          {formData.notice_required && (
-            <div className="mt-2 space-y-2 max-w-xs">
-              <Label>Length of notice:</Label>
-              <Input
-                value={formData.notice_length}
-                onChange={(e) => updateField('notice_length', e.target.value)}
-                placeholder="e.g., 2 weeks"
-                disabled={readOnly}
-              />
-            </div>
-          )}
-
-          {/* Employment History Table */}
-          <div className="mt-6">
-            <Label className="text-sm">
-              Please list in order the organisations you have worked for in the last 5 years, full-time and part-time, paid and unpaid, including relevant voluntary work:
-            </Label>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full border-collapse border border-border">
-                <thead>
-                  <tr className="bg-muted/50">
-                    <th className="border border-border p-2 text-left text-sm font-medium">Name and address of employer</th>
-                    <th className="border border-border p-2 text-left text-sm font-medium">Job Title</th>
-                    <th className="border border-border p-2 text-left text-sm font-medium">Dates employed from and to</th>
-                    {!readOnly && <th className="border border-border p-2 w-10"></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.employment_history.map((emp, index) => (
-                    <tr key={index}>
-                      <td className="border border-border p-1">
-                        <Input
-                          value={emp.employer}
-                          onChange={(e) => {
-                            const updated = [...formData.employment_history];
-                            updated[index].employer = e.target.value;
-                            updateField('employment_history', updated);
-                          }}
-                          className="border-0"
-                          disabled={readOnly}
-                        />
-                      </td>
-                      <td className="border border-border p-1">
-                        <Input
-                          value={emp.job_title}
-                          onChange={(e) => {
-                            const updated = [...formData.employment_history];
-                            updated[index].job_title = e.target.value;
-                            updateField('employment_history', updated);
-                          }}
-                          className="border-0"
-                          disabled={readOnly}
-                        />
-                      </td>
-                      <td className="border border-border p-1">
-                        <Input
-                          value={emp.dates}
-                          onChange={(e) => {
-                            const updated = [...formData.employment_history];
-                            updated[index].dates = e.target.value;
-                            updateField('employment_history', updated);
-                          }}
-                          className="border-0"
-                          placeholder="e.g., Jan 2020 - Dec 2022"
-                          disabled={readOnly}
-                        />
-                      </td>
-                      {!readOnly && (
-                        <td className="border border-border p-1">
-                          {formData.employment_history.length > 1 && (
-                            <Button variant="ghost" size="icon" onClick={() => removeEmploymentHistory(index)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {!readOnly && (
-              <Button variant="outline" size="sm" onClick={addEmploymentHistory} className="mt-2 gap-2">
-                <Plus className="h-4 w-4" />
-                Add Row
-              </Button>
-            )}
-          </div>
         </div>
 
         {/* Section 4: Education */}

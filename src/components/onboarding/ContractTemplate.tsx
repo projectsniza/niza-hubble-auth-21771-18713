@@ -131,6 +131,26 @@ export default function ContractTemplate({
 
       if (data?.contract_content) {
         setContractData(prev => ({ ...prev, ...(data.contract_content as unknown as ContractData) }));
+        return;
+      }
+
+      // If no saved contract, try to auto-populate from Application Form
+      const { data: applicationData } = await supabase
+        .from('onboarding_form_responses')
+        .select('*')
+        .eq('employee_id', employeeId)
+        .eq('form_type', 'application_form')
+        .maybeSingle();
+
+      if (applicationData?.form_data) {
+        const appForm = applicationData.form_data as any;
+        setContractData(prev => ({
+          ...prev,
+          // Auto-populate address from Application Form if not already set
+          employee_address: prev.employee_address || appForm.address || '',
+          commencement_date: prev.commencement_date || appForm.start_date || '',
+          job_title: prev.job_title || appForm.position || '',
+        }));
       }
     }
   };
