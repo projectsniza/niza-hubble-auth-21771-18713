@@ -16,6 +16,7 @@ interface BankDetailsFormProps {
     first_name: string;
     last_name: string;
     phone?: string;
+    address?: string;
   };
   onSave: () => void;
   onNext: () => void;
@@ -55,7 +56,7 @@ export default function BankDetailsForm({
     sort_code: '',
     account_number: '',
     building_society_roll: '',
-    account_holder_name: '',
+    account_holder_name: `${employeeData.first_name} ${employeeData.last_name}`,
     signature: '',
     signature_date: ''
   });
@@ -65,15 +66,34 @@ export default function BankDetailsForm({
   }, [employeeId]);
 
   const loadSavedData = async () => {
-    const { data } = await supabase
+    // First, try to load saved bank details data
+    const { data: bankData } = await supabase
       .from('onboarding_form_responses')
       .select('*')
       .eq('employee_id', employeeId)
       .eq('form_type', 'bank_details')
       .maybeSingle();
 
-    if (data?.form_data) {
-      setFormData(prev => ({ ...prev, ...(data.form_data as unknown as FormData) }));
+    if (bankData?.form_data) {
+      setFormData(prev => ({ ...prev, ...(bankData.form_data as unknown as FormData) }));
+      return; // If we have saved data, use it as-is
+    }
+
+    // If no saved bank details, try to auto-populate phone from Application Form
+    const { data: applicationData } = await supabase
+      .from('onboarding_form_responses')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('form_type', 'application_form')
+      .maybeSingle();
+
+    if (applicationData?.form_data) {
+      const appForm = applicationData.form_data as any;
+      setFormData(prev => ({
+        ...prev,
+        // Auto-populate phone if not set
+        telephone_number: prev.telephone_number || appForm.phone || '',
+      }));
     }
   };
 

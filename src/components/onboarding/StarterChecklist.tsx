@@ -16,6 +16,10 @@ interface StarterChecklistProps {
   employeeData: {
     first_name: string;
     last_name: string;
+    date_of_birth?: string;
+    address?: string;
+    national_insurance_number?: string;
+    join_date?: string;
   };
   onSave: () => void;
   onNext: () => void;
@@ -56,12 +60,12 @@ export default function StarterChecklist({
     last_name: employeeData.last_name || '',
     first_names: employeeData.first_name || '',
     gender: '',
-    date_of_birth: '',
-    address: '',
+    date_of_birth: employeeData.date_of_birth || '',
+    address: employeeData.address || '',
     postcode: '',
     country: '',
-    national_insurance: '',
-    employment_start_date: '',
+    national_insurance: employeeData.national_insurance_number || '',
+    employment_start_date: employeeData.join_date || '',
     statement: '',
     has_student_loan: null,
     repaying_direct: null,
@@ -77,15 +81,36 @@ export default function StarterChecklist({
   }, [employeeId]);
 
   const loadSavedData = async () => {
-    const { data } = await supabase
+    // First, try to load saved starter checklist data
+    const { data: checklistData } = await supabase
       .from('onboarding_form_responses')
       .select('*')
       .eq('employee_id', employeeId)
       .eq('form_type', 'starter_checklist')
       .maybeSingle();
 
-    if (data?.form_data) {
-      setFormData(prev => ({ ...prev, ...(data.form_data as unknown as FormData) }));
+    if (checklistData?.form_data) {
+      setFormData(prev => ({ ...prev, ...(checklistData.form_data as unknown as FormData) }));
+      return; // If we have saved data, use it as-is
+    }
+
+    // If no saved checklist, try to auto-populate from Application Form
+    const { data: applicationData } = await supabase
+      .from('onboarding_form_responses')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('form_type', 'application_form')
+      .maybeSingle();
+
+    if (applicationData?.form_data) {
+      const appForm = applicationData.form_data as any;
+      setFormData(prev => ({
+        ...prev,
+        // Auto-populate from Application Form if not already set
+        address: prev.address || appForm.address || '',
+        postcode: prev.postcode || appForm.postcode || '',
+        employment_start_date: prev.employment_start_date || appForm.start_date || '',
+      }));
     }
   };
 
