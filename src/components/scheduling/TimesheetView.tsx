@@ -1113,58 +1113,107 @@ export function TimesheetView() {
           </SheetHeader>
           
           <div className="py-6 space-y-6">
-            {/* Apply to All Days Button */}
-            {entries.length > 0 && entries[0]?.shift_start_time && entries[0]?.shift_end_time && (
-              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Apply to All Days</p>
-                    <p className="text-xs text-muted-foreground">
-                      Copy {entries[0].day_of_week}'s timing ({formatTimeDisplay(entries[0].shift_start_time)} - {formatTimeDisplay(entries[0].shift_end_time)}) to all days
-                    </p>
+            {/* Apply to All Days / Clear All Buttons */}
+            <div className="flex gap-2">
+              {entries.length > 0 && entries[0]?.shift_start_time && entries[0]?.shift_end_time && (
+                <div className="flex-1 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Apply to All Days</p>
+                      <p className="text-xs text-muted-foreground">
+                        Copy {entries[0].day_of_week}'s timing ({formatTimeDisplay(entries[0].shift_start_time)} - {formatTimeDisplay(entries[0].shift_end_time)}) to all days
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const firstEntry = entries[0];
+                        if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
+                        
+                        const updated = entries.map((entry, idx) => {
+                          if (idx === 0) return entry;
+                          
+                          const newEntry = { ...entry };
+                          newEntry.shift_start_time = firstEntry.shift_start_time;
+                          newEntry.shift_end_time = firstEntry.shift_end_time;
+                          newEntry.break_duration_minutes = firstEntry.break_duration_minutes;
+                          
+                          // Recalculate hours
+                          const start = newEntry.shift_start_time!;
+                          const end = newEntry.shift_end_time!;
+                          const breakMins = newEntry.break_duration_minutes || 0;
+                          const [startH, startM] = start.split(':').map(Number);
+                          const [endH, endM] = end.split(':').map(Number);
+                          let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
+                          if (totalMins < 0) totalMins += 24 * 60;
+                          newEntry.actual_hours = Math.round(totalMins / 60 * 100) / 100;
+                          
+                          return newEntry;
+                        });
+                        setEntries(updated);
+                        toast.success('Timing applied to all days');
+                      }}
+                    >
+                      Apply to All
+                    </Button>
                   </div>
+                </div>
+              )}
+              
+              {entries.some(e => e.shift_start_time || e.shift_end_time || e.actual_hours > 0) && (
+                <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20">
                   <Button 
-                    variant="outline" 
+                    variant="ghost" 
                     size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => {
-                      const firstEntry = entries[0];
-                      if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
-                      
-                      const updated = entries.map((entry, idx) => {
-                        if (idx === 0) return entry;
-                        
-                        const newEntry = { ...entry };
-                        newEntry.shift_start_time = firstEntry.shift_start_time;
-                        newEntry.shift_end_time = firstEntry.shift_end_time;
-                        newEntry.break_duration_minutes = firstEntry.break_duration_minutes;
-                        
-                        // Recalculate hours
-                        const start = newEntry.shift_start_time!;
-                        const end = newEntry.shift_end_time!;
-                        const breakMins = newEntry.break_duration_minutes || 0;
-                        const [startH, startM] = start.split(':').map(Number);
-                        const [endH, endM] = end.split(':').map(Number);
-                        let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
-                        if (totalMins < 0) totalMins += 24 * 60;
-                        newEntry.actual_hours = Math.round(totalMins / 60 * 100) / 100;
-                        
-                        return newEntry;
-                      });
+                      const updated = entries.map(entry => ({
+                        ...entry,
+                        shift_start_time: null,
+                        shift_end_time: null,
+                        break_duration_minutes: 0,
+                        actual_hours: 0
+                      }));
                       setEntries(updated);
-                      toast.success('Timing applied to all days');
+                      toast.success('All days cleared');
                     }}
                   >
-                    Apply to All
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Clear All
                   </Button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {entries.map((entry, idx) => (
               <div key={idx} className="space-y-3 p-4 rounded-lg bg-muted/30">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">{entry.day_of_week}</span>
-                  <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                    {(entry.shift_start_time || entry.shift_end_time) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          const updated = [...entries];
+                          updated[idx] = {
+                            ...updated[idx],
+                            shift_start_time: null,
+                            shift_end_time: null,
+                            break_duration_minutes: 0,
+                            actual_hours: 0
+                          };
+                          setEntries(updated);
+                        }}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Clear
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1172,7 +1221,7 @@ export function TimesheetView() {
                     <Input 
                       type="time" 
                       value={entry.shift_start_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value)}
+                      onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value || null)}
                       className="mt-1"
                     />
                   </div>
@@ -1181,7 +1230,7 @@ export function TimesheetView() {
                     <Input 
                       type="time" 
                       value={entry.shift_end_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value)}
+                      onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value || null)}
                       className="mt-1"
                     />
                   </div>
@@ -1192,9 +1241,10 @@ export function TimesheetView() {
                     <Input 
                       type="number" 
                       step="0.5"
-                      value={entry.actual_hours || 0} 
-                      onChange={(e) => updateEntry(idx, 'actual_hours', parseFloat(e.target.value) || 0)}
+                      value={entry.actual_hours === 0 ? '' : entry.actual_hours} 
+                      onChange={(e) => updateEntry(idx, 'actual_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -1202,9 +1252,10 @@ export function TimesheetView() {
                     <Input 
                       type="number" 
                       step="0.5"
-                      value={entry.holiday_hours || 0} 
-                      onChange={(e) => updateEntry(idx, 'holiday_hours', parseFloat(e.target.value) || 0)}
+                      value={entry.holiday_hours === 0 ? '' : entry.holiday_hours} 
+                      onChange={(e) => updateEntry(idx, 'holiday_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -1212,9 +1263,10 @@ export function TimesheetView() {
                     <Input 
                       type="number" 
                       step="0.5"
-                      value={entry.sick_hours || 0} 
-                      onChange={(e) => updateEntry(idx, 'sick_hours', parseFloat(e.target.value) || 0)}
+                      value={entry.sick_hours === 0 ? '' : entry.sick_hours} 
+                      onChange={(e) => updateEntry(idx, 'sick_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -1222,9 +1274,10 @@ export function TimesheetView() {
                     <Input 
                       type="number" 
                       step="0.5"
-                      value={entry.adjustment_hours || 0} 
-                      onChange={(e) => updateEntry(idx, 'adjustment_hours', parseFloat(e.target.value) || 0)}
+                      value={entry.adjustment_hours === 0 ? '' : entry.adjustment_hours} 
+                      onChange={(e) => updateEntry(idx, 'adjustment_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
+                      placeholder="0"
                     />
                   </div>
                 </div>
