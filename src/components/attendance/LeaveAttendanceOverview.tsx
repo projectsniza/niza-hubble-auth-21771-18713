@@ -21,7 +21,7 @@ interface ClockIn {
   clock_out_time: string | null;
   notes: string | null;
   profile?: { name: string | null; display_name: string | null };
-  branch?: { name: string };
+  branch?: { name: string; organization_id?: string };
 }
 
 interface LeaveRequest {
@@ -33,7 +33,7 @@ interface LeaveRequest {
   reason: string | null;
   supporting_document_path: string | null;
   supporting_document_name: string | null;
-  employee?: { first_name: string; last_name: string; user_id?: string | null };
+  employee?: { first_name: string; last_name: string; user_id?: string | null; organization_id?: string; branch_id?: string };
   leave_type?: { name: string };
 }
 
@@ -47,7 +47,7 @@ interface TimesheetEntry {
   sick_hours: number | null;
   timesheet?: { 
     employee_id: string;
-    employee?: { first_name: string; last_name: string; user_id?: string | null };
+    employee?: { first_name: string; last_name: string; user_id?: string | null; organization_id?: string; branch_id?: string };
   };
 }
 
@@ -72,12 +72,29 @@ export default function LeaveAttendanceOverview() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [leaveToDelete, setLeaveToDelete] = useState<LeaveRequest | null>(null);
+  
+  // Org/Branch filters
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
 
   const isSuperAdmin = user?.role === 'super_admin';
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
 
   useEffect(() => {
     fetchData();
+    fetchOrgsAndBranches();
   }, [selectedMonth, selectedYear]);
+
+  const fetchOrgsAndBranches = async () => {
+    const [orgsRes, branchesRes] = await Promise.all([
+      supabase.from('organizations').select('id, name').order('name'),
+      supabase.from('branches').select('id, name, organization_id').order('name')
+    ]);
+    setOrganizations(orgsRes.data || []);
+    setBranches(branchesRes.data || []);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -92,7 +109,7 @@ export default function LeaveAttendanceOverview() {
           .from('clock_ins')
           .select(`
             *,
-            branch:branches(name)
+            branch:branches(name, organization_id)
           `)
           .gte('clock_in_time', monthStart.toISOString())
           .lte('clock_in_time', monthEnd.toISOString())
@@ -101,7 +118,7 @@ export default function LeaveAttendanceOverview() {
           .from('leave_requests')
           .select(`
             *,
-            employee:employees(first_name, last_name, user_id),
+            employee:employees(first_name, last_name, user_id, organization_id, branch_id),
             leave_type:leave_types(name)
           `)
           .order('start_date', { ascending: false }),
@@ -111,7 +128,7 @@ export default function LeaveAttendanceOverview() {
             *,
             timesheet:timesheets(
               employee_id,
-              employee:employees(first_name, last_name, user_id)
+              employee:employees(first_name, last_name, user_id, organization_id, branch_id)
             )
           `)
           .gte('entry_date', monthStartStr)
@@ -304,20 +321,49 @@ export default function LeaveAttendanceOverview() {
     return rows;
   }, [selectedMonth, selectedYear, timesheetEntries, clockIns, leaveRequests]);
 
+  // Apply org/branch filtering to clock-ins
   const filteredClockIns = clockIns.filter(c => {
     const name = c.profile?.display_name || c.profile?.name || '';
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    if (!canViewFilters) return true;
+    
+    if (filterOrg && filterOrg !== 'all') {
+      if (c.branch?.organization_id !== filterOrg) return false;
+    }
+    if (filterBranch && filterBranch !== 'all') {
+      if (c.branch_id !== filterBranch) return false;
+    }
+    return true;
   });
 
+  // Apply org/branch filtering to leave requests
   const filteredLeave = leaveRequests.filter(l => {
     const name = `${l.employee?.first_name} ${l.employee?.last_name}`;
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    if (!canViewFilters) return true;
+    
+    if (filterOrg && filterOrg !== 'all') {
+      if (l.employee?.organization_id !== filterOrg) return false;
+    }
+    if (filterBranch && filterBranch !== 'all') {
+      if (l.employee?.branch_id !== filterBranch) return false;
+    }
+    return true;
   });
 
   const comparisonData = getComparisonData();
-  const filteredComparison = comparisonData.filter(row => 
-    row.employeeName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredComparison = comparisonData.filter(row => {
+    const matchesSearch = row.employeeName.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    
+    // Note: comparison data filtering would need employee org/branch info passed through
+    // For now, it filters by search only
+    return true;
+  });
 
   const pendingLeave = leaveRequests.filter(l => l.status === 'pending').length;
   const approvedLeave = leaveRequests.filter(l => l.status === 'approved').length;
@@ -405,6 +451,37 @@ export default function LeaveAttendanceOverview() {
             className="pl-9"
           />
         </div>
+        
+        {canViewFilters && (
+          <>
+            <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setFilterBranch(''); }}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Organizations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Organizations</SelectItem>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {branches
+                  .filter(b => !filterOrg || filterOrg === 'all' || b.organization_id === filterOrg)
+                  .map(branch => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+        
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
           <SelectTrigger className="w-[140px]">
             <SelectValue />

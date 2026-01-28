@@ -34,6 +34,8 @@ interface ClockIn {
   clock_in_method: string | null;
   location_id: string | null;
   branch_id: string;
+  branch?: { name: string; organization_id: string } | null;
+  location?: { name: string } | null;
 }
 
 // Convert DMS (Degrees Minutes Seconds) to Decimal
@@ -106,6 +108,15 @@ export default function ClockIns() {
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   const [clockAction, setClockAction] = useState<{ type: 'in' | 'out'; locationId?: string } | null>(null);
   
+  // History tab filters
+  const [historyFilterOrg, setHistoryFilterOrg] = useState('');
+  const [historyFilterBranch, setHistoryFilterBranch] = useState('');
+  const [historyFilterMonth, setHistoryFilterMonth] = useState(new Date().getMonth().toString());
+  const [historyFilterYear, setHistoryFilterYear] = useState(new Date().getFullYear().toString());
+  const [clockInProfiles, setClockInProfiles] = useState<Record<string, { name: string; display_name: string | null }>>({});
+  
+  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  
   const [newLocation, setNewLocation] = useState({
     name: '',
     address: '',
@@ -119,7 +130,7 @@ export default function ClockIns() {
 
   useEffect(() => {
     fetchData();
-  }, [user?.id]);
+  }, [user?.id, historyFilterMonth, historyFilterYear]);
 
   // Timer effect for active clock-in
   useEffect(() => {
@@ -161,9 +172,17 @@ export default function ClockIns() {
         userBranchId = empData?.branch_id || null;
       }
 
+      // Build date range for history filter
+      const monthStart = new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth), 1);
+      const monthEnd = new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth) + 1, 0, 23, 59, 59);
+
       const [locationsRes, clockInsRes, branchesRes, orgsRes] = await Promise.all([
         supabase.from('locations').select('*').order('name'),
-        supabase.from('clock_ins').select('*').order('clock_in_time', { ascending: false }).limit(50),
+        supabase.from('clock_ins')
+          .select('*, branch:branches(name, organization_id), location:locations(name)')
+          .gte('clock_in_time', monthStart.toISOString())
+          .lte('clock_in_time', monthEnd.toISOString())
+          .order('clock_in_time', { ascending: false }),
         supabase.from('branches').select('*, organizations(name)').order('name'),
         supabase.from('organizations').select('*').order('name')
       ]);
@@ -175,9 +194,25 @@ export default function ClockIns() {
       }
 
       setLocations(filteredLocations);
-      setClockIns(clockInsRes.data || []);
       setBranches(branchesRes.data || []);
       setOrganizations(orgsRes.data || []);
+
+      // Fetch profiles for clock-in users
+      if (clockInsRes.data && clockInsRes.data.length > 0) {
+        const userIds = [...new Set(clockInsRes.data.map(c => c.user_id))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, display_name')
+          .in('id', userIds);
+        
+        const profileMap: Record<string, { name: string; display_name: string | null }> = {};
+        profiles?.forEach(p => {
+          profileMap[p.id] = { name: p.name || '', display_name: p.display_name };
+        });
+        setClockInProfiles(profileMap);
+      }
+
+      setClockIns(clockInsRes.data || []);
 
       // Find active clock-in for current user (clocked in but not clocked out)
       const activeSession = (clockInsRes.data || []).find(
@@ -941,45 +976,159 @@ export default function ClockIns() {
           )}
         </TabsContent>
 
-        <TabsContent value="history" className="mt-6">
+        <TabsContent value="history" className="mt-6 space-y-4">
+          {/* History Filters */}
+          <Card className="p-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by employee name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              
+              {canViewFilters && (
+                <>
+                  <Select value={historyFilterOrg} onValueChange={(v) => { setHistoryFilterOrg(v); setHistoryFilterBranch(''); }}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Organizations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Organizations</SelectItem>
+                      {organizations.map(org => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={historyFilterBranch} onValueChange={setHistoryFilterBranch}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Branches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Branches</SelectItem>
+                      {branches
+                        .filter(b => !historyFilterOrg || historyFilterOrg === 'all' || b.organization_id === historyFilterOrg)
+                        .map(branch => (
+                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+              
+              <Select value={historyFilterMonth} onValueChange={setHistoryFilterMonth}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <SelectItem key={i} value={i.toString()}>
+                      {new Date(2025, i).toLocaleString('default', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={historyFilterYear} onValueChange={setHistoryFilterYear}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const year = new Date().getFullYear() + i - 2;
+                    return <SelectItem key={year} value={year.toString()}>{year}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </Card>
+          
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead>Location</TableHead>
                   <TableHead>Clock In</TableHead>
                   <TableHead>Clock Out</TableHead>
-                  <TableHead>Method</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clockIns.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No clock-in records found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  clockIns.map(clockIn => (
-                    <TableRow key={clockIn.id}>
-                      <TableCell>{format(new Date(clockIn.clock_in_time), 'dd MMM yyyy')}</TableCell>
-                      <TableCell>{format(new Date(clockIn.clock_in_time), 'HH:mm')}</TableCell>
-                      <TableCell>
-                        {clockIn.clock_out_time 
-                          ? format(new Date(clockIn.clock_out_time), 'HH:mm')
-                          : '-'
-                        }
-                      </TableCell>
-                      <TableCell className="capitalize">{clockIn.clock_in_method || 'GPS'}</TableCell>
-                      <TableCell>
-                        <Badge variant={clockIn.clock_out_time ? 'secondary' : 'default'}>
-                          {clockIn.clock_out_time ? 'Completed' : 'Active'}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                {(() => {
+                  // Filter clock-ins based on filters
+                  let filtered = clockIns;
+                  
+                  // Apply org filter
+                  if (historyFilterOrg && historyFilterOrg !== 'all') {
+                    filtered = filtered.filter(c => c.branch?.organization_id === historyFilterOrg);
+                  }
+                  
+                  // Apply branch filter
+                  if (historyFilterBranch && historyFilterBranch !== 'all') {
+                    filtered = filtered.filter(c => c.branch_id === historyFilterBranch);
+                  }
+                  
+                  // Apply search
+                  if (searchQuery) {
+                    filtered = filtered.filter(c => {
+                      const profile = clockInProfiles[c.user_id];
+                      const name = profile?.display_name || profile?.name || '';
+                      return name.toLowerCase().includes(searchQuery.toLowerCase());
+                    });
+                  }
+                  
+                  if (filtered.length === 0) {
+                    return (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No clock-in records found for {new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth)).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                  
+                  return filtered.map(clockIn => {
+                    const profile = clockInProfiles[clockIn.user_id];
+                    const employeeName = profile?.display_name || profile?.name || 'Unknown';
+                    
+                    // Calculate duration
+                    let duration = '-';
+                    if (clockIn.clock_out_time) {
+                      const diffMs = new Date(clockIn.clock_out_time).getTime() - new Date(clockIn.clock_in_time).getTime();
+                      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                      duration = `${hours}h ${mins}m`;
+                    }
+                    
+                    return (
+                      <TableRow key={clockIn.id}>
+                        <TableCell className="font-medium">{employeeName}</TableCell>
+                        <TableCell>{clockIn.branch?.name || '-'}</TableCell>
+                        <TableCell>{clockIn.location?.name || '-'}</TableCell>
+                        <TableCell>{format(new Date(clockIn.clock_in_time), 'dd MMM yyyy, HH:mm')}</TableCell>
+                        <TableCell>
+                          {clockIn.clock_out_time 
+                            ? format(new Date(clockIn.clock_out_time), 'dd MMM yyyy, HH:mm')
+                            : '-'
+                          }
+                        </TableCell>
+                        <TableCell>{duration}</TableCell>
+                        <TableCell>
+                          <Badge variant={clockIn.clock_out_time ? 'secondary' : 'default'}>
+                            {clockIn.clock_out_time ? 'Completed' : 'Active'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  });
+                })()}
               </TableBody>
             </Table>
           </Card>
