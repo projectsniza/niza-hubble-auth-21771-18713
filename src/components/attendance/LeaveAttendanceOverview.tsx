@@ -56,6 +56,8 @@ interface ComparisonRow {
   employeeId: string;
   employeeName: string;
   userId: string | null;
+  organizationId: string | null;
+  branchId: string | null;
   timesheetHours: string | null;
   clockInHours: string | null;
   leaveType: string | null;
@@ -185,14 +187,32 @@ export default function LeaveAttendanceOverview() {
   };
 
   const getEmployeeTotalHours = () => {
-    const employeeHours: { [key: string]: { name: string; totalMins: number; sessions: number } } = {};
+    const employeeHours: { [key: string]: { name: string; totalMins: number; sessions: number; orgId?: string; branchId?: string } } = {};
     
-    clockIns.forEach(clockIn => {
+    // First apply org/branch filter to clockIns
+    const filteredClockInsForHours = clockIns.filter(clockIn => {
+      if (!canViewFilters) return true;
+      if (filterOrg && filterOrg !== 'all') {
+        if (clockIn.branch?.organization_id !== filterOrg) return false;
+      }
+      if (filterBranch && filterBranch !== 'all') {
+        if (clockIn.branch_id !== filterBranch) return false;
+      }
+      return true;
+    });
+    
+    filteredClockInsForHours.forEach(clockIn => {
       const userId = clockIn.user_id;
       const name = clockIn.profile?.display_name || clockIn.profile?.name || 'Unknown';
       
       if (!employeeHours[userId]) {
-        employeeHours[userId] = { name, totalMins: 0, sessions: 0 };
+        employeeHours[userId] = { 
+          name, 
+          totalMins: 0, 
+          sessions: 0,
+          orgId: clockIn.branch?.organization_id,
+          branchId: clockIn.branch_id
+        };
       }
       
       if (clockIn.clock_out_time) {
@@ -220,14 +240,16 @@ export default function LeaveAttendanceOverview() {
     const monthEnd = endOfMonth(monthStart);
     const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
     
-    // Build unique employee list from all sources
-    const employeeMap = new Map<string, { name: string; userId: string | null }>();
+    // Build unique employee list from all sources with org/branch info
+    const employeeMap = new Map<string, { name: string; userId: string | null; organizationId: string | null; branchId: string | null }>();
     
     timesheetEntries.forEach(te => {
       if (te.timesheet?.employee) {
         employeeMap.set(te.timesheet.employee_id, { 
           name: `${te.timesheet.employee.first_name} ${te.timesheet.employee.last_name}`,
-          userId: te.timesheet.employee.user_id || null
+          userId: te.timesheet.employee.user_id || null,
+          organizationId: te.timesheet.employee.organization_id || null,
+          branchId: te.timesheet.employee.branch_id || null
         });
       }
     });
@@ -236,7 +258,9 @@ export default function LeaveAttendanceOverview() {
       if (lr.employee) {
         employeeMap.set(lr.employee_id, { 
           name: `${lr.employee.first_name} ${lr.employee.last_name}`,
-          userId: lr.employee.user_id || null
+          userId: lr.employee.user_id || null,
+          organizationId: lr.employee.organization_id || null,
+          branchId: lr.employee.branch_id || null
         });
       }
     });
@@ -302,6 +326,8 @@ export default function LeaveAttendanceOverview() {
             employeeId: empId,
             employeeName: empData.name,
             userId: empData.userId,
+            organizationId: empData.organizationId,
+            branchId: empData.branchId,
             timesheetHours,
             clockInHours,
             leaveType: leave?.leave_type?.name || null,
@@ -359,9 +385,15 @@ export default function LeaveAttendanceOverview() {
   const filteredComparison = comparisonData.filter(row => {
     const matchesSearch = row.employeeName.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
+    if (!canViewFilters) return true;
     
-    // Note: comparison data filtering would need employee org/branch info passed through
-    // For now, it filters by search only
+    // Apply org/branch filters
+    if (filterOrg && filterOrg !== 'all') {
+      if (row.organizationId !== filterOrg) return false;
+    }
+    if (filterBranch && filterBranch !== 'all') {
+      if (row.branchId !== filterBranch) return false;
+    }
     return true;
   });
 

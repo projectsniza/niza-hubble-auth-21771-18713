@@ -101,6 +101,14 @@ export default function Attendance() {
     requiresDocument: false
   });
 
+  const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
+  const [editLeaveTypeForm, setEditLeaveTypeForm] = useState({
+    name: '',
+    daysAllowed: '',
+    isPaid: true,
+    requiresDocument: false
+  });
+
   useEffect(() => {
     fetchData();
   }, [user]);
@@ -274,8 +282,91 @@ export default function Attendance() {
   const handleDeleteLeaveType = async (id: string) => {
     try {
       const { error } = await supabase.from('leave_types').delete().eq('id', id);
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23503') {
+          toast.error('Cannot delete: This leave type is being used by existing leave requests. You can edit it instead.');
+        } else {
+          throw error;
+        }
+        return;
+      }
       toast.success('Leave type deleted');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleEditLeaveType = (lt: LeaveType) => {
+    setEditingLeaveType(lt);
+    setEditLeaveTypeForm({
+      name: lt.name,
+      daysAllowed: lt.days_allowed?.toString() || '',
+      isPaid: lt.is_paid ?? true,
+      requiresDocument: lt.requires_supporting_document ?? false
+    });
+  };
+
+  const handleUpdateLeaveType = async () => {
+    if (!editingLeaveType || !editLeaveTypeForm.name) {
+      toast.error('Please enter leave type name');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('leave_types').update({
+        name: editLeaveTypeForm.name,
+        days_allowed: editLeaveTypeForm.daysAllowed ? parseInt(editLeaveTypeForm.daysAllowed) : null,
+        is_paid: editLeaveTypeForm.isPaid,
+        requires_supporting_document: editLeaveTypeForm.requiresDocument
+      }).eq('id', editingLeaveType.id);
+
+      if (error) throw error;
+      toast.success('Leave type updated');
+      setEditingLeaveType(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const seedDefaultLeaveTypes = async () => {
+    const defaultLeaveTypes = [
+      { name: 'Annual Leave', days_allowed: 28, is_paid: true, requires_supporting_document: false },
+      { name: 'Sickness', days_allowed: null, is_paid: true, requires_supporting_document: true },
+      { name: 'Medical Appointment', days_allowed: 1, is_paid: true, requires_supporting_document: false },
+      { name: 'Dental Appointment', days_allowed: 1, is_paid: false, requires_supporting_document: false },
+      { name: 'Maternity Leave', days_allowed: 364, is_paid: true, requires_supporting_document: true },
+      { name: 'Paternity Leave', days_allowed: 14, is_paid: true, requires_supporting_document: true },
+      { name: 'Adoption Leave', days_allowed: 364, is_paid: true, requires_supporting_document: true },
+      { name: 'Shared Parental Leave', days_allowed: 350, is_paid: true, requires_supporting_document: true },
+      { name: 'Parental Leave (Unpaid)', days_allowed: 90, is_paid: false, requires_supporting_document: false },
+      { name: 'Parental Bereavement Leave', days_allowed: 14, is_paid: true, requires_supporting_document: true },
+      { name: 'Neonatal Care Leave', days_allowed: null, is_paid: true, requires_supporting_document: true },
+      { name: 'Bereavement Leave', days_allowed: 5, is_paid: true, requires_supporting_document: false },
+      { name: 'Compassionate Leave', days_allowed: 5, is_paid: true, requires_supporting_document: false },
+      { name: 'Time off for Dependants', days_allowed: null, is_paid: false, requires_supporting_document: false },
+      { name: 'Unpaid Carer\'s Leave', days_allowed: 5, is_paid: false, requires_supporting_document: false },
+      { name: 'Training / Events', days_allowed: null, is_paid: true, requires_supporting_document: false },
+      { name: 'Time Off In Lieu (TOIL)', days_allowed: null, is_paid: true, requires_supporting_document: false },
+      { name: 'Unpaid Leave', days_allowed: null, is_paid: false, requires_supporting_document: false },
+    ];
+
+    try {
+      const existingNames = leaveTypes.map(lt => lt.name.toLowerCase());
+      const toInsert = defaultLeaveTypes.filter(lt => !existingNames.includes(lt.name.toLowerCase()));
+      
+      if (toInsert.length === 0) {
+        toast.info('All default leave types already exist');
+        return;
+      }
+
+      const { error } = await supabase.from('leave_types').insert(
+        toInsert.map(lt => ({ ...lt, created_by: user?.id }))
+      );
+
+      if (error) throw error;
+      toast.success(`Added ${toInsert.length} default leave types`);
       fetchData();
     } catch (error: any) {
       toast.error(error.message);
@@ -1242,52 +1333,119 @@ export default function Attendance() {
 
       {/* Leave Type Settings Dialog */}
       <Dialog open={showLeaveTypeSettings} onOpenChange={setShowLeaveTypeSettings}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Leave Type Settings</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
-            <div className="space-y-4">
-              <h4 className="font-semibold">Add New Leave Type</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Name *</Label>
-                  <Input value={newLeaveType.name} onChange={(e) => setNewLeaveType({ ...newLeaveType, name: e.target.value })} placeholder="e.g., Compassionate Leave" />
+            {/* Add/Edit Form */}
+            {editingLeaveType ? (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                <h4 className="font-semibold">Edit Leave Type</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name *</Label>
+                    <Input 
+                      value={editLeaveTypeForm.name} 
+                      onChange={(e) => setEditLeaveTypeForm({ ...editLeaveTypeForm, name: e.target.value })} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Days Allowed</Label>
+                    <Input 
+                      type="number" 
+                      value={editLeaveTypeForm.daysAllowed} 
+                      onChange={(e) => setEditLeaveTypeForm({ ...editLeaveTypeForm, daysAllowed: e.target.value })} 
+                      placeholder="Leave empty for unlimited"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Days Allowed</Label>
-                  <Input type="number" value={newLeaveType.daysAllowed} onChange={(e) => setNewLeaveType({ ...newLeaveType, daysAllowed: e.target.value })} />
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="editPaid" 
+                      checked={editLeaveTypeForm.isPaid} 
+                      onChange={(e) => setEditLeaveTypeForm({ ...editLeaveTypeForm, isPaid: e.target.checked })} 
+                    />
+                    <Label htmlFor="editPaid">Paid leave</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="editRequiresDoc" 
+                      checked={editLeaveTypeForm.requiresDocument} 
+                      onChange={(e) => setEditLeaveTypeForm({ ...editLeaveTypeForm, requiresDocument: e.target.checked })} 
+                    />
+                    <Label htmlFor="editRequiresDoc">Requires supporting document</Label>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleUpdateLeaveType}>Save Changes</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingLeaveType(null)}>Cancel</Button>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="ltPaid" checked={newLeaveType.isPaid} onChange={(e) => setNewLeaveType({ ...newLeaveType, isPaid: e.target.checked })} />
-                  <Label htmlFor="ltPaid">Paid leave</Label>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">Add New Leave Type</h4>
+                  <Button size="sm" variant="outline" onClick={seedDefaultLeaveTypes}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add UK Default Types
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="ltRequiresDoc" checked={newLeaveType.requiresDocument || false} onChange={(e) => setNewLeaveType({ ...newLeaveType, requiresDocument: e.target.checked })} />
-                  <Label htmlFor="ltRequiresDoc">Requires supporting document</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name *</Label>
+                    <Input value={newLeaveType.name} onChange={(e) => setNewLeaveType({ ...newLeaveType, name: e.target.value })} placeholder="e.g., Compassionate Leave" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Days Allowed</Label>
+                    <Input type="number" value={newLeaveType.daysAllowed} onChange={(e) => setNewLeaveType({ ...newLeaveType, daysAllowed: e.target.value })} placeholder="Leave empty for unlimited" />
+                  </div>
                 </div>
-                <Button size="sm" onClick={handleAddLeaveType}>Add Leave Type</Button>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="ltPaid" checked={newLeaveType.isPaid} onChange={(e) => setNewLeaveType({ ...newLeaveType, isPaid: e.target.checked })} />
+                    <Label htmlFor="ltPaid">Paid leave</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="ltRequiresDoc" checked={newLeaveType.requiresDocument || false} onChange={(e) => setNewLeaveType({ ...newLeaveType, requiresDocument: e.target.checked })} />
+                    <Label htmlFor="ltRequiresDoc">Requires supporting document</Label>
+                  </div>
+                  <Button size="sm" onClick={handleAddLeaveType}>Add Leave Type</Button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
-              <h4 className="font-semibold mb-4">Existing Leave Types</h4>
-              <div className="space-y-2">
-                {leaveTypes.map(lt => (
-                  <div key={lt.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div>
-                      <p className="font-medium">{lt.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {lt.days_allowed ? `${lt.days_allowed} days` : 'Unlimited'} • {lt.is_paid ? 'Paid' : 'Unpaid'}
-                      </p>
+              <h4 className="font-semibold mb-4">Existing Leave Types ({leaveTypes.length})</h4>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {leaveTypes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No leave types configured. Click "Add UK Default Types" to get started.
+                  </p>
+                ) : (
+                  leaveTypes.map(lt => (
+                    <div key={lt.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium">{lt.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {lt.days_allowed ? `${lt.days_allowed} days` : 'Unlimited'} • {lt.is_paid ? 'Paid' : 'Unpaid'}
+                          {lt.requires_supporting_document && ' • Doc Required'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => handleEditLeaveType(lt)}>
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDeleteLeaveType(lt.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => handleDeleteLeaveType(lt.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
