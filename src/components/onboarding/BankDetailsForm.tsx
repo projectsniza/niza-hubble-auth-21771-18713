@@ -248,9 +248,20 @@ export default function BankDetailsForm({
     doc.text('I confirm that the bank details provided above are correct and that payments should be made to this account.', margin, y, { maxWidth: pageWidth - 2 * margin });
     y += 15;
     
+    // Format date as DD/MM/YYYY for display
+    const formatDateDisplay = (dateStr: string) => {
+      if (!dateStr) return '____________________';
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+    
     doc.setFontSize(11);
     doc.text(`Signature: ${formData.signature || '____________________'}`, margin, y);
-    doc.text(`Date: ${formData.signature_date || '____________________'}`, margin + 100, y);
+    doc.text(`Date: ${formatDateDisplay(formData.signature_date)}`, margin + 100, y);
     
     doc.save(`Bank_Details_${formData.your_name.replace(/\s/g, '_')}.pdf`);
     toast.success('PDF downloaded successfully');
