@@ -21,7 +21,7 @@ export default function MessagingPanel() {
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
 
-  const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage } =
+  const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, deleteConversation } =
     useConversations();
 
   const { messages, pinnedMessages, loading: msgLoading, sending, sendMessage, togglePin } =
@@ -141,6 +141,20 @@ export default function MessagingPanel() {
     [createDirectMessage]
   );
 
+  const handleDeleteConversation = useCallback(
+    async (conversationId: string) => {
+      const result = await deleteConversation(conversationId);
+      if (result) {
+        if (selectedConversationId === conversationId) {
+          setSelectedConversationId(null);
+        }
+        toast.success('Conversation deleted');
+      }
+      return result;
+    },
+    [deleteConversation, selectedConversationId]
+  );
+
   const selectedConversation: Conversation | null =
     conversations.find(c => c.id === selectedConversationId) || null;
 
@@ -174,6 +188,7 @@ export default function MessagingPanel() {
           selectedId={selectedConversationId}
           onSelect={setSelectedConversationId}
           onNewDM={() => setNewDmOpen(true)}
+          onDeleteConversation={handleDeleteConversation}
           loading={convoLoading}
         />
 

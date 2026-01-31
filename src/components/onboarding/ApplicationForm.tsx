@@ -154,6 +154,15 @@ export default function ApplicationForm({
         savedData.branch_address = selectedBranch?.address || '';
       }
       setFormData(prev => ({ ...prev, ...savedData }));
+    } else {
+      // No saved data - try to extract postcode from address
+      if (employeeData.address && !formData.postcode) {
+        const ukPostcodeRegex = /([A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2})/i;
+        const match = employeeData.address.match(ukPostcodeRegex);
+        if (match) {
+          setFormData(prev => ({ ...prev, postcode: match[1].toUpperCase() }));
+        }
+      }
     }
   };
 

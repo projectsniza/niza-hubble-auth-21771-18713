@@ -267,6 +267,13 @@ export default function AddEmployee() {
         return;
       }
       
+      // Validate emergency phone is not same as employee phone
+      if (formData.phone && formData.emergencyContactPhone && 
+          formData.phone.replace(/\s/g, '') === formData.emergencyContactPhone.replace(/\s/g, '')) {
+        toast.error('Emergency contact phone cannot be the same as employee phone');
+        return;
+      }
+      
       // Create or update employee record after basic details
       if (!employeeRecord) {
         await saveBasicDetails();

@@ -252,11 +252,57 @@ export function useConversations() {
     fetchConversations();
   }, [fetchConversations]);
 
+  const deleteConversation = useCallback(async (conversationId: string): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    try {
+      // Get the conversation to check if it's the org chat
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('name, is_group, created_by')
+        .eq('id', conversationId)
+        .single();
+
+      // Don't allow deleting org chat
+      if (conv?.name === ORG_CHAT_NAME) {
+        return false;
+      }
+
+      // For DMs, just remove self from participants (soft delete for user)
+      // Delete all messages in the conversation first
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      // Delete participants
+      await supabase
+        .from('conversation_participants')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      // Delete the conversation itself
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+
+      if (error) throw error;
+
+      await fetchConversations();
+      return true;
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      return false;
+    }
+  }, [user?.id, fetchConversations]);
+
   return {
     conversations,
     loading,
     fetchConversations,
     initializeOrgChat,
     createDirectMessage,
+    deleteConversation,
   };
 }
