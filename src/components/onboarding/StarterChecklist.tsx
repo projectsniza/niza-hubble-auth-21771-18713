@@ -159,6 +159,17 @@ export default function StarterChecklist({
     let y = 15;
     const lineHeight = 6;
 
+    // Format date as DD MM YYYY
+    const formatDateDDMMYYYY = (dateStr: string) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day} ${month} ${year}`;
+    };
+
     // Load and add logo
     const loadLogoImage = (): Promise<string> => {
       return new Promise((resolve) => {
@@ -245,23 +256,22 @@ export default function StarterChecklist({
     doc.text(formData.first_names || '', margin + 8, y);
     y += 8;
 
-    // Question 3
     doc.setFont('helvetica', 'bold');
     doc.text('3', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.text('Are you male or female?', margin + 8, y);
     y += lineHeight;
-    doc.text(`Male ${formData.gender === 'male' ? '☑' : '☐'}    Female ${formData.gender === 'female' ? '☑' : '☐'}`, margin + 8, y);
+    doc.text(`Male ${formData.gender === 'male' ? '☑' : '☐'}      Female ${formData.gender === 'female' ? '☑' : '☐'}`, margin + 8, y);
     y += 8;
 
-    // Question 4
+    // Question 4 - Format date properly
     doc.setFont('helvetica', 'bold');
     doc.text('4', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.text('Date of birth', margin + 8, y);
     doc.text('DD MM YYYY', margin + 50, y);
     y += lineHeight;
-    doc.text(formData.date_of_birth || '', margin + 8, y);
+    doc.text(formatDateDDMMYYYY(formData.date_of_birth), margin + 8, y);
     y += 8;
 
     // Question 5
@@ -288,14 +298,14 @@ export default function StarterChecklist({
     doc.text(formData.national_insurance || '', margin + 8, y);
     y += 8;
 
-    // Question 7
+    // Question 7 - Format date properly
     doc.setFont('helvetica', 'bold');
     doc.text('7', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.text('Employment start date', margin + 8, y);
     doc.text('DD MM YYYY', margin + 60, y);
     y += lineHeight;
-    doc.text(formData.employment_start_date || '', margin + 8, y);
+    doc.text(formatDateDDMMYYYY(formData.employment_start_date), margin + 8, y);
     y += 12;
 
     // Employee statement section
@@ -433,7 +443,7 @@ export default function StarterChecklist({
     doc.text('For further guidance about repaying Student Loans go to www.gov.uk/new-employee/student-loans', margin, y);
     y += 15;
 
-    // Signature section
+    // Signature section - Format date properly
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Signature:', margin, y);
@@ -443,7 +453,7 @@ export default function StarterChecklist({
     doc.text(formData.name_printed || '____________________', margin + 25, y);
     y += 10;
     doc.text('Date:', margin, y);
-    doc.text(formData.signature_date || 'DD MM YYYY', margin + 25, y);
+    doc.text(formData.signature_date ? formatDateDDMMYYYY(formData.signature_date) : 'DD MM YYYY', margin + 25, y);
     y += 15;
 
     // Footer
