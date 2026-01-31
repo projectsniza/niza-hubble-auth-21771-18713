@@ -207,12 +207,12 @@ export default function ConversationList({
               {directMessages.map(conv => {
                 const otherParticipant = conv.participants?.find(p => p.id !== user?.id);
                 return (
-                  <button
+                  <div
                     key={conv.id}
-                    onClick={() => onSelect(conv.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors group cursor-pointer ${
                       selectedId === conv.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
                     }`}
+                    onClick={() => onSelect(conv.id)}
                   >
                     <Avatar className={`h-10 w-10 ${getAvatarColor(otherParticipant?.role)}`}>
                       <AvatarFallback className="bg-transparent text-sm font-medium">
@@ -241,8 +241,18 @@ export default function ConversationList({
                           {conv.unread_count}
                         </Badge>
                       )}
+                      {onDeleteConversation && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => handleDeleteClick(e, conv.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -256,6 +266,24 @@ export default function ConversationList({
           )}
         </div>
       </ScrollArea>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation? All messages will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
