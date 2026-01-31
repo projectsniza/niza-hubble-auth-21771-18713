@@ -3,17 +3,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { Users, MessageSquare, Plus, Search, Shield, Building2, UserCog } from 'lucide-react';
+import { Users, MessageSquare, Plus, Search, Shield, Building2, UserCog, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Conversation, UserProfile } from './types';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface ConversationListProps {
   conversations: Conversation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNewDM: () => void;
+  onDeleteConversation?: (id: string) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -22,10 +24,27 @@ export default function ConversationList({
   selectedId,
   onSelect,
   onNewDM,
+  onDeleteConversation,
   loading,
 }: ConversationListProps) {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
+
+  const handleDeleteClick = (e: React.MouseEvent, convId: string) => {
+    e.stopPropagation();
+    setConversationToDelete(convId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (conversationToDelete && onDeleteConversation) {
+      await onDeleteConversation(conversationToDelete);
+    }
+    setDeleteDialogOpen(false);
+    setConversationToDelete(null);
+  };
 
   const getInitials = (name: string) =>
     name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
