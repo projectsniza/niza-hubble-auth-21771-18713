@@ -77,23 +77,63 @@ serve(async (req) => {
     }
 
     // First clean up related data that might have foreign key constraints
+    console.log("Cleaning up related data for user:", userId);
+    
+    // Delete clock-in records
+    const { error: clockInError } = await supabaseAdmin
+      .from("clock_ins")
+      .delete()
+      .eq("user_id", userId);
+    if (clockInError) {
+      console.log("Clock-ins cleanup error (may not exist):", clockInError.message);
+    }
+
     // Delete from conversation_participants
-    await supabaseAdmin
+    const { error: partError } = await supabaseAdmin
       .from("conversation_participants")
       .delete()
       .eq("user_id", userId);
+    if (partError) {
+      console.log("Conversation participants cleanup error:", partError.message);
+    }
 
     // Delete messages sent by this user (soft delete by setting is_deleted)
-    await supabaseAdmin
+    const { error: msgError } = await supabaseAdmin
       .from("messages")
       .update({ is_deleted: true })
       .eq("sender_id", userId);
+    if (msgError) {
+      console.log("Messages cleanup error:", msgError.message);
+    }
+
+    // Delete from profiles first (has FK to auth.users)
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+    if (profileError) {
+      console.log("Profiles cleanup error:", profileError.message);
+    }
+
+    // Delete user roles
+    const { error: userRoleDelError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId);
+    if (userRoleDelError) {
+      console.log("User roles cleanup error:", userRoleDelError.message);
+    }
 
     // Update employees to unlink from this user
-    await supabaseAdmin
+    const { error: empError } = await supabaseAdmin
       .from("employees")
       .update({ user_id: null, account_activated: false })
       .eq("user_id", userId);
+    if (empError) {
+      console.log("Employees cleanup error:", empError.message);
+    }
+
+    console.log("Cleanup completed, deleting auth user...");
 
     // Delete the user using admin API - this will cascade to profiles and user_roles
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
