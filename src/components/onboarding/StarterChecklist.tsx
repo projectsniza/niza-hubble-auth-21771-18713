@@ -159,6 +159,18 @@ export default function StarterChecklist({
     let y = 15;
     const lineHeight = 6;
 
+    // Draw a predictable checkbox (avoid unicode □/☑ rendering issues)
+    const drawCheckbox = (x: number, yPos: number, checked: boolean) => {
+      const size = 3;
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.3);
+      doc.rect(x, yPos - size, size, size);
+      if (checked) {
+        doc.line(x + 0.5, yPos - size / 2, x + size / 2, yPos - 0.5);
+        doc.line(x + size / 2, yPos - 0.5, x + size - 0.5, yPos - size + 0.5);
+      }
+    };
+
     // Format date as DD MM YYYY
     const formatDateDDMMYYYY = (dateStr: string) => {
       if (!dateStr) return '';
@@ -261,7 +273,10 @@ export default function StarterChecklist({
     doc.setFont('helvetica', 'normal');
     doc.text('Are you male or female?', margin + 8, y);
     y += lineHeight;
-    doc.text(`Male ${formData.gender === 'male' ? '☑' : '☐'}      Female ${formData.gender === 'female' ? '☑' : '☐'}`, margin + 8, y);
+    doc.text('Male', margin + 8, y);
+    drawCheckbox(margin + 20, y, formData.gender === 'male');
+    doc.text('Female', margin + 40, y);
+    drawCheckbox(margin + 55, y, formData.gender === 'female');
     y += 8;
 
     // Question 4 - Format date properly
@@ -326,7 +341,8 @@ export default function StarterChecklist({
     // Statement A
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${formData.statement === 'A' ? '☑' : '☐'} A`, margin, y);
+    drawCheckbox(margin, y, formData.statement === 'A');
+    doc.text('A', margin + 6, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     y += lineHeight;
@@ -338,7 +354,8 @@ export default function StarterChecklist({
     // Statement B
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${formData.statement === 'B' ? '☑' : '☐'} B`, margin, y);
+    drawCheckbox(margin, y, formData.statement === 'B');
+    doc.text('B', margin + 6, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     y += lineHeight;
@@ -352,7 +369,8 @@ export default function StarterChecklist({
     // Statement C
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${formData.statement === 'C' ? '☑' : '☐'} C`, margin, y);
+    drawCheckbox(margin, y, formData.statement === 'C');
+    doc.text('C', margin + 6, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     y += lineHeight;
@@ -398,7 +416,10 @@ export default function StarterChecklist({
     doc.setFont('helvetica', 'normal');
     doc.text('Do you have a Student Loan which is not fully repaid?', margin + 8, y);
     y += lineHeight;
-    doc.text(`Yes ${formData.has_student_loan === true ? '☑' : '☐'}    No ${formData.has_student_loan === false ? '☑' : '☐'}`, margin + 8, y);
+    doc.text('Yes', margin + 8, y);
+    drawCheckbox(margin + 16, y, formData.has_student_loan === true);
+    doc.text('No', margin + 28, y);
+    drawCheckbox(margin + 35, y, formData.has_student_loan === false);
     doc.setFontSize(7);
     doc.text('If yes, go to question 10', margin + 50, y);
     doc.text('If no, go to question 12', margin + 95, y);
@@ -413,7 +434,10 @@ export default function StarterChecklist({
     y += 4;
     doc.text('by agreed monthly payments?', margin + 10, y);
     y += lineHeight;
-    doc.text(`Yes ${formData.repaying_direct === true ? '☑' : '☐'}    No ${formData.repaying_direct === false ? '☑' : '☐'}`, margin + 10, y);
+    doc.text('Yes', margin + 10, y);
+    drawCheckbox(margin + 18, y, formData.repaying_direct === true);
+    doc.text('No', margin + 30, y);
+    drawCheckbox(margin + 37, y, formData.repaying_direct === false);
     doc.setFontSize(7);
     doc.text('If yes, go to question 12', margin + 50, y);
     doc.text('If no, go to question 11', margin + 95, y);
@@ -426,7 +450,10 @@ export default function StarterChecklist({
     doc.setFont('helvetica', 'normal');
     doc.text('What type of Student Loan do you have?', margin + 10, y);
     y += lineHeight;
-    doc.text(`Plan 1 ${formData.student_loan_type === 'plan1' ? '☑' : '☐'}    Plan 2 ${formData.student_loan_type === 'plan2' ? '☑' : '☐'}`, margin + 10, y);
+    doc.text('Plan 1', margin + 10, y);
+    drawCheckbox(margin + 24, y, formData.student_loan_type === 'plan1');
+    doc.text('Plan 2', margin + 40, y);
+    drawCheckbox(margin + 54, y, formData.student_loan_type === 'plan2');
     y += 10;
 
     // Question 12
@@ -436,7 +463,10 @@ export default function StarterChecklist({
     doc.setFont('helvetica', 'normal');
     doc.text('Did you finish your studies before the last 6 April?', margin + 10, y);
     y += lineHeight;
-    doc.text(`Yes ${formData.finished_before_april === true ? '☑' : '☐'}    No ${formData.finished_before_april === false ? '☑' : '☐'}`, margin + 10, y);
+    doc.text('Yes', margin + 10, y);
+    drawCheckbox(margin + 18, y, formData.finished_before_april === true);
+    doc.text('No', margin + 30, y);
+    drawCheckbox(margin + 37, y, formData.finished_before_april === false);
     y += 12;
 
     doc.setFontSize(7);

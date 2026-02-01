@@ -395,7 +395,17 @@ export default function UserManagement() {
       setDeleteUserId(null);
       fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete user');
+      console.error('Delete user error:', error);
+
+      // supabase-js returns rich error objects for functions.invoke.
+      // Prefer a clear message over the generic "non-2xx" text.
+      const message =
+        error?.context?.body?.error ||
+        error?.context?.body?.message ||
+        error?.message ||
+        'Failed to delete user';
+
+      toast.error(message);
     }
   };
 

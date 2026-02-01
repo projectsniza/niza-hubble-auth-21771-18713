@@ -148,6 +148,24 @@ export default function ApplicationForm({
 
     if (data?.form_data) {
       const savedData = data.form_data as unknown as FormData;
+
+      // Guard against older saved data where referee fields were incorrectly copied
+      // from the applicant details.
+      const sanitizeReferee = (ref: FormData['referee1']) => {
+        const applicantName = (savedData.name || '').trim();
+        const applicantAddress = (savedData.address || '').trim();
+        const isProbablyAutofill =
+          (ref?.name || '').trim() === applicantName || (ref?.name || '').trim() === '';
+
+        if (isProbablyAutofill && (ref?.address || '').trim() === applicantAddress) {
+          return { ...ref, address: '' };
+        }
+        return ref;
+      };
+
+      savedData.referee1 = sanitizeReferee(savedData.referee1);
+      savedData.referee2 = sanitizeReferee(savedData.referee2);
+
       // If branch_address is not in saved data, try to get it from the selected branch
       if (!savedData.branch_address) {
         const selectedBranch = branches.find(b => b.id === savedData.branch_id || b.id === employeeData.branch_id);
