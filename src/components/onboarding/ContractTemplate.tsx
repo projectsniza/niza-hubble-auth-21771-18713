@@ -50,6 +50,11 @@ interface ContractData {
   salary_type: 'hourly' | 'annual';
   place_of_work: string;
   holiday_days: string;
+
+  // Employee acceptance (AGREED by the parties)
+  employee_signed_name?: string;
+  employee_signed_date?: string;
+  employee_signature_data?: string; // data URL
 }
 
 export default function ContractTemplate({
@@ -66,12 +71,14 @@ export default function ContractTemplate({
 }: ContractTemplateProps) {
   const { user } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const employeeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(false);
   const [showSignatureDialog, setShowSignatureDialog] = useState(false);
   const [signatureType, setSignatureType] = useState<'typed' | 'drawn' | 'uploaded'>('typed');
   const [typedSignature, setTypedSignature] = useState('');
   const [signatureDate, setSignatureDate] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isEmployeeDrawing, setIsEmployeeDrawing] = useState(false);
   
   const [contractData, setContractData] = useState<ContractData>({
     contract_date: '',
@@ -87,7 +94,11 @@ export default function ContractTemplate({
     salary_rate: '',
     salary_type: 'hourly',
     place_of_work: '',
-    holiday_days: ''
+    holiday_days: '',
+
+    employee_signed_name: '',
+    employee_signed_date: '',
+    employee_signature_data: ''
   });
 
   const selectedOrg = organizations.find(o => o.id === contractData.organization_id);
@@ -302,6 +313,60 @@ export default function ContractTemplate({
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY
     };
+  };
+
+  const getEmployeeCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = employeeCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
+  };
+
+  const startEmployeeDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsEmployeeDrawing(true);
+    const canvas = employeeCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getEmployeeCanvasCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const drawEmployee = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isEmployeeDrawing) return;
+    const canvas = employeeCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getEmployeeCanvasCoordinates(e);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+
+  const stopEmployeeDrawing = () => {
+    if (!isEmployeeDrawing) return;
+    setIsEmployeeDrawing(false);
+    const canvas = employeeCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL();
+    setContractData(prev => ({ ...prev, employee_signature_data: dataUrl }));
+  };
+
+  const clearEmployeeSignature = () => {
+    const canvas = employeeCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setContractData(prev => ({ ...prev, employee_signature_data: '' }));
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -626,9 +691,18 @@ export default function ContractTemplate({
     doc.setFont('helvetica', 'normal');
     doc.text('I agree to the above terms', margin, y);
     y += 10;
-    doc.text('Signed: ...............................................', margin, y);
+    doc.text(`Signed: ${contractData.employee_signed_name || '...............................................'}`, margin, y);
+
+    // Draw employee signature image (if provided)
+    if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
+      try {
+        doc.addImage(contractData.employee_signature_data, 'PNG', margin + 20, y + 3, 60, 15);
+      } catch {
+        // ignore addImage failures
+      }
+    }
     y += 8;
-    doc.text('Date: ...............................................', margin, y);
+    doc.text(`Date: ${contractData.employee_signed_date || '...............................................'}`, margin, y);
     y += 15;
     
     doc.text('Signed on behalf of the Employer', margin, y);
@@ -994,11 +1068,51 @@ export default function ContractTemplate({
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Signed:</p>
-                  <div className="border-b-2 border-dotted h-10"></div>
+                  {readOnly ? (
+                    <p className="text-base">{contractData.employee_signed_name || ''}</p>
+                  ) : (
+                    <Input
+                      value={contractData.employee_signed_name || ''}
+                      onChange={(e) => updateField('employee_signed_name', e.target.value)}
+                      placeholder="Type your name"
+                      className="h-9"
+                    />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Signature:</p>
+                  <div className="rounded-md border bg-background p-2">
+                    <canvas
+                      ref={employeeCanvasRef}
+                      width={500}
+                      height={140}
+                      className="h-20 w-full cursor-crosshair rounded bg-background"
+                      onMouseDown={startEmployeeDrawing}
+                      onMouseMove={drawEmployee}
+                      onMouseUp={stopEmployeeDrawing}
+                      onMouseLeave={stopEmployeeDrawing}
+                    />
+                    {!readOnly && (
+                      <div className="flex justify-end mt-2">
+                        <Button variant="outline" size="sm" onClick={clearEmployeeSignature}>
+                          Clear
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Date:</p>
-                  <div className="border-b-2 border-dotted h-6"></div>
+                  {readOnly ? (
+                    <p>{contractData.employee_signed_date || ''}</p>
+                  ) : (
+                    <Input
+                      type="date"
+                      value={contractData.employee_signed_date || ''}
+                      onChange={(e) => updateField('employee_signed_date', e.target.value)}
+                      className="h-9"
+                    />
+                  )}
                 </div>
               </div>
             </div>
