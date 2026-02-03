@@ -182,7 +182,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: error.message };
     }
 
-    // Check if user is deactivated after successful login
+    // Immediately fetch user profile and set state after successful login
+    // This ensures user state is set before returning to the caller
     if (data.user) {
       const result = await fetchUserProfile(data.user.id);
       if (result === 'deactivated') {
@@ -190,6 +191,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await supabase.auth.signOut();
         return { error: 'Your account has been deactivated. Please contact your administrator.' };
       }
+      
+      // Set user and session state immediately so navigation works
+      setSession(data.session);
+      setUser(result);
     }
 
     return { error: null };
