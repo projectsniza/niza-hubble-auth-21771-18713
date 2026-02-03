@@ -3209,6 +3209,7 @@ export type Database = {
         Row: {
           branch_id: string | null
           created_at: string
+          custom_role_id: string | null
           display_name: string | null
           email: string
           force_password_change: boolean | null
@@ -3222,6 +3223,7 @@ export type Database = {
         Insert: {
           branch_id?: string | null
           created_at?: string
+          custom_role_id?: string | null
           display_name?: string | null
           email: string
           force_password_change?: boolean | null
@@ -3237,6 +3239,7 @@ export type Database = {
         Update: {
           branch_id?: string | null
           created_at?: string
+          custom_role_id?: string | null
           display_name?: string | null
           email?: string
           force_password_change?: boolean | null
@@ -3262,6 +3265,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
             referencedColumns: ["id"]
           },
         ]

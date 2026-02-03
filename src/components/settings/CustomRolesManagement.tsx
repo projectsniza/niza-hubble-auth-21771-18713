@@ -374,6 +374,33 @@ export default function CustomRolesManagement() {
 
     setIsSubmitting(true);
     try {
+      // First, find all users created from this custom role and deactivate them
+      const { data: linkedUsers, error: findError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('custom_role_id', selectedRole.id);
+      
+      if (findError) {
+        console.error('Error finding linked users:', findError);
+      }
+      
+      // Deactivate all linked users
+      if (linkedUsers && linkedUsers.length > 0) {
+        const userIds = linkedUsers.map(u => u.id);
+        const { error: deactivateError } = await supabase
+          .from('profiles')
+          .update({ is_active: false })
+          .in('id', userIds);
+        
+        if (deactivateError) {
+          console.error('Error deactivating linked users:', deactivateError);
+          toast.error('Warning: Could not deactivate some linked user accounts');
+        } else {
+          toast.info(`Deactivated ${linkedUsers.length} user account(s) linked to this role`);
+        }
+      }
+      
+      // Now delete the custom role
       const { error } = await supabase
         .from('custom_roles')
         .delete()
