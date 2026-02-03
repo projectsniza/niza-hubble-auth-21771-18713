@@ -62,36 +62,26 @@ export default function Login() {
     
     const { error } = await login(email, password);
     
-    if (!error) {
-      // Check if user got deactivated (they will be signed out automatically)
-      // Small delay to allow auth context to process
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Save or clear credentials based on remember me
-      if (rememberMe) {
-        localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
-      } else {
-        localStorage.removeItem(REMEMBER_ME_KEY);
-      }
-      toast({ title: 'Welcome back!', description: 'Login successful' });
-      navigate('/dashboard');
-    } else {
-      // Check if error indicates deactivated account
-      if (error.toLowerCase().includes('invalid') || error.toLowerCase().includes('credentials')) {
-        toast({ 
-          title: 'Login failed', 
-          description: error,
-          variant: 'destructive' 
-        });
-      } else {
-        toast({ 
-          title: 'Login failed', 
-          description: error,
-          variant: 'destructive' 
-        });
-      }
+    if (error) {
+      toast({ 
+        title: 'Login failed', 
+        description: error,
+        variant: 'destructive' 
+      });
+      setIsLoading(false);
+      return;
     }
-    setIsLoading(false);
+    
+    // Save or clear credentials based on remember me
+    if (rememberMe) {
+      localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
+    } else {
+      localStorage.removeItem(REMEMBER_ME_KEY);
+    }
+    
+    toast({ title: 'Welcome back!', description: 'Login successful' });
+    // Don't navigate here - let the useEffect handle navigation once user state updates
+    // The useEffect at line 43 will navigate when user becomes truthy
   };
 
   // Show nothing while checking auth status
