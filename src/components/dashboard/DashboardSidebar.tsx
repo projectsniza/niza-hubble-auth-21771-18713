@@ -39,6 +39,7 @@ const getMenuItems = (role: string) => {
       { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
+      { title: 'Submit Documents', icon: FileText, path: '/dashboard/documents/submit' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },

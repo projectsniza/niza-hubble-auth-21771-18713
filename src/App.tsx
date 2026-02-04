@@ -26,6 +26,7 @@ const EmployeeProfile = lazy(() => import("./pages/dashboard/EmployeeProfile"));
 const MyProfile = lazy(() => import("./pages/dashboard/MyProfile"));
 const Onboarding = lazy(() => import("./pages/dashboard/Onboarding"));
 const Documents = lazy(() => import("./pages/dashboard/Documents"));
+const SubmitDocuments = lazy(() => import("./pages/dashboard/SubmitDocuments"));
 const DocumentsTodo = lazy(() => import("./pages/dashboard/DocumentsTodo"));
 const Attendance = lazy(() => import("./pages/dashboard/Attendance"));
 const Scheduling = lazy(() => import("./pages/dashboard/Scheduling"));
@@ -61,6 +62,7 @@ const Messages = lazy(() => import("./pages/dashboard/Messages"));
 const StoreTemplates = lazy(() => import("./pages/dashboard/StoreTemplates"));
 const Lottery = lazy(() => import("./pages/dashboard/Lottery"));
 const Reminders = lazy(() => import("./pages/dashboard/Reminders"));
+const Notifications = lazy(() => import("./pages/dashboard/Notifications"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -96,6 +98,7 @@ const App = () => (
                 <Route path="onboarding/:id" element={<AddEmployee />} />
                 <Route path="add-employee" element={<AddEmployee />} />
                 <Route path="documents" element={<Documents />} />
+                <Route path="documents/submit" element={<SubmitDocuments />} />
                 <Route path="documents/todo" element={<DocumentsTodo />} />
                 <Route path="attendance" element={<Attendance />} />
                 <Route path="scheduling" element={<Scheduling />} />
@@ -114,6 +117,7 @@ const App = () => (
                 <Route path="store-templates" element={<StoreTemplates />} />
                 <Route path="lottery" element={<Lottery />} />
                 <Route path="reminders" element={<Reminders />} />
+                <Route path="notifications" element={<Notifications />} />
               </Route>
               <Route path="/niza-safe" element={<NizaSafe />}>
                 <Route index element={<NizaSafeHome />} />

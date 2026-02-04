@@ -17,6 +17,8 @@ import { format, differenceInDays } from 'date-fns';
 import CreateFolderDialog from '@/components/documents/CreateFolderDialog';
 import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
+import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
+import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,8 +93,7 @@ export default function Documents() {
   const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
-
-  // Initialize with Company Documents root folder and fetch follow-up settings
+  const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
   useEffect(() => {
     const initializeRoot = async () => {
       const { data: rootFolder } = await supabase
@@ -490,10 +491,20 @@ export default function Documents() {
               Upcoming
               {upcomingCount > 0 && <Badge variant="secondary">{upcomingCount}</Badge>}
             </TabsTrigger>
+            {user?.role === 'super_admin' && (
+              <TabsTrigger value="submissions" className="gap-2">
+                Submissions
+                {submissionsPendingCount > 0 && (
+                  <Badge variant="default" className="animate-pulse">{submissionsPendingCount}</Badge>
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
         </Tabs>
 
-        {loading ? (
+        {activeTab === 'submissions' ? (
+          <DocumentSubmissionsTab />
+        ) : loading ? (
           <div className="flex items-center justify-center h-40">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>

@@ -5,6 +5,7 @@ import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
 import TaskReminderListener from '@/components/reminders/TaskReminderListener';
 import RemindersSidebar from '@/components/reminders/RemindersSidebar';
+import NotificationBell from '@/components/notifications/NotificationBell';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Loader2, Menu, CheckSquare } from 'lucide-react';
@@ -74,16 +75,19 @@ export default function Dashboard() {
             <AppsDialog />
           </div>
 
-          {/* Reminders Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setRemindersSidebarOpen(true)}
-            className="relative"
-            title="My Reminders"
-          >
-            <CheckSquare className="h-5 w-5" />
-          </Button>
+          {/* Notification Bell and Reminders Button */}
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setRemindersSidebarOpen(true)}
+              className="relative"
+              title="My Reminders"
+            >
+              <CheckSquare className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
 
         {/* Reminders Sidebar */}

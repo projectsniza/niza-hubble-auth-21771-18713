@@ -16,6 +16,7 @@ import StarterChecklist from '@/components/onboarding/StarterChecklist';
 import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
 import DocumentUploadStep, { DocumentUploadStepRef } from '@/components/onboarding/DocumentUploadStep';
+import { logActivity } from '@/hooks/useActivityLogs';
 
 
 interface FormSettings {
@@ -442,6 +443,21 @@ export default function AddEmployee() {
           current_step: getStepIndex('approval') + 2
         })
         .eq('employee_id', employeeRecord.id);
+
+      // Log activity for super admin notification
+      if (user) {
+        await logActivity({
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          activityType: 'contract_submission',
+          activityCategory: 'employees',
+          title: 'Contract Pending Approval',
+          description: `${user.name} submitted contract for ${formData.firstName} ${formData.lastName}`,
+          organizationId: user.organizationId,
+          branchId: user.branchId,
+        });
+      }
 
       toast.success('Contract submitted for approval');
       handleNext();

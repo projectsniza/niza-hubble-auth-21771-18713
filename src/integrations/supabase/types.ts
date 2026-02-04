@@ -86,6 +86,69 @@ export type Database = {
           },
         ]
       }
+      activity_logs: {
+        Row: {
+          activity_category: string
+          activity_type: string
+          branch_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_read: boolean | null
+          metadata: Json | null
+          organization_id: string | null
+          title: string
+          user_id: string
+          user_name: string
+          user_role: string | null
+        }
+        Insert: {
+          activity_category: string
+          activity_type: string
+          branch_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_read?: boolean | null
+          metadata?: Json | null
+          organization_id?: string | null
+          title: string
+          user_id: string
+          user_name: string
+          user_role?: string | null
+        }
+        Update: {
+          activity_category?: string
+          activity_type?: string
+          branch_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_read?: boolean | null
+          metadata?: Json | null
+          organization_id?: string | null
+          title?: string
+          user_id?: string
+          user_name?: string
+          user_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bradford_thresholds: {
         Row: {
           action_required: string
@@ -944,6 +1007,94 @@ export type Database = {
           },
           {
             foreignKeyName: "document_requirements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_submissions: {
+        Row: {
+          branch_id: string
+          created_at: string
+          document_name: string
+          employee_id: string
+          expiry_date: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_by: string
+          submitted_by_name: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          document_name: string
+          employee_id: string
+          expiry_date?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by: string
+          submitted_by_name: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          document_name?: string
+          employee_id?: string
+          expiry_date?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by?: string
+          submitted_by_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_submissions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_submissions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_submissions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

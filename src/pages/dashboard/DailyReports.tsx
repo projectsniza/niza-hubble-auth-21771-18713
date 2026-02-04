@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { logActivity } from '@/hooks/useActivityLogs';
 
 interface DailyReport {
   id: string;
@@ -212,6 +213,19 @@ export default function DailyReports() {
       });
 
       if (error) throw error;
+
+      // Log activity for super admin notification
+      await logActivity({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        activityType: 'report_submission',
+        activityCategory: 'reports',
+        title: 'New Daily Report',
+        description: `${user.name} submitted "${reportTitle}" report`,
+        organizationId: user.organizationId,
+        branchId: user.branchId,
+      });
 
       toast({
         title: "Report Submitted",

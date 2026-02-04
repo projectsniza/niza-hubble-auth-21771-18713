@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logActivity } from '@/hooks/useActivityLogs';
 import type { Session } from '@supabase/supabase-js';
 
 export type UserRole = 'super_admin' | 'hr' | 'manager' | 'employee';
@@ -215,8 +216,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: error.message };
     }
 
+    // Log password change activity for super admin notification
+    if (user) {
+      await logActivity({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        activityType: 'password_change',
+        activityCategory: 'security',
+        title: 'Password Changed',
+        description: `${user.name} changed their password`,
+        organizationId: user.organizationId,
+        branchId: user.branchId,
+      });
+    }
+
     return { error: null };
-  }, []);
+  }, [user]);
 
   const contextValue = useMemo(() => ({
     user,
