@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { logActivity } from '@/hooks/useActivityLogs';
 
 export default function MyProfile() {
   const { user } = useAuth();
@@ -136,6 +137,21 @@ export default function MyProfile() {
       });
 
       if (error) throw error;
+
+      // Log activity for super admin notification
+      if (user) {
+        await logActivity({
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          activityType: 'leave_request',
+          activityCategory: 'employees',
+          title: 'New Leave Request',
+          description: `${user.name} submitted a leave request`,
+          organizationId: user.organizationId,
+          branchId: user.branchId,
+        });
+      }
 
       toast({ title: "Success", description: "Leave request submitted" });
       setShowLeaveDialog(false);
