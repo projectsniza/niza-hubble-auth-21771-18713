@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const getMenuItems = (role: string) => {
       { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Submit Documents', icon: FileText, path: '/dashboard/documents/submit' },
+      { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
@@ -64,6 +65,7 @@ const getMenuItems = (role: string) => {
       { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
@@ -86,6 +88,7 @@ const getMenuItems = (role: string) => {
     { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
     { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+    { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
     { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
     { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
     { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
