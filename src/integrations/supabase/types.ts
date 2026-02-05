@@ -1244,6 +1244,114 @@ export type Database = {
           },
         ]
       }
+      drive_offs: {
+        Row: {
+          amount_drive_off: number
+          branch_id: string
+          cashier_name: string
+          created_at: string
+          created_by: string | null
+          date_handed_to_guardian: string | null
+          drive_off_date: string
+          fuel_type: string
+          head_office_notes: string | null
+          id: string
+          organization_id: string | null
+          payment_received_date: string | null
+          payment_till_1: number | null
+          payment_till_2: number | null
+          pump_number: number
+          remarks: string | null
+          till_1_amount: number | null
+          till_2_amount: number | null
+          till_3_amount: number | null
+          till_4_amount: number | null
+          till_5_amount: number | null
+          total_amount_received: number | null
+          total_liters: number
+          tracking_reference: string | null
+          tracking_status: string | null
+          updated_at: string
+          vehicle_model: string | null
+          vehicle_registration: string
+        }
+        Insert: {
+          amount_drive_off: number
+          branch_id: string
+          cashier_name: string
+          created_at?: string
+          created_by?: string | null
+          date_handed_to_guardian?: string | null
+          drive_off_date: string
+          fuel_type: string
+          head_office_notes?: string | null
+          id?: string
+          organization_id?: string | null
+          payment_received_date?: string | null
+          payment_till_1?: number | null
+          payment_till_2?: number | null
+          pump_number: number
+          remarks?: string | null
+          till_1_amount?: number | null
+          till_2_amount?: number | null
+          till_3_amount?: number | null
+          till_4_amount?: number | null
+          till_5_amount?: number | null
+          total_amount_received?: number | null
+          total_liters: number
+          tracking_reference?: string | null
+          tracking_status?: string | null
+          updated_at?: string
+          vehicle_model?: string | null
+          vehicle_registration: string
+        }
+        Update: {
+          amount_drive_off?: number
+          branch_id?: string
+          cashier_name?: string
+          created_at?: string
+          created_by?: string | null
+          date_handed_to_guardian?: string | null
+          drive_off_date?: string
+          fuel_type?: string
+          head_office_notes?: string | null
+          id?: string
+          organization_id?: string | null
+          payment_received_date?: string | null
+          payment_till_1?: number | null
+          payment_till_2?: number | null
+          pump_number?: number
+          remarks?: string | null
+          till_1_amount?: number | null
+          till_2_amount?: number | null
+          till_3_amount?: number | null
+          till_4_amount?: number | null
+          till_5_amount?: number | null
+          total_amount_received?: number | null
+          total_liters?: number
+          tracking_reference?: string | null
+          tracking_status?: string | null
+          updated_at?: string
+          vehicle_model?: string | null
+          vehicle_registration?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drive_offs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drive_offs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_contracts: {
         Row: {
           contract_type: string
