@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
+import { NizaLoaderFullPage, NizaLoaderOverlay } from '@/components/ui/niza-loader';
 import { Eye, EyeOff } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import hrEmployee1 from '@/assets/hr-employee-1.jpg';
@@ -91,7 +91,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
+    <>
+      {/* Loading overlay during login */}
+      {isLoading && <NizaLoaderOverlay />}
+      
+      <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
       {/* Left Panel - Desktop Only */}
       <div className="relative hidden lg:flex lg:flex-1 flex-col border-r border-border" 
            style={{ 
@@ -263,6 +267,7 @@ export default function Login() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

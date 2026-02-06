@@ -59,3 +59,15 @@ export function NizaLoaderFullPage() {
     </div>
   );
 }
+
+export function NizaLoaderOverlay() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+      <NizaLoader size="lg" />
+    </div>
+  );
+}
+
+export function NizaLoaderInline({ className = '' }: { className?: string }) {
+  return <NizaLoader size="sm" className={className} />;
+}
