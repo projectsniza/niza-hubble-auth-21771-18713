@@ -152,7 +152,7 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
 
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen`}
+      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
       style={{ background: 'var(--gradient-panel)' }}
     >
       {/* Decorative SVG Background */}
@@ -167,17 +167,17 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
       </svg>
       {/* Toggle Button - Hidden on mobile */}
       <Button
-        variant="ghost"
+        variant="outline"
         size="icon"
         onClick={onToggle}
-        className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-card border border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex"
+        className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center"
       >
-        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </Button>
 
       {/* Logo */}
-      <div className="p-4 flex items-center justify-center border-b border-primary/20 relative z-10">
-        <img src={nizaCloudLogo} alt="Niza Cloud" className={collapsed ? "h-8" : "h-10"} />
+      <div className={`${collapsed ? 'p-2' : 'p-4'} flex items-center justify-center border-b border-primary/20 relative z-10 min-h-[60px]`}>
+        <img src={nizaCloudLogo} alt="Niza Cloud" className={collapsed ? "h-10 w-auto object-contain" : "h-10"} />
       </div>
 
       {/* User Info */}
