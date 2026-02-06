@@ -6,14 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { OrgBranchProvider } from "./contexts/OrgBranchContext";
-import { Loader2 } from "lucide-react";
-
-// Loading fallback component
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-  </div>
-);
+import { NizaLoaderFullPage } from "@/components/ui/niza-loader";
 
 // Lazy load all route components for better initial bundle size
 const Index = lazy(() => import("./pages/Index"));
@@ -85,7 +78,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<NizaLoaderFullPage />}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
