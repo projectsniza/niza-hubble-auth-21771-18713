@@ -11,6 +11,7 @@ import {
   MessageSquare, Users, Paperclip, Clock, Save, RefreshCw, 
   Shield, Building2, UserCog, User, Info, Eye, Bell, Check
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -97,7 +98,7 @@ export default function MessageSettingsPanel() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <NizaLoaderInline />
       </div>
     );
   }

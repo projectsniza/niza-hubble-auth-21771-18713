@@ -32,6 +32,7 @@ import {
   CheckSquare,
   AtSign,
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -402,11 +403,10 @@ export default function ChatArea({
       </div>
     );
   }
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

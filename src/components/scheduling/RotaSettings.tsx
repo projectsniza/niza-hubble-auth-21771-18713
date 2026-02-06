@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, CalendarDays, Layers, Loader2 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,7 +101,7 @@ export function RotaSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <NizaLoaderInline />
       </div>
     );
   }

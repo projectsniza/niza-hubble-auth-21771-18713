@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Shield, Building2, UserCog, MessageSquare, Loader2 } from 'lucide-react';
+import { Search, Shield, Building2, UserCog, MessageSquare } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { UserProfile } from './types';
@@ -171,7 +172,7 @@ export default function NewConversationDialog({
         <ScrollArea className="h-80">
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <NizaLoaderInline />
             </div>
           ) : filteredUsers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -199,7 +200,7 @@ export default function NewConversationDialog({
                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   </div>
                   {getRoleBadge(u.role)}
-                  {creating === u.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {creating === u.id && <div className="h-4 w-4 animate-spin border-2 border-primary border-t-transparent rounded-full" />}
                 </button>
               ))}
             </div>

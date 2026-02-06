@@ -14,6 +14,7 @@ import {
   Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
   LayoutGrid, CalendarDays, FileSpreadsheet
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -806,7 +807,7 @@ export default function Lottery() {
               <CardContent className="p-0">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-16">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <NizaLoaderInline />
                   </div>
                 ) : games.length === 0 ? (
                   <div className="py-16 text-center">
@@ -1245,7 +1246,7 @@ export default function Lottery() {
               <CardContent className="p-4">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-16">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <NizaLoaderInline />
                   </div>
                 ) : games.length === 0 ? (
                   <div className="py-16 text-center">

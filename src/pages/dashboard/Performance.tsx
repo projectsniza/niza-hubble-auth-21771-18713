@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Search, Plus, Download, TrendingUp, Users, Target, Star, Settings, Building2, MapPin, Trophy, Medal, Award, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -507,7 +508,7 @@ export default function Performance() {
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center h-40">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <NizaLoaderInline />
               </div>
             ) : filteredReviewsAll.length === 0 ? (
               <div className="text-center py-12">
@@ -933,7 +934,7 @@ export default function Performance() {
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <NizaLoaderInline />
             </div>
           ) : filteredReviews.length === 0 ? (
             <div className="text-center py-12">

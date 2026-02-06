@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Loader2, Mail, Phone, MapPin, Building2, Clock, Edit } from 'lucide-react';
+import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Mail, Phone, MapPin, Building2, Clock, Edit } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
@@ -124,7 +125,7 @@ export default function EmployeeProfile() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

@@ -30,10 +30,10 @@ import {
   PoundSterling,
   Car,
   AlertTriangle,
-  Loader2,
   Building2,
   MapPin
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { useDriveOffs, DriveOff, DriveOffFormData } from '@/hooks/useDriveOffs';
 import { DriveOffFormDialog } from '@/components/drive-offs/DriveOffFormDialog';
@@ -287,7 +287,7 @@ export default function DriveOffs() {
       {/* Drive-Off Cards */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <NizaLoaderInline />
         </div>
       ) : filteredDriveOffs.length === 0 ? (
         <Card>

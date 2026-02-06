@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FileText, CheckCircle, XCircle, Clock, Eye, Download, Loader2, User, Building2, Calendar } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, Eye, Download, User, Building2, Calendar } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -100,7 +101,7 @@ export default function DocumentSubmissionsTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <NizaLoaderInline />
       </div>
     );
   }
@@ -297,7 +298,7 @@ export default function DocumentSubmissionsTab() {
             >
               {isProcessing ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <div className="h-4 w-4 mr-2 animate-spin border-2 border-destructive-foreground border-t-transparent rounded-full" />
                   Rejecting...
                 </>
               ) : (

@@ -18,6 +18,7 @@ import {
   Download, Loader2, Users, Plus, Search, Calendar, Clock,
   FileSpreadsheet, Edit3, CheckCircle2, XCircle
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
@@ -829,7 +830,7 @@ export function TimesheetView() {
 
       {loading ? (
         <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <NizaLoaderInline />
         </div>
       ) : viewTab === 'weekly' ? (
         /* Weekly View */

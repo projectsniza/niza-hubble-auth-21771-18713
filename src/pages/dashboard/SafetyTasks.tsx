@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Search, CheckCircle2, Clock, AlertTriangle, CheckCheck, Play, Paperclip, FileText, X, Download, Eye } from "lucide-react";
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import {
   Select,
   SelectContent,
@@ -337,7 +338,7 @@ export default function SafetyTasks() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-40">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <NizaLoaderInline />
         </div>
       ) : filteredTasks.length === 0 ? (
         <Card className="p-12 text-center border-dashed">

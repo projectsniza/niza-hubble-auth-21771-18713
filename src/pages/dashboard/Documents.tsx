@@ -11,6 +11,7 @@ import {
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
   Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -506,7 +507,7 @@ export default function Documents() {
           <DocumentSubmissionsTab />
         ) : loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <NizaLoaderInline />
           </div>
         ) : (
           <>

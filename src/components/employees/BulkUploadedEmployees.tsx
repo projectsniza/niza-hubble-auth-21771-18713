@@ -15,6 +15,7 @@ import {
   Upload, FileText, Check, X, Loader2, User, Building, MapPin, 
   Calendar, AlertCircle, CheckCircle2
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -226,7 +227,7 @@ export default function BulkUploadedEmployees() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }
