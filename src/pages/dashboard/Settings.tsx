@@ -11,6 +11,7 @@ import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
 import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
 import DepartmentManagement from '@/components/settings/DepartmentManagement';
 import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -101,7 +102,7 @@ export default function Settings() {
   if (!user) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <NizaLoaderInline />
       </div>
     );
   }

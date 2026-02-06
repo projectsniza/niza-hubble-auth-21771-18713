@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, MapPin, Trash2, FolderOpen, Loader2, Pencil } from 'lucide-react';
+import { Plus, Building2, MapPin, Trash2, FolderOpen, Pencil } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import CreateOrganizationDialog from './CreateOrganizationDialog';
 import CreateBranchDialog from './CreateBranchDialog';
 import EditOrganizationDialog from './EditOrganizationDialog';
@@ -71,7 +72,7 @@ export default function OrganizationManagement() {
   if (orgsLoading || branchesLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }
