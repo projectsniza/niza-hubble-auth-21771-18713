@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
 import { Eye, EyeOff } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import hrEmployee1 from '@/assets/hr-employee-1.jpg';
@@ -86,11 +87,7 @@ export default function Login() {
 
   // Show nothing while checking auth status
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <NizaLoaderFullPage />;
   }
 
   return (
