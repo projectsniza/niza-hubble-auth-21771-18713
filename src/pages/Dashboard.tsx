@@ -8,8 +8,9 @@ import RemindersSidebar from '@/components/reminders/RemindersSidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Loader2, Menu, CheckSquare } from 'lucide-react';
+import { Menu, CheckSquare } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
@@ -20,11 +21,7 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <NizaLoaderFullPage />;
   }
 
   if (!user) {

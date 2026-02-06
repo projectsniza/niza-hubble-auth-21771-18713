@@ -18,9 +18,9 @@ import {
   Circle,
   ChevronDown,
   ChevronRight,
-  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 
 interface Reminder {
   id: string;
@@ -172,7 +172,7 @@ export default function RemindersSidebar({ open, onClose }: RemindersSidebarProp
         <div className="p-4 space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <NizaLoaderInline />
             </div>
           ) : (
             <>

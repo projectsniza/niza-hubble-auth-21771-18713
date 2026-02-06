@@ -21,14 +21,24 @@ const menuItems = [
 export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTemplatesSidebarProps) {
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} border-r border-primary/20 backdrop-blur-xl transition-all duration-300 flex flex-col relative`}
+      className={`${collapsed ? 'w-16' : 'w-64'} border-r border-primary/20 backdrop-blur-xl transition-all duration-300 flex flex-col relative h-screen sticky top-0 flex-shrink-0`}
       style={{ background: 'var(--gradient-panel)' }}
     >
-      <div className="p-4 border-b border-primary/20 flex items-center justify-center h-16">
-        <img src={nizaCloudLogo} alt="Niza Templates" className={collapsed ? "h-8" : "h-10"} />
+      {/* Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={onToggle}
+        className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </Button>
+
+      <div className={`${collapsed ? 'p-2' : 'p-4'} border-b border-primary/20 flex items-center justify-center min-h-[60px]`}>
+        <img src={nizaCloudLogo} alt="Niza Templates" className={collapsed ? "h-10 w-auto object-contain" : "h-10"} />
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {menuItems.map((item) => (
           <NavLink
             key={item.path}
@@ -36,26 +46,20 @@ export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTempla
             end={item.end}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                collapsed ? 'justify-center' : ''
+              } ${
                 isActive
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25'
                   : 'text-muted-foreground hover:bg-primary/10 hover:text-foreground'
               }`
             }
+            title={collapsed ? item.name : undefined}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span className="font-medium text-sm">{item.name}</span>}
           </NavLink>
         ))}
       </nav>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggle}
-        className="absolute -right-3 top-20 h-6 w-6 rounded-full border border-primary/20 bg-card hover:bg-primary/10"
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </Button>
     </aside>
   );
 }

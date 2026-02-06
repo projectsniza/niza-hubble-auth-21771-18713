@@ -5,7 +5,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, FileCheck, Loader2, Upload, Users, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { Download, FileCheck, Upload, Users, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -95,7 +96,7 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

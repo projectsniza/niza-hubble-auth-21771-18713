@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, FileText, Download, Eye, Loader2 } from 'lucide-react';
+import { Plus, Trash2, FileText, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import { Button } from '@/components/ui/button';
 import AppsDialog from '@/components/dashboard/AppsDialog';
 import { Card } from '@/components/ui/card';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -87,6 +88,7 @@ export default function NizaFinance() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('reports');
   const [loading, setLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     fetchReports();
@@ -270,30 +272,51 @@ export default function NizaFinance() {
   const selectedReportData = savedReports.filter(r => r.id && selectedReports.includes(r.id));
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex h-screen">
-        {/* Sidebar */}
-        <div className="w-80 border-r bg-card/50 backdrop-blur-sm flex flex-col">
-          <div className="p-4 border-b flex items-center justify-center">
-            <img src={nizaCloudLogo} alt="Niza Finance" className="h-10" />
-          </div>
-          <div className="p-6 border-b">
-            <div className="flex items-center gap-3 mb-6">
-              <AppsDialog />
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                  Niza Finance
-                </h1>
-                <p className="text-xs text-muted-foreground">P&L Management</p>
-              </div>
+    <div className="min-h-screen flex w-full bg-background">
+      {/* Sidebar */}
+      <aside 
+        className={`${sidebarCollapsed ? 'w-16' : 'w-80'} transition-all duration-300 border-r border-primary/20 flex flex-col relative h-screen sticky top-0 flex-shrink-0`}
+        style={{ background: 'var(--gradient-panel)' }}
+      >
+        {/* Toggle Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
+        >
+          {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+
+        <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-b border-primary/20 flex items-center justify-center min-h-[60px]`}>
+          <img src={nizaCloudLogo} alt="Niza Finance" className={sidebarCollapsed ? "h-10 w-auto object-contain" : "h-10"} />
+        </div>
+
+        {!sidebarCollapsed && (
+          <div className="p-6 border-b border-primary/20">
+            <div className="mb-4">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                Niza Finance
+              </h1>
+              <p className="text-xs text-muted-foreground">P&L Management</p>
             </div>
             <Button onClick={() => setCalculatorOpen(true)} className="w-full gap-2">
               <Plus className="h-4 w-4" />
               Profit & Loss Calculator
             </Button>
           </div>
+        )}
 
-          <div className="flex-1 overflow-y-auto p-4">
+        {sidebarCollapsed && (
+          <div className="p-2 border-b border-primary/20 flex justify-center">
+            <Button onClick={() => setCalculatorOpen(true)} size="icon" className="h-10 w-10">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {!sidebarCollapsed && (
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-muted-foreground">Saved Reports</h3>
@@ -311,7 +334,7 @@ export default function NizaFinance() {
               </div>
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <NizaLoaderInline />
                 </div>
               ) : savedReports.length === 0 ? (
                 <div className="text-center py-8">
@@ -358,10 +381,17 @@ export default function NizaFinance() {
                 ))
               )}
             </div>
-          </div>
+          )}
         </div>
+      </aside>
 
-        {/* Main Content */}
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Header with Apps Dialog */}
+        <header className="h-16 border-b border-border bg-card flex items-center px-6 relative z-10">
+          <AppsDialog />
+        </header>
+
         <div className="flex-1 overflow-y-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
             <div className="border-b bg-card/30 px-6 py-4">
@@ -376,7 +406,7 @@ export default function NizaFinance() {
             <TabsContent value="reports" className="p-6 m-0">
               {loading ? (
                 <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <NizaLoaderInline />
                 </div>
               ) : savedReports.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
@@ -459,7 +489,7 @@ export default function NizaFinance() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
+      </main>
 
       <PLCalculatorDialog
         open={calculatorOpen}

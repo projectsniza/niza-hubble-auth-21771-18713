@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, Loader2, MoreHorizontal, Eye, Trash2, UserCog, Edit } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -95,7 +96,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }
