@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Users, MessageSquare, Plus, Search, Shield, Building2, UserCog, Trash2 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,7 +104,7 @@ export default function ConversationList({
   if (loading) {
     return (
       <div className="w-80 border-r flex items-center justify-center">
-        <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+        <NizaLoaderInline />
       </div>
     );
   }

@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { 
   Calendar, RefreshCw, Search, Loader2, Download, FileSpreadsheet, Edit3, Save, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, parseISO, addMonths, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
@@ -518,7 +519,7 @@ export function HolidayBalance() {
 
       {loading ? (
         <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <NizaLoaderInline />
         </div>
       ) : viewMode === 'ref' ? (
         /* REF Summary View - Matches Excel Page 2 */

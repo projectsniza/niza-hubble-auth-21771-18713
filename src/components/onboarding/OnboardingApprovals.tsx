@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, CheckCircle, XCircle, Clock, User, Building, Calendar, FileSignature, Loader2, FileText } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Clock, User, Building, Calendar, FileSignature, FileText } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { usePendingApprovals } from '@/hooks/useEmployees';
 import ContractApprovalDialog from './ContractApprovalDialog';
 
@@ -38,7 +39,7 @@ export default function OnboardingApprovals() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

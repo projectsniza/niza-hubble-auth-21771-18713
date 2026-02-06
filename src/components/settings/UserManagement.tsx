@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shield, Building2, Loader2, Edit, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, Users, Link2 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Badge } from '@/components/ui/badge';
 import { useUsers } from '@/hooks/useUsers';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
@@ -476,7 +477,7 @@ export default function UserManagement() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

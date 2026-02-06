@@ -2,7 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Building, ArrowRight, Plus } from 'lucide-react';
+import { Building, ArrowRight, Plus } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/contexts/AuthContext';
 import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
@@ -70,7 +71,7 @@ export default function OnboardingManagement() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <NizaLoaderInline />
       </div>
     );
   }

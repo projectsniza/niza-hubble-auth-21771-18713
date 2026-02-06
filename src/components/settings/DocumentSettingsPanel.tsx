@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, FileText, Bell, Loader2, Save } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -118,7 +119,7 @@ export default function DocumentSettingsPanel() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <NizaLoaderInline />
       </div>
     );
   }

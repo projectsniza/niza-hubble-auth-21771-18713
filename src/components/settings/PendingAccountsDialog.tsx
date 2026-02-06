@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
@@ -196,7 +197,7 @@ export default function PendingAccountsDialog({
         <div className="space-y-4 py-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <NizaLoaderInline />
             </div>
           ) : pendingEmployees.length === 0 ? (
             <Card className="p-8 text-center">

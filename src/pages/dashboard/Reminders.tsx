@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, CheckSquare, Calendar, Loader2, ChevronDown, ChevronRight, Circle } from 'lucide-react';
+import { Plus, Trash2, CheckSquare, Calendar, ChevronDown, ChevronRight, Circle } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, isToday, isTomorrow, isPast, parseISO, isYesterday } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -156,7 +157,7 @@ export default function Reminders() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <NizaLoaderInline />
       </div>
     );
   }
@@ -198,7 +199,7 @@ export default function Reminders() {
                     onClick={addReminder} 
                     disabled={isAdding || !newTask.trim()}
                   >
-                    {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {isAdding ? <div className="h-4 w-4 animate-spin border-2 border-primary border-t-transparent rounded-full" /> : <Plus className="h-4 w-4" />}
                   </Button>
                 </div>
               )}

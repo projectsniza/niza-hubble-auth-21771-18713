@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Upload, FileText, Calendar, User, CheckCircle, Clock, Send, Download, X, Building, MapPin, Search, Eye, Filter, Trash2 } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, isValid } from 'date-fns';
@@ -575,7 +576,7 @@ export default function ELearning() {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <NizaLoaderInline />
       </div>
     );
   }

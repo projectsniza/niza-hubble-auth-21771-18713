@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Bell, Briefcase, GraduationCap, Cake, Users, Megaphone, Eye, Calendar, Pin, Trash2 } from "lucide-react";
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
@@ -398,7 +399,7 @@ export default function Events() {
         
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <NizaLoaderInline />
           </div>
         ) : filteredEvents.length === 0 ? (
           <Card className="p-12 text-center border-dashed">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Download, Eye, FileText, Clock } from 'lucide-react';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -389,7 +390,7 @@ export function OldRotas() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <NizaLoaderInline />
       </div>
     );
   }
