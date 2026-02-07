@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Download, Save, ArrowLeft } from 'lucide-react';
+import { Download, Save, ArrowLeft, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
@@ -38,6 +38,10 @@ interface FormData {
   signature_date: string;
 }
 
+interface ValidationErrors {
+  [key: string]: string;
+}
+
 export default function BankDetailsForm({
   employeeId,
   employeeData,
@@ -47,6 +51,7 @@ export default function BankDetailsForm({
   readOnly = false
 }: BankDetailsFormProps) {
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<ValidationErrors>({});
   const [formData, setFormData] = useState<FormData>({
     your_name: `${employeeData.first_name} ${employeeData.last_name}`,
     telephone_number: employeeData.phone || '',
@@ -66,7 +71,6 @@ export default function BankDetailsForm({
   }, [employeeId]);
 
   const loadSavedData = async () => {
-    // First, try to load saved bank details data
     const { data: bankData } = await supabase
       .from('onboarding_form_responses')
       .select('*')
@@ -76,10 +80,9 @@ export default function BankDetailsForm({
 
     if (bankData?.form_data) {
       setFormData(prev => ({ ...prev, ...(bankData.form_data as unknown as FormData) }));
-      return; // If we have saved data, use it as-is
+      return;
     }
 
-    // If no saved bank details, try to auto-populate phone from Application Form
     const { data: applicationData } = await supabase
       .from('onboarding_form_responses')
       .select('*')
@@ -91,7 +94,6 @@ export default function BankDetailsForm({
       const appForm = applicationData.form_data as any;
       setFormData(prev => ({
         ...prev,
-        // Auto-populate phone if not set
         telephone_number: prev.telephone_number || appForm.phone || '',
       }));
     }
@@ -99,6 +101,55 @@ export default function BankDetailsForm({
 
   const updateField = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: ValidationErrors = {};
+
+    // Mandatory fields
+    if (!formData.your_name.trim()) {
+      newErrors.your_name = 'Your name is required';
+    }
+    if (!formData.telephone_number.trim()) {
+      newErrors.telephone_number = 'Telephone number is required';
+    } else if (!/^[\d\s\-+()]+$/.test(formData.telephone_number)) {
+      newErrors.telephone_number = 'Invalid phone number format';
+    }
+    if (!formData.bank_name.trim()) {
+      newErrors.bank_name = 'Bank name is required';
+    }
+    if (!formData.bank_address.trim()) {
+      newErrors.bank_address = 'Bank address is required';
+    }
+    if (!formData.sort_code.trim()) {
+      newErrors.sort_code = 'Sort code is required';
+    } else if (!/^\d{2}-\d{2}-\d{2}$/.test(formData.sort_code)) {
+      newErrors.sort_code = 'Sort code must be in format XX-XX-XX';
+    }
+    if (!formData.account_number.trim()) {
+      newErrors.account_number = 'Account number is required';
+    } else if (!/^\d{8}$/.test(formData.account_number)) {
+      newErrors.account_number = 'Account number must be 8 digits';
+    }
+    if (!formData.account_holder_name.trim()) {
+      newErrors.account_holder_name = 'Account holder name is required';
+    }
+    if (!formData.signature.trim()) {
+      newErrors.signature = 'Signature is required';
+    }
+    if (!formData.signature_date) {
+      newErrors.signature_date = 'Date is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async (): Promise<boolean> => {
@@ -128,6 +179,11 @@ export default function BankDetailsForm({
   };
 
   const handleSaveAndContinue = async () => {
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields correctly');
+      return;
+    }
+    
     const saved = await handleSave();
     if (saved) {
       onNext();
@@ -141,7 +197,6 @@ export default function BankDetailsForm({
     const margin = 20;
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Load and add logo
     const loadLogoImage = (): Promise<string> => {
       return new Promise((resolve) => {
         const img = new Image();
@@ -165,7 +220,6 @@ export default function BankDetailsForm({
       y += 15;
     }
     
-    // Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('EMPLOYEE BANK DETAILS FORM', pageWidth / 2, y, { align: 'center' });
@@ -209,12 +263,6 @@ export default function BankDetailsForm({
     y += addressLines.length * 6 + lineHeight;
     
     doc.setFont('helvetica', 'bold');
-    doc.text('TELEPHONE NUMBER OF YOUR BRANCH:', margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.bank_telephone || '____________________', margin + 85, y);
-    y += lineHeight * 2;
-    
-    doc.setFont('helvetica', 'bold');
     doc.text('BANK SORT CODE:', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.text(formData.sort_code || '__ - __ - __', margin + 50, y);
@@ -226,27 +274,11 @@ export default function BankDetailsForm({
     y += lineHeight * 2;
     
     doc.setFont('helvetica', 'bold');
-    doc.text('BUILDING SOCIETY ROLL NUMBER (if applicable):', margin, y);
-    y += lineHeight;
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.building_society_roll || '____________________', margin, y);
-    y += lineHeight * 2;
-    
-    doc.setFont('helvetica', 'bold');
     doc.text('NAME OF ACCOUNT HOLDER:', margin, y);
     y += lineHeight;
     doc.setFont('helvetica', 'normal');
     doc.text(formData.account_holder_name || '____________________', margin, y);
     y += lineHeight * 2;
-    
-    // Declaration
-    doc.setFont('helvetica', 'bold');
-    doc.text('Declaration', margin, y);
-    y += lineHeight;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text('I confirm that the bank details provided above are correct and that payments should be made to this account.', margin, y, { maxWidth: pageWidth - 2 * margin });
-    y += 15;
     
     // Format date as DD/MM/YYYY for display
     const formatDateDisplay = (dateStr: string) => {
@@ -277,6 +309,22 @@ export default function BankDetailsForm({
     return numbers;
   };
 
+  const RequiredLabel = ({ children, error }: { children: React.ReactNode; error?: string }) => (
+    <Label className={`text-base font-medium ${error ? 'text-destructive' : ''}`}>
+      {children} <span className="text-destructive">*</span>
+    </Label>
+  );
+
+  const ErrorMessage = ({ error }: { error?: string }) => {
+    if (!error) return null;
+    return (
+      <p className="text-sm text-destructive flex items-center gap-1 mt-1">
+        <AlertCircle className="h-3 w-3" />
+        {error}
+      </p>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-8 print:shadow-none">
@@ -290,51 +338,58 @@ export default function BankDetailsForm({
           <p className="text-sm text-amber-600 font-medium mt-1">
             Incorrect information will result in a delay in payment.
           </p>
+          <p className="text-sm text-amber-600 mt-2">Fields marked with * are mandatory</p>
         </div>
 
         {/* Form Fields */}
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-base font-medium">YOUR NAME:</Label>
+            <div className="space-y-2" data-field="your_name">
+              <RequiredLabel error={errors.your_name}>YOUR NAME:</RequiredLabel>
               <Input
                 value={formData.your_name}
                 onChange={(e) => updateField('your_name', e.target.value)}
-                className="text-lg"
+                className={`text-lg ${errors.your_name ? 'border-destructive' : ''}`}
                 disabled={readOnly}
               />
+              <ErrorMessage error={errors.your_name} />
             </div>
-            <div className="space-y-2">
-              <Label className="text-base font-medium">YOUR TELEPHONE NUMBER:</Label>
+            <div className="space-y-2" data-field="telephone_number">
+              <RequiredLabel error={errors.telephone_number}>YOUR TELEPHONE NUMBER:</RequiredLabel>
               <Input
                 value={formData.telephone_number}
                 onChange={(e) => updateField('telephone_number', e.target.value)}
-                className="text-lg"
+                className={`text-lg ${errors.telephone_number ? 'border-destructive' : ''}`}
                 disabled={readOnly}
+                placeholder="e.g., 07123 456789"
               />
+              <ErrorMessage error={errors.telephone_number} />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-base font-medium">NAME OF BANK OR BUILDING SOCIETY:</Label>
+          <div className="space-y-2" data-field="bank_name">
+            <RequiredLabel error={errors.bank_name}>NAME OF BANK OR BUILDING SOCIETY:</RequiredLabel>
             <Input
               value={formData.bank_name}
               onChange={(e) => updateField('bank_name', e.target.value)}
               placeholder="e.g., Barclays, HSBC, Nationwide"
-              className="text-lg"
+              className={`text-lg ${errors.bank_name ? 'border-destructive' : ''}`}
               disabled={readOnly}
             />
+            <ErrorMessage error={errors.bank_name} />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-base font-medium">BANK OR BUILDING SOCIETY ADDRESS:</Label>
+          <div className="space-y-2" data-field="bank_address">
+            <RequiredLabel error={errors.bank_address}>BANK OR BUILDING SOCIETY ADDRESS:</RequiredLabel>
             <Textarea
               value={formData.bank_address}
               onChange={(e) => updateField('bank_address', e.target.value)}
               placeholder="Full branch address"
               rows={3}
               disabled={readOnly}
+              className={errors.bank_address ? 'border-destructive' : ''}
             />
+            <ErrorMessage error={errors.bank_address} />
           </div>
 
           <div className="space-y-2">
@@ -347,26 +402,28 @@ export default function BankDetailsForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label className="text-base font-medium">BANK SORT CODE:</Label>
+            <div className="space-y-2" data-field="sort_code">
+              <RequiredLabel error={errors.sort_code}>BANK SORT CODE:</RequiredLabel>
               <Input
                 value={formData.sort_code}
                 onChange={(e) => updateField('sort_code', formatSortCode(e.target.value))}
                 placeholder="00-00-00"
-                className="text-lg font-mono tracking-wider"
+                className={`text-lg font-mono tracking-wider ${errors.sort_code ? 'border-destructive' : ''}`}
                 disabled={readOnly}
               />
+              <ErrorMessage error={errors.sort_code} />
             </div>
-            <div className="space-y-2">
-              <Label className="text-base font-medium">BANK ACCOUNT NUMBER:</Label>
+            <div className="space-y-2" data-field="account_number">
+              <RequiredLabel error={errors.account_number}>BANK ACCOUNT NUMBER:</RequiredLabel>
               <Input
                 value={formData.account_number}
                 onChange={(e) => updateField('account_number', e.target.value.replace(/\D/g, '').slice(0, 8))}
                 placeholder="12345678"
-                className="text-lg font-mono tracking-wider"
+                className={`text-lg font-mono tracking-wider ${errors.account_number ? 'border-destructive' : ''}`}
                 maxLength={8}
                 disabled={readOnly}
               />
+              <ErrorMessage error={errors.account_number} />
             </div>
           </div>
 
@@ -379,15 +436,16 @@ export default function BankDetailsForm({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-base font-medium">NAME OF ACCOUNT HOLDER:</Label>
+          <div className="space-y-2" data-field="account_holder_name">
+            <RequiredLabel error={errors.account_holder_name}>NAME OF ACCOUNT HOLDER:</RequiredLabel>
             <Input
               value={formData.account_holder_name}
               onChange={(e) => updateField('account_holder_name', e.target.value)}
               placeholder="As it appears on your bank account"
-              className="text-lg"
+              className={`text-lg ${errors.account_holder_name ? 'border-destructive' : ''}`}
               disabled={readOnly}
             />
+            <ErrorMessage error={errors.account_holder_name} />
           </div>
 
           {/* Signature */}
@@ -397,24 +455,27 @@ export default function BankDetailsForm({
               I confirm that the bank details provided above are correct and that payments should be made to this account.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Signature (Type your name)</Label>
+              <div className="space-y-2" data-field="signature">
+                <RequiredLabel error={errors.signature}>Signature (Type your name)</RequiredLabel>
                 <Input
                   value={formData.signature}
                   onChange={(e) => updateField('signature', e.target.value)}
                   placeholder="Type your full name as signature"
-                  className="italic"
+                  className={`italic ${errors.signature ? 'border-destructive' : ''}`}
                   disabled={readOnly}
                 />
+                <ErrorMessage error={errors.signature} />
               </div>
-              <div className="space-y-2">
-                <Label>Date</Label>
+              <div className="space-y-2" data-field="signature_date">
+                <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>
                 <Input
                   type="date"
                   value={formData.signature_date}
                   onChange={(e) => updateField('signature_date', e.target.value)}
                   disabled={readOnly}
+                  className={errors.signature_date ? 'border-destructive' : ''}
                 />
+                <ErrorMessage error={errors.signature_date} />
               </div>
             </div>
           </div>
@@ -422,7 +483,7 @@ export default function BankDetailsForm({
 
         {/* Actions */}
         {!readOnly && (
-          <div className="flex flex-wrap justify-between gap-4 print:hidden">
+          <div className="flex flex-wrap justify-between gap-4 print:hidden mt-6">
             <div className="flex gap-2">
               {onBack && (
                 <Button variant="outline" onClick={onBack} className="gap-2">

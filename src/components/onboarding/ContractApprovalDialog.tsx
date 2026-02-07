@@ -4,7 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +12,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle } from 'lucide-react';
+import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface ContractApprovalDialogProps {
@@ -32,6 +33,7 @@ export default function ContractApprovalDialog({
   onApprove,
   onReject,
 }: ContractApprovalDialogProps) {
+  const { user } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [activeTab, setActiveTab] = useState('details');
   const [signatureType, setSignatureType] = useState<'typed' | 'drawn' | 'uploaded'>('typed');
@@ -41,6 +43,11 @@ export default function ContractApprovalDialog({
   const [rejectReason, setRejectReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
+  
+  // RTW Document upload state
+  const [rtwFile, setRtwFile] = useState<File | null>(null);
+  const [rtwExpiry, setRtwExpiry] = useState('');
+  const [isUploadingRtw, setIsUploadingRtw] = useState(false);
 
   if (!approval) return null;
 
@@ -65,7 +72,6 @@ export default function ContractApprovalDialog({
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    // Scale coordinates based on difference between canvas internal size and rendered size
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
@@ -110,20 +116,93 @@ export default function ContractApprovalDialog({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  const handleUploadRtwDocument = async () => {
+    if (!rtwFile || !employee.id) return;
+    
+    setIsUploadingRtw(true);
+    try {
+      // Get or create employee folder
+      let folderId: string | null = null;
+      const { data: existingFolder } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('employee_id', employee.id)
+        .single();
+
+      if (existingFolder) {
+        folderId = existingFolder.id;
+      }
+
+      // Upload RTW document
+      const fileExt = rtwFile.name.split('.').pop() || 'pdf';
+      const fileName = `Right_to_Work_${employee.id}_${Date.now()}.${fileExt}`;
+      const filePath = `employees/${employee.id}/documents/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, rtwFile);
+
+      if (uploadError) throw uploadError;
+
+      // Save document record
+      await supabase.from('documents').insert({
+        title: 'Right to Work (Verified)',
+        file_name: rtwFile.name,
+        file_path: filePath,
+        file_type: rtwFile.type,
+        file_size: rtwFile.size,
+        employee_id: employee.id,
+        folder_id: folderId,
+        expiry_date: rtwExpiry || null,
+        uploaded_by: user?.id,
+        verified_at: new Date().toISOString(),
+        verified_by_name: user?.name || 'Super Admin',
+        verified_by_role: user?.role || 'super_admin'
+      });
+
+      toast.success('Right to Work document uploaded successfully');
+      setRtwFile(null);
+      setRtwExpiry('');
+      
+      // Refresh documents in approval
+      if (approval.documents) {
+        approval.documents.push({
+          id: 'temp-' + Date.now(),
+          title: 'Right to Work (Verified)',
+          file_name: rtwFile.name,
+          file_path: filePath,
+          verified_by_name: user?.name,
+          verified_by_role: user?.role
+        });
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload RTW document');
+    } finally {
+      setIsUploadingRtw(false);
+    }
+  };
+
   const handleApprove = async () => {
     if (!signatureDate) {
+      toast.error('Please select a signature date');
       return;
     }
     
     let finalSignature = '';
     if (signatureType === 'typed') {
-      if (!typedSignature.trim()) return;
+      if (!typedSignature.trim()) {
+        toast.error('Please type your signature');
+        return;
+      }
       finalSignature = typedSignature;
     } else if (signatureType === 'drawn') {
       if (!canvasRef.current) return;
       finalSignature = canvasRef.current.toDataURL();
     } else if (signatureType === 'uploaded') {
-      if (!uploadedSignature) return;
+      if (!uploadedSignature) {
+        toast.error('Please upload a signature');
+        return;
+      }
       finalSignature = uploadedSignature;
     }
 
@@ -136,7 +215,10 @@ export default function ContractApprovalDialog({
   };
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return;
+    if (!rejectReason.trim()) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
     setIsSubmitting(true);
     await onReject(rejectReason);
     setIsSubmitting(false);
@@ -156,7 +238,7 @@ export default function ContractApprovalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-4">
             <img src={nizaLogo} alt="Logo" className="h-10" />
@@ -167,7 +249,10 @@ export default function ContractApprovalDialog({
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">Employee Details</TabsTrigger>
-            <TabsTrigger value="documents">Documents ({approval.documents?.length || 0})</TabsTrigger>
+            <TabsTrigger value="documents" className="relative">
+              Documents
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5">{approval.documents?.length || 0}</Badge>
+            </TabsTrigger>
             <TabsTrigger value="contract">Contract Preview</TabsTrigger>
             <TabsTrigger value="action">Sign / Reject</TabsTrigger>
           </TabsList>
@@ -225,7 +310,7 @@ export default function ContractApprovalDialog({
 
           <TabsContent value="documents" className="space-y-4 pt-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">Uploaded Documents</h3>
+              <h3 className="font-semibold text-lg">Required Documents</h3>
               {approval.documents?.length > 0 ? (
                 <Badge className="bg-green-500">
                   <CheckCircle className="h-3 w-3 mr-1" />
@@ -239,13 +324,55 @@ export default function ContractApprovalDialog({
               )}
             </div>
 
+            {/* RTW Upload Section for Super Admin */}
+            <Card className="p-4 border-primary/30 bg-primary/5">
+              <div className="flex items-center gap-2 mb-3">
+                <Upload className="h-5 w-5 text-primary" />
+                <h4 className="font-semibold">Upload Final Right to Work Document</h4>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload the verified Right to Work document. This will be saved to the employee's folder.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Select Document</Label>
+                  <Input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setRtwFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Expiry Date (if applicable)</Label>
+                  <Input
+                    type="date"
+                    value={rtwExpiry}
+                    onChange={(e) => setRtwExpiry(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 flex items-end">
+                  <Button
+                    onClick={handleUploadRtwDocument}
+                    disabled={!rtwFile || isUploadingRtw}
+                    className="w-full gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {isUploadingRtw ? 'Uploading...' : 'Upload RTW'}
+                  </Button>
+                </div>
+              </div>
+              {rtwFile && (
+                <p className="text-sm text-primary mt-2">Selected: {rtwFile.name}</p>
+              )}
+            </Card>
+
             {approval.documents?.length === 0 ? (
               <Card className="p-8 text-center">
                 <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Documents Found</h3>
                 <p className="text-muted-foreground">
                   No documents have been uploaded for this employee yet. 
-                  Consider requesting document uploads before approving.
+                  You can upload the Right to Work document above before approving.
                 </p>
               </Card>
             ) : (
@@ -435,7 +562,7 @@ export default function ContractApprovalDialog({
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  Date
+                  Date <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="date"
