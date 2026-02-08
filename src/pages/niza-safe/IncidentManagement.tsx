@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar, Paperclip } from "lucide-react";
+import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar, Paperclip, Download } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,9 +49,19 @@ export default function IncidentManagement() {
     description: '',
     incident_type: 'accident',
     incident_date: new Date(),
+    incident_time: '',
     location_details: '',
     victim_name: '',
+    victim_job_title: '',
     injury_type: '',
+    body_part_injured: '',
+    severity: 'minor',
+    immediate_action: '',
+    witness_names: '',
+    first_aid_given: false,
+    first_aider_name: '',
+    hospital_attended: false,
+    reported_to_riddor: false,
   });
 
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
@@ -147,6 +158,19 @@ export default function IncidentManagement() {
         branch_id: branchId,
         reported_by: authUser?.id ?? '',
         images: attachedFiles as unknown as null,
+        // Store additional UK format fields in a metadata column or existing columns
+        medical_documents: {
+          incident_time: formData.incident_time,
+          victim_job_title: formData.victim_job_title,
+          body_part_injured: formData.body_part_injured,
+          severity: formData.severity,
+          immediate_action: formData.immediate_action,
+          witness_names: formData.witness_names,
+          first_aid_given: formData.first_aid_given,
+          first_aider_name: formData.first_aider_name,
+          hospital_attended: formData.hospital_attended,
+          reported_to_riddor: formData.reported_to_riddor,
+        } as unknown as null,
       }]);
 
       if (error) throw error;
@@ -171,9 +195,19 @@ export default function IncidentManagement() {
       description: '',
       incident_type: activeTab === 'accidents' ? 'accident' : 'near_miss',
       incident_date: new Date(),
+      incident_time: '',
       location_details: '',
       victim_name: '',
+      victim_job_title: '',
       injury_type: '',
+      body_part_injured: '',
+      severity: 'minor',
+      immediate_action: '',
+      witness_names: '',
+      first_aid_given: false,
+      first_aider_name: '',
+      hospital_attended: false,
+      reported_to_riddor: false,
     });
     setAttachedFiles([]);
     setSelectedOrg('');
@@ -475,23 +509,168 @@ export default function IncidentManagement() {
                 placeholder="Where did it happen?"
               />
             </div>
+            {/* Time of Incident */}
+            <div className="space-y-2">
+              <Label>Time of Incident</Label>
+              <Input
+                type="time"
+                value={formData.incident_time}
+                onChange={(e) => setFormData({ ...formData, incident_time: e.target.value })}
+              />
+            </div>
+
             {formData.incident_type === 'accident' && (
               <>
+                {/* Injured Person Details */}
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                  <h4 className="font-medium text-sm">Injured Person Details</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Full Name *</Label>
+                      <Input
+                        value={formData.victim_name}
+                        onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })}
+                        placeholder="Enter injured person's name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Job Title</Label>
+                      <Input
+                        value={formData.victim_job_title}
+                        onChange={(e) => setFormData({ ...formData, victim_job_title: e.target.value })}
+                        placeholder="e.g., Sales Assistant"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Injury Details */}
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                  <h4 className="font-medium text-sm">Injury Details</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Type of Injury *</Label>
+                      <Select value={formData.injury_type} onValueChange={(v) => setFormData({ ...formData, injury_type: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select injury type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cut">Cut / Laceration</SelectItem>
+                          <SelectItem value="bruise">Bruise / Contusion</SelectItem>
+                          <SelectItem value="burn">Burn / Scald</SelectItem>
+                          <SelectItem value="sprain">Sprain / Strain</SelectItem>
+                          <SelectItem value="fracture">Fracture</SelectItem>
+                          <SelectItem value="dislocation">Dislocation</SelectItem>
+                          <SelectItem value="concussion">Concussion</SelectItem>
+                          <SelectItem value="electric_shock">Electric Shock</SelectItem>
+                          <SelectItem value="poisoning">Poisoning</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Body Part Injured</Label>
+                      <Select value={formData.body_part_injured} onValueChange={(v) => setFormData({ ...formData, body_part_injured: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select body part" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="head">Head</SelectItem>
+                          <SelectItem value="face">Face</SelectItem>
+                          <SelectItem value="eye">Eye</SelectItem>
+                          <SelectItem value="neck">Neck</SelectItem>
+                          <SelectItem value="shoulder">Shoulder</SelectItem>
+                          <SelectItem value="arm">Arm</SelectItem>
+                          <SelectItem value="hand">Hand / Wrist</SelectItem>
+                          <SelectItem value="finger">Finger</SelectItem>
+                          <SelectItem value="back">Back</SelectItem>
+                          <SelectItem value="chest">Chest</SelectItem>
+                          <SelectItem value="leg">Leg</SelectItem>
+                          <SelectItem value="knee">Knee</SelectItem>
+                          <SelectItem value="ankle">Ankle</SelectItem>
+                          <SelectItem value="foot">Foot</SelectItem>
+                          <SelectItem value="multiple">Multiple Areas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Severity</Label>
+                    <Select value={formData.severity} onValueChange={(v) => setFormData({ ...formData, severity: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minor">Minor - First aid only</SelectItem>
+                        <SelectItem value="moderate">Moderate - Medical attention required</SelectItem>
+                        <SelectItem value="major">Major - Hospital treatment required</SelectItem>
+                        <SelectItem value="fatal">Fatal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* First Aid & Medical */}
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                  <h4 className="font-medium text-sm">First Aid & Medical Treatment</h4>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="first_aid_given"
+                      checked={formData.first_aid_given}
+                      onCheckedChange={(checked) => setFormData({ ...formData, first_aid_given: !!checked })}
+                    />
+                    <Label htmlFor="first_aid_given" className="cursor-pointer">First aid was administered</Label>
+                  </div>
+
+                  {formData.first_aid_given && (
+                    <div className="space-y-2">
+                      <Label>First Aider Name</Label>
+                      <Input
+                        value={formData.first_aider_name}
+                        onChange={(e) => setFormData({ ...formData, first_aider_name: e.target.value })}
+                        placeholder="Name of person who provided first aid"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="hospital_attended"
+                      checked={formData.hospital_attended}
+                      onCheckedChange={(checked) => setFormData({ ...formData, hospital_attended: !!checked })}
+                    />
+                    <Label htmlFor="hospital_attended" className="cursor-pointer">Hospital / A&E attended</Label>
+                  </div>
+                </div>
+
+                {/* Immediate Action & Witnesses */}
                 <div className="space-y-2">
-                  <Label>Victim Name (if applicable)</Label>
-                  <Input
-                    value={formData.victim_name}
-                    onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })}
-                    placeholder="Enter victim's name"
+                  <Label>Immediate Action Taken</Label>
+                  <Textarea
+                    value={formData.immediate_action}
+                    onChange={(e) => setFormData({ ...formData, immediate_action: e.target.value })}
+                    placeholder="Describe what immediate actions were taken..."
+                    rows={2}
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Injury Type</Label>
+                  <Label>Witness Names</Label>
                   <Input
-                    value={formData.injury_type}
-                    onChange={(e) => setFormData({ ...formData, injury_type: e.target.value })}
-                    placeholder="Type of injury"
+                    value={formData.witness_names}
+                    onChange={(e) => setFormData({ ...formData, witness_names: e.target.value })}
+                    placeholder="Separate multiple names with commas"
                   />
+                </div>
+
+                {/* RIDDOR */}
+                <div className="flex items-center space-x-2 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
+                  <Checkbox
+                    id="reported_to_riddor"
+                    checked={formData.reported_to_riddor}
+                    onCheckedChange={(checked) => setFormData({ ...formData, reported_to_riddor: !!checked })}
+                  />
+                  <Label htmlFor="reported_to_riddor" className="cursor-pointer text-amber-800 dark:text-amber-200">
+                    Reportable under RIDDOR (Reporting of Injuries, Diseases and Dangerous Occurrences Regulations)
+                  </Label>
                 </div>
               </>
             )}
@@ -503,7 +682,7 @@ export default function IncidentManagement() {
               bucket="documents"
               folderPath="incidents"
               maxFiles={10}
-              label="Attach Evidence/Documents"
+              label="Attach Evidence (Photos, Videos, Documents)"
               accept="*/*"
             />
           </div>
@@ -546,22 +725,91 @@ export default function IncidentManagement() {
               </div>
               {selectedIncident.incident_type === 'accident' && (
                 <>
-                  <div>
-                    <Label className="text-muted-foreground">Victim Name</Label>
-                    <p>{selectedIncident.victim_name || '-'}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground">Victim Name</Label>
+                      <p>{selectedIncident.victim_name || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Injury Type</Label>
+                      <p>{selectedIncident.injury_type || '-'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-muted-foreground">Injury Type</Label>
-                    <p>{selectedIncident.injury_type || '-'}</p>
-                  </div>
+                  {/* Show additional UK format details from medical_documents */}
+                  {selectedIncident.medical_documents && (
+                    <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                      <h4 className="font-medium text-sm">Additional Details</h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {(selectedIncident.medical_documents as any).incident_time && (
+                          <div>
+                            <span className="text-muted-foreground">Time: </span>
+                            {(selectedIncident.medical_documents as any).incident_time}
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).victim_job_title && (
+                          <div>
+                            <span className="text-muted-foreground">Job Title: </span>
+                            {(selectedIncident.medical_documents as any).victim_job_title}
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).body_part_injured && (
+                          <div>
+                            <span className="text-muted-foreground">Body Part: </span>
+                            {(selectedIncident.medical_documents as any).body_part_injured}
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).severity && (
+                          <div>
+                            <span className="text-muted-foreground">Severity: </span>
+                            {(selectedIncident.medical_documents as any).severity}
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).witness_names && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Witnesses: </span>
+                            {(selectedIncident.medical_documents as any).witness_names}
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).first_aid_given && (
+                          <div className="col-span-2">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300">
+                              First Aid Given
+                              {(selectedIncident.medical_documents as any).first_aider_name && 
+                                ` by ${(selectedIncident.medical_documents as any).first_aider_name}`}
+                            </Badge>
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).hospital_attended && (
+                          <div className="col-span-2">
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                              Hospital/A&E Attended
+                            </Badge>
+                          </div>
+                        )}
+                        {(selectedIncident.medical_documents as any).reported_to_riddor && (
+                          <div className="col-span-2">
+                            <Badge variant="destructive">
+                              RIDDOR Reportable
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                      {(selectedIncident.medical_documents as any).immediate_action && (
+                        <div>
+                          <Label className="text-muted-foreground text-xs">Immediate Action Taken</Label>
+                          <p className="text-sm">{(selectedIncident.medical_documents as any).immediate_action}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
-              {/* View Attached Files */}
+              {/* View Attached Files with Video Support */}
               <FileViewer
                 files={getFilesFromIncident(selectedIncident)}
                 bucket="documents"
-                label="Attached Files"
+                label="Attached Evidence"
               />
             </div>
           )}

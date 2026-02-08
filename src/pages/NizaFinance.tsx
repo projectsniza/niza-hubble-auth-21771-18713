@@ -13,6 +13,7 @@ import ComparisonView from '@/components/finance/ComparisonView';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import jsPDF from 'jspdf';
+import AppRouteGuard from '@/components/shared/AppRouteGuard';
 
 interface FinancialData {
   id?: string;
@@ -272,7 +273,8 @@ export default function NizaFinance() {
   const selectedReportData = savedReports.filter(r => r.id && selectedReports.includes(r.id));
 
   return (
-    <div className="min-h-screen flex w-full bg-background">
+    <AppRouteGuard appKey="niza_finance">
+      <div className="min-h-screen flex w-full bg-background">
       {/* Sidebar */}
       <aside 
         className={`${sidebarCollapsed ? 'w-16' : 'w-80'} transition-all duration-300 border-r border-primary/20 flex flex-col relative h-screen sticky top-0 flex-shrink-0`}
@@ -496,6 +498,7 @@ export default function NizaFinance() {
         onOpenChange={setCalculatorOpen}
         onSave={handleSave}
       />
-    </div>
+      </div>
+    </AppRouteGuard>
   );
 }

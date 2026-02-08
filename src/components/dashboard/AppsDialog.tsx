@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCustomRoleAccess } from "@/hooks/useCustomRoleAccess";
 
 interface AppItem {
   name: string;
@@ -16,6 +17,7 @@ interface AppItem {
   icon: React.ReactNode;
   path: string;
   gradient: string;
+  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates';
 }
 
 const apps: AppItem[] = [
@@ -25,6 +27,7 @@ const apps: AppItem[] = [
     icon: <Users className="h-7 w-7" />,
     path: "/dashboard",
     gradient: "from-blue-500 to-cyan-600",
+    // HR is always accessible for users who can see the dialog
   },
   {
     name: "Niza Safe",
@@ -32,6 +35,7 @@ const apps: AppItem[] = [
     icon: <Shield className="h-7 w-7" />,
     path: "/niza-safe",
     gradient: "from-primary to-accent",
+    accessKey: 'niza_safe',
   },
   {
     name: "Niza Finance",
@@ -39,6 +43,7 @@ const apps: AppItem[] = [
     icon: <Calculator className="h-7 w-7" />,
     path: "/niza-finance",
     gradient: "from-green-500 to-emerald-600",
+    accessKey: 'niza_finance',
   },
   {
     name: "Niza Templates",
@@ -46,6 +51,7 @@ const apps: AppItem[] = [
     icon: <FileText className="h-7 w-7" />,
     path: "/niza-templates",
     gradient: "from-purple-500 to-pink-600",
+    accessKey: 'niza_templates',
   },
 ];
 
@@ -53,10 +59,25 @@ export default function AppsDialog() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { hasAppAccess, customRole, isLoading } = useCustomRoleAccess();
 
-  // Only show apps for super_admin or full workspace HR
-  const canAccessApps = user?.role === 'super_admin' || 
+  // Super admins and full HR always have access to the app switcher
+  const isSuperAdminOrFullHR = user?.role === 'super_admin' || 
     (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+
+  // Check if user has a custom role with any app access
+  const hasAnyCustomAppAccess = customRole?.app_access && (
+    customRole.app_access.niza_safe || 
+    customRole.app_access.niza_finance || 
+    customRole.app_access.niza_templates
+  );
+
+  // Show dialog for: super admin, full HR, or users with custom role app access
+  const canAccessApps = isSuperAdminOrFullHR || hasAnyCustomAppAccess;
+
+  if (isLoading) {
+    return null;
+  }
 
   if (!canAccessApps) {
     return null;
@@ -64,12 +85,27 @@ export default function AppsDialog() {
 
   // Filter out current app based on location
   const currentPath = location.pathname;
+  
+  // Filter apps based on access permissions
   const filteredApps = apps.filter(app => {
+    // First, check if we're on the current app's path
     if (app.path === '/dashboard') {
-      return !currentPath.startsWith('/dashboard');
+      if (currentPath.startsWith('/dashboard')) return false;
+    } else {
+      if (currentPath.startsWith(app.path)) return false;
     }
-    return !currentPath.startsWith(app.path);
+
+    // HR app is always accessible for those who can see the dialog
+    if (!app.accessKey) return true;
+
+    // For other apps, check access
+    return hasAppAccess(app.accessKey);
   });
+
+  // If no apps to show, don't render the button
+  if (filteredApps.length === 0) {
+    return null;
+  }
 
   return (
     <Dialog>
