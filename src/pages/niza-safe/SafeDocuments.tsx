@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Search, FolderOpen, FileText, Upload, Download, Trash2, FolderPlus, 
-  ChevronRight, Home, Edit2, Folder 
+  ChevronRight, Home, Edit2, Folder, Eye 
 } from "lucide-react";
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +72,8 @@ export default function SafeDocuments() {
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [deleteDocPath, setDeleteDocPath] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Form states
   const [newFolderName, setNewFolderName] = useState('');
@@ -256,6 +258,37 @@ export default function SafeDocuments() {
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
+  };
+
+  const handlePreview = async (doc: DocumentItem) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.file_path, 3600);
+
+      if (error) throw error;
+
+      if (data?.signedUrl) {
+        setPreviewUrl(data.signedUrl);
+        setPreviewDoc(doc);
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: "Could not load preview", variant: "destructive" });
+    }
+  };
+
+  const isImageFile = (doc: DocumentItem) => {
+    const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    return doc.file_type && imageTypes.includes(doc.file_type);
+  };
+
+  const isPdfFile = (doc: DocumentItem) => {
+    return doc.file_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
+  };
+
+  const isVideoFile = (doc: DocumentItem) => {
+    const videoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+    return doc.file_type && videoTypes.includes(doc.file_type);
   };
 
   const handleDeleteDocument = async () => {
@@ -484,7 +517,10 @@ export default function SafeDocuments() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)}>
+                            <Button variant="ghost" size="icon" onClick={() => handlePreview(doc)} title="Preview">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)} title="Download">
                               <Download className="h-4 w-4" />
                             </Button>
                             {isAdmin && (
@@ -495,6 +531,7 @@ export default function SafeDocuments() {
                                   setDeleteDocId(doc.id);
                                   setDeleteDocPath(doc.file_path);
                                 }}
+                                title="Delete"
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
@@ -619,6 +656,51 @@ export default function SafeDocuments() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Document Preview Dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={() => { setPreviewDoc(null); setPreviewUrl(null); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="truncate">{previewDoc?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {previewUrl && previewDoc && (
+              <>
+                {isImageFile(previewDoc) ? (
+                  <img
+                    src={previewUrl}
+                    alt={previewDoc.title}
+                    className="max-w-full h-auto mx-auto rounded-lg"
+                  />
+                ) : isPdfFile(previewDoc) ? (
+                  <iframe
+                    src={previewUrl}
+                    title={previewDoc.title}
+                    className="w-full h-[70vh] rounded-lg"
+                  />
+                ) : isVideoFile(previewDoc) ? (
+                  <video
+                    src={previewUrl}
+                    controls
+                    className="max-w-full h-auto mx-auto rounded-lg"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">Preview not available for this file type</p>
+                    <Button onClick={() => handleDownload(previewDoc)}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download to View
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
