@@ -102,89 +102,81 @@ export default function CreateUserDialog({
     setIsSubmitting(true);
 
     try {
-      // Store current session to restore after user creation
-      const { data: currentSession } = await supabase.auth.getSession();
-      const adminSession = currentSession?.session;
+      // Use edge function with admin API for reliable user creation (handles re-registration)
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Create user with all data in metadata - the trigger will use these values
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: name,
-            role: role,
-            organization_id: organizationId || '',
-            branch_id: branchId || '',
-            hr_access_level: role === 'hr' ? hrAccessLevel : '',
-          },
-          emailRedirectTo: `${window.location.origin}/`
-        }
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email,
+          password,
+          name,
+          role,
+          organization_id: organizationId || '',
+          branch_id: branchId || '',
+          hr_access_level: role === 'hr' ? hrAccessLevel : '',
+        },
       });
 
-      if (authError) throw authError;
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to create user');
+      }
 
-      if (authData.user) {
-        const newUserId = authData.user.id;
+      const result = response.data;
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to create user');
+      }
 
-        // CRITICAL: Restore the original session to prevent switching users
-        if (adminSession) {
-          await supabase.auth.setSession({
-            access_token: adminSession.access_token,
-            refresh_token: adminSession.refresh_token
-          });
+      const newUserId = result.userId;
+
+      // If creating an Employee user, ensure there is a linked employees row
+      if (role === 'employee' && organizationId && branchId) {
+        const parts = name.trim().split(/\s+/);
+        const firstName = parts[0] || name.trim();
+        const lastName = parts.slice(1).join(' ') || '-';
+
+        // Try to link an existing employee record (same email + org + branch)
+        const { data: updatedEmployees, error: linkError } = await supabase
+          .from('employees')
+          .update({
+            user_id: newUserId,
+            account_activated: true,
+            status: 'active',
+          })
+          .eq('email', email)
+          .eq('organization_id', organizationId)
+          .eq('branch_id', branchId)
+          .is('user_id', null)
+          .select('id')
+          .limit(1);
+
+        if (linkError) {
+          console.warn('Could not link employee record:', linkError);
         }
 
-        // If creating an Employee user, ensure there is a linked employees row (required for leave requests, onboarding, etc.)
-        if (role === 'employee' && organizationId && branchId) {
-          const parts = name.trim().split(/\s+/);
-          const firstName = parts[0] || name.trim();
-          const lastName = parts.slice(1).join(' ') || '-';
-
-          // Try to link an existing employee record (same email + org + branch)
-          const { data: updatedEmployees, error: linkError } = await supabase
+        // If no existing employee row was linked, create one
+        if (!linkError && (!updatedEmployees || updatedEmployees.length === 0)) {
+          const { error: createEmpError } = await supabase
             .from('employees')
-            .update({
+            .insert({
+              first_name: firstName,
+              last_name: lastName,
+              email,
+              organization_id: organizationId,
+              branch_id: branchId,
               user_id: newUserId,
               account_activated: true,
               status: 'active',
-            })
-            .eq('email', email)
-            .eq('organization_id', organizationId)
-            .eq('branch_id', branchId)
-            .is('user_id', null)
-            .select('id')
-            .limit(1);
+            });
 
-          if (linkError) {
-            console.warn('Could not link employee record:', linkError);
-          }
-
-          // If no existing employee row was linked, create one
-          if (!linkError && (!updatedEmployees || updatedEmployees.length === 0)) {
-            const { error: createEmpError } = await supabase
-              .from('employees')
-              .insert({
-                first_name: firstName,
-                last_name: lastName,
-                email,
-                organization_id: organizationId,
-                branch_id: branchId,
-                user_id: newUserId,
-                account_activated: true,
-                status: 'active',
-              });
-
-            if (createEmpError) {
-              console.warn('Could not create employee record:', createEmpError);
-            }
+          if (createEmpError) {
+            console.warn('Could not create employee record:', createEmpError);
           }
         }
-
-        toast.success('User created successfully');
-        onSuccess?.();
-        handleClose();
       }
+
+      toast.success('User created successfully');
+      onSuccess?.();
+      handleClose();
     } catch (err: unknown) {
       console.error('Error creating user:', err);
       const message = err instanceof Error ? err.message : 'Failed to create user';

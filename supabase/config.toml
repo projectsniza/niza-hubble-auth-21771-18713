@@ -1,1 +1,13 @@
 project_id = "exapetzvebjmdbjwsipg"
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.reset-password]
+verify_jwt = false
+
+[functions.bulk-delete-messages]
+verify_jwt = false

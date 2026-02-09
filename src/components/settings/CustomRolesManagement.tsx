@@ -287,39 +287,26 @@ export default function CustomRolesManagement() {
 
       if (roleError) throw roleError;
 
-      // Create the user with this role
+      // Create the user with this role using admin edge function
       if (roleData) {
-        // Store current session to restore after user creation
-        const { data: currentSession } = await supabase.auth.getSession();
-        
-        // Create user with metadata - the trigger will use these values
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: userEmail.trim(),
-          password: userPassword,
-          options: {
-            data: {
-              name: userName.trim(),
-              role: formData.base_role,
-              organization_id: formData.organization_id || '',
-              branch_id: formData.branch_id || '',
-              custom_role_id: roleData.id,
-            },
-            emailRedirectTo: `${window.location.origin}/`
-          }
+        const response = await supabase.functions.invoke('create-user', {
+          body: {
+            email: userEmail.trim(),
+            password: userPassword,
+            name: userName.trim(),
+            role: formData.base_role,
+            organization_id: formData.organization_id || '',
+            branch_id: formData.branch_id || '',
+            custom_role_id: roleData.id,
+          },
         });
 
-        if (authError) {
-          // Role was created but user creation failed - inform user
-          toast.error('Role created but user creation failed: ' + authError.message);
-        } else if (authData.user) {
-          // Restore the original session to prevent switching users
-          if (currentSession?.session) {
-            await supabase.auth.setSession({
-              access_token: currentSession.session.access_token,
-              refresh_token: currentSession.session.refresh_token
-            });
-          }
+        if (response.error) {
+          toast.error('Role created but user creation failed: ' + (response.error.message || 'Unknown error'));
+        } else if (response.data?.success) {
           toast.success('Custom role and user created successfully');
+        } else {
+          toast.error('Role created but user creation failed: ' + (response.data?.error || 'Unknown error'));
         }
       }
 
