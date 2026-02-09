@@ -201,7 +201,24 @@ export default function Lottery() {
     return map;
   }, [dailyRecords]);
 
-  // Get value for a cell (edited or from DB)
+  // Get previous day's closing stock for auto-carry-forward
+  const getPreviousDayClosingStock = useCallback((gameId: string, dateStr: string): number | null => {
+    const currentDate = new Date(dateStr);
+    const previousDate = subDays(currentDate, 1);
+    const prevDateStr = format(previousDate, 'yyyy-MM-dd');
+    
+    // First check if there's edited data for the previous day
+    const editedPrev = editingData[gameId]?.[prevDateStr];
+    if (editedPrev?.stockEnd !== undefined && editedPrev.stockEnd !== null) {
+      return editedPrev.stockEnd;
+    }
+    
+    // Then check the database record
+    const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
+    return prevRecord?.stock_end ?? null;
+  }, [editingData, recordsByGameAndDate]);
+
+  // Get value for a cell (edited or from DB) with auto-carry-forward for stockBegin
   const getCellValue = useCallback((gameId: string, dateStr: string, field: keyof GameDailyData) => {
     const edited = editingData[gameId]?.[dateStr];
     const record = recordsByGameAndDate[gameId]?.[dateStr];
@@ -211,12 +228,20 @@ export default function Lottery() {
     }
     
     switch (field) {
-      case 'stockBegin': return record?.stock_begin ?? null;
+      case 'stockBegin': {
+        // If there's a saved value, use it
+        if (record?.stock_begin !== undefined && record.stock_begin !== null) {
+          return record.stock_begin;
+        }
+        // Otherwise, try to auto-populate from previous day's closing stock
+        const prevClosing = getPreviousDayClosingStock(gameId, dateStr);
+        return prevClosing;
+      }
       case 'activatedTickets': return record?.activated_tickets ?? null;
       case 'stockEnd': return record?.stock_end ?? null;
       default: return null;
     }
-  }, [editingData, recordsByGameAndDate]);
+  }, [editingData, recordsByGameAndDate, getPreviousDayClosingStock]);
 
   // Calculate derived values for a day
   const getDayCalculations = useCallback((gameId: string, dateStr: string, game: LotteryGame) => {
@@ -509,6 +534,38 @@ export default function Lottery() {
     }
   };
 
+  // Save all games data at once
+  const saveAllData = async () => {
+    const gamesWithChanges = Object.keys(editingData);
+    if (gamesWithChanges.length === 0) {
+      toast.info('No changes to save');
+      return;
+    }
+
+    try {
+      for (const gameId of gamesWithChanges) {
+        const gameData = editingData[gameId];
+        for (const [date, data] of Object.entries(gameData)) {
+          await saveRecordMutation.mutateAsync({
+            gameId,
+            date,
+            stockBegin: data.stockBegin ?? 0,
+            activatedTickets: data.activatedTickets ?? 0,
+            stockEnd: data.stockEnd,
+          });
+        }
+      }
+
+      setEditingData({});
+      toast.success(`Saved data for ${gamesWithChanges.length} game(s) successfully`);
+    } catch {
+      // Error already handled in mutation
+    }
+  };
+
+  // Check if there are any unsaved changes
+  const hasAnyUnsavedChanges = Object.keys(editingData).length > 0;
+
   // Export to CSV - Excel-like format
   const exportToCSV = () => {
     const monthStr = format(selectedMonth, 'MMMM yyyy');
@@ -780,13 +837,19 @@ export default function Lottery() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <CardTitle className="text-xl">Scratchcard Daily Tracking</CardTitle>
-                    <CardDescription>Enter daily stock and sales data for each game</CardDescription>
+                    <CardDescription>Enter daily stock and sales data for each game. Yesterday's closing stock auto-fills today's opening stock.</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-2">
                       <Download className="h-4 w-4" />
                       Export CSV
                     </Button>
+                    {isSingleBranchSelected && hasAnyUnsavedChanges && (
+                      <Button size="sm" variant="default" onClick={saveAllData} className="gap-2 bg-green-600 hover:bg-green-700">
+                        <Save className="h-4 w-4" />
+                        Save All
+                      </Button>
+                    )}
                     {isSingleBranchSelected && (
                       <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
                         <Plus className="h-4 w-4" />
@@ -1042,13 +1105,13 @@ export default function Lottery() {
                     {/* Summary Section */}
                     {games.length > 0 && (
                       <div className="p-4 bg-gradient-to-r from-primary/5 to-accent/5">
-                        <h4 className="font-semibold text-lg mb-4">Month End Summary</h4>
+                        <h4 className="font-semibold text-lg mb-4">Daily Summary — Opening & Closing Stock</h4>
                         <ScrollArea className="w-full">
                           <div className="min-w-max">
                             <table className="w-full border-collapse text-sm">
                               <thead>
                                 <tr className="bg-muted/50">
-                                  <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-semibold min-w-[280px] border-r">
+                                  <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-semibold min-w-[200px] border-r">
                                     Summary
                                   </th>
                                   {daysInMonth.map(day => (
@@ -1062,6 +1125,30 @@ export default function Lottery() {
                                 </tr>
                               </thead>
                               <tbody>
+                                {/* Opening Stock (Day's Total Stock Begin) */}
+                                <tr className="border-b bg-blue-50/50 dark:bg-blue-950/20">
+                                  <td className="sticky left-0 z-10 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2 font-medium border-r">
+                                    Opening Stock (All Games)
+                                  </td>
+                                  {daysInMonth.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    let openingStock = 0;
+                                    games.forEach(game => {
+                                      const stockBegin = getCellValue(game.id, dateStr, 'stockBegin') ?? 0;
+                                      const activated = getCellValue(game.id, dateStr, 'activatedTickets') ?? 0;
+                                      openingStock += stockBegin + activated;
+                                    });
+                                    return (
+                                      <td key={dateStr} className="px-1 py-2 text-center font-medium text-blue-700 dark:text-blue-400 border-r">
+                                        {openingStock > 0 ? openingStock : '-'}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold text-blue-700 dark:text-blue-400 bg-blue-100/50">
+                                    —
+                                  </td>
+                                </tr>
+
                                 {/* Total Sales */}
                                 <tr className="border-b bg-green-50/50 dark:bg-green-950/20">
                                   <td className="sticky left-0 z-10 bg-green-50/50 dark:bg-green-950/20 px-3 py-2 font-semibold border-r">
@@ -1084,7 +1171,7 @@ export default function Lottery() {
                                 {/* Closing Stock - Working */}
                                 <tr className="border-b">
                                   <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium border-r">
-                                    Closing Instant Lottery Stock — As per the Working
+                                    Closing Stock — As per Working
                                   </td>
                                   {daysInMonth.map(day => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
@@ -1100,66 +1187,59 @@ export default function Lottery() {
                                   </td>
                                 </tr>
                                 
-                                {/* Closing Stock - Physical */}
-                                <tr className="border-b hover:bg-muted/30">
-                                  <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium border-r">
-                                    Closing Instant Lottery Stock — Physically (Number of Tickets)
-                                  </td>
-                                  {daysInMonth.map(day => {
-                                    const dateStr = format(day, 'yyyy-MM-dd');
-                                    const value = physicalStock[dateStr];
-                                    return (
-                                      <td key={dateStr} className="px-0.5 py-0.5 border-r">
-                                        <Input
-                                          type="number"
-                                          className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
-                                          value={value ?? ''}
-                                          onChange={(e) => setPhysicalStock(prev => ({
-                                            ...prev,
-                                            [dateStr]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
-                                          }))}
-                                          placeholder="-"
-                                          disabled={!isSingleBranchSelected}
-                                        />
-                                      </td>
-                                    );
-                                  })}
-                                  <td className="px-3 py-2 text-center font-semibold bg-primary/5">
-                                    {physicalStock[format(endOfMonth(selectedMonth), 'yyyy-MM-dd')] || '-'}
-                                  </td>
-                                </tr>
-                                
-                                {/* Differences */}
+                                {/* Stock Difference (Day over Day) */}
                                 <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                                   <td className="sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-2 font-semibold border-r">
-                                    Differences
+                                    Stock Difference (Day-over-Day)
                                   </td>
-                                  {daysInMonth.map(day => {
+                                  {daysInMonth.map((day, idx) => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
-                                    const working = dailyTotals[dateStr]?.closingStock || 0;
-                                    const physical = physicalStock[dateStr];
-                                    const diff = physical !== undefined && physical !== '' ? working - physical : null;
-                                    const hasError = diff !== null && diff !== 0;
+                                    const currentClosing = dailyTotals[dateStr]?.closingStock || 0;
+                                    
+                                    // Get previous day's closing
+                                    let previousClosing = 0;
+                                    if (idx > 0) {
+                                      const prevDateStr = format(daysInMonth[idx - 1], 'yyyy-MM-dd');
+                                      previousClosing = dailyTotals[prevDateStr]?.closingStock || 0;
+                                    } else {
+                                      // First day - compare with opening stock
+                                      games.forEach(game => {
+                                        const stockBegin = getCellValue(game.id, dateStr, 'stockBegin') ?? 0;
+                                        previousClosing += stockBegin;
+                                      });
+                                    }
+                                    
+                                    // If no data for this day, show dash
+                                    if (currentClosing === 0) {
+                                      return (
+                                        <td key={dateStr} className="px-1 py-2 text-center border-r text-muted-foreground">
+                                          -
+                                        </td>
+                                      );
+                                    }
+                                    
+                                    // Get tickets sold for this day
+                                    let ticketsSold = 0;
+                                    let activatedToday = 0;
+                                    games.forEach(game => {
+                                      const calc = getDayCalculations(game.id, dateStr, game);
+                                      ticketsSold += calc.ticketsSold ?? 0;
+                                      activatedToday += calc.activated ?? 0;
+                                    });
+                                    
+                                    // Expected: previousClosing + activated - sold = currentClosing
+                                    const expectedClosing = previousClosing + activatedToday - ticketsSold;
+                                    const diff = currentClosing - expectedClosing;
+                                    const hasError = diff !== 0 && currentClosing > 0;
+                                    
                                     return (
-                                      <td key={dateStr} className={`px-1 py-2 text-center font-medium border-r ${hasError ? 'text-destructive' : ''}`}>
-                                        {diff !== null ? (diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '0') : '-'}
+                                      <td key={dateStr} className={`px-1 py-2 text-center font-medium border-r ${hasError ? 'text-destructive' : 'text-green-600'}`}>
+                                        {diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : diff)}
                                       </td>
                                     );
                                   })}
                                   <td className="px-3 py-2 text-center font-bold bg-amber-100/50">
-                                    {(() => {
-                                      const lastDay = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-                                      const physical = physicalStock[lastDay];
-                                      if (physical !== undefined && physical !== '') {
-                                        const diff = grandTotals.totalClosingStock - physical;
-                                        return diff !== 0 ? (
-                                          <span className="text-destructive">{diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}</span>
-                                        ) : (
-                                          <span className="text-green-600">0</span>
-                                        );
-                                      }
-                                      return '-';
-                                    })()}
+                                    —
                                   </td>
                                 </tr>
                               </tbody>
@@ -1168,15 +1248,14 @@ export default function Lottery() {
                           <ScrollBar orientation="horizontal" />
                         </ScrollArea>
                         
-                        {isSingleBranchSelected && (
+                        {isSingleBranchSelected && hasAnyUnsavedChanges && (
                           <div className="mt-4 flex justify-end">
                             <Button 
-                              onClick={() => saveMonthlySummaryMutation.mutate()} 
-                              disabled={saveMonthlySummaryMutation.isPending}
-                              className="gap-2"
+                              onClick={saveAllData} 
+                              className="gap-2 bg-green-600 hover:bg-green-700"
                             >
                               <Save className="h-4 w-4" />
-                              Save Monthly Summary
+                              Save All Changes
                             </Button>
                           </div>
                         )}
@@ -1466,99 +1545,130 @@ export default function Lottery() {
                 <CardDescription>Overview of lottery reconciliation for the month</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column - Calculated Values */}
-                  <div className="space-y-4">
-                    <div className="p-6 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border border-green-200/50">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-green-500/20 rounded-lg">
-                          <TrendingUp className="h-5 w-5 text-green-600" />
-                        </div>
-                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Total Instant Lottery Sales</span>
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border border-green-200/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-green-500/20 rounded-lg">
+                        <TrendingUp className="h-5 w-5 text-green-600" />
                       </div>
-                      <p className="text-4xl font-bold text-green-700 dark:text-green-400">
-                        £{grandTotals.totalSalesValue.toFixed(2)}
-                      </p>
+                      <span className="text-sm font-medium text-green-700 dark:text-green-400">Total Instant Lottery Sales</span>
                     </div>
-                    
-                    <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200/50">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-blue-500/20 rounded-lg">
-                          <Package className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Closing Stock (As per Working)</span>
-                      </div>
-                      <p className="text-4xl font-bold text-blue-700 dark:text-blue-400">
-                        {grandTotals.totalClosingStock}
-                      </p>
-                      <p className="text-sm text-blue-600/70 mt-1">tickets remaining</p>
-                    </div>
+                    <p className="text-4xl font-bold text-green-700 dark:text-green-400">
+                      £{grandTotals.totalSalesValue.toFixed(2)}
+                    </p>
                   </div>
                   
-                  {/* Right Column - Physical Count & Difference */}
-                  <div className="space-y-4">
-                    <div className="p-6 rounded-xl border bg-card">
-                      <Label className="text-sm font-medium text-muted-foreground">Closing Stock (Physical Count)</Label>
-                      <Input
-                        type="number"
-                        className="mt-3 text-2xl font-bold h-14"
-                        placeholder="Enter physical stock count"
-                        value={physicalStock[format(endOfMonth(selectedMonth), 'yyyy-MM-dd')] ?? ''}
-                        onChange={(e) => setPhysicalStock(prev => ({
-                          ...prev,
-                          [format(endOfMonth(selectedMonth), 'yyyy-MM-dd')]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
-                        }))}
-                        disabled={!isSingleBranchSelected}
-                      />
-                      <p className="text-sm text-muted-foreground mt-2">Count all physical lottery tickets at month end</p>
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <Package className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Closing Stock (As per Working)</span>
                     </div>
-                    
-                    {(() => {
-                      const lastDayPhysical = physicalStock[format(endOfMonth(selectedMonth), 'yyyy-MM-dd')];
-                      const hasDifference = lastDayPhysical !== undefined && lastDayPhysical !== '';
-                      const difference = hasDifference ? grandTotals.totalClosingStock - (lastDayPhysical as number) : 0;
-                      const isNegative = difference > 0; // Working > Physical = Missing
-                      const isPositive = difference < 0; // Working < Physical = Extra
-                      
-                      return (
-                        <div className={`p-6 rounded-xl border ${
-                          !hasDifference ? 'bg-muted/30' :
-                          difference === 0 ? 'bg-green-50 dark:bg-green-950/20 border-green-200' :
-                          'bg-amber-50 dark:bg-amber-950/20 border-amber-200'
-                        }`}>
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className={`p-2 rounded-lg ${
-                              !hasDifference ? 'bg-muted' :
-                              difference === 0 ? 'bg-green-500/20' : 'bg-amber-500/20'
-                            }`}>
-                              {difference === 0 && hasDifference ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                              ) : (
-                                <AlertTriangle className={`h-5 w-5 ${hasDifference ? 'text-amber-600' : 'text-muted-foreground'}`} />
-                              )}
-                            </div>
-                            <span className="text-sm font-medium">Stock Difference</span>
-                          </div>
-                          <p className={`text-4xl font-bold ${
-                            !hasDifference ? 'text-muted-foreground' :
-                            difference === 0 ? 'text-green-600' : 'text-amber-600'
-                          }`}>
-                            {hasDifference ? (
-                              difference === 0 ? '0' : (isNegative ? `-${difference}` : `+${Math.abs(difference)}`)
-                            ) : '—'}
-                          </p>
-                          {hasDifference && difference !== 0 && (
-                            <p className="text-sm text-amber-600 mt-1">
-                              {isNegative ? `${difference} tickets missing` : `${Math.abs(difference)} extra tickets`}
-                            </p>
-                          )}
-                          {hasDifference && difference === 0 && (
-                            <p className="text-sm text-green-600 mt-1">Stock reconciled perfectly!</p>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    <p className="text-4xl font-bold text-blue-700 dark:text-blue-400">
+                      {grandTotals.totalClosingStock}
+                    </p>
+                    <p className="text-sm text-blue-600/70 mt-1">tickets remaining</p>
                   </div>
+
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border border-amber-200/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-amber-500/20 rounded-lg">
+                        <Ticket className="h-5 w-5 text-amber-600" />
+                      </div>
+                      <span className="text-sm font-medium text-amber-700 dark:text-amber-400">Total Tickets Sold</span>
+                    </div>
+                    <p className="text-4xl font-bold text-amber-700 dark:text-amber-400">
+                      {games.reduce((sum, game) => sum + getGameTotals(game.id, game).totalTicketsSold, 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily Summary Table */}
+                <div className="mb-6">
+                  <h4 className="font-semibold mb-4">Daily-wise Summary</h4>
+                  <ScrollArea className="w-full">
+                    <div className="min-w-max">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-semibold min-w-[100px] border-r">
+                              Date
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Opening Stock
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Activated
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Sold
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Closing Stock
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Sales Value
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[80px]">
+                              Balance ✓
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {daysInMonth.map((day, idx) => {
+                            const dateStr = format(day, 'yyyy-MM-dd');
+                            let opening = 0, activated = 0, sold = 0, closing = 0, sales = 0;
+                            
+                            games.forEach(game => {
+                              const stockBegin = getCellValue(game.id, dateStr, 'stockBegin') ?? 0;
+                              const activatedTickets = getCellValue(game.id, dateStr, 'activatedTickets') ?? 0;
+                              const calc = getDayCalculations(game.id, dateStr, game);
+                              
+                              opening += stockBegin;
+                              activated += activatedTickets;
+                              sold += calc.ticketsSold ?? 0;
+                              closing += calc.stockEnd ?? 0;
+                              sales += calc.salesValue ?? 0;
+                            });
+                            
+                            // Check balance: opening + activated - sold = closing
+                            const expectedClosing = opening + activated - sold;
+                            const isBalanced = closing > 0 && expectedClosing === closing;
+                            const hasData = opening > 0 || activated > 0 || closing > 0;
+                            
+                            return (
+                              <tr key={dateStr} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                                <td className="sticky left-0 bg-inherit px-3 py-2 font-medium border-r">
+                                  {format(day, 'EEE dd')}
+                                </td>
+                                <td className="px-3 py-2 text-center border-r">
+                                  {opening > 0 ? opening : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-center border-r text-blue-600">
+                                  {activated > 0 ? `+${activated}` : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-center border-r text-amber-600">
+                                  {sold > 0 ? sold : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-center border-r font-medium">
+                                  {closing > 0 ? closing : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-center border-r text-green-600 font-medium">
+                                  {sales > 0 ? `£${sales.toFixed(2)}` : '-'}
+                                </td>
+                                <td className={`px-3 py-2 text-center ${hasData ? (isBalanced ? 'text-green-600' : 'text-destructive') : 'text-muted-foreground'}`}>
+                                  {hasData ? (isBalanced ? '✓' : '✗') : '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
                 </div>
                 
                 <Separator className="my-6" />
@@ -1590,17 +1700,6 @@ export default function Lottery() {
                       );
                     })}
                   </div>
-                </div>
-                
-                <div className="mt-6 flex justify-end">
-                  <Button 
-                    onClick={() => saveMonthlySummaryMutation.mutate()} 
-                    disabled={saveMonthlySummaryMutation.isPending}
-                    className="gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    Save Monthly Summary
-                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -882,9 +882,22 @@ export function TimesheetView() {
                               const entry = ts.entries?.find(e => e.day_of_week === day);
                               const editingDay = inlineEditing[ts.id]?.[day];
                               const hasEdit = !!editingDay;
+                              
+                              // Determine cell background based on entry type or hours
+                              const holidayHours = Number(entry?.holiday_hours) || 0;
+                              const sickHours = Number(entry?.sick_hours) || 0;
+                              const isHoliday = holidayHours > 0;
+                              const isSick = sickHours > 0;
+                              
+                              const cellBgClass = isHoliday 
+                                ? 'bg-amber-100/70 dark:bg-amber-900/30' 
+                                : isSick 
+                                  ? 'bg-rose-100/70 dark:bg-rose-900/30' 
+                                  : '';
+                              
                               return (
                                 <React.Fragment key={dayIdx}>
-                                  <TableCell className="text-center px-1 border-l text-[10px]">
+                                  <TableCell className={`text-center px-1 border-l text-[10px] ${cellBgClass}`}>
                                     {hasEdit ? (
                                       <Input
                                         type="time"
@@ -898,11 +911,11 @@ export function TimesheetView() {
                                         className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
                                         onClick={() => handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '')}
                                       >
-                                        {formatTimeDisplay(entry?.shift_start_time || null) || '-'}
+                                        {formatTimeDisplay(entry?.shift_start_time || null) || (isHoliday ? 'HOL' : isSick ? 'SICK' : '-')}
                                       </span>
                                     )}
                                   </TableCell>
-                                  <TableCell className="text-center px-1 border-r text-[10px]">
+                                  <TableCell className={`text-center px-1 border-r text-[10px] ${cellBgClass}`}>
                                     {hasEdit ? (
                                       <Input
                                         type="time"
@@ -916,7 +929,7 @@ export function TimesheetView() {
                                         className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
                                         onClick={() => handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '')}
                                       >
-                                        {formatTimeDisplay(entry?.shift_end_time || null) || '-'}
+                                        {formatTimeDisplay(entry?.shift_end_time || null) || (isHoliday ? `${holidayHours}h` : isSick ? `${sickHours}h` : '-')}
                                       </span>
                                     )}
                                   </TableCell>
