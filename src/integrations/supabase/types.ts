@@ -5218,6 +5218,10 @@ export type Database = {
         Args: { p_employee_id: string; p_holiday_year_start?: string }
         Returns: undefined
       }
+      cleanup_user_references: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       delete_branch_cascade: {
         Args: { p_branch_id: string }
         Returns: undefined
