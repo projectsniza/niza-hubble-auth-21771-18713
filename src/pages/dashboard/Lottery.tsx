@@ -1305,6 +1305,12 @@ export default function Lottery() {
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
+                    {isSingleBranchSelected && hasAnyUnsavedChanges && (
+                      <Button size="sm" variant="default" onClick={saveAllData} className="gap-2 bg-green-600 hover:bg-green-700">
+                        <Save className="h-4 w-4" />
+                        Save All
+                      </Button>
+                    )}
                     {isSingleBranchSelected && (
                       <Button size="sm" onClick={() => setShowAddGameDialog(true)} className="gap-2">
                         <Plus className="h-4 w-4" />
@@ -1474,7 +1480,7 @@ export default function Lottery() {
                       })}
                     </div>
                     
-                    {/* Daily Physical Stock & Difference */}
+                    {/* Daily Physical Stock & Difference - Auto Calculated */}
                     <Card className="bg-gradient-to-r from-muted/30 to-muted/10">
                       <CardContent className="p-4">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
@@ -1486,33 +1492,50 @@ export default function Lottery() {
                           </div>
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">Physical Count</Label>
-                            <Input
-                              type="number"
-                              className="h-10 text-center font-semibold"
-                              placeholder="Enter count"
-                              value={physicalStock[format(selectedDate, 'yyyy-MM-dd')] ?? ''}
-                              onChange={(e) => setPhysicalStock(prev => ({
-                                ...prev,
-                                [format(selectedDate, 'yyyy-MM-dd')]: e.target.value === '' ? '' : parseInt(e.target.value) || 0
-                              }))}
-                              disabled={!isSingleBranchSelected}
-                            />
+                            {(() => {
+                              const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                              // Auto-calculate physical count as sum of all games' stock_end for this day
+                              let autoPhysicalCount = 0;
+                              games.forEach(game => {
+                                const stockEnd = getCellValue(game.id, dateStr, 'stockEnd');
+                                if (stockEnd !== null && stockEnd !== undefined) {
+                                  autoPhysicalCount += stockEnd;
+                                }
+                              });
+                              
+                              return (
+                                <div className="h-10 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 flex items-center justify-center font-bold text-lg text-blue-700 dark:text-blue-400">
+                                  {autoPhysicalCount}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">Difference</Label>
                             {(() => {
                               const dateStr = format(selectedDate, 'yyyy-MM-dd');
                               const working = dailyTotals[dateStr]?.closingStock || 0;
-                              const physical = physicalStock[dateStr];
-                              const diff = physical !== undefined && physical !== '' ? working - (physical as number) : null;
+                              
+                              // Auto-calculate physical count
+                              let autoPhysicalCount = 0;
+                              games.forEach(game => {
+                                const stockEnd = getCellValue(game.id, dateStr, 'stockEnd');
+                                if (stockEnd !== null && stockEnd !== undefined) {
+                                  autoPhysicalCount += stockEnd;
+                                }
+                              });
+                              
+                              // Difference = Working - Physical (should be 0 if data matches)
+                              const diff = working - autoPhysicalCount;
+                              const hasData = working > 0 || autoPhysicalCount > 0;
                               
                               return (
                                 <div className={`h-10 px-3 rounded-lg border flex items-center justify-center font-bold text-lg ${
-                                  diff === null ? 'bg-muted' :
-                                  diff === 0 ? 'bg-green-100 text-green-700 border-green-300' :
+                                  !hasData ? 'bg-muted text-muted-foreground' :
+                                  diff === 0 ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800' :
                                   'bg-destructive/10 text-destructive border-destructive/30'
                                 }`}>
-                                  {diff !== null ? (
+                                  {hasData ? (
                                     diff === 0 ? (
                                       <span className="flex items-center gap-1">
                                         <CheckCircle2 className="h-4 w-4" /> 0
@@ -1520,7 +1543,7 @@ export default function Lottery() {
                                     ) : (
                                       <span className="flex items-center gap-1">
                                         <AlertTriangle className="h-4 w-4" />
-                                        {diff > 0 ? `-${diff}` : `+${Math.abs(diff)}`}
+                                        {diff > 0 ? `+${diff}` : diff}
                                       </span>
                                     )
                                   ) : '—'}
@@ -1531,6 +1554,19 @@ export default function Lottery() {
                         </div>
                       </CardContent>
                     </Card>
+
+                    {/* Save All Button for Daily View */}
+                    {isSingleBranchSelected && hasAnyUnsavedChanges && (
+                      <div className="flex justify-end">
+                        <Button 
+                          onClick={saveAllData} 
+                          className="gap-2 bg-green-600 hover:bg-green-700"
+                        >
+                          <Save className="h-4 w-4" />
+                          Save All Changes
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
