@@ -170,12 +170,18 @@ export function useStoreTemplates() {
 
       if (storeError) throw storeError;
 
-      // Fetch shared templates from admin
-      const { data: sharedData, error: sharedError } = await supabase
+      // Fetch shared templates from admin - filter by global OR matching branch/org
+      let sharedQuery = supabase
         .from('shared_templates')
         .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .eq('is_active', true);
+      
+      // If user has a branch, get templates that are global OR specifically shared with their branch/org
+      if (user?.branchId) {
+        sharedQuery = sharedQuery.or(`is_global.eq.true,branch_id.eq.${user.branchId},organization_id.eq.${user.organizationId}`);
+      }
+      
+      const { data: sharedData, error: sharedError } = await sharedQuery.order('created_at', { ascending: false });
 
       if (sharedError) throw sharedError;
 
@@ -187,7 +193,7 @@ export function useStoreTemplates() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.branchId, user?.organizationId]);
 
   useEffect(() => {
     fetchTemplates();
