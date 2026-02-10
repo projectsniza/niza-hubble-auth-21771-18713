@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Car, 
   Fuel, 
@@ -12,10 +14,16 @@ import {
   Trash2,
   AlertTriangle,
   Shield,
-  CreditCard
+  CreditCard,
+  Paperclip,
+  FileText,
+  Video,
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import { DriveOff } from '@/hooks/useDriveOffs';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DriveOffCardProps {
   driveOff: DriveOff;
@@ -24,9 +32,24 @@ interface DriveOffCardProps {
 }
 
 export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) {
+  const [showFiles, setShowFiles] = useState(false);
   const isPaymentStatus = driveOff.tracking_status === 'payment';
   const unpaidAmount = driveOff.amount_drive_off - (driveOff.total_amount_received || 0);
   const isPaid = unpaidAmount <= 0;
+  const files = (driveOff as any).supporting_files || [];
+
+  const openFile = async (filePath: string) => {
+    const { data } = await supabase.storage.from('drive-off-files').createSignedUrl(filePath, 3600);
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    }
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type?.startsWith('video/')) return <Video className="h-4 w-4" />;
+    if (type?.startsWith('image/')) return <ImageIcon className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
+  };
 
   const getStatusBadge = () => {
     switch (driveOff.tracking_status) {
@@ -197,12 +220,52 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
             </p>
           )}
 
+          {/* Supporting Files */}
+          {files.length > 0 && (
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs"
+                onClick={() => setShowFiles(true)}
+              >
+                <Paperclip className="h-3 w-3" />
+                {files.length} file{files.length > 1 ? 's' : ''} attached
+              </Button>
+            </div>
+          )}
+
           {/* Branch */}
           <div className="text-xs text-muted-foreground pt-2 border-t">
             Site: {driveOff.branches?.name || 'Unknown'}
           </div>
         </div>
       </CardContent>
+
+      {/* Files Dialog */}
+      <Dialog open={showFiles} onOpenChange={setShowFiles}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Supporting Files - {driveOff.vehicle_registration}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {files.map((file: any, idx: number) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  {getFileIcon(file.type)}
+                  <div>
+                    <p className="text-sm font-medium truncate max-w-[250px]">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => openFile(file.path)}>
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

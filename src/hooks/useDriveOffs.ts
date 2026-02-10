@@ -29,6 +29,7 @@ export interface DriveOff {
   date_handed_to_guardian: string | null;
   head_office_notes: string | null;
   remarks: string | null;
+  supporting_files: any[] | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -60,6 +61,7 @@ export interface DriveOffFormData {
   date_handed_to_guardian?: string;
   head_office_notes?: string;
   remarks?: string;
+  supporting_files?: any[];
 }
 
 export function useDriveOffs(month?: Date, selectedOrg?: string, selectedBranch?: string) {
@@ -111,12 +113,16 @@ export function useDriveOffs(month?: Date, selectedOrg?: string, selectedBranch?
 
   const createDriveOff = useMutation({
     mutationFn: async (formData: DriveOffFormData) => {
+      // Clean empty date strings to null
+      const cleanData = {
+        ...formData,
+        payment_received_date: formData.payment_received_date || null,
+        date_handed_to_guardian: formData.date_handed_to_guardian || null,
+        created_by: user?.id,
+      };
       const { data, error } = await supabase
         .from('drive_offs')
-        .insert({
-          ...formData,
-          created_by: user?.id,
-        })
+        .insert(cleanData)
         .select()
         .single();
 
@@ -134,9 +140,15 @@ export function useDriveOffs(month?: Date, selectedOrg?: string, selectedBranch?
 
   const updateDriveOff = useMutation({
     mutationFn: async ({ id, ...formData }: DriveOffFormData & { id: string }) => {
+      // Clean empty date strings to null
+      const cleanData = {
+        ...formData,
+        payment_received_date: formData.payment_received_date || null,
+        date_handed_to_guardian: formData.date_handed_to_guardian || null,
+      };
       const { data, error } = await supabase
         .from('drive_offs')
-        .update(formData)
+        .update(cleanData)
         .eq('id', id)
         .select()
         .single();

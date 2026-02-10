@@ -1262,6 +1262,7 @@ export type Database = {
           payment_till_2: number | null
           pump_number: number
           remarks: string | null
+          supporting_files: Json | null
           till_1_amount: number | null
           till_2_amount: number | null
           till_3_amount: number | null
@@ -1292,6 +1293,7 @@ export type Database = {
           payment_till_2?: number | null
           pump_number: number
           remarks?: string | null
+          supporting_files?: Json | null
           till_1_amount?: number | null
           till_2_amount?: number | null
           till_3_amount?: number | null
@@ -1322,6 +1324,7 @@ export type Database = {
           payment_till_2?: number | null
           pump_number?: number
           remarks?: string | null
+          supporting_files?: Json | null
           till_1_amount?: number | null
           till_2_amount?: number | null
           till_3_amount?: number | null
