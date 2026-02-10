@@ -1170,9 +1170,10 @@ export default function Payroll() {
               <Label>Basic Salary (£)</Label>
               <Input
                 type="number"
+                step="0.01"
                 placeholder="0.00"
                 value={salaryForm.basicSalary}
-                onChange={(e) => setSalaryForm(prev => ({ ...prev, basicSalary: e.target.value }))}
+                onChange={(e) => setSalaryForm({ basicSalary: e.target.value })}
               />
             </div>
             

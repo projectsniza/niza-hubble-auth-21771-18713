@@ -29,7 +29,9 @@ import {
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import { DriveOff, DriveOffFormData } from '@/hooks/useDriveOffs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload, X, FileText, Video, Image as ImageIcon } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const FUEL_TYPES = ['UNLEADED', 'DIESEL', 'SUPER UNLEADED', 'PREMIUM DIESEL', 'LPG'];
 const PUMP_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -61,6 +63,13 @@ const formSchema = z.object({
   remarks: z.string().optional(),
 });
 
+interface SupportingFile {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 interface DriveOffFormDialogProps {
   open: boolean;
   onClose: () => void;
@@ -80,6 +89,8 @@ export function DriveOffFormDialog({
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [supportingFiles, setSupportingFiles] = useState<SupportingFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -157,8 +168,17 @@ export function DriveOffFormDialog({
         head_office_notes: editingDriveOff.head_office_notes || '',
         remarks: editingDriveOff.remarks || '',
       });
+
+      // Load existing files
+      const existingFiles = (editingDriveOff as any).supporting_files;
+      if (Array.isArray(existingFiles)) {
+        setSupportingFiles(existingFiles);
+      } else {
+        setSupportingFiles([]);
+      }
     } else {
       form.reset();
+      setSupportingFiles([]);
       // Set default branch for non-super admin users
       if (user?.role === 'manager' && user.branchId) {
         form.setValue('branch_id', user.branchId);
@@ -166,8 +186,67 @@ export function DriveOffFormDialog({
     }
   }, [editingDriveOff, form, user, branches]);
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const newFiles: SupportingFile[] = [];
+      for (const file of Array.from(files)) {
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${user?.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+        const { error } = await supabase.storage
+          .from('drive-off-files')
+          .upload(filePath, file);
+
+        if (error) {
+          toast.error(`Failed to upload ${file.name}: ${error.message}`);
+          continue;
+        }
+
+        newFiles.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type,
+        });
+      }
+      setSupportingFiles(prev => [...prev, ...newFiles]);
+      if (newFiles.length > 0) {
+        toast.success(`${newFiles.length} file(s) uploaded`);
+      }
+    } catch (err) {
+      toast.error('Upload failed');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveFile = async (index: number) => {
+    const file = supportingFiles[index];
+    await supabase.storage.from('drive-off-files').remove([file.path]);
+    setSupportingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('video/')) return <Video className="h-4 w-4" />;
+    if (type.startsWith('image/')) return <ImageIcon className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
+  };
+
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     const branch = branches.find(b => b.id === values.branch_id);
+    
+    // Ensure date fields are properly formatted (YYYY-MM-DD) or null
+    const formatDate = (val?: string) => {
+      if (!val || val.trim() === '') return undefined;
+      // Already in YYYY-MM-DD format from date input
+      return val;
+    };
+
     const formData: DriveOffFormData = {
       branch_id: values.branch_id,
       drive_off_date: values.drive_off_date,
@@ -184,15 +263,16 @@ export function DriveOffFormDialog({
       till_4_amount: values.till_4_amount,
       till_5_amount: values.till_5_amount,
       total_amount_received: values.total_amount_received,
-      payment_received_date: values.payment_received_date,
+      payment_received_date: formatDate(values.payment_received_date),
       payment_till_1: values.payment_till_1,
       payment_till_2: values.payment_till_2,
       tracking_status: values.tracking_status || null,
       tracking_reference: values.tracking_reference,
-      date_handed_to_guardian: values.date_handed_to_guardian,
+      date_handed_to_guardian: formatDate(values.date_handed_to_guardian),
       head_office_notes: values.head_office_notes,
       remarks: values.remarks,
       organization_id: branch?.organization_id,
+      supporting_files: supportingFiles,
     };
     await onSubmit(formData);
     onClose();
@@ -618,12 +698,70 @@ export function DriveOffFormDialog({
               )}
             </div>
 
+            {/* Supporting Files */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg border-b pb-2">Supporting Files</h3>
+              <p className="text-sm text-muted-foreground">
+                Upload CCTV footage, photos, or any supporting documents (images, videos, PDFs, etc.)
+              </p>
+
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer">
+                  <Input
+                    type="file"
+                    accept="*/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 border border-dashed border-primary/40 rounded-lg hover:bg-muted/50 transition-colors">
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {isUploading ? 'Uploading...' : 'Upload Files'}
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {supportingFiles.length > 0 && (
+                <div className="space-y-2">
+                  {supportingFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {getFileIcon(file.type)}
+                        <div>
+                          <p className="text-sm font-medium truncate max-w-[300px]">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => handleRemoveFile(idx)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Submit Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || isUploading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingDriveOff ? 'Update Record' : 'Record Drive-Off'}
               </Button>
