@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileCheck, Upload, CheckCircle2, Clock, Eye, Download } from 'lucide-react';
+import { FileCheck, Upload, CheckCircle2, Clock, Eye, Download, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -46,6 +47,7 @@ export default function ApprovedContractsTab() {
   const [viewingContract, setViewingContract] = useState<ApprovedContract | null>(null);
   const [viewEmployeeData, setViewEmployeeData] = useState<any>(null);
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchApprovedContracts();
@@ -524,6 +526,14 @@ export default function ApprovedContractsTab() {
     );
   }
 
+  const filteredContracts = contracts.filter(contract => {
+    if (!searchQuery.trim()) return true;
+    const employee = contract.employee;
+    if (!employee) return false;
+    const fullName = `${employee.first_name} ${employee.last_name}`.toLowerCase();
+    return fullName.includes(searchQuery.toLowerCase());
+  });
+
   if (contracts.length === 0) {
     return (
       <Card className="p-8">
@@ -539,9 +549,20 @@ export default function ApprovedContractsTab() {
   return (
     <>
       <Card>
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-semibold">Approved Contracts</h3>
-          <p className="text-sm text-muted-foreground">Download contracts and complete remaining onboarding steps</p>
+        <div className="p-4 border-b space-y-3">
+          <div>
+            <h3 className="text-lg font-semibold">Approved Contracts</h3>
+            <p className="text-sm text-muted-foreground">Download contracts and complete remaining onboarding steps</p>
+          </div>
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search employees..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
         </div>
         <Table>
           <TableHeader>
@@ -555,7 +576,7 @@ export default function ApprovedContractsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {contracts.map((contract) => (
+            {filteredContracts.map((contract) => (
               <TableRow key={contract.id}>
                 <TableCell className="font-medium">
                   {contract.employee?.first_name} {contract.employee?.last_name}

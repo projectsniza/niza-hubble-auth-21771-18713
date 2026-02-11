@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Building, ArrowRight, Plus } from 'lucide-react';
+import { Building, ArrowRight, Plus, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +13,8 @@ import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
 export default function OnboardingManagement() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+
   
   const filters: any = { status: 'onboarding' };
   
@@ -77,9 +81,13 @@ export default function OnboardingManagement() {
   }
 
   // Include both onboarding and pending status employees
-  const onboardingEmployees = employees.filter(e => 
-    e.status === 'onboarding' || (e.status === 'pending' && e.onboarding?.[0]?.current_step > 0)
-  );
+  const onboardingEmployees = employees.filter(e => {
+    const matchesStatus = e.status === 'onboarding' || (e.status === 'pending' && e.onboarding?.[0]?.current_step > 0);
+    if (!matchesStatus) return false;
+    if (!searchQuery.trim()) return true;
+    const fullName = `${e.first_name} ${e.last_name}`.toLowerCase();
+    return fullName.includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div className="space-y-6">
@@ -92,6 +100,16 @@ export default function OnboardingManagement() {
           <Plus className="h-4 w-4 mr-2" />
           Start New Onboarding
         </Button>
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search employees..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       {/* Status Flow Legend */}

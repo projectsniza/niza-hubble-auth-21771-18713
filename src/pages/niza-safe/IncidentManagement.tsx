@@ -146,7 +146,7 @@ export default function IncidentManagement() {
         branchId = profile.branch_id;
       }
 
-      const { error } = await supabase.from('incidents').insert([{
+      const incidentPayload = {
         title: formData.title,
         description: formData.description,
         incident_type: formData.incident_type,
@@ -158,7 +158,6 @@ export default function IncidentManagement() {
         branch_id: branchId,
         reported_by: authUser?.id ?? '',
         images: attachedFiles as unknown as null,
-        // Store additional UK format fields in a metadata column or existing columns
         medical_documents: {
           incident_time: formData.incident_time,
           victim_job_title: formData.victim_job_title,
@@ -171,13 +170,23 @@ export default function IncidentManagement() {
           hospital_attended: formData.hospital_attended,
           reported_to_riddor: formData.reported_to_riddor,
         } as unknown as null,
-      }]);
+      };
+
+      let error;
+      if (selectedIncident) {
+        // Update existing
+        ({ error } = await supabase.from('incidents').update(incidentPayload).eq('id', selectedIncident.id));
+      } else {
+        // Create new
+        ({ error } = await supabase.from('incidents').insert([incidentPayload]));
+      }
 
       if (error) throw error;
 
-      toast({ title: "Success", description: "Incident reported successfully" });
+      toast({ title: "Success", description: selectedIncident ? "Incident updated successfully" : "Incident reported successfully" });
       setShowCreateDialog(false);
       setAttachedFiles([]);
+      setSelectedIncident(null);
       fetchIncidents();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to report incident';
@@ -218,6 +227,31 @@ export default function IncidentManagement() {
   const openViewDialog = (incident: any) => {
     setSelectedIncident(incident);
     setShowViewDialog(true);
+  };
+
+  const openEditDialog = (incident: any) => {
+    setFormData({
+      title: incident.title || '',
+      description: incident.description || '',
+      incident_type: incident.incident_type || 'accident',
+      incident_date: new Date(incident.incident_date),
+      incident_time: incident.medical_documents?.incident_time || '',
+      location_details: incident.location_details || '',
+      victim_name: incident.victim_name || '',
+      victim_job_title: incident.medical_documents?.victim_job_title || '',
+      injury_type: incident.injury_type || '',
+      body_part_injured: incident.medical_documents?.body_part_injured || '',
+      severity: incident.medical_documents?.severity || 'minor',
+      immediate_action: incident.medical_documents?.immediate_action || '',
+      witness_names: incident.medical_documents?.witness_names || '',
+      first_aid_given: incident.medical_documents?.first_aid_given || false,
+      first_aider_name: incident.medical_documents?.first_aider_name || '',
+      hospital_attended: incident.medical_documents?.hospital_attended || false,
+      reported_to_riddor: incident.medical_documents?.reported_to_riddor || false,
+    });
+    setAttachedFiles(getFilesFromIncident(incident));
+    setSelectedIncident(incident);
+    setShowCreateDialog(true);
   };
 
   const accidents = incidents.filter(i => i.incident_type === 'accident');
@@ -358,7 +392,7 @@ export default function IncidentManagement() {
                       <TableCell>
                         <div className="flex gap-2">
                           <Button variant="ghost" size="icon" onClick={() => openViewDialog(item)}><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -409,7 +443,7 @@ export default function IncidentManagement() {
                       <TableCell>
                         <div className="flex gap-2">
                           <Button variant="ghost" size="icon" onClick={() => openViewDialog(item)}><Eye className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)}><Edit className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
