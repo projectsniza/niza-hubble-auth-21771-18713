@@ -222,7 +222,8 @@ export default function AddEmployee() {
     const { data } = await supabase
       .from('profiles')
       .select('id, name, email')
-      .eq('branch_id', branchId);
+      .eq('branch_id', branchId)
+      .eq('is_active', true);
     if (data) setManagers(data);
   };
 
@@ -559,7 +560,14 @@ export default function AddEmployee() {
                 </div>
                 <div className="space-y-2">
                   <Label>Phone</Label>
-                  <Input value={formData.phone} onChange={(e) => updateFormData({ phone: e.target.value })} placeholder="+44 7xxx xxx xxx" />
+                  <Input 
+                    value={formData.phone} 
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9\s\-+()]/g, '');
+                      updateFormData({ phone: val });
+                    }} 
+                    placeholder="+44 7xxx xxx xxx" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Date of Birth</Label>
