@@ -351,6 +351,16 @@ export default function ApplicationForm({
     }
   };
 
+  const formatDateDDMMYYYY = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
   const handleDownloadPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -442,7 +452,7 @@ export default function ApplicationForm({
     y += lineHeight + 2;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Closing date for applications: ${formData.closing_date || '............................'}`, margin, y);
+    doc.text(`Closing date for applications: ${formatDateDDMMYYYY(formData.closing_date) || '............................'}`, margin, y);
     y += lineHeight + 2;
     doc.text(`Application for employment as a ${formData.position || '.....................'} at ${branchAddress || '.....................'}`, margin, y, { maxWidth: contentWidth });
     y += sectionGap + 4;
@@ -478,7 +488,7 @@ export default function ApplicationForm({
     doc.text('No', eligibleX + 20, y);
     drawCheckbox(eligibleX + 28, y, formData.eligible_to_work_uk === false);
     y += lineHeight + 2;
-    doc.text(`When can you start work?: ${formData.start_date || '............................'}`, margin, y);
+    doc.text(`When can you start work?: ${formatDateDDMMYYYY(formData.start_date) || '............................'}`, margin, y);
     y += sectionGap + 4;
 
     // Section 3: Employment
@@ -505,7 +515,7 @@ export default function ApplicationForm({
       y += lineHeight;
       doc.text(`Name and Address of Employer: ${formData.employer_address || ''}`, margin, y, { maxWidth: contentWidth });
       y += lineHeight + 2;
-      doc.text(`Date Employment Commenced: ${formData.employment_commenced || '............................'}`, margin, y);
+      doc.text(`Date Employment Commenced: ${formatDateDDMMYYYY(formData.employment_commenced) || '............................'}`, margin, y);
       y += lineHeight;
       doc.text(`Previous Salary: ${formData.present_salary || '............................'}`, margin, y);
       y += lineHeight + 4;
@@ -553,7 +563,140 @@ export default function ApplicationForm({
       y += sectionGap;
     }
 
-    // Continue with remaining sections...
+    // Section 4: Education
+    checkNewPage(40);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('4. Education and Training', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Institution', margin, y);
+    doc.text('From', margin + 60, y);
+    doc.text('To', margin + 85, y);
+    doc.text('Qualifications', margin + 110, y);
+    y += lineHeight;
+    drawLine(y - 3);
+    doc.setFont('helvetica', 'normal');
+    formData.education.forEach((edu) => {
+      checkNewPage(10);
+      doc.text(edu.institution || '', margin, y, { maxWidth: 55 });
+      doc.text(edu.from || '', margin + 60, y);
+      doc.text(edu.to || '', margin + 85, y);
+      doc.text(edu.qualifications || '', margin + 110, y, { maxWidth: 60 });
+      y += lineHeight + 2;
+    });
+    if (formData.other_qualifications) {
+      y += 4;
+      doc.text('Other qualifications:', margin, y);
+      y += lineHeight;
+      doc.text(formData.other_qualifications, margin, y, { maxWidth: contentWidth });
+      y += lineHeight + 4;
+    }
+    y += sectionGap;
+
+    // Section 5: Supporting Information
+    checkNewPage(30);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('5. Information in support of your application', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    if (formData.skills_experience) {
+      const skillLines = doc.splitTextToSize(formData.skills_experience, contentWidth);
+      checkNewPage(skillLines.length * 5 + 10);
+      doc.text(skillLines, margin, y);
+      y += skillLines.length * 5 + sectionGap;
+    }
+    y += sectionGap;
+
+    // Section 6: Medical
+    checkNewPage(30);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('6. Medical', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Do you consider yourself to have a disability?', margin, y);
+    const disX = margin + 80;
+    doc.text('Yes', disX, y);
+    drawCheckbox(disX + 10, y, formData.has_disability === true);
+    doc.text('No', disX + 20, y);
+    drawCheckbox(disX + 28, y, formData.has_disability === false);
+    y += lineHeight + 2;
+    if (formData.reasonable_adjustments) {
+      doc.text(`Reasonable adjustments: ${formData.reasonable_adjustments}`, margin, y, { maxWidth: contentWidth });
+      y += lineHeight + 2;
+    }
+    if (formData.unavailable_dates) {
+      doc.text(`Unavailable dates: ${formData.unavailable_dates}`, margin, y);
+      y += lineHeight + 2;
+    }
+    y += sectionGap;
+
+    // Section 7: Convictions
+    checkNewPage(20);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('7. Convictions', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Do you have any unspent criminal convictions or cautions?', margin, y);
+    const convX = margin + 100;
+    doc.text('Yes', convX, y);
+    drawCheckbox(convX + 10, y, formData.has_convictions === true);
+    doc.text('No', convX + 20, y);
+    drawCheckbox(convX + 28, y, formData.has_convictions === false);
+    y += sectionGap + 4;
+
+    // Section 8: References
+    checkNewPage(50);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('8. References', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(10);
+
+    const printReferee = (ref: typeof formData.referee1, label: string) => {
+      checkNewPage(40);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, margin, y);
+      y += lineHeight;
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Name: ${ref.name || '............................'}`, margin, y);
+      y += lineHeight;
+      doc.text(`Address: ${ref.address || '............................'}`, margin, y, { maxWidth: contentWidth });
+      y += lineHeight;
+      doc.text(`Telephone: ${ref.telephone || '............................'}`, margin, y);
+      doc.text(`Email: ${ref.email || '............................'}`, margin + 80, y);
+      y += lineHeight;
+      doc.text(`Relationship: ${ref.relationship || '............................'}`, margin, y);
+      y += lineHeight + 4;
+    };
+    printReferee(formData.referee1, 'Referee 1');
+    printReferee(formData.referee2, 'Referee 2');
+
+    // Declaration
+    checkNewPage(40);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DECLARATION', margin, y);
+    y += lineHeight + 3;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const declText = 'I declare that to the best of my knowledge the information given on this form is correct. I understand that any false information may result in my application not being considered, or if I am subsequently employed by the organisation, in the termination of my employment.';
+    const declLines = doc.splitTextToSize(declText, contentWidth);
+    doc.text(declLines, margin, y);
+    y += declLines.length * 5 + 8;
+
+    doc.setFontSize(10);
+    doc.text(`Signature: ${formData.signature || '............................'}`, margin, y);
+    y += lineHeight;
+    doc.text(`Date: ${formatDateDDMMYYYY(formData.signature_date) || '............................'}`, margin, y);
+
     doc.save(`Application_Form_${formData.name.replace(/\s/g, '_')}.pdf`);
     toast.success('PDF downloaded successfully');
   };

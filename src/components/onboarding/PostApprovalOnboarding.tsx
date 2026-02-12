@@ -92,6 +92,27 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         })
         .eq('id', contractApproval.id);
 
+      // Save signed contract to employee's document folder
+      const { data: employeeFolder } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .eq('folder_type', 'employee')
+        .maybeSingle();
+
+      if (employeeFolder) {
+        await supabase.from('documents').insert({
+          title: 'Signed Contract',
+          file_name: signedContractFile.name,
+          file_path: filePath,
+          file_type: signedContractFile.type,
+          file_size: signedContractFile.size,
+          employee_id: employeeId,
+          folder_id: employeeFolder.id,
+          uploaded_by: user?.id,
+        });
+      }
+
       // Update onboarding status
       await supabase
         .from('employee_onboarding')

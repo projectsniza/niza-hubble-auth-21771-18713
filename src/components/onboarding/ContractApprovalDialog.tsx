@@ -38,6 +38,7 @@ export default function ContractApprovalDialog({
   const [activeTab, setActiveTab] = useState('details');
   const [signatureType, setSignatureType] = useState<'typed' | 'drawn' | 'uploaded'>('typed');
   const [typedSignature, setTypedSignature] = useState('');
+  const [employerName, setEmployerName] = useState('');
   const [signatureDate, setSignatureDate] = useState('');
   const [uploadedSignature, setUploadedSignature] = useState('');
   const [rejectReason, setRejectReason] = useState('');
@@ -187,6 +188,10 @@ export default function ContractApprovalDialog({
       toast.error('Please select a signature date');
       return;
     }
+    if (!employerName.trim()) {
+      toast.error('Please enter your name as employer representative');
+      return;
+    }
     
     let finalSignature = '';
     if (signatureType === 'typed') {
@@ -310,7 +315,7 @@ export default function ContractApprovalDialog({
 
           <TabsContent value="documents" className="space-y-4 pt-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">Required Documents</h3>
+              <h3 className="font-semibold text-lg">Employee Documents</h3>
               {approval.documents?.length > 0 ? (
                 <Badge className="bg-green-500">
                   <CheckCircle className="h-3 w-3 mr-1" />
@@ -323,6 +328,31 @@ export default function ContractApprovalDialog({
                 </Badge>
               )}
             </div>
+
+            {/* Employee Share Code section - shown on top */}
+            {(() => {
+              const contractContent = approval.contract_content as any;
+              const shareCode = contractContent?.share_code;
+              const govLink = contractContent?.gov_portal_link;
+              if (shareCode || govLink) {
+                return (
+                  <Card className="p-4 border-amber-500/30 bg-amber-500/5 mb-4">
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-amber-600" />
+                      Employee Share Code
+                    </h4>
+                    {shareCode && <p className="text-sm"><strong>Share Code:</strong> {shareCode}</p>}
+                    {govLink && (
+                      <p className="text-sm mt-1">
+                        <strong>Gov Portal:</strong>{' '}
+                        <a href={govLink} target="_blank" rel="noopener noreferrer" className="text-primary underline">{govLink}</a>
+                      </p>
+                    )}
+                  </Card>
+                );
+              }
+              return null;
+            })()}
 
             {/* RTW Upload Section for Super Admin */}
             <Card className="p-4 border-primary/30 bg-primary/5">
@@ -558,6 +588,16 @@ export default function ContractApprovalDialog({
                   </div>
                 </TabsContent>
               </Tabs>
+
+              <div className="space-y-2">
+                <Label>Your Name (Employer Representative) <span className="text-destructive">*</span></Label>
+                <Input
+                  value={employerName}
+                  onChange={(e) => setEmployerName(e.target.value)}
+                  placeholder="Type your full name"
+                  className="font-semibold"
+                />
+              </div>
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
