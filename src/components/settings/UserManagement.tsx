@@ -373,6 +373,8 @@ export default function UserManagement() {
     }
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const handleDeleteUser = async () => {
     if (!deleteUserId) return;
     
@@ -383,13 +385,24 @@ export default function UserManagement() {
       return;
     }
     
+    setIsDeleting(true);
     try {
       // Call edge function to delete user (uses admin API)
       const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { userId: deleteUserId }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Try to extract a meaningful message from the error
+        let message = 'Failed to delete user';
+        try {
+          const body = await error?.context?.json?.();
+          if (body?.error) message = body.error;
+        } catch {
+          if (error.message) message = error.message;
+        }
+        throw new Error(message);
+      }
       if (data?.error) throw new Error(data.error);
       
       toast.success('User deleted successfully');
@@ -397,16 +410,10 @@ export default function UserManagement() {
       fetchUsers();
     } catch (error: any) {
       console.error('Delete user error:', error);
-
-      // supabase-js returns rich error objects for functions.invoke.
-      // Prefer a clear message over the generic "non-2xx" text.
-      const message =
-        error?.context?.body?.error ||
-        error?.context?.body?.message ||
-        error?.message ||
-        'Failed to delete user';
-
+      const message = error?.message || 'Failed to delete user';
       toast.error(message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1040,9 +1047,9 @@ export default function UserManagement() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</> : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -24,12 +24,10 @@ serve(async (req) => {
       throw new Error("Missing authorization header");
     }
 
-    // Admin client for user creation
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Client with caller's token to verify role
     const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -37,7 +35,6 @@ serve(async (req) => {
     const { data: { user: currentUser }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !currentUser) throw new Error("Unauthorized");
 
-    // Check if caller is super_admin
     const { data: roleData, error: roleError } = await supabaseClient
       .from("user_roles")
       .select("role")
@@ -55,20 +52,77 @@ serve(async (req) => {
       throw new Error("Missing required fields: email, password, name");
     }
 
-    // Use admin.createUser which works reliably for re-registration of deleted emails
+    const userMetadata = {
+      name,
+      role: role || "employee",
+      organization_id: organization_id || "",
+      branch_id: branch_id || "",
+      hr_access_level: hr_access_level || "",
+      custom_role_id: custom_role_id || "",
+    };
+
+    // Try to create the user first
     const { data: newUserData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirm so they can log in immediately
-      user_metadata: {
-        name,
-        role: role || "employee",
-        organization_id: organization_id || "",
-        branch_id: branch_id || "",
-        hr_access_level: hr_access_level || "",
-        custom_role_id: custom_role_id || "",
-      },
+      email_confirm: true,
+      user_metadata: userMetadata,
     });
+
+    // If email already exists, delete the old user and recreate
+    if (createError && createError.message?.includes("already been registered")) {
+      console.log("User with this email exists, attempting to delete and recreate...");
+
+      // Find the existing user by email
+      const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (listError) {
+        console.error("Error listing users:", listError);
+        throw new Error("Failed to look up existing user");
+      }
+
+      const existingUser = listData.users.find((u: any) => u.email === email);
+      if (!existingUser) {
+        throw new Error("User exists but could not be found for re-creation");
+      }
+
+      // Clean up references first
+      const { error: cleanupError } = await supabaseAdmin.rpc("cleanup_user_references", {
+        p_user_id: existingUser.id,
+      });
+      if (cleanupError) {
+        console.error("Cleanup error:", cleanupError);
+      }
+
+      // Delete the old auth user
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
+      if (deleteError) {
+        console.error("Delete existing user error:", deleteError);
+        throw new Error("Failed to remove existing user account: " + deleteError.message);
+      }
+
+      console.log("Old user deleted, recreating...");
+
+      // Now create the new user
+      const { data: recreatedUser, error: recreateError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
+
+      if (recreateError) {
+        console.error("Recreate user error:", recreateError);
+        throw new Error(recreateError.message);
+      }
+
+      const newUserId = recreatedUser.user.id;
+      console.log("User re-created successfully:", newUserId);
+
+      return new Response(
+        JSON.stringify({ success: true, userId: newUserId, message: "User re-created successfully" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
 
     if (createError) {
       console.error("Admin createUser error:", createError);
@@ -79,25 +133,15 @@ serve(async (req) => {
     console.log("User created successfully:", newUserId);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        userId: newUserId,
-        message: "User created successfully",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
+      JSON.stringify({ success: true, userId: newUserId, message: "User created successfully" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "An error occurred";
     console.error("Create user function error:", errorMessage);
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }
 });
