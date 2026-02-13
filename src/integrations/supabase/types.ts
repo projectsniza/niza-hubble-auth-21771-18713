@@ -2053,7 +2053,7 @@ export type Database = {
           location_details: string | null
           organization_id: string
           priority: string | null
-          reported_by: string
+          reported_by: string | null
           resolution_notes: string | null
           resolved_at: string | null
           status: string | null
@@ -2070,7 +2070,7 @@ export type Database = {
           location_details?: string | null
           organization_id: string
           priority?: string | null
-          reported_by: string
+          reported_by?: string | null
           resolution_notes?: string | null
           resolved_at?: string | null
           status?: string | null
@@ -2087,7 +2087,7 @@ export type Database = {
           location_details?: string | null
           organization_id?: string
           priority?: string | null
-          reported_by?: string
+          reported_by?: string | null
           resolution_notes?: string | null
           resolved_at?: string | null
           status?: string | null
@@ -3935,7 +3935,7 @@ export type Database = {
       safety_tasks: {
         Row: {
           assigned_by: string | null
-          assigned_to: string
+          assigned_to: string | null
           attachments: Json | null
           branch_id: string
           completed_at: string | null
@@ -3958,7 +3958,7 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
-          assigned_to: string
+          assigned_to?: string | null
           attachments?: Json | null
           branch_id: string
           completed_at?: string | null
@@ -3981,7 +3981,7 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
-          assigned_to?: string
+          assigned_to?: string | null
           attachments?: Json | null
           branch_id?: string
           completed_at?: string | null
