@@ -499,7 +499,17 @@ export default function ContractTemplate({
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`is made on ${contractData.contract_date || '…………………………………………………'}`, pageWidth / 2, y, { align: 'center' });
+    const formatDateWithDay = (dateStr: string) => {
+      if (!dateStr) return '…………………………………………………';
+      const parts = dateStr.split('-');
+      const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(dateStr);
+      if (isNaN(dt.getTime())) return dateStr;
+      const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      return `${dd}/${mm}/${dt.getFullYear()} - ${days[dt.getDay()]}`;
+    };
+    doc.text(`is made on ${formatDateWithDay(contractData.contract_date)}`, pageWidth / 2, y, { align: 'center' });
     y += 12;
 
     // PARTIES
@@ -727,7 +737,7 @@ export default function ContractTemplate({
     y += 18;
     
     // Employer section
-    // E-signature / drawn signature above "Signed on behalf of the Employer"
+    // E-signature / drawn signature ABOVE "Signed on behalf of the Employer"
     if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
@@ -741,28 +751,27 @@ export default function ContractTemplate({
       doc.text(contractApproval.employer_signature, margin, y);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      y += 8;
+      y += 10;
     }
-    
-    doc.text('Signed on behalf of the Employer', margin, y);
-    y += 8;
-    
-    // Employer typed name (from employerName field in approval)
-    if (contractApproval?.employer_signature) {
-      doc.setFont('helvetica', 'bold');
-      // Use the employer name stored in contract_content if available
-      const employerNameVal = (contractApproval.contract_content as any)?.employer_name || contractApproval.employer_signature;
-      if (contractApproval.employer_signature_type === 'typed') {
-        doc.text(employerNameVal.toUpperCase(), margin, y);
-      } else {
-        doc.text(employerNameVal.toUpperCase(), margin, y);
-      }
-      doc.setFont('helvetica', 'normal');
-    }
-    y += 8;
+
+    // Date line ABOVE "Signed on behalf of the Employer"
     doc.setFont('helvetica', 'bold');
     doc.text(`Date: ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
     doc.setFont('helvetica', 'normal');
+    y += 8;
+    
+    // "Signed on behalf of the Employer" label
+    doc.text('Signed on behalf of the Employer', margin, y);
+    y += 8;
+    
+    // Employer Representative Name BELOW the label
+    const employerNameVal = (contractApproval?.contract_content as any)?.employer_name || '';
+    if (employerNameVal) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(employerNameVal.toUpperCase(), margin, y);
+      doc.setFont('helvetica', 'normal');
+    }
+    y += 8;
 
     doc.save(`Contract_${contractData.employee_name.replace(/\s/g, '_')}.pdf`);
     toast.success('PDF downloaded successfully');
@@ -803,6 +812,15 @@ export default function ContractTemplate({
           <p className="mt-4">
             is made on{' '}
             <EditableField label="Contract Date" value={contractData.contract_date} field="contract_date" type="date" />
+            {contractData.contract_date && (() => {
+              const parts = contractData.contract_date.split('-');
+              const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(contractData.contract_date);
+              if (isNaN(dt.getTime())) return null;
+              const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+              const dd = String(dt.getDate()).padStart(2, '0');
+              const mm = String(dt.getMonth() + 1).padStart(2, '0');
+              return <span className="ml-2 font-semibold">({dd}/{mm}/{dt.getFullYear()} - {days[dt.getDay()]})</span>;
+            })()}
           </p>
         </div>
 
@@ -1164,8 +1182,8 @@ export default function ContractTemplate({
           {/* Employer Section */}
           <div className="border p-6 rounded-lg">
             {contractApproval?.employer_signature ? (
-              <div className="space-y-4">
-                {/* Signature/e-sign above "Signed on behalf of the Employer" */}
+              <div className="space-y-3">
+                {/* 1. Signature/e-sign at top */}
                 <div>
                   {contractApproval.employer_signature_type === 'drawn' ? (
                     <img src={contractApproval.employer_signature} alt="Signature" className="h-12" />
@@ -1173,20 +1191,19 @@ export default function ContractTemplate({
                     <p className="text-xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
                   )}
                 </div>
+                {/* 2. Date */}
+                <p className="font-bold">Date: {(() => {
+                  const d = contractApproval.employer_signed_date;
+                  if (!d) return '';
+                  const parts = d.split('-');
+                  const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
+                  if (isNaN(dt.getTime())) return d;
+                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                })()}</p>
+                {/* 3. "Signed on behalf of the Employer" label */}
                 <p className="text-muted-foreground">Signed on behalf of the Employer</p>
-                <div>
-                  <p className="font-bold uppercase">{(contractApproval.contract_content as any)?.employer_name || contractApproval.employer_signature}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Date:</p>
-                  <p className="font-bold">{(() => {
-                    const d = contractApproval.employer_signed_date;
-                    if (!d) return '';
-                    const dt = new Date(d);
-                    if (isNaN(dt.getTime())) return d;
-                    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                  })()}</p>
-                </div>
+                {/* 4. Employer Representative Name */}
+                <p className="font-bold uppercase">{(contractApproval.contract_content as any)?.employer_name || ''}</p>
               </div>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
               <div>

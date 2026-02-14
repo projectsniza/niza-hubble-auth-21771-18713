@@ -205,65 +205,130 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-destructive" />
-            <h3 className="font-semibold text-lg">Mandatory Documents</h3>
+            <h3 className="font-semibold text-lg">Required Documents</h3>
           </div>
           
-          {mandatoryRequirements.map((req) => (
-            <Card key={req.id} className="p-4 border-destructive/30 bg-destructive/5">
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    {req.is_locked && <Lock className="h-4 w-4 text-muted-foreground" />}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{req.name}</span>
-                        <Badge variant="destructive" className="text-xs">Required</Badge>
-                        {req.requires_esignature && (
-                          <Badge variant="outline" className="text-xs">E-Sign</Badge>
-                        )}
+          {mandatoryRequirements.map((req) => {
+            const isShareCode = req.name.toLowerCase().includes('right to work') || req.name.toLowerCase().includes('share code');
+            const displayName = isShareCode ? 'Employee Share Code' : req.name;
+            const displayDescription = isShareCode ? 'Provide your Employee Share Code for right to work verification' : req.description;
+            
+            if (isShareCode) {
+              return (
+                <Card key={req.id} className="p-5 border-2 border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-md">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                          <AlertCircle className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-amber-800 dark:text-amber-300">{displayName}</span>
+                            <Badge className="text-xs bg-amber-500 hover:bg-amber-600">Required</Badge>
+                            {req.requires_esignature && (
+                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-700">E-Sign</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-amber-700/80 dark:text-amber-400/80 mt-1">{displayDescription}</p>
+                        </div>
                       </div>
-                      {req.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{req.description}</p>
+                      {requirementFiles[req.id] && (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
                       )}
                     </div>
-                  </div>
-                  {requirementFiles[req.id] && (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  )}
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Upload Document *</Label>
-                    <div className="border-2 border-dashed rounded-lg p-4 text-center">
-                      <input
-                        type="file"
-                        id={`req-${req.id}`}
-                        className="hidden"
-                        onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
-                      />
-                      <label htmlFor={`req-${req.id}`} className="cursor-pointer">
-                        <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
-                        {requirementFiles[req.id] ? (
-                          <p className="text-sm text-primary mt-1 truncate">{requirementFiles[req.id]?.name}</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground mt-1">Click to upload</p>
-                        )}
-                      </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-amber-800 dark:text-amber-300">Upload Document *</Label>
+                        <div className="border-2 border-dashed border-amber-400 rounded-lg p-4 text-center bg-white/60 dark:bg-background/40">
+                          <input
+                            type="file"
+                            id={`req-${req.id}`}
+                            className="hidden"
+                            onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
+                          />
+                          <label htmlFor={`req-${req.id}`} className="cursor-pointer">
+                            <Upload className="h-6 w-6 mx-auto text-amber-500" />
+                            {requirementFiles[req.id] ? (
+                              <p className="text-sm text-primary mt-1 truncate">{requirementFiles[req.id]?.name}</p>
+                            ) : (
+                              <p className="text-sm text-amber-600 mt-1">Click to upload</p>
+                            )}
+                          </label>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-amber-800 dark:text-amber-300">Expiry Date</Label>
+                        <Input 
+                          type="date"
+                          value={requirementExpiry[req.id] || ''}
+                          onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Expiry Date</Label>
-                    <Input 
-                      type="date"
-                      value={requirementExpiry[req.id] || ''}
-                      onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
-                    />
+                </Card>
+              );
+            }
+
+            return (
+              <Card key={req.id} className="p-4 border-destructive/30 bg-destructive/5">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      {req.is_locked && <Lock className="h-4 w-4 text-muted-foreground" />}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{req.name}</span>
+                          <Badge variant="destructive" className="text-xs">Required</Badge>
+                          {req.requires_esignature && (
+                            <Badge variant="outline" className="text-xs">E-Sign</Badge>
+                          )}
+                        </div>
+                        {req.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{req.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    {requirementFiles[req.id] && (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Upload Document *</Label>
+                      <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                        <input
+                          type="file"
+                          id={`req-${req.id}`}
+                          className="hidden"
+                          onChange={(e) => handleRequirementFileChange(req.id, e.target.files?.[0] || null)}
+                        />
+                        <label htmlFor={`req-${req.id}`} className="cursor-pointer">
+                          <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                          {requirementFiles[req.id] ? (
+                            <p className="text-sm text-primary mt-1 truncate">{requirementFiles[req.id]?.name}</p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground mt-1">Click to upload</p>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Expiry Date</Label>
+                      <Input 
+                        type="date"
+                        value={requirementExpiry[req.id] || ''}
+                        onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
