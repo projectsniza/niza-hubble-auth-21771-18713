@@ -10,12 +10,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface EditOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organization: { id: string; name: string; vat_number?: string | null; registration_number?: string | null } | null;
-  onSubmit: (id: string, name: string, vatNumber?: string, registrationNumber?: string) => Promise<void>;
+  organization: { id: string; name: string; vat_number?: string | null; registration_number?: string | null; address?: string | null } | null;
+  onSubmit: (id: string, name: string, vatNumber?: string, registrationNumber?: string, address?: string) => Promise<void>;
 }
 
 export default function EditOrganizationDialog({
@@ -27,6 +28,7 @@ export default function EditOrganizationDialog({
   const [name, setName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export default function EditOrganizationDialog({
       setName(organization.name);
       setVatNumber(organization.vat_number || '');
       setRegistrationNumber(organization.registration_number || '');
+      setAddress(organization.address || '');
     }
   }, [organization]);
 
@@ -43,7 +46,7 @@ export default function EditOrganizationDialog({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(organization.id, name.trim(), vatNumber.trim() || undefined, registrationNumber.trim() || undefined);
+      await onSubmit(organization.id, name.trim(), vatNumber.trim() || undefined, registrationNumber.trim() || undefined, address.trim() || undefined);
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);
@@ -70,6 +73,19 @@ export default function EditOrganizationDialog({
                 placeholder="Enter organization name"
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="org-address">Registered Office Address</Label>
+              <Textarea
+                id="org-address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g., 15 The Gallop, Sutton, Surrey, SM2 5RU"
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                This address will appear in employee contracts under PARTIES section
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="registration-number">Registration Number</Label>

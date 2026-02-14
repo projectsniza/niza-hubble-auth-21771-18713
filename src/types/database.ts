@@ -9,6 +9,7 @@ export type DocumentFollowUpStatus = 'overdue' | 'upcoming' | 'ok';
 export interface Organization {
   id: string;
   name: string;
+  address?: string | null;
   vat_number?: string | null;
   registration_number?: string | null;
   created_by: string | null;

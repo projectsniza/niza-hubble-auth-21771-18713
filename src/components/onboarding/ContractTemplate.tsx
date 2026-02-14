@@ -25,7 +25,7 @@ interface ContractTemplateProps {
     organization_id: string;
     branch_id: string;
   };
-  organizations: { id: string; name: string; vat_number?: string | null; registration_number?: string | null }[];
+  organizations: { id: string; name: string; vat_number?: string | null; registration_number?: string | null; address?: string | null }[];
   branches?: { id: string; name: string; address?: string | null }[];
   onSave: () => void;
   onSubmit: () => void;
@@ -112,16 +112,16 @@ export default function ContractTemplate({
     if (selectedOrg?.registration_number && !contractData.registered_number) {
       setContractData(prev => ({ ...prev, registered_number: selectedOrg.registration_number || '' }));
     }
+    if (selectedOrg?.address && !contractData.registered_office) {
+      setContractData(prev => ({ ...prev, registered_office: selectedOrg.address || '' }));
+    }
   }, [selectedOrg]);
 
-  // Auto-fill place of work and registered office from branch address
+  // Auto-fill place of work from branch address
   useEffect(() => {
     if (selectedBranch?.address) {
       if (!contractData.place_of_work) {
         setContractData(prev => ({ ...prev, place_of_work: selectedBranch.address || '' }));
-      }
-      if (!contractData.registered_office) {
-        setContractData(prev => ({ ...prev, registered_office: selectedBranch.address || '' }));
       }
     }
   }, [selectedBranch]);
@@ -727,23 +727,41 @@ export default function ContractTemplate({
     y += 18;
     
     // Employer section
-    doc.text('...............................................', margin, y);
-    y += 6;
-    doc.text('Signed on behalf of the Employer', margin, y);
-    y += 10;
+    // E-signature / drawn signature above "Signed on behalf of the Employer"
+    if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
+      try {
+        doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
+        y += 18;
+      } catch {
+        // ignore
+      }
+    } else if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'typed') {
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(14);
+      doc.text(contractApproval.employer_signature, margin, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      y += 8;
+    }
     
-    // Employer typed name (from contract approval if available)
+    doc.text('Signed on behalf of the Employer', margin, y);
+    y += 8;
+    
+    // Employer typed name (from employerName field in approval)
     if (contractApproval?.employer_signature) {
       doc.setFont('helvetica', 'bold');
+      // Use the employer name stored in contract_content if available
+      const employerNameVal = (contractApproval.contract_content as any)?.employer_name || contractApproval.employer_signature;
       if (contractApproval.employer_signature_type === 'typed') {
-        doc.text(contractApproval.employer_signature.toUpperCase(), margin + 2, y);
+        doc.text(employerNameVal.toUpperCase(), margin, y);
+      } else {
+        doc.text(employerNameVal.toUpperCase(), margin, y);
       }
       doc.setFont('helvetica', 'normal');
     }
-    doc.text('...............................................', margin, y + 3);
-    y += 10;
+    y += 8;
     doc.setFont('helvetica', 'bold');
-    doc.text(`Date : ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
+    doc.text(`Date: ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
     doc.setFont('helvetica', 'normal');
 
     doc.save(`Contract_${contractData.employee_name.replace(/\s/g, '_')}.pdf`);
@@ -1145,36 +1163,48 @@ export default function ContractTemplate({
 
           {/* Employer Section */}
           <div className="border p-6 rounded-lg">
-            <p className="text-muted-foreground mb-2">...............................................</p>
-            <p className="mb-4">Signed on behalf of the Employer</p>
             {contractApproval?.employer_signature ? (
               <div className="space-y-4">
+                {/* Signature/e-sign above "Signed on behalf of the Employer" */}
                 <div>
                   {contractApproval.employer_signature_type === 'drawn' ? (
                     <img src={contractApproval.employer_signature} alt="Signature" className="h-12" />
                   ) : (
-                    <p className="text-xl font-bold uppercase">{contractApproval.employer_signature}</p>
+                    <p className="text-xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
                   )}
-                  <p className="text-muted-foreground mt-1">...............................................</p>
+                </div>
+                <p className="text-muted-foreground">Signed on behalf of the Employer</p>
+                <div>
+                  <p className="font-bold uppercase">{(contractApproval.contract_content as any)?.employer_name || contractApproval.employer_signature}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Date :</p>
-                  <p className="font-bold">{contractApproval.employer_signed_date}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Date:</p>
+                  <p className="font-bold">{(() => {
+                    const d = contractApproval.employer_signed_date;
+                    if (!d) return '';
+                    const dt = new Date(d);
+                    if (isNaN(dt.getTime())) return d;
+                    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                  })()}</p>
                 </div>
               </div>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
-              <Button onClick={() => setShowSignatureDialog(true)} className="gap-2 mt-4">
-                <PenTool className="h-4 w-4" />
-                Sign Contract
-              </Button>
+              <div>
+                <p className="text-muted-foreground mb-2">...............................................</p>
+                <p className="mb-4">Signed on behalf of the Employer</p>
+                <Button onClick={() => setShowSignatureDialog(true)} className="gap-2 mt-4">
+                  <PenTool className="h-4 w-4" />
+                  Sign Contract
+                </Button>
+              </div>
             ) : (
               <div className="space-y-4">
                 <div>
                   <div className="border-b-2 border-dotted h-10"></div>
-                  <p className="text-muted-foreground">...............................................</p>
+                  <p className="text-muted-foreground mt-2">Signed on behalf of the Employer</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Date :</p>
+                  <p className="text-sm text-muted-foreground mb-1">Date:</p>
                   <div className="border-b-2 border-dotted h-6 max-w-xs"></div>
                 </div>
               </div>
