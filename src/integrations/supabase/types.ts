@@ -3197,6 +3197,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          address: string | null
           auto_create_folder: boolean | null
           created_at: string | null
           created_by: string | null
@@ -3207,6 +3208,7 @@ export type Database = {
           vat_number: string | null
         }
         Insert: {
+          address?: string | null
           auto_create_folder?: boolean | null
           created_at?: string | null
           created_by?: string | null
@@ -3217,6 +3219,7 @@ export type Database = {
           vat_number?: string | null
         }
         Update: {
+          address?: string | null
           auto_create_folder?: boolean | null
           created_at?: string | null
           created_by?: string | null

@@ -4,17 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CreateOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string) => void;
+  onSubmit: (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string, address?: string) => void;
 }
 
 export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit }: CreateOrganizationDialogProps) {
   const [name, setName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [autoCreateFolder, setAutoCreateFolder] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,11 +25,12 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
     if (!name.trim()) return;
     
     setIsSubmitting(true);
-    await onSubmit(name.trim(), autoCreateFolder, vatNumber.trim() || undefined, registrationNumber.trim() || undefined);
+    await onSubmit(name.trim(), autoCreateFolder, vatNumber.trim() || undefined, registrationNumber.trim() || undefined, address.trim() || undefined);
     setIsSubmitting(false);
     setName('');
     setVatNumber('');
     setRegistrationNumber('');
+    setAddress('');
     setAutoCreateFolder(true);
   };
 
@@ -48,6 +51,19 @@ export default function CreateOrganizationDialog({ open, onOpenChange, onSubmit 
               required
               autoFocus
             />
+          </div>
+          <div>
+            <Label htmlFor="org-address">Registered Office Address</Label>
+            <Textarea
+              id="org-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g., 15 The Gallop, Sutton, Surrey, SM2 5RU"
+              rows={2}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              This address will appear in employee contracts under PARTIES section
+            </p>
           </div>
           <div>
             <Label htmlFor="registration-number">Registration Number (Optional)</Label>

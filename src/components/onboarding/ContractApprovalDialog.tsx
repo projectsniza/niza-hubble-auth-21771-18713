@@ -22,7 +22,7 @@ interface ContractApprovalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   approval: any;
-  onApprove: (signature: string, signatureType: string, signatureDate: string) => void;
+  onApprove: (signature: string, signatureType: string, signatureDate: string, employerName: string) => void;
   onReject: (reason: string) => void;
 }
 
@@ -212,7 +212,7 @@ export default function ContractApprovalDialog({
     }
 
     setIsSubmitting(true);
-    await onApprove(finalSignature, signatureType, signatureDate);
+    await onApprove(finalSignature, signatureType, signatureDate, employerName.trim());
     setIsSubmitting(false);
     setTypedSignature('');
     setSignatureDate('');
@@ -421,7 +421,11 @@ export default function ContractApprovalDialog({
                             {doc.expiry_date && (
                               <>
                                 <span>•</span>
-                                <span>Expires: {new Date(doc.expiry_date).toLocaleDateString()}</span>
+                                <span>Expires: {(() => {
+                                  const dt = new Date(doc.expiry_date);
+                                  if (isNaN(dt.getTime())) return doc.expiry_date;
+                                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                                })()}</span>
                               </>
                             )}
                           </div>
@@ -460,10 +464,16 @@ export default function ContractApprovalDialog({
           </TabsContent>
 
           <TabsContent value="contract" className="space-y-4 pt-4">
-            <div className="border rounded-lg p-6 bg-muted/20">
+            <div className="border rounded-lg p-6 bg-muted/20 max-h-[60vh] overflow-y-auto">
               <div className="text-center mb-6">
                 <h2 className="text-xl font-bold">CONTRACT OF EMPLOYMENT</h2>
-                <p className="text-sm text-muted-foreground">Date: {contractContent?.contract_date || 'Not specified'}</p>
+                <p className="text-sm text-muted-foreground">Date: {(() => {
+                  const d = contractContent?.contract_date;
+                  if (!d) return 'Not specified';
+                  const dt = new Date(d);
+                  if (isNaN(dt.getTime())) return d;
+                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                })()}</p>
               </div>
 
               <div className="space-y-4 text-sm">
@@ -477,12 +487,56 @@ export default function ContractApprovalDialog({
                   <h3 className="font-semibold">KEY TERMS</h3>
                   <ul className="list-disc ml-5 space-y-1">
                     <li>Job Title: {contractContent?.job_title || '________'}</li>
-                    <li>Commencement Date: {contractContent?.commencement_date || '________'}</li>
+                    <li>Commencement Date: {(() => {
+                      const d = contractContent?.commencement_date;
+                      if (!d) return '________';
+                      const dt = new Date(d);
+                      if (isNaN(dt.getTime())) return d;
+                      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                    })()}</li>
                     <li>Hours per Week: {contractContent?.hours_per_week || '________'}</li>
                     <li>Salary Rate: £{contractContent?.salary_rate || '________'} per hour</li>
                     <li>Place of Work: {contractContent?.place_of_work || '________'}</li>
                     <li>Holiday Entitlement: {contractContent?.holiday_days || '28'} days per year</li>
                   </ul>
+                </div>
+
+                {/* Full contract sections */}
+                <div><h3 className="font-semibold">1. Appointment</h3>
+                  <p className="mb-1">1.1. The Employer will employ you on the terms and conditions set out in this contract.</p>
+                  <p className="mb-1">1.2. Your employment will commence on {(() => { const d = contractContent?.commencement_date; if (!d) return '________'; const dt = new Date(d); if (isNaN(dt.getTime())) return d; return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`; })()}.</p>
+                  <p className="mb-1">1.3-1.6. Standard appointment terms including probationary period of 6 months.</p>
+                </div>
+                <div><h3 className="font-semibold">2. Duties</h3><p>Employed as {contractContent?.job_title || '________'} with standard duty terms.</p></div>
+                <div><h3 className="font-semibold">3. Hours of work</h3><p>{contractContent?.hours_per_week || '________'} hours per week with standard break entitlements.</p></div>
+                <div><h3 className="font-semibold">4. Salary</h3><p>£{contractContent?.salary_rate || '________'} per {contractContent?.salary_type === 'annual' ? 'annum' : 'hour'}, subject to standard deductions.</p></div>
+                <div><h3 className="font-semibold">5. Place of work and mobility</h3><p>Normal place of work: {contractContent?.place_of_work || '________'}</p></div>
+                <div><h3 className="font-semibold">6. Holiday</h3><p>{contractContent?.holiday_days || '28'} days per year (April-March), standard holiday terms.</p></div>
+                <div><h3 className="font-semibold">7-19.</h3><p>Standard clauses covering sickness, disciplinary, grievance, pension, termination, data protection, policies, and entire agreement.</p></div>
+
+                {/* Signatures section */}
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="font-semibold mb-3">AGREED by the parties</h3>
+                  <div className="space-y-2">
+                    <p>Employee: <strong>{contractContent?.employee_name || `${employee.first_name} ${employee.last_name}`}</strong></p>
+                    {approval.employer_signature && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Signed on behalf of the Employer:</p>
+                        {approval.employer_signature_type === 'drawn' ? (
+                          <img src={approval.employer_signature} alt="Employer signature" className="h-10" />
+                        ) : (
+                          <p className="text-lg font-bold italic font-serif">{approval.employer_signature}</p>
+                        )}
+                        <p className="text-sm">Date: {(() => {
+                          const d = approval.employer_signed_date;
+                          if (!d) return '';
+                          const dt = new Date(d);
+                          if (isNaN(dt.getTime())) return d;
+                          return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                        })()}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -493,7 +547,13 @@ export default function ContractApprovalDialog({
                 <div>
                   <p className="font-medium">{approval.contract_file_name || 'Contract Document'}</p>
                   <p className="text-sm text-muted-foreground">
-                    Submitted: {new Date(approval.submitted_at).toLocaleDateString()}
+                    Submitted: {(() => {
+                      const d = approval.submitted_at;
+                      if (!d) return '';
+                      const dt = new Date(d);
+                      if (isNaN(dt.getTime())) return d;
+                      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                    })()}
                   </p>
                 </div>
               </div>

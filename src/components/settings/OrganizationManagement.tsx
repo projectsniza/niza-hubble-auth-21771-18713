@@ -27,11 +27,11 @@ export default function OrganizationManagement() {
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const [deleteOrgId, setDeleteOrgId] = useState<string | null>(null);
   const [deleteBranchId, setDeleteBranchId] = useState<string | null>(null);
-  const [editOrg, setEditOrg] = useState<{ id: string; name: string; vat_number?: string | null; registration_number?: string | null } | null>(null);
+  const [editOrg, setEditOrg] = useState<{ id: string; name: string; vat_number?: string | null; registration_number?: string | null; address?: string | null } | null>(null);
   const [editBranch, setEditBranch] = useState<{ id: string; name: string; address?: string | null } | null>(null);
 
-  const handleCreateOrganization = async (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string) => {
-    await createOrganization(name, autoCreateFolder, vatNumber, registrationNumber);
+  const handleCreateOrganization = async (name: string, autoCreateFolder: boolean, vatNumber?: string, registrationNumber?: string, address?: string) => {
+    await createOrganization(name, autoCreateFolder, vatNumber, registrationNumber, address);
     setCreateOrgOpen(false);
   };
 
@@ -55,8 +55,8 @@ export default function OrganizationManagement() {
     }
   };
 
-  const handleUpdateOrganization = async (id: string, name: string, vatNumber?: string, registrationNumber?: string) => {
-    await updateOrganization(id, name, vatNumber, registrationNumber);
+  const handleUpdateOrganization = async (id: string, name: string, vatNumber?: string, registrationNumber?: string, address?: string) => {
+    await updateOrganization(id, name, vatNumber, registrationNumber, address);
     setEditOrg(null);
   };
 
@@ -119,7 +119,7 @@ export default function OrganizationManagement() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setEditOrg({ id: org.id, name: org.name, vat_number: org.vat_number, registration_number: org.registration_number })}
+                  onClick={() => setEditOrg({ id: org.id, name: org.name, vat_number: org.vat_number, registration_number: org.registration_number, address: (org as any).address })}
                   className="gap-2"
                 >
                   <Pencil className="h-4 w-4" />

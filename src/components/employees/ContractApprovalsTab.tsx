@@ -16,9 +16,9 @@ export default function ContractApprovalsTab() {
   
   const { pendingApprovals, isLoading, approveContract, rejectContract } = usePendingApprovals();
 
-  const handleApprove = async (signature: string, signatureType: string, signatureDate: string) => {
+  const handleApprove = async (signature: string, signatureType: string, signatureDate: string, employerName: string) => {
     if (selectedApproval) {
-      await approveContract(selectedApproval.id, signature, signatureType, signatureDate);
+      await approveContract(selectedApproval.id, signature, signatureType, signatureDate, employerName);
       setSelectedApproval(null);
     }
   };
@@ -144,7 +144,7 @@ export default function ContractApprovalsTab() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span>Submitted: {new Date(approval.submitted_at).toLocaleDateString()}</span>
+                        <span>Submitted: {(() => { const dt = new Date(approval.submitted_at); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`; })()}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />

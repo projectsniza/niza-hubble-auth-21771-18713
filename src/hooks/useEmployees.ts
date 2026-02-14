@@ -232,8 +232,20 @@ export function usePendingApprovals() {
     }
   }, []);
 
-  const approveContract = useCallback(async (approvalId: string, signature: string, signatureType: string, signatureDate: string) => {
+  const approveContract = useCallback(async (approvalId: string, signature: string, signatureType: string, signatureDate: string, employerName?: string) => {
     try {
+      // First get existing contract_content to merge employer_name
+      const { data: existing } = await supabase
+        .from('contract_approvals')
+        .select('contract_content')
+        .eq('id', approvalId)
+        .single();
+
+      const updatedContent = {
+        ...((existing?.contract_content as any) || {}),
+        employer_name: employerName || ''
+      };
+
       const { data, error } = await supabase
         .from('contract_approvals')
         .update({
@@ -243,7 +255,8 @@ export function usePendingApprovals() {
           admin_signature: signature,
           employer_signature: signature,
           employer_signature_type: signatureType,
-          employer_signed_date: signatureDate
+          employer_signed_date: signatureDate,
+          contract_content: updatedContent
         })
         .eq('id', approvalId)
         .select()

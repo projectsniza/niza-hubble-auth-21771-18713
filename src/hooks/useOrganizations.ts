@@ -31,7 +31,7 @@ export function useOrganizations() {
     }
   }, []);
 
-  const createOrganization = useCallback(async (name: string, autoCreateFolder: boolean = true, vatNumber?: string, registrationNumber?: string) => {
+  const createOrganization = useCallback(async (name: string, autoCreateFolder: boolean = true, vatNumber?: string, registrationNumber?: string, address?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
@@ -40,6 +40,7 @@ export function useOrganizations() {
           auto_create_folder: autoCreateFolder,
           vat_number: vatNumber,
           registration_number: registrationNumber,
+          address: address,
           created_by: user?.id
         })
         .select()
@@ -57,11 +58,11 @@ export function useOrganizations() {
     }
   }, [user?.id]);
 
-  const updateOrganization = useCallback(async (id: string, name: string, vatNumber?: string, registrationNumber?: string) => {
+  const updateOrganization = useCallback(async (id: string, name: string, vatNumber?: string, registrationNumber?: string, address?: string) => {
     try {
       const { data, error } = await supabase
         .from('organizations')
-        .update({ name, vat_number: vatNumber, registration_number: registrationNumber })
+        .update({ name, vat_number: vatNumber, registration_number: registrationNumber, address })
         .eq('id', id)
         .select()
         .single();

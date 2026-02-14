@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, 
-  UserCog, Settings, Briefcase, FileCheck, FileUp 
+  UserCog, Settings, FileCheck, FileUp 
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
-import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
+
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
@@ -102,10 +102,6 @@ export default function Employees() {
             <Users className="h-4 w-4" />
             Employees
           </TabsTrigger>
-          <TabsTrigger value="onboarding" className="gap-2">
-            <Briefcase className="h-4 w-4" />
-            Onboarding
-          </TabsTrigger>
           {showContractApprovals && (
             <TabsTrigger value="approvals" className="gap-2">
               <FileSignature className="h-4 w-4" />
@@ -146,9 +142,6 @@ export default function Employees() {
           <EmployeeList searchQuery={searchQuery} />
         </TabsContent>
 
-        <TabsContent value="onboarding" className="mt-6">
-          <OnboardingManagement />
-        </TabsContent>
 
         {showContractApprovals && (
           <TabsContent value="approvals" className="mt-6">

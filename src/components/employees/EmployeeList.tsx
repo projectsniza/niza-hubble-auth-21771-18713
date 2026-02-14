@@ -212,7 +212,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                   </TableCell>
                   <TableCell>
                     {employee.join_date 
-                      ? new Date(employee.join_date).toLocaleDateString() 
+                      ? (() => {
+                          const dt = new Date(employee.join_date);
+                          return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                        })()
                       : '-'
                     }
                   </TableCell>
