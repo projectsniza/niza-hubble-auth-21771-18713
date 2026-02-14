@@ -336,15 +336,17 @@ export default function ContractApprovalDialog({
               const govLink = contractContent?.gov_portal_link;
               if (shareCode || govLink) {
                 return (
-                  <Card className="p-4 border-amber-500/30 bg-amber-500/5 mb-4">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-amber-600" />
-                      Employee Share Code
-                    </h4>
-                    {shareCode && <p className="text-sm"><strong>Share Code:</strong> {shareCode}</p>}
+                  <Card className="p-5 border-2 border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-md mb-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                      </div>
+                      <h4 className="font-bold text-amber-800 dark:text-amber-300 text-lg">Employee Share Code</h4>
+                    </div>
+                    {shareCode && <p className="text-sm font-medium"><strong className="text-amber-700">Share Code:</strong> <span className="font-mono text-base bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded">{shareCode}</span></p>}
                     {govLink && (
-                      <p className="text-sm mt-1">
-                        <strong>Gov Portal:</strong>{' '}
+                      <p className="text-sm mt-2">
+                        <strong className="text-amber-700">Gov Portal:</strong>{' '}
                         <a href={govLink} target="_blank" rel="noopener noreferrer" className="text-primary underline">{govLink}</a>
                       </p>
                     )}
@@ -354,15 +356,17 @@ export default function ContractApprovalDialog({
               return null;
             })()}
 
-            {/* RTW Upload Section for Super Admin */}
-            <Card className="p-4 border-primary/30 bg-primary/5">
-              <div className="flex items-center gap-2 mb-3">
-                <Upload className="h-5 w-5 text-primary" />
-                <h4 className="font-semibold">Upload Final Right to Work Document</h4>
+            {/* RTW Upload Section for Super Admin - Unique Share Code Design */}
+            <Card className="p-5 border-2 border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-md">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <Upload className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-800 dark:text-amber-300">Upload Verified Employee Share Code Document</h4>
+                  <p className="text-sm text-amber-700/80 dark:text-amber-400/80">Verify the share code and upload the Right to Work document. This will be saved to the employee's folder.</p>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Upload the verified Right to Work document. This will be saved to the employee's folder.
-              </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Select Document</Label>
@@ -470,9 +474,11 @@ export default function ContractApprovalDialog({
                 <p className="text-sm text-muted-foreground">Date: {(() => {
                   const d = contractContent?.contract_date;
                   if (!d) return 'Not specified';
-                  const dt = new Date(d);
+                  const parts = d.split('-');
+                  const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
                   if (isNaN(dt.getTime())) return d;
-                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} - ${days[dt.getDay()]}`;
                 })()}</p>
               </div>
 
