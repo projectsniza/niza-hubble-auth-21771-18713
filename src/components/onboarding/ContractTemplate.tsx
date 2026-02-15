@@ -711,33 +711,36 @@ export default function ContractTemplate({
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
 
-    // Dotted line for employee signature space
+    // Employee signature image (if drawn)
+    if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
+      try {
+        doc.addImage(contractData.employee_signature_data, 'PNG', margin, y, 60, 15);
+        y += 18;
+      } catch {
+        // ignore
+      }
+    }
+
+    // Dotted line
     doc.text('...............................................', margin, y);
     y += 6;
     doc.text('I agree to the above terms', margin, y);
-    y += 8;
+    y += 10;
 
-    // Employee name auto-populated
+    // Signed: EMPLOYEE NAME
     doc.setFont('helvetica', 'bold');
     doc.text(`Signed: ${contractData.employee_name?.toUpperCase() || '...............................................'}`, margin, y);
     doc.setFont('helvetica', 'normal');
-
-    // Draw employee signature image (if provided)
-    if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
-      try {
-        doc.addImage(contractData.employee_signature_data, 'PNG', margin + 20, y + 3, 60, 15);
-      } catch {
-        // ignore addImage failures
-      }
-    }
     y += 8;
+    
+    // Date
     doc.setFont('helvetica', 'bold');
     doc.text(`Date: ${formatDateDDMMYYYY(contractData.employee_signed_date) || '...............................................'}`, margin, y);
     doc.setFont('helvetica', 'normal');
     y += 18;
     
     // Employer section
-    // E-signature / drawn signature ABOVE "Signed on behalf of the Employer"
+    // Employer signature (drawn or typed) at top
     if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
@@ -754,23 +757,28 @@ export default function ContractTemplate({
       y += 10;
     }
 
-    // Date line ABOVE "Signed on behalf of the Employer"
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Date: ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
-    doc.setFont('helvetica', 'normal');
-    y += 8;
-    
+    // Dotted line
+    doc.text('...............................................', margin, y);
+    y += 6;
+
     // "Signed on behalf of the Employer" label
     doc.text('Signed on behalf of the Employer', margin, y);
-    y += 8;
+    y += 10;
     
-    // Employer Representative Name BELOW the label
+    // Employer Representative Name with dotted underline
     const employerNameVal = (contractApproval?.contract_content as any)?.employer_name || '';
     if (employerNameVal) {
       doc.setFont('helvetica', 'bold');
-      doc.text(employerNameVal.toUpperCase(), margin, y);
+      doc.text(` ${employerNameVal.toUpperCase()}`, margin, y);
       doc.setFont('helvetica', 'normal');
     }
+    doc.text('...............................................', margin + (employerNameVal ? doc.getTextWidth(` ${employerNameVal.toUpperCase()}`) + margin : 0), y);
+    y += 8;
+
+    // Date
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Date : ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
+    doc.setFont('helvetica', 'normal');
     y += 8;
 
     doc.save(`Contract_${contractData.employee_name.replace(/\s/g, '_')}.pdf`);
@@ -1191,19 +1199,24 @@ export default function ContractTemplate({
                     <p className="text-xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
                   )}
                 </div>
-                {/* 2. Date */}
-                <p className="font-bold">Date: {(() => {
+                {/* Dotted line */}
+                <p className="text-muted-foreground">...............................................</p>
+                {/* 2. "Signed on behalf of the Employer" label */}
+                <p>Signed on behalf of the Employer</p>
+                {/* 3. Employer Representative Name with dotted underline */}
+                <div>
+                  <p className="font-bold uppercase inline">{' '}{(contractApproval.contract_content as any)?.employer_name || ''}</p>
+                  <span className="text-muted-foreground">{' '}...............................................</span>
+                </div>
+                {/* 4. Date */}
+                <p>Date : <strong>{(() => {
                   const d = contractApproval.employer_signed_date;
                   if (!d) return '';
                   const parts = d.split('-');
                   const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
                   if (isNaN(dt.getTime())) return d;
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                })()}</p>
-                {/* 3. "Signed on behalf of the Employer" label */}
-                <p className="text-muted-foreground">Signed on behalf of the Employer</p>
-                {/* 4. Employer Representative Name */}
-                <p className="font-bold uppercase">{(contractApproval.contract_content as any)?.employer_name || ''}</p>
+                })()}</strong></p>
               </div>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
               <div>
