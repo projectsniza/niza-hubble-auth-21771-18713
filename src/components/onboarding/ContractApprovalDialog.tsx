@@ -400,71 +400,150 @@ export default function ContractApprovalDialog({
               )}
             </Card>
 
-            {approval.documents?.length === 0 ? (
-              <Card className="p-8 text-center">
-                <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Documents Found</h3>
-                <p className="text-muted-foreground">
-                  No documents have been uploaded for this employee yet. 
-                  You can upload the Right to Work document above before approving.
-                </p>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {approval.documents?.map((doc: any) => (
-                  <Card key={doc.id} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <File className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{doc.title}</p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{doc.file_name}</span>
-                            {doc.expiry_date && (
-                              <>
-                                <span>•</span>
-                                <span>Expires: {(() => {
-                                  const dt = new Date(doc.expiry_date);
-                                  if (isNaN(dt.getTime())) return doc.expiry_date;
-                                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                                })()}</span>
-                              </>
-                            )}
+            {/* Share Code / RTW documents shown separately at top */}
+            {(() => {
+              const shareCodeDocs = (approval.documents || []).filter((doc: any) => 
+                doc.title?.toLowerCase().includes('right to work') || 
+                doc.title?.toLowerCase().includes('share code') ||
+                doc.title?.toLowerCase().includes('rtw')
+              );
+              const otherDocs = (approval.documents || []).filter((doc: any) => 
+                !doc.title?.toLowerCase().includes('right to work') && 
+                !doc.title?.toLowerCase().includes('share code') &&
+                !doc.title?.toLowerCase().includes('rtw')
+              );
+
+              return (
+                <>
+                  {shareCodeDocs.length > 0 && (
+                    <Card className="p-4 border-2 border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                        <h4 className="font-bold text-amber-800 dark:text-amber-300">Employee Share Code Documents</h4>
+                        <Badge className="bg-amber-500 ml-auto">{shareCodeDocs.length}</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {shareCodeDocs.map((doc: any) => (
+                          <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-white/60 dark:bg-background/40 border border-amber-200">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                <File className="h-4 w-4 text-amber-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">Employee Share Code</p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{doc.file_name}</span>
+                                  {doc.expiry_date && (
+                                    <>
+                                      <span>•</span>
+                                      <span>Expires: {(() => {
+                                        const dt = new Date(doc.expiry_date);
+                                        if (isNaN(dt.getTime())) return doc.expiry_date;
+                                        return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                                      })()}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const { data } = await supabase.storage
+                                  .from('documents')
+                                  .createSignedUrl(doc.file_path, 3600);
+                                if (data?.signedUrl) {
+                                  window.open(data.signedUrl, '_blank');
+                                }
+                              }}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              View
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      {shareCodeDocs.some((d: any) => d.verified_by_name) && (
+                        <div className="mt-3 pt-2 border-t border-amber-200">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm text-green-600">Verified</span>
                           </div>
                         </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          const { data } = await supabase.storage
-                            .from('documents')
-                            .createSignedUrl(doc.file_path, 3600);
-                          if (data?.signedUrl) {
-                            window.open(data.signedUrl, '_blank');
-                          }
-                        }}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        View
-                      </Button>
+                      )}
+                    </Card>
+                  )}
+
+                  {otherDocs.length === 0 && shareCodeDocs.length === 0 ? (
+                    <Card className="p-8 text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto text-amber-500 mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Documents Found</h3>
+                      <p className="text-muted-foreground">
+                        No documents have been uploaded for this employee yet. 
+                        You can upload the Right to Work document above before approving.
+                      </p>
+                    </Card>
+                  ) : otherDocs.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm text-muted-foreground">Other Documents</h4>
+                      {otherDocs.map((doc: any) => (
+                        <Card key={doc.id} className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <File className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{doc.title}</p>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <span>{doc.file_name}</span>
+                                  {doc.expiry_date && (
+                                    <>
+                                      <span>•</span>
+                                      <span>Expires: {(() => {
+                                        const dt = new Date(doc.expiry_date);
+                                        if (isNaN(dt.getTime())) return doc.expiry_date;
+                                        return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                                      })()}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const { data } = await supabase.storage
+                                  .from('documents')
+                                  .createSignedUrl(doc.file_path, 3600);
+                                if (data?.signedUrl) {
+                                  window.open(data.signedUrl, '_blank');
+                                }
+                              }}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              View
+                            </Button>
+                          </div>
+                          {doc.verified_by_name && (
+                            <div className="mt-3 pt-3 border-t">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                <span className="text-sm text-green-600">
+                                  Verified by {doc.verified_by_name} ({doc.verified_by_role})
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </Card>
+                      ))}
                     </div>
-                    {doc.verified_by_name && (
-                      <div className="mt-3 pt-3 border-t">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-sm text-green-600">
-                            Verified by {doc.verified_by_name} ({doc.verified_by_role})
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            )}
+                  )}
+                </>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="contract" className="space-y-4 pt-4">
@@ -520,27 +599,48 @@ export default function ContractApprovalDialog({
                 <div><h3 className="font-semibold">6. Holiday</h3><p>{contractContent?.holiday_days || '28'} days per year (April-March), standard holiday terms.</p></div>
                 <div><h3 className="font-semibold">7-19.</h3><p>Standard clauses covering sickness, disciplinary, grievance, pension, termination, data protection, policies, and entire agreement.</p></div>
 
-                {/* Signatures section */}
+                {/* Signatures section - matching reference PDF layout */}
                 <div className="border-t pt-4 mt-4">
-                  <h3 className="font-semibold mb-3">AGREED by the parties</h3>
-                  <div className="space-y-2">
-                    <p>Employee: <strong>{contractContent?.employee_name || `${employee.first_name} ${employee.last_name}`}</strong></p>
+                  <h3 className="font-semibold mb-4">AGREED by the parties</h3>
+                  
+                  {/* Employee signature */}
+                  <div className="mb-6">
+                    {contractContent?.employee_signature_data && contractContent.employee_signature_data.startsWith('data:image') && (
+                      <img src={contractContent.employee_signature_data} alt="Employee signature" className="h-12 mb-1" />
+                    )}
+                    <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">...............................................</p>
+                    <p className="mb-3">I agree to the above terms</p>
+                    <p className="mb-1"><span>Signed: </span><strong>{contractContent?.employee_name?.toUpperCase() || `${employee.first_name} ${employee.last_name}`.toUpperCase()}</strong></p>
+                    <p>Date: <strong>{(() => {
+                      const d = contractContent?.employee_signed_date;
+                      if (!d) return '';
+                      const dt = new Date(d);
+                      if (isNaN(dt.getTime())) return d;
+                      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                    })()}</strong></p>
+                  </div>
+
+                  {/* Employer signature */}
+                  <div>
                     {approval.employer_signature && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Signed on behalf of the Employer:</p>
+                      <>
                         {approval.employer_signature_type === 'drawn' ? (
-                          <img src={approval.employer_signature} alt="Employer signature" className="h-10" />
+                          <img src={approval.employer_signature} alt="Employer signature" className="h-12 mb-1" />
                         ) : (
-                          <p className="text-lg font-bold italic font-serif">{approval.employer_signature}</p>
+                          <p className="text-2xl font-bold italic font-serif mb-1">{approval.employer_signature}</p>
                         )}
-                        <p className="text-sm">Date: {(() => {
+                        <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">...............................................</p>
+                        <p className="mb-3">Signed on behalf of the Employer</p>
+                        <p className="mb-1"><strong>{((approval.contract_content as any)?.employer_name || '').toUpperCase()}</strong></p>
+                        <p className="text-muted-foreground border-b border-dotted pb-1 mb-1 max-w-xs">...............................................</p>
+                        <p>Date: <strong>{(() => {
                           const d = approval.employer_signed_date;
                           if (!d) return '';
                           const dt = new Date(d);
                           if (isNaN(dt.getTime())) return d;
                           return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                        })()}</p>
-                      </div>
+                        })()}</strong></p>
+                      </>
                     )}
                   </div>
                 </div>
@@ -563,7 +663,18 @@ export default function ContractApprovalDialog({
                   </p>
                 </div>
               </div>
-              <Button variant="outline" onClick={handleDownloadContract} disabled={!approval.contract_file_path}>
+              <Button variant="outline" onClick={() => {
+                if (approval.contract_file_path) {
+                  handleDownloadContract();
+                } else {
+                  // Generate PDF from contract content
+                  toast.info('Generating contract PDF...');
+                  // Trigger the contract preview download by opening in new tab
+                  const contractPreview = document.querySelector('[data-contract-download]') as HTMLButtonElement;
+                  if (contractPreview) contractPreview.click();
+                  else toast.error('No contract file available for download');
+                }
+              }}>
                 <Download className="h-4 w-4 mr-2" />
                 Download
               </Button>

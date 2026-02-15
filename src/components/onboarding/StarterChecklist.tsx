@@ -170,9 +170,6 @@ export default function StarterChecklist({
     if (!formData.signature.trim()) {
       newErrors.signature = 'Signature is required';
     }
-    if (!formData.name_printed.trim()) {
-      newErrors.name_printed = 'Printed name is required';
-    }
     if (!formData.signature_date) {
       newErrors.signature_date = 'Date is required';
     }
@@ -418,8 +415,6 @@ export default function StarterChecklist({
     y += lineHeight + 4;
     doc.setFont('helvetica', 'normal');
     doc.text(`Signature: ${formData.signature || '............................'}`, margin, y);
-    y += lineHeight + 2;
-    doc.text(`Name (printed): ${formData.name_printed || '............................'}`, margin, y);
     y += lineHeight + 2;
     doc.text(`Date: ${formatDateDDMMYYYY(formData.signature_date) || '............................'}`, margin, y);
 
@@ -788,7 +783,7 @@ export default function StarterChecklist({
 
         {/* Signature */}
         <div className="mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2" data-field="signature">
               <RequiredLabel error={errors.signature}>Signature (type your full name)</RequiredLabel>
               <Input
@@ -799,16 +794,6 @@ export default function StarterChecklist({
                 className={`font-serif italic text-lg ${errors.signature ? 'border-destructive' : ''}`}
               />
               <ErrorMessage error={errors.signature} />
-            </div>
-            <div className="space-y-2" data-field="name_printed">
-              <RequiredLabel error={errors.name_printed}>Name (printed)</RequiredLabel>
-              <Input
-                value={formData.name_printed}
-                onChange={(e) => updateField('name_printed', e.target.value)}
-                disabled={readOnly}
-                className={errors.name_printed ? 'border-destructive' : ''}
-              />
-              <ErrorMessage error={errors.name_printed} />
             </div>
             <div className="space-y-2" data-field="signature_date">
               <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>
