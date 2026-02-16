@@ -704,7 +704,7 @@ export default function ContractTemplate({
     };
 
     // Signatures
-    checkPageBreak(80);
+    checkPageBreak(90);
     y += 10;
     addSectionTitle('AGREED by the parties');
     
@@ -721,31 +721,38 @@ export default function ContractTemplate({
         // ignore
       }
     }
-    // Dotted line
-    doc.text('...............................................', margin, y);
-    y += 7;
+    // Signature line
+    doc.text('______________________________', margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text('(Employee Signature)', margin, y);
+    doc.setFontSize(10);
+    y += 8;
 
     // 2. "I agree to the above terms"
     doc.text('I agree to the above terms', margin, y);
-    y += 12;
+    y += 10;
 
     // 3. Signed: EMPLOYEE NAME
     doc.setFont('helvetica', 'normal');
     doc.text('Signed: ', margin, y);
     doc.setFont('helvetica', 'bold');
-    doc.text(contractData.employee_name?.toUpperCase() || '...............................................', margin + doc.getTextWidth('Signed: '), y);
+    doc.text(contractData.employee_name?.toUpperCase() || '______________________________', margin + doc.getTextWidth('Signed: '), y);
     doc.setFont('helvetica', 'normal');
     y += 7;
     
     // 4. Date
-    doc.text('Date: ', margin, y);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatDateDDMMYYYY(contractData.employee_signed_date) || '...............................................', margin + doc.getTextWidth('Date: '), y);
-    doc.setFont('helvetica', 'normal');
-    y += 20;
+    doc.text(`Date: ${formatDateDDMMYYYY(contractData.employee_signed_date)}`, margin, y);
+    y += 25;
     
     // ── Employer Section ──
-    // 1. Employer signature (drawn or typed)
+    // 1. "Signed on behalf of the Employer" heading
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signed on behalf of the Employer', margin, y);
+    doc.setFont('helvetica', 'normal');
+    y += 10;
+
+    // 2. Employer signature (drawn or typed)
     if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
@@ -761,32 +768,25 @@ export default function ContractTemplate({
       doc.setFontSize(10);
       y += 12;
     }
-    // Dotted line
-    doc.text('...............................................', margin, y);
-    y += 7;
-
-    // 2. "Signed on behalf of the Employer"
-    doc.text('Signed on behalf of the Employer', margin, y);
-    y += 14;
+    // Signature line
+    doc.text('______________________________', margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text('(Authorized Signature)', margin, y);
+    doc.setFontSize(10);
+    y += 10;
     
-    // 3. Employer Representative Name with dotted underline
+    // 3. Employer Representative Name
     const employerNameVal = (contractApproval?.contract_content as any)?.employer_name || '';
     if (employerNameVal) {
       doc.setFont('helvetica', 'bold');
-      const nameText = ` ${employerNameVal.toUpperCase()}`;
-      doc.text(nameText, margin, y);
+      doc.text(employerNameVal.toUpperCase(), margin, y);
       doc.setFont('helvetica', 'normal');
-      doc.text('...............................................', margin + doc.getTextWidth(nameText), y);
-    } else {
-      doc.text('...............................................', margin, y);
     }
     y += 7;
 
     // 4. Date
-    doc.text('Date : ', margin, y);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................', margin + doc.getTextWidth('Date : '), y);
-    doc.setFont('helvetica', 'normal');
+    doc.text(`Date: ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '')}`, margin, y);
     y += 8;
 
     doc.save(`Contract_${contractData.employee_name.replace(/\s/g, '_')}.pdf`);
@@ -1149,10 +1149,9 @@ export default function ContractTemplate({
           <h2 className="font-bold text-base mb-6">AGREED by the parties</h2>
           
           {/* Employee Section */}
-          <div className="border p-6 rounded-lg mb-6 space-y-2">
+          <div className="border p-6 rounded-lg mb-8 space-y-2">
             {/* 1. Signature drawing */}
             <div>
-              <p className="text-sm text-muted-foreground mb-2">Signature:</p>
               <div className="rounded-md border bg-background p-2">
                 <canvas
                   ref={employeeCanvasRef}
@@ -1173,7 +1172,9 @@ export default function ContractTemplate({
                 )}
               </div>
             </div>
-            <p className="text-muted-foreground tracking-widest">...............................................</p>
+            <p className="text-muted-foreground tracking-widest">______________________________</p>
+            <p className="text-xs text-muted-foreground">(Employee Signature)</p>
+            <div className="h-1" />
             {/* 2. I agree to the above terms */}
             <p>I agree to the above terms</p>
             <div className="h-2" />
@@ -1183,14 +1184,14 @@ export default function ContractTemplate({
             <div className="flex items-center gap-2">
               <span>Date:</span>
               {readOnly ? (
-                <strong>{(() => {
+                <span>{(() => {
                   const d = contractData.employee_signed_date;
                   if (!d) return '';
                   const parts = d.split('-');
                   const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
                   if (isNaN(dt.getTime())) return d;
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                })()}</strong>
+                })()}</span>
               ) : (
                 <Input
                   type="date"
@@ -1206,37 +1207,36 @@ export default function ContractTemplate({
           <div className="border p-6 rounded-lg space-y-2">
             {contractApproval?.employer_signature ? (
               <>
+                {/* Heading first */}
+                <p className="font-semibold mb-3">Signed on behalf of the Employer</p>
                 {/* 1. Signature/e-sign */}
                 <div>
                   {contractApproval.employer_signature_type === 'drawn' ? (
-                    <img src={contractApproval.employer_signature} alt="Signature" className="h-14" />
+                    <img src={contractApproval.employer_signature} alt="Signature" className="h-16" />
                   ) : (
                     <p className="text-2xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
                   )}
                 </div>
-                <p className="text-muted-foreground tracking-widest">...............................................</p>
-                {/* 2. Signed on behalf of the Employer */}
-                <p>Signed on behalf of the Employer</p>
+                <p className="text-muted-foreground tracking-widest">______________________________</p>
+                <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
                 {/* 3. Employer Representative Name */}
-                <p>
-                  <strong className="uppercase">{' '}{(contractApproval.contract_content as any)?.employer_name || ''}</strong>
-                  <span className="text-muted-foreground">{' '}...............................................</span>
-                </p>
+                <p><strong className="uppercase">{(contractApproval.contract_content as any)?.employer_name || ''}</strong></p>
                 {/* 4. Date */}
-                <p>Date : <strong>{(() => {
+                <p>Date: {(() => {
                   const d = contractApproval.employer_signed_date;
                   if (!d) return '';
                   const parts = d.split('-');
                   const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
                   if (isNaN(dt.getTime())) return d;
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                })()}</strong></p>
+                })()}</p>
               </>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
               <div>
-                <p className="text-muted-foreground tracking-widest mb-2">...............................................</p>
-                <p className="mb-4">Signed on behalf of the Employer</p>
+                <p className="font-semibold mb-4">Signed on behalf of the Employer</p>
+                <p className="text-muted-foreground tracking-widest mb-2">______________________________</p>
+                <p className="text-xs text-muted-foreground mb-2">(Authorized Signature)</p>
                 <Button onClick={() => setShowSignatureDialog(true)} className="gap-2 mt-4">
                   <PenTool className="h-4 w-4" />
                   Sign Contract
@@ -1244,10 +1244,11 @@ export default function ContractTemplate({
               </div>
             ) : (
               <div className="space-y-2">
+                <p className="font-semibold">Signed on behalf of the Employer</p>
                 <div className="border-b-2 border-dotted h-10"></div>
-                <p className="text-muted-foreground">Signed on behalf of the Employer</p>
+                <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
-                <p className="text-sm text-muted-foreground">Date: ...............................................</p>
+                <p className="text-sm text-muted-foreground">Date: ______________________________</p>
               </div>
             )}
           </div>

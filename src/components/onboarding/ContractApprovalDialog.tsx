@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus } from 'lucide-react';
+import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -49,6 +49,10 @@ export default function ContractApprovalDialog({
   const [rtwFile, setRtwFile] = useState<File | null>(null);
   const [rtwExpiry, setRtwExpiry] = useState('');
   const [isUploadingRtw, setIsUploadingRtw] = useState(false);
+  
+  // Document viewer state
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerTitle, setViewerTitle] = useState('');
 
   if (!approval) return null;
 
@@ -242,6 +246,7 @@ export default function ContractApprovalDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -454,11 +459,12 @@ export default function ContractApprovalDialog({
                                   .from('documents')
                                   .createSignedUrl(doc.file_path, 3600);
                                 if (data?.signedUrl) {
-                                  window.open(data.signedUrl, '_blank');
+                                  setViewerUrl(data.signedUrl);
+                                  setViewerTitle(doc.title || doc.file_name || 'Document');
                                 }
                               }}
                             >
-                              <Download className="h-4 w-4 mr-2" />
+                              <Eye className="h-4 w-4 mr-2" />
                               View
                             </Button>
                           </div>
@@ -519,11 +525,12 @@ export default function ContractApprovalDialog({
                                   .from('documents')
                                   .createSignedUrl(doc.file_path, 3600);
                                 if (data?.signedUrl) {
-                                  window.open(data.signedUrl, '_blank');
+                                  setViewerUrl(data.signedUrl);
+                                  setViewerTitle(doc.title || doc.file_name || 'Document');
                                 }
                               }}
                             >
-                              <Download className="h-4 w-4 mr-2" />
+                              <Eye className="h-4 w-4 mr-2" />
                               View
                             </Button>
                           </div>
@@ -601,45 +608,46 @@ export default function ContractApprovalDialog({
 
                 {/* Signatures section - matching reference PDF layout */}
                 <div className="border-t pt-4 mt-4">
-                  <h3 className="font-semibold mb-4">AGREED by the parties</h3>
+                  <h3 className="font-semibold mb-6">AGREED by the parties</h3>
                   
                   {/* Employee signature */}
-                  <div className="mb-6">
+                  <div className="mb-8">
                     {contractContent?.employee_signature_data && contractContent.employee_signature_data.startsWith('data:image') && (
-                      <img src={contractContent.employee_signature_data} alt="Employee signature" className="h-12 mb-1" />
+                      <img src={contractContent.employee_signature_data} alt="Employee signature" className="h-16 mb-1" />
                     )}
-                    <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">...............................................</p>
+                    <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">______________________________</p>
+                    <p className="text-xs text-muted-foreground mb-3">(Employee Signature)</p>
                     <p className="mb-3">I agree to the above terms</p>
-                    <p className="mb-1"><span>Signed: </span><strong>{contractContent?.employee_name?.toUpperCase() || `${employee.first_name} ${employee.last_name}`.toUpperCase()}</strong></p>
-                    <p>Date: <strong>{(() => {
+                    <p className="mb-1">Signed: <strong>{contractContent?.employee_name?.toUpperCase() || `${employee.first_name} ${employee.last_name}`.toUpperCase()}</strong></p>
+                    <p>Date: {(() => {
                       const d = contractContent?.employee_signed_date;
                       if (!d) return '';
                       const dt = new Date(d);
                       if (isNaN(dt.getTime())) return d;
                       return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                    })()}</strong></p>
+                    })()}</p>
                   </div>
 
                   {/* Employer signature */}
                   <div>
+                    <p className="font-semibold mb-3">Signed on behalf of the Employer</p>
                     {approval.employer_signature && (
                       <>
                         {approval.employer_signature_type === 'drawn' ? (
-                          <img src={approval.employer_signature} alt="Employer signature" className="h-12 mb-1" />
+                          <img src={approval.employer_signature} alt="Employer signature" className="h-16 mb-1" />
                         ) : (
                           <p className="text-2xl font-bold italic font-serif mb-1">{approval.employer_signature}</p>
                         )}
-                        <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">...............................................</p>
-                        <p className="mb-3">Signed on behalf of the Employer</p>
+                        <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">______________________________</p>
+                        <p className="text-xs text-muted-foreground mb-3">(Authorized Signature)</p>
                         <p className="mb-1"><strong>{((approval.contract_content as any)?.employer_name || '').toUpperCase()}</strong></p>
-                        <p className="text-muted-foreground border-b border-dotted pb-1 mb-1 max-w-xs">...............................................</p>
-                        <p>Date: <strong>{(() => {
+                        <p>Date: {(() => {
                           const d = approval.employer_signed_date;
                           if (!d) return '';
                           const dt = new Date(d);
                           if (isNaN(dt.getTime())) return d;
                           return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                        })()}</strong></p>
+                        })()}</p>
                       </>
                     )}
                   </div>
@@ -663,16 +671,94 @@ export default function ContractApprovalDialog({
                   </p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => {
+              <Button variant="outline" onClick={async () => {
                 if (approval.contract_file_path) {
                   handleDownloadContract();
-                } else {
-                  // Generate PDF from contract content
+                } else if (contractContent) {
+                  // Generate PDF locally from contract content
                   toast.info('Generating contract PDF...');
-                  // Trigger the contract preview download by opening in new tab
-                  const contractPreview = document.querySelector('[data-contract-download]') as HTMLButtonElement;
-                  if (contractPreview) contractPreview.click();
-                  else toast.error('No contract file available for download');
+                  try {
+                    const { jsPDF } = await import('jspdf');
+                    const doc = new jsPDF();
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const margin = 20;
+                    const contentWidth = pageWidth - 2 * margin;
+                    let yPos = 30;
+                    
+                    const formatDate = (d: string) => {
+                      if (!d) return '';
+                      const dt = new Date(d);
+                      if (isNaN(dt.getTime())) return d;
+                      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                    };
+
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('CONTRACT OF EMPLOYMENT', pageWidth / 2, yPos, { align: 'center' });
+                    yPos += 10;
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`Date: ${formatDate(contractContent.contract_date)}`, pageWidth / 2, yPos, { align: 'center' });
+                    yPos += 15;
+
+                    const addLine = (text: string, bold = false) => {
+                      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+                      const lines = doc.splitTextToSize(text, contentWidth);
+                      if (yPos + lines.length * 5 > 280) { doc.addPage(); yPos = 20; }
+                      doc.text(lines, margin, yPos);
+                      yPos += lines.length * 5 + 2;
+                    };
+
+                    addLine('PARTIES', true);
+                    addLine(`1. ${employee.organization?.name || ''} (registered number ${contractContent.registered_number || ''}) (the Employer)`);
+                    addLine(`2. ${contractContent.employee_name || `${employee.first_name} ${employee.last_name}`} (the Employee)`);
+                    yPos += 5;
+                    addLine('KEY TERMS', true);
+                    addLine(`Job Title: ${contractContent.job_title || ''}`);
+                    addLine(`Hours per Week: ${contractContent.hours_per_week || ''}`);
+                    addLine(`Salary: £${contractContent.salary_rate || ''} per ${contractContent.salary_type === 'annual' ? 'annum' : 'hour'}`);
+                    addLine(`Place of Work: ${contractContent.place_of_work || ''}`);
+                    addLine(`Holiday: ${contractContent.holiday_days || '28'} days per year`);
+                    yPos += 10;
+
+                    // Signature section
+                    addLine('AGREED by the parties', true);
+                    yPos += 5;
+                    doc.text('______________________________', margin, yPos); yPos += 5;
+                    doc.text('(Employee Signature)', margin, yPos); yPos += 7;
+                    doc.text('I agree to the above terms', margin, yPos); yPos += 7;
+                    doc.text(`Signed: ${(contractContent.employee_name || `${employee.first_name} ${employee.last_name}`).toUpperCase()}`, margin, yPos); yPos += 7;
+                    doc.text(`Date: ${formatDate(contractContent.employee_signed_date)}`, margin, yPos); yPos += 15;
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Signed on behalf of the Employer', margin, yPos); yPos += 7;
+                    doc.setFont('helvetica', 'normal');
+                    if (approval.employer_signature && approval.employer_signature_type === 'typed') {
+                      doc.setFont('helvetica', 'bolditalic');
+                      doc.setFontSize(14);
+                      doc.text(approval.employer_signature, margin, yPos);
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(10);
+                      yPos += 10;
+                    }
+                    doc.text('______________________________', margin, yPos); yPos += 5;
+                    doc.text('(Authorized Signature)', margin, yPos); yPos += 7;
+                    const empName = (approval.contract_content as any)?.employer_name || '';
+                    if (empName) {
+                      doc.setFont('helvetica', 'bold');
+                      doc.text(empName.toUpperCase(), margin, yPos);
+                      doc.setFont('helvetica', 'normal');
+                      yPos += 7;
+                    }
+                    doc.text(`Date: ${formatDate(approval.employer_signed_date)}`, margin, yPos);
+
+                    doc.save(`Contract_${employee.first_name}_${employee.last_name}.pdf`);
+                    toast.success('Contract PDF downloaded');
+                  } catch (err) {
+                    toast.error('Failed to generate PDF');
+                  }
+                } else {
+                  toast.error('No contract data available');
                 }
               }}>
                 <Download className="h-4 w-4 mr-2" />
@@ -831,5 +917,24 @@ export default function ContractApprovalDialog({
         </Tabs>
       </DialogContent>
     </Dialog>
+
+      {/* Document Viewer Dialog */}
+      <Dialog open={!!viewerUrl} onOpenChange={() => setViewerUrl(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <DialogHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+            <DialogTitle>{viewerTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="w-full h-[75vh] px-4 pb-4">
+            {viewerUrl && (
+              viewerUrl.match(/\.(jpg|jpeg|png|gif|webp)/i) ? (
+                <img src={viewerUrl} alt={viewerTitle} className="w-full h-full object-contain" />
+              ) : (
+                <iframe src={viewerUrl} className="w-full h-full rounded border" title={viewerTitle} />
+              )
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
