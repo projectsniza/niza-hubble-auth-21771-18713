@@ -711,7 +711,8 @@ export default function ContractTemplate({
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
 
-    // Employee signature image (if drawn)
+    // ── Employee Section ──
+    // 1. Employee signature image (if drawn)
     if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
       try {
         doc.addImage(contractData.employee_signature_data, 'PNG', margin, y, 60, 15);
@@ -720,27 +721,31 @@ export default function ContractTemplate({
         // ignore
       }
     }
-
     // Dotted line
     doc.text('...............................................', margin, y);
-    y += 6;
-    doc.text('I agree to the above terms', margin, y);
-    y += 10;
+    y += 7;
 
-    // Signed: EMPLOYEE NAME
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Signed: ${contractData.employee_name?.toUpperCase() || '...............................................'}`, margin, y);
+    // 2. "I agree to the above terms"
+    doc.text('I agree to the above terms', margin, y);
+    y += 12;
+
+    // 3. Signed: EMPLOYEE NAME
     doc.setFont('helvetica', 'normal');
-    y += 8;
-    
-    // Date
+    doc.text('Signed: ', margin, y);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Date: ${formatDateDDMMYYYY(contractData.employee_signed_date) || '...............................................'}`, margin, y);
+    doc.text(contractData.employee_name?.toUpperCase() || '...............................................', margin + doc.getTextWidth('Signed: '), y);
     doc.setFont('helvetica', 'normal');
-    y += 18;
+    y += 7;
     
-    // Employer section
-    // Employer signature (drawn or typed) at top
+    // 4. Date
+    doc.text('Date: ', margin, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatDateDDMMYYYY(contractData.employee_signed_date) || '...............................................', margin + doc.getTextWidth('Date: '), y);
+    doc.setFont('helvetica', 'normal');
+    y += 20;
+    
+    // ── Employer Section ──
+    // 1. Employer signature (drawn or typed)
     if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
@@ -754,30 +759,33 @@ export default function ContractTemplate({
       doc.text(contractApproval.employer_signature, margin, y);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      y += 10;
+      y += 12;
     }
-
     // Dotted line
     doc.text('...............................................', margin, y);
-    y += 6;
+    y += 7;
 
-    // "Signed on behalf of the Employer" label
+    // 2. "Signed on behalf of the Employer"
     doc.text('Signed on behalf of the Employer', margin, y);
-    y += 10;
+    y += 14;
     
-    // Employer Representative Name with dotted underline
+    // 3. Employer Representative Name with dotted underline
     const employerNameVal = (contractApproval?.contract_content as any)?.employer_name || '';
     if (employerNameVal) {
       doc.setFont('helvetica', 'bold');
-      doc.text(` ${employerNameVal.toUpperCase()}`, margin, y);
+      const nameText = ` ${employerNameVal.toUpperCase()}`;
+      doc.text(nameText, margin, y);
       doc.setFont('helvetica', 'normal');
+      doc.text('...............................................', margin + doc.getTextWidth(nameText), y);
+    } else {
+      doc.text('...............................................', margin, y);
     }
-    doc.text('...............................................', margin + (employerNameVal ? doc.getTextWidth(` ${employerNameVal.toUpperCase()}`) + margin : 0), y);
-    y += 8;
+    y += 7;
 
-    // Date
+    // 4. Date
+    doc.text('Date : ', margin, y);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Date : ${formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................'}`, margin, y);
+    doc.text(formatDateDDMMYYYY(contractApproval?.employer_signed_date || '') || '...............................................', margin + doc.getTextWidth('Date : '), y);
     doc.setFont('helvetica', 'normal');
     y += 8;
 
@@ -1141,73 +1149,80 @@ export default function ContractTemplate({
           <h2 className="font-bold text-base mb-6">AGREED by the parties</h2>
           
           {/* Employee Section */}
-          <div className="border p-6 rounded-lg mb-6">
-            <p className="text-muted-foreground mb-2">...............................................</p>
-            <p className="mb-4">I agree to the above terms</p>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Signed:</p>
-                <p className="font-bold uppercase">{contractData.employee_name || ''}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Signature:</p>
-                <div className="rounded-md border bg-background p-2">
-                  <canvas
-                    ref={employeeCanvasRef}
-                    width={500}
-                    height={140}
-                    className="h-20 w-full cursor-crosshair rounded bg-background"
-                    onMouseDown={startEmployeeDrawing}
-                    onMouseMove={drawEmployee}
-                    onMouseUp={stopEmployeeDrawing}
-                    onMouseLeave={stopEmployeeDrawing}
-                  />
-                  {!readOnly && (
-                    <div className="flex justify-end mt-2">
-                      <Button variant="outline" size="sm" onClick={clearEmployeeSignature}>
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Date:</p>
-                {readOnly ? (
-                  <p>{contractData.employee_signed_date || ''}</p>
-                ) : (
-                  <Input
-                    type="date"
-                    value={contractData.employee_signed_date || ''}
-                    onChange={(e) => updateField('employee_signed_date', e.target.value)}
-                    className="h-9 max-w-xs"
-                  />
+          <div className="border p-6 rounded-lg mb-6 space-y-2">
+            {/* 1. Signature drawing */}
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Signature:</p>
+              <div className="rounded-md border bg-background p-2">
+                <canvas
+                  ref={employeeCanvasRef}
+                  width={500}
+                  height={140}
+                  className="h-20 w-full cursor-crosshair rounded bg-background"
+                  onMouseDown={startEmployeeDrawing}
+                  onMouseMove={drawEmployee}
+                  onMouseUp={stopEmployeeDrawing}
+                  onMouseLeave={stopEmployeeDrawing}
+                />
+                {!readOnly && (
+                  <div className="flex justify-end mt-2">
+                    <Button variant="outline" size="sm" onClick={clearEmployeeSignature}>
+                      Clear
+                    </Button>
+                  </div>
                 )}
               </div>
+            </div>
+            <p className="text-muted-foreground tracking-widest">...............................................</p>
+            {/* 2. I agree to the above terms */}
+            <p>I agree to the above terms</p>
+            <div className="h-2" />
+            {/* 3. Signed: EMPLOYEE NAME */}
+            <p>Signed: <strong className="uppercase">{contractData.employee_name || ''}</strong></p>
+            {/* 4. Date */}
+            <div className="flex items-center gap-2">
+              <span>Date:</span>
+              {readOnly ? (
+                <strong>{(() => {
+                  const d = contractData.employee_signed_date;
+                  if (!d) return '';
+                  const parts = d.split('-');
+                  const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
+                  if (isNaN(dt.getTime())) return d;
+                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                })()}</strong>
+              ) : (
+                <Input
+                  type="date"
+                  value={contractData.employee_signed_date || ''}
+                  onChange={(e) => updateField('employee_signed_date', e.target.value)}
+                  className="h-9 max-w-xs"
+                />
+              )}
             </div>
           </div>
 
           {/* Employer Section */}
-          <div className="border p-6 rounded-lg">
+          <div className="border p-6 rounded-lg space-y-2">
             {contractApproval?.employer_signature ? (
-              <div className="space-y-3">
-                {/* 1. Signature/e-sign at top */}
+              <>
+                {/* 1. Signature/e-sign */}
                 <div>
                   {contractApproval.employer_signature_type === 'drawn' ? (
-                    <img src={contractApproval.employer_signature} alt="Signature" className="h-12" />
+                    <img src={contractApproval.employer_signature} alt="Signature" className="h-14" />
                   ) : (
-                    <p className="text-xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
+                    <p className="text-2xl font-bold italic font-serif">{contractApproval.employer_signature}</p>
                   )}
                 </div>
-                {/* Dotted line */}
-                <p className="text-muted-foreground">...............................................</p>
-                {/* 2. "Signed on behalf of the Employer" label */}
+                <p className="text-muted-foreground tracking-widest">...............................................</p>
+                {/* 2. Signed on behalf of the Employer */}
                 <p>Signed on behalf of the Employer</p>
-                {/* 3. Employer Representative Name with dotted underline */}
-                <div>
-                  <p className="font-bold uppercase inline">{' '}{(contractApproval.contract_content as any)?.employer_name || ''}</p>
+                <div className="h-2" />
+                {/* 3. Employer Representative Name */}
+                <p>
+                  <strong className="uppercase">{' '}{(contractApproval.contract_content as any)?.employer_name || ''}</strong>
                   <span className="text-muted-foreground">{' '}...............................................</span>
-                </div>
+                </p>
                 {/* 4. Date */}
                 <p>Date : <strong>{(() => {
                   const d = contractApproval.employer_signed_date;
@@ -1217,10 +1232,10 @@ export default function ContractTemplate({
                   if (isNaN(dt.getTime())) return d;
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
                 })()}</strong></p>
-              </div>
+              </>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
               <div>
-                <p className="text-muted-foreground mb-2">...............................................</p>
+                <p className="text-muted-foreground tracking-widest mb-2">...............................................</p>
                 <p className="mb-4">Signed on behalf of the Employer</p>
                 <Button onClick={() => setShowSignatureDialog(true)} className="gap-2 mt-4">
                   <PenTool className="h-4 w-4" />
@@ -1228,15 +1243,11 @@ export default function ContractTemplate({
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div>
-                  <div className="border-b-2 border-dotted h-10"></div>
-                  <p className="text-muted-foreground mt-2">Signed on behalf of the Employer</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Date:</p>
-                  <div className="border-b-2 border-dotted h-6 max-w-xs"></div>
-                </div>
+              <div className="space-y-2">
+                <div className="border-b-2 border-dotted h-10"></div>
+                <p className="text-muted-foreground">Signed on behalf of the Employer</p>
+                <div className="h-2" />
+                <p className="text-sm text-muted-foreground">Date: ...............................................</p>
               </div>
             )}
           </div>
