@@ -792,30 +792,25 @@ export default function ContractTemplate({
     toast.success('PDF downloaded successfully');
   };
 
-  // Editable field component
-  const EditableField = ({ label, value, field, type = 'text', placeholder }: { 
-    label: string; 
-    value: string; 
-    field: keyof ContractData; 
-    type?: string;
-    placeholder?: string;
-  }) => (
-    <span className="inline-flex items-center gap-1">
-      {readOnly ? (
+  // Editable field renderer - using inline JSX instead of component to avoid remount
+  const renderEditableField = (label: string, value: string, field: keyof ContractData, type = 'text', placeholder?: string) => {
+    if (readOnly) {
+      return (
         <span className="border-b border-dotted border-foreground min-w-[100px] px-1">
           {value || '………………………'}
         </span>
-      ) : (
-        <Input
-          type={type}
-          value={value}
-          onChange={(e) => updateField(field, e.target.value)}
-          className="inline-block w-auto min-w-[120px] h-7 text-sm border-b border-dotted rounded-none px-1 py-0"
-          placeholder={placeholder || '………………………'}
-        />
-      )}
-    </span>
-  );
+      );
+    }
+    return (
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => updateField(field, e.target.value)}
+        className="inline-block w-auto min-w-[120px] h-7 text-sm border-b border-dotted rounded-none px-1 py-0 bg-transparent border-input focus:outline-none focus:ring-1 focus:ring-ring"
+        placeholder={placeholder || '………………………'}
+      />
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -826,7 +821,7 @@ export default function ContractTemplate({
           <h1 className="text-xl font-bold uppercase">THIS CONTRACT OF EMPLOYMENT</h1>
           <p className="mt-4">
             is made on{' '}
-            <EditableField label="Contract Date" value={contractData.contract_date} field="contract_date" type="date" />
+            {renderEditableField("Contract Date", contractData.contract_date, "contract_date", "date")}
             {contractData.contract_date && (() => {
               const parts = contractData.contract_date.split('-');
               const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(contractData.contract_date);
@@ -863,7 +858,7 @@ export default function ContractTemplate({
                 </Select>
               )}
               {' '}a company incorporated in England and Wales (registered number{' '}
-              <EditableField label="Registered Number" value={contractData.registered_number} field="registered_number" placeholder="04914942" />
+              {renderEditableField("Registered Number", contractData.registered_number, "registered_number", "text", "04914942")}
               ){contractData.vat_number && ` (VAT: ${contractData.vat_number})`} whose registered office is at{' '}
               {readOnly ? (
                 <span className="border-b border-dotted">{contractData.registered_office || '________________'}</span>
@@ -879,9 +874,9 @@ export default function ContractTemplate({
             </p>
             <p>
               2.{' '}
-              <EditableField label="Employee Name" value={contractData.employee_name} field="employee_name" />
+              {renderEditableField("Employee Name", contractData.employee_name, "employee_name")}
               {' '}of{' '}
-              <EditableField label="Employee Address" value={contractData.employee_address} field="employee_address" />
+              {renderEditableField("Employee Address", contractData.employee_address, "employee_address")}
               {' '}(you).
             </p>
           </div>
@@ -897,7 +892,7 @@ export default function ContractTemplate({
             <p className="mb-2">1.1. The Employer will employ you on the terms and conditions set out in this contract.</p>
             <p className="mb-2">
               1.2. Your employment with the Employer under this contract will commence on the date hereof{' '}
-              <EditableField label="Commencement Date" value={contractData.commencement_date} field="commencement_date" type="date" />
+              {renderEditableField("Commencement Date", contractData.commencement_date, "commencement_date", "date")}
               {' '}(The Commencement Date).
             </p>
             <p className="mb-2">1.3. Your period of continuous employment with the Employer commenced on the Commencement Date, and no period of employment with any previous employer counts as part of your period of continuous employment with the Employer.</p>
@@ -911,7 +906,7 @@ export default function ContractTemplate({
             <h3 className="font-bold mb-2">2. Duties</h3>
             <p className="mb-2">
               2.1. You will be employed as a{' '}
-              <EditableField label="Job Title" value={contractData.job_title} field="job_title" />
+              {renderEditableField("Job Title", contractData.job_title, "job_title")}
               {' '}or in such other capacity as the Employer may from time to time reasonably direct.
             </p>
             <p className="mb-2">2.2. In addition to your normal duties, you may be required to undertake alternative, additional, or ancillary duties from time to time or to transfer to another part of the business as the Employer may reasonably direct.</p>
@@ -923,7 +918,7 @@ export default function ContractTemplate({
             <h3 className="font-bold mb-2">3. Hours of work</h3>
             <p className="mb-2">
               3.1. Your normal hours of work are{' '}
-              <EditableField label="Hours per week" value={contractData.hours_per_week} field="hours_per_week" placeholder="40" />
+              {renderEditableField("Hours per week", contractData.hours_per_week, "hours_per_week", "text", "40")}
               {' '}hours per week.
             </p>
             <p className="mb-2">3.2. The Employer may vary your hours of work or the pattern of your normal hours, as it considers necessary to meet the needs of the business.</p>
@@ -943,7 +938,7 @@ export default function ContractTemplate({
             <h3 className="font-bold mb-2">4. Salary</h3>
             <p className="mb-2">
               4.1. The Employer will pay you a salary at the rate of £
-              <EditableField label="Salary Rate" value={contractData.salary_rate} field="salary_rate" placeholder={contractData.salary_type === 'annual' ? '25000' : '12.50'} />
+              {renderEditableField("Salary Rate", contractData.salary_rate, "salary_rate", "text", contractData.salary_type === 'annual' ? '25000' : '12.50')}
               {' '}per{' '}
               {readOnly ? (
                 <span>{contractData.salary_type === 'annual' ? 'annum' : 'hour'}</span>
@@ -990,7 +985,7 @@ export default function ContractTemplate({
             <h3 className="font-bold mb-2">6. Holiday</h3>
             <p className="mb-2">
               6.1. You will be entitled to{' '}
-              <EditableField label="Holiday Days" value={contractData.holiday_days} field="holiday_days" placeholder="28" />
+              {renderEditableField("Holiday Days", contractData.holiday_days, "holiday_days", "text", "28")}
               {' '}days' paid holiday in each holiday year, which runs from 1st of April to 31st of March, excluding bank and public holidays which you normally work. Your holiday entitlement includes your statutory basic entitlement. If your employment starts or finishes part way through the holiday year, your holiday entitlement during that year shall be calculated on a pro-rata basis rounded up to the nearest whole day.
             </p>
             <p className="mb-2">6.2. You acknowledge that the Employer trades on the usual bank holidays in England and Wales and that you may be scheduled to work in accordance with availability unless on Annual Leave.</p>
