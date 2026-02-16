@@ -241,7 +241,16 @@ export default function ApprovedContractsTab() {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`is made on ${contractData.contract_date || '…………………………………………………'}`, pageWidth / 2, y, { align: 'center' });
+    const contractDateFormatted = (() => {
+      const d = contractData.contract_date;
+      if (!d) return '…………………………………………………';
+      const parts = d.split('-');
+      const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
+      if (isNaN(dt.getTime())) return d;
+      const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} - ${days[dt.getDay()]}`;
+    })();
+    doc.text(`is made on ${contractDateFormatted}`, pageWidth / 2, y, { align: 'center' });
     y += 12;
 
     // PARTIES
@@ -423,48 +432,86 @@ export default function ApprovedContractsTab() {
     addText('19.2. The information contained in this contract contains the particulars required for a written statement under Section 1 of the Employment Rights Act 1996.');
 
     // Signatures
-    checkPageBreak(60);
+    checkPageBreak(80);
     y += 10;
     addSectionTitle('AGREED by the parties');
+    y += 5;
     
+    const formatDateDD = (d: string | null) => {
+      if (!d) return '';
+      const parts = d.split('-');
+      const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
+      if (isNaN(dt.getTime())) return d;
+      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+    };
+
+    // --- EMPLOYEE SECTION ---
+    // 1. Employee signature (handwritten space above line)
+    if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
+      try { doc.addImage(contractData.employee_signature_data, 'PNG', margin, y, 60, 15); } catch {}
+    }
+    y += 18;
+    // Line
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    doc.text('______________________________', margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text('(Employee Signature)', margin, y);
+    y += 8;
+    // 2. I agree to the above terms
+    doc.setFontSize(10);
     doc.text('I agree to the above terms', margin, y);
     y += 10;
-    doc.text('Signed: ...............................................', margin, y);
-    y += 8;
-    doc.text('Date: ...............................................', margin, y);
-    y += 15;
-    
-    doc.text('Signed on behalf of the Employer', margin, y);
-    y += 10;
-    
-    // Add employer signature if available
+    // 3. Signed: EMPLOYEE NAME (bold)
+    doc.setFont('helvetica', 'normal');
+    doc.text('Signed: ', margin, y);
+    doc.setFont('helvetica', 'bold');
+    const empFullName = (contractData.employee_name || `${contract.employee?.first_name} ${contract.employee?.last_name}`).toUpperCase();
+    doc.text(empFullName, margin + doc.getTextWidth('Signed: '), y);
+    doc.setFont('helvetica', 'normal');
+    y += 7;
+    // 4. Date
+    doc.text(`Date: ${formatDateDD(contractData.employee_signed_date)}`, margin, y);
+    y += 25;
+
+    // --- EMPLOYER SECTION ---
+    // 1. Employer signature (handwritten above line)
     if (contract.employer_signature) {
       if (contract.employer_signature_type === 'drawn' || contract.employer_signature_type === 'uploaded') {
-        try {
-          doc.addImage(contract.employer_signature, 'PNG', margin, y, 60, 20);
-          y += 25;
-        } catch {
-          doc.setFont('times', 'italic');
-          doc.setFontSize(14);
-          doc.text(contract.employer_signature, margin, y);
-          y += 8;
-        }
+        try { doc.addImage(contract.employer_signature, 'PNG', margin, y, 60, 15); } catch {}
+        y += 18;
       } else {
-        doc.setFont('times', 'italic');
+        doc.setFont('times', 'bolditalic');
         doc.setFontSize(14);
         doc.text(contract.employer_signature, margin, y);
-        y += 8;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        y += 12;
       }
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(`Date: ${contract.employer_signed_date ? format(new Date(contract.employer_signed_date), 'dd MMM yyyy') : '...............................................'}`, margin, y);
-    } else {
-      doc.text('Signed: ...............................................', margin, y);
-      y += 8;
-      doc.text('Date: ...............................................', margin, y);
     }
+    // Line
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('______________________________', margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text('(Authorized Signature)', margin, y);
+    y += 8;
+    // 2. Signed on behalf of the Employer
+    doc.setFontSize(10);
+    doc.text('Signed on behalf of the Employer', margin, y);
+    y += 10;
+    // 3. Admin name (bold)
+    const adminName = contractData.employer_name || '';
+    if (adminName) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(adminName.toUpperCase(), margin, y);
+      doc.setFont('helvetica', 'normal');
+      y += 7;
+    }
+    // 4. Date
+    doc.text(`Date: ${formatDateDD(contract.employer_signed_date)}`, margin, y);
 
     const employeeName = contractData.employee_name || `${contract.employee?.first_name}_${contract.employee?.last_name}`;
     doc.save(`Contract_${employeeName.replace(/\s/g, '_')}.pdf`);
