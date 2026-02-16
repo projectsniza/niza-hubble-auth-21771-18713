@@ -225,6 +225,8 @@ export default function StarterChecklist({
     const headerHeight = 25;
     let y = headerHeight + 5;
     const lineHeight = 6;
+    const labelCol = margin;
+    const valueCol = margin + 55;
 
     const drawCheckbox = (x: number, yPos: number, checked: boolean) => {
       const size = 3;
@@ -289,7 +291,7 @@ export default function StarterChecklist({
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Starter checklist', margin, y);
-    y += 12;
+    y += 10;
 
     // Instructions
     doc.setFontSize(8);
@@ -299,65 +301,71 @@ export default function StarterChecklist({
     doc.text(instrLines, margin, y);
     y += instrLines.length * 4 + 6;
 
-    // Employee's personal details
-    doc.setFontSize(12);
+    // ── Employee's personal details ──
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setFillColor(0, 102, 179);
     doc.rect(margin, y - 4, contentWidth, 8, 'F');
     doc.setTextColor(255, 255, 255);
     doc.text("Employee's personal details", margin + 3, y + 1);
     doc.setTextColor(0, 0, 0);
-    y += 12;
+    y += 10;
 
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const fields = [
-      ['1 Last name:', formData.last_name],
-      ['2 First name(s):', formData.first_names],
-      ['3 Gender:', formData.gender === 'male' ? 'Male' : formData.gender === 'female' ? 'Female' : ''],
-      ['4 Date of birth:', formatDateDDMMYYYY(formData.date_of_birth)],
-      ['5 Home address:', formData.address],
-      ['  Postcode:', formData.postcode],
-      ['  Country:', formData.country],
-      ['6 National Insurance number:', formData.national_insurance],
-      ['7 Employment start date:', formatDateDDMMYYYY(formData.employment_start_date)],
+    const fields: [string, string][] = [
+      ['1  Last name:', formData.last_name],
+      ['2  First name(s):', formData.first_names],
+      ['3  Gender:', formData.gender === 'male' ? 'Male' : formData.gender === 'female' ? 'Female' : ''],
+      ['4  Date of birth:', formatDateDDMMYYYY(formData.date_of_birth)],
+      ['5  Home address:', formData.address],
+      ['    Postcode:', formData.postcode?.toUpperCase() || ''],
+      ['    Country:', formData.country],
+      ['6  National Insurance number:', formData.national_insurance],
+      ['7  Employment start date:', formatDateDDMMYYYY(formData.employment_start_date)],
     ];
 
     fields.forEach(([label, value]) => {
-      checkNewPage(8);
+      checkNewPage(lineHeight + 2);
       doc.setFont('helvetica', 'bold');
-      doc.text(label, margin, y);
+      doc.text(label, labelCol, y);
       doc.setFont('helvetica', 'normal');
-      doc.text(value || '', margin + 55, y);
-      y += lineHeight + 1;
+      // Handle long addresses
+      if (label.includes('address')) {
+        const valLines = doc.splitTextToSize(value || '', contentWidth - 55);
+        doc.text(valLines, valueCol, y);
+        y += Math.max(valLines.length, 1) * 5 + 2;
+      } else {
+        doc.text(value || '', valueCol, y);
+        y += lineHeight;
+      }
     });
-    y += 6;
+    y += 4;
 
-    // Employee statement
+    // ── Employee statement ──
     checkNewPage(60);
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setFillColor(0, 102, 179);
     doc.rect(margin, y - 4, contentWidth, 8, 'F');
     doc.setTextColor(255, 255, 255);
     doc.text('Employee statement', margin + 3, y + 1);
     doc.setTextColor(0, 0, 0);
-    y += 12;
+    y += 10;
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text('You need to select only one of the following statements A, B or C.', margin, y);
-    y += lineHeight + 4;
+    y += lineHeight + 3;
 
     // Statement A
     drawCheckbox(margin, y, formData.statement === 'A');
     doc.setFont('helvetica', 'bold');
     doc.text('A', margin + 6, y);
     doc.setFont('helvetica', 'normal');
-    const stmtA = 'This is my first job since last 6 April and I have not been receiving taxable Jobseeker\'s Allowance, Employment and Support Allowance, taxable Incapacity Benefit, State or Occupational Pension.';
+    const stmtA = "This is my first job since last 6 April and I have not been receiving taxable Jobseeker's Allowance, Employment and Support Allowance, taxable Incapacity Benefit, State or Occupational Pension.";
     const stmtALines = doc.splitTextToSize(stmtA, contentWidth - 10);
     doc.text(stmtALines, margin + 10, y);
-    y += stmtALines.length * 4 + 6;
+    y += stmtALines.length * 4 + 5;
 
     // Statement B
     checkNewPage(20);
@@ -365,10 +373,10 @@ export default function StarterChecklist({
     doc.setFont('helvetica', 'bold');
     doc.text('B', margin + 6, y);
     doc.setFont('helvetica', 'normal');
-    const stmtB = 'This is now my only job, but since last 6 April I have had another job, or received taxable Jobseeker\'s Allowance, Employment and Support Allowance or taxable Incapacity Benefit. I do not receive a State or Occupational Pension.';
+    const stmtB = "This is now my only job, but since last 6 April I have had another job, or received taxable Jobseeker's Allowance, Employment and Support Allowance or taxable Incapacity Benefit. I do not receive a State or Occupational Pension.";
     const stmtBLines = doc.splitTextToSize(stmtB, contentWidth - 10);
     doc.text(stmtBLines, margin + 10, y);
-    y += stmtBLines.length * 4 + 6;
+    y += stmtBLines.length * 4 + 5;
 
     // Statement C
     checkNewPage(20);
@@ -379,21 +387,28 @@ export default function StarterChecklist({
     const stmtC = 'As well as my new job, I have another job or receive a State or Occupational Pension.';
     const stmtCLines = doc.splitTextToSize(stmtC, contentWidth - 10);
     doc.text(stmtCLines, margin + 10, y);
-    y += stmtCLines.length * 4 + 8;
+    y += stmtCLines.length * 4 + 6;
 
-    // Student Loan
+    // ── Student Loan ──
     checkNewPage(30);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('Student Loan', margin, y);
-    y += lineHeight + 2;
+    doc.setFillColor(0, 102, 179);
+    doc.rect(margin, y - 4, contentWidth, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text('Student Loan', margin + 3, y + 1);
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text('Do you have a student loan which is not fully repaid?', margin, y);
-    const slX = margin + 90;
+    const slX = margin + 95;
     doc.text('Yes', slX, y);
     drawCheckbox(slX + 10, y, formData.has_student_loan === true);
     doc.text('No', slX + 20, y);
     drawCheckbox(slX + 28, y, formData.has_student_loan === false);
-    y += lineHeight + 4;
+    y += lineHeight + 3;
 
     if (formData.has_student_loan === true) {
       doc.text('Are you repaying your Student Loan direct to the Student Loans Company?', margin, y);
@@ -402,21 +417,33 @@ export default function StarterChecklist({
       drawCheckbox(margin + 20, y, formData.repaying_direct === true);
       doc.text('No', margin + 30, y);
       drawCheckbox(margin + 38, y, formData.repaying_direct === false);
-      y += lineHeight + 2;
+      y += lineHeight;
       doc.text(`Student Loan type: ${formData.student_loan_type === 'plan1' ? 'Plan 1' : formData.student_loan_type === 'plan2' ? 'Plan 2' : ''}`, margin, y);
-      y += lineHeight + 4;
+      y += lineHeight + 2;
     }
 
-    // Signature
+    // ── Employee declaration ──
     checkNewPage(30);
-    y += 4;
+    y += 2;
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('Employee declaration', margin, y);
-    y += lineHeight + 4;
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Signature: ${formData.signature || '............................'}`, margin, y);
+    doc.setFillColor(0, 102, 179);
+    doc.rect(margin, y - 4, contentWidth, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text('Employee declaration', margin + 3, y + 1);
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signature:', margin, y);
+    doc.setFont('helvetica', 'italic');
+    doc.text(formData.signature || '............................', margin + 25, y);
     y += lineHeight + 2;
-    doc.text(`Date: ${formatDateDDMMYYYY(formData.signature_date) || '............................'}`, margin, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Date:', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDateDDMMYYYY(formData.signature_date) || '............................', margin + 15, y);
 
     doc.save(`Starter_Checklist_${formData.first_names}_${formData.last_name}.pdf`);
     toast.success('PDF downloaded successfully');

@@ -192,10 +192,13 @@ export default function BankDetailsForm({
 
   const handleDownloadPDF = async () => {
     const doc = new jsPDF();
-    let y = 20;
-    const lineHeight = 8;
-    const margin = 20;
     const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - 2 * margin;
+    const labelX = margin;
+    const valueX = margin + 75; // consistent value column
+    const lineHeight = 7;
+    let y = 20;
     
     const loadLogoImage = (): Promise<string> => {
       return new Promise((resolve) => {
@@ -215,72 +218,114 @@ export default function BankDetailsForm({
     };
 
     const logoDataUrl = await loadLogoImage();
+
+    // Header - Logo centered
     if (logoDataUrl) {
       doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 20, y - 10, 40, 12);
-      y += 15;
+      y += 12;
     }
-    
-    doc.setFontSize(16);
+
+    // Title
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('EMPLOYEE BANK DETAILS FORM', pageWidth / 2, y, { align: 'center' });
-    y += 10;
-    doc.setFontSize(10);
+    y += 8;
+
+    // Subtitle
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text('Please complete the following information carefully.', pageWidth / 2, y, { align: 'center' });
-    y += 6;
+    y += 5;
     doc.setTextColor(200, 100, 0);
     doc.text('Incorrect information will result in a delay in payment.', pageWidth / 2, y, { align: 'center' });
     doc.setTextColor(0, 0, 0);
-    y += 15;
-    
-    // Form Fields
-    doc.setFontSize(11);
+    y += 10;
+
+    // Separator line
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 8;
+
+    // Helper to draw a label-value row
+    const addRow = (label: string, value: string, bold = true) => {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, labelX, y);
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setFont('helvetica', 'normal');
+      doc.text(value || '____________________', valueX, y);
+      y += lineHeight;
+    };
+
+    // Form fields - aligned consistently
+    addRow('YOUR NAME:', formData.your_name);
+    addRow('YOUR TELEPHONE NUMBER:', formData.telephone_number);
+    y += 4;
+
+    // Bank name - full width
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('YOUR NAME:', margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.your_name || '____________________', margin + 50, y);
-    y += lineHeight;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('YOUR TELEPHONE NUMBER:', margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.telephone_number || '____________________', margin + 70, y);
-    y += lineHeight * 2;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('NAME OF BANK OR BUILDING SOCIETY:', margin, y);
-    y += lineHeight;
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.bank_name || '____________________', margin, y);
-    y += lineHeight * 2;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('BANK OR BUILDING SOCIETY ADDRESS:', margin, y);
-    y += lineHeight;
-    doc.setFont('helvetica', 'normal');
-    const addressLines = doc.splitTextToSize(formData.bank_address || '____________________', pageWidth - 2 * margin);
-    doc.text(addressLines, margin, y);
-    y += addressLines.length * 6 + lineHeight;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('BANK SORT CODE:', margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.sort_code || '__ - __ - __', margin + 50, y);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('BANK ACCOUNT NUMBER:', margin + 100, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formData.account_number || '________', margin + 165, y);
-    y += lineHeight * 2;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('NAME OF ACCOUNT HOLDER:', margin, y);
+    doc.text('NAME OF BANK OR BUILDING SOCIETY:', labelX, y);
     y += lineHeight;
     doc.setFont('helvetica', 'normal');
-    doc.text(formData.account_holder_name || '____________________', margin, y);
-    y += lineHeight * 2;
-    
-    // Format date as DD/MM/YYYY for display
+    doc.text(formData.bank_name || '____________________', labelX, y);
+    y += lineHeight + 4;
+
+    // Bank address - multi-line
+    doc.setFont('helvetica', 'bold');
+    doc.text('BANK OR BUILDING SOCIETY ADDRESS:', labelX, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    const addressLines = doc.splitTextToSize(formData.bank_address || '____________________', contentWidth);
+    doc.text(addressLines, labelX, y);
+    y += addressLines.length * 5 + 4;
+
+    // Bank telephone
+    addRow('TELEPHONE NUMBER OF BRANCH:', formData.bank_telephone);
+    y += 4;
+
+    // Sort code and Account number side by side
+    doc.setFont('helvetica', 'bold');
+    doc.text('BANK SORT CODE:', labelX, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.sort_code || '__ - __ - __', labelX + 45, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ACCOUNT NUMBER:', labelX + 95, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.account_number || '________', labelX + 140, y);
+    y += lineHeight + 2;
+
+    // Building society roll
+    addRow('BUILDING SOCIETY ROLL NO:', formData.building_society_roll);
+    y += 4;
+
+    // Account holder name
+    doc.setFont('helvetica', 'bold');
+    doc.text('NAME OF ACCOUNT HOLDER:', labelX, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text(formData.account_holder_name || '____________________', labelX, y);
+    y += lineHeight + 8;
+
+    // Separator
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 8;
+
+    // Declaration
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Declaration', labelX, y);
+    y += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const declText = 'I confirm that the bank details provided above are correct and that payments should be made to this account.';
+    const declLines = doc.splitTextToSize(declText, contentWidth);
+    doc.text(declLines, labelX, y);
+    y += declLines.length * 4 + 6;
+
+    // Format date as DD/MM/YYYY
     const formatDateDisplay = (dateStr: string) => {
       if (!dateStr) return '____________________';
       const date = new Date(dateStr);
@@ -290,10 +335,17 @@ export default function BankDetailsForm({
       const year = date.getFullYear();
       return `${day}/${month}/${year}`;
     };
-    
-    doc.setFontSize(11);
-    doc.text(`Signature: ${formData.signature || '____________________'}`, margin, y);
-    doc.text(`Date: ${formatDateDisplay(formData.signature_date)}`, margin + 100, y);
+
+    // Signature and Date on same line
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Signature:', labelX, y);
+    doc.setFont('helvetica', 'italic');
+    doc.text(formData.signature || '____________________', labelX + 25, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Date:', labelX + 105, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDateDisplay(formData.signature_date), labelX + 118, y);
     
     doc.save(`Bank_Details_${formData.your_name.replace(/\s/g, '_')}.pdf`);
     toast.success('PDF downloaded successfully');
