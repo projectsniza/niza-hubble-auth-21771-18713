@@ -746,13 +746,7 @@ export default function ContractTemplate({
     y += 25;
     
     // ── Employer Section ──
-    // 1. "Signed on behalf of the Employer" heading
-    doc.setFont('helvetica', 'bold');
-    doc.text('Signed on behalf of the Employer', margin, y);
-    doc.setFont('helvetica', 'normal');
-    y += 10;
-
-    // 2. Employer signature (drawn or typed)
+    // 1. Employer signature (drawn or typed) - ABOVE the line
     if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
@@ -774,6 +768,11 @@ export default function ContractTemplate({
     doc.setFontSize(8);
     doc.text('(Authorized Signature)', margin, y);
     doc.setFontSize(10);
+    y += 10;
+
+    // 2. "Signed on behalf of the Employer"
+    doc.setFont('helvetica', 'normal');
+    doc.text('Signed on behalf of the Employer', margin, y);
     y += 10;
     
     // 3. Employer Representative Name
@@ -1207,9 +1206,7 @@ export default function ContractTemplate({
           <div className="border p-6 rounded-lg space-y-2">
             {contractApproval?.employer_signature ? (
               <>
-                {/* Heading first */}
-                <p className="font-semibold mb-3">Signed on behalf of the Employer</p>
-                {/* 1. Signature/e-sign */}
+                {/* 1. Signature/e-sign ABOVE the line */}
                 <div>
                   {contractApproval.employer_signature_type === 'drawn' ? (
                     <img src={contractApproval.employer_signature} alt="Signature" className="h-16" />
@@ -1220,6 +1217,9 @@ export default function ContractTemplate({
                 <p className="text-muted-foreground tracking-widest">______________________________</p>
                 <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
+                {/* 2. Signed on behalf of the Employer */}
+                <p>Signed on behalf of the Employer</p>
+                <div className="h-1" />
                 {/* 3. Employer Representative Name */}
                 <p><strong className="uppercase">{(contractApproval.contract_content as any)?.employer_name || ''}</strong></p>
                 {/* 4. Date */}
@@ -1234,20 +1234,23 @@ export default function ContractTemplate({
               </>
             ) : isApprovalMode && user?.role === 'super_admin' ? (
               <div>
-                <p className="font-semibold mb-4">Signed on behalf of the Employer</p>
-                <p className="text-muted-foreground tracking-widest mb-2">______________________________</p>
-                <p className="text-xs text-muted-foreground mb-2">(Authorized Signature)</p>
-                <Button onClick={() => setShowSignatureDialog(true)} className="gap-2 mt-4">
+                <div className="border-b-2 border-dotted h-16 mb-2"></div>
+                <p className="text-muted-foreground tracking-widest mb-1">______________________________</p>
+                <p className="text-xs text-muted-foreground mb-3">(Authorized Signature)</p>
+                <p className="mb-4">Signed on behalf of the Employer</p>
+                <Button onClick={() => setShowSignatureDialog(true)} className="gap-2">
                   <PenTool className="h-4 w-4" />
                   Sign Contract
                 </Button>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="font-semibold">Signed on behalf of the Employer</p>
-                <div className="border-b-2 border-dotted h-10"></div>
+                <div className="border-b-2 border-dotted h-16"></div>
+                <p className="text-muted-foreground tracking-widest">______________________________</p>
                 <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
+                <p>Signed on behalf of the Employer</p>
+                <div className="h-1" />
                 <p className="text-sm text-muted-foreground">Date: ______________________________</p>
               </div>
             )}

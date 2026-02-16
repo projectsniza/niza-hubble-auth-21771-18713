@@ -630,9 +630,9 @@ export default function ContractApprovalDialog({
 
                   {/* Employer signature */}
                   <div>
-                    <p className="font-semibold mb-3">Signed on behalf of the Employer</p>
                     {approval.employer_signature && (
                       <>
+                        {/* 1. Signature above line */}
                         {approval.employer_signature_type === 'drawn' ? (
                           <img src={approval.employer_signature} alt="Employer signature" className="h-16 mb-1" />
                         ) : (
@@ -640,7 +640,11 @@ export default function ContractApprovalDialog({
                         )}
                         <p className="text-muted-foreground border-b border-dotted pb-1 mb-1">______________________________</p>
                         <p className="text-xs text-muted-foreground mb-3">(Authorized Signature)</p>
+                        {/* 2. Signed on behalf of the Employer */}
+                        <p className="mb-3">Signed on behalf of the Employer</p>
+                        {/* 3. Admin name */}
                         <p className="mb-1"><strong>{((approval.contract_content as any)?.employer_name || '').toUpperCase()}</strong></p>
+                        {/* 4. Date */}
                         <p>Date: {(() => {
                           const d = approval.employer_signed_date;
                           if (!d) return '';
@@ -724,32 +728,44 @@ export default function ContractApprovalDialog({
                     // Signature section
                     addLine('AGREED by the parties', true);
                     yPos += 5;
-                    doc.text('______________________________', margin, yPos); yPos += 5;
-                    doc.text('(Employee Signature)', margin, yPos); yPos += 7;
-                    doc.text('I agree to the above terms', margin, yPos); yPos += 7;
-                    doc.text(`Signed: ${(contractContent.employee_name || `${employee.first_name} ${employee.last_name}`).toUpperCase()}`, margin, yPos); yPos += 7;
-                    doc.text(`Date: ${formatDate(contractContent.employee_signed_date)}`, margin, yPos); yPos += 15;
 
+                    // Employee: 1. signature image
+                    if (contractContent.employee_signature_data && contractContent.employee_signature_data.startsWith('data:image')) {
+                      try { doc.addImage(contractContent.employee_signature_data, 'PNG', margin, yPos, 60, 15); yPos += 18; } catch {}
+                    }
+                    // Line + label
+                    doc.text('______________________________', margin, yPos); yPos += 5;
+                    doc.setFontSize(8); doc.text('(Employee Signature)', margin, yPos); doc.setFontSize(10); yPos += 8;
+                    // 2. I agree
+                    doc.text('I agree to the above terms', margin, yPos); yPos += 10;
+                    // 3. Signed: NAME
+                    doc.setFont('helvetica', 'normal'); doc.text('Signed: ', margin, yPos);
                     doc.setFont('helvetica', 'bold');
-                    doc.text('Signed on behalf of the Employer', margin, yPos); yPos += 7;
-                    doc.setFont('helvetica', 'normal');
-                    if (approval.employer_signature && approval.employer_signature_type === 'typed') {
-                      doc.setFont('helvetica', 'bolditalic');
-                      doc.setFontSize(14);
+                    doc.text((contractContent.employee_name || `${employee.first_name} ${employee.last_name}`).toUpperCase(), margin + doc.getTextWidth('Signed: '), yPos);
+                    doc.setFont('helvetica', 'normal'); yPos += 7;
+                    // 4. Date
+                    doc.text(`Date: ${formatDate(contractContent.employee_signed_date)}`, margin, yPos); yPos += 25;
+
+                    // Employer: 1. signature above line
+                    if (approval.employer_signature && approval.employer_signature_type === 'drawn' && approval.employer_signature.startsWith('data:image')) {
+                      try { doc.addImage(approval.employer_signature, 'PNG', margin, yPos, 60, 15); yPos += 18; } catch {}
+                    } else if (approval.employer_signature && approval.employer_signature_type === 'typed') {
+                      doc.setFont('helvetica', 'bolditalic'); doc.setFontSize(14);
                       doc.text(approval.employer_signature, margin, yPos);
-                      doc.setFont('helvetica', 'normal');
-                      doc.setFontSize(10);
-                      yPos += 10;
+                      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); yPos += 12;
                     }
                     doc.text('______________________________', margin, yPos); yPos += 5;
-                    doc.text('(Authorized Signature)', margin, yPos); yPos += 7;
+                    doc.setFontSize(8); doc.text('(Authorized Signature)', margin, yPos); doc.setFontSize(10); yPos += 10;
+                    // 2. Signed on behalf
+                    doc.text('Signed on behalf of the Employer', margin, yPos); yPos += 10;
+                    // 3. Name
                     const empName = (approval.contract_content as any)?.employer_name || '';
                     if (empName) {
                       doc.setFont('helvetica', 'bold');
                       doc.text(empName.toUpperCase(), margin, yPos);
-                      doc.setFont('helvetica', 'normal');
-                      yPos += 7;
+                      doc.setFont('helvetica', 'normal'); yPos += 7;
                     }
+                    // 4. Date
                     doc.text(`Date: ${formatDate(approval.employer_signed_date)}`, margin, yPos);
 
                     doc.save(`Contract_${employee.first_name}_${employee.last_name}.pdf`);
