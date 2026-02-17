@@ -1,10 +1,11 @@
-import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { File, Plus, Lock, AlertCircle, CheckCircle, Upload } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { File, Plus, Lock, AlertCircle, CheckCircle, Upload, PenTool, Eraser } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -52,6 +53,13 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
   const [requirementExpiry, setRequirementExpiry] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // E-signature state per requirement
+  const [esignNames, setEsignNames] = useState<Record<string, string>>({});
+  const [esignRoles, setEsignRoles] = useState<Record<string, string>>({});
+  const [esignHasSignature, setEsignHasSignature] = useState<Record<string, boolean>>({});
+  const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  const [drawingReqId, setDrawingReqId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDocumentRequirements();
@@ -81,6 +89,65 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
 
   const handleRequirementExpiryChange = (reqId: string, date: string) => {
     setRequirementExpiry(prev => ({ ...prev, [reqId]: date }));
+  };
+
+  // E-signature canvas helpers
+  const initCanvas = (reqId: string, canvas: HTMLCanvasElement | null) => {
+    canvasRefs.current[reqId] = canvas;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+      }
+    }
+  };
+
+  const startDrawingOnCanvas = (reqId: string, e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    setDrawingReqId(reqId);
+    const canvas = canvasRefs.current[reqId];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const drawOnCanvas = (reqId: string, e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (drawingReqId !== reqId) return;
+    const canvas = canvasRefs.current[reqId];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setEsignHasSignature(prev => ({ ...prev, [reqId]: true }));
+  };
+
+  const stopDrawing = () => setDrawingReqId(null);
+
+  const clearCanvasSignature = (reqId: string) => {
+    const canvas = canvasRefs.current[reqId];
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setEsignHasSignature(prev => ({ ...prev, [reqId]: false }));
+  };
+
+  const getCanvasDataUrl = (reqId: string): string | null => {
+    if (!esignHasSignature[reqId] || !canvasRefs.current[reqId]) return null;
+    return canvasRefs.current[reqId]!.toDataURL('image/png');
   };
 
   const hasAllMandatoryDocuments = () => {
@@ -117,7 +184,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
 
           if (uploadError) throw uploadError;
 
-          await supabase.from('documents').insert({
+          const insertData: any = {
             title: req.name,
             file_name: file.name,
             file_path: filePath,
@@ -127,7 +194,18 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
             folder_id: folderId,
             expiry_date: requirementExpiry[req.id] || null,
             uploaded_by: user?.id
-          });
+          };
+
+          // Add e-signature data if required
+          if (req.requires_esignature) {
+            insertData.verified_by_name = esignNames[req.id] || null;
+            insertData.verified_by_role = esignRoles[req.id] || null;
+            insertData.verified_by_signature = getCanvasDataUrl(req.id);
+            insertData.verified_at = new Date().toISOString();
+            insertData.verification_message = req.verification_message || null;
+          }
+
+          await supabase.from('documents').insert(insertData);
         }
       }
 
@@ -267,6 +345,45 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                         />
                       </div>
                     </div>
+
+                    {/* E-Signature Section for share code */}
+                    {req.requires_esignature && requirementFiles[req.id] && (
+                      <>
+                        <Separator />
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <PenTool className="h-4 w-4 text-primary" />
+                            <span className="font-semibold text-sm">E-Signature Verification</span>
+                          </div>
+                          {req.verification_message && (
+                            <div className="bg-muted/50 rounded-lg p-3 border">
+                              <p className="text-sm">{req.verification_message}</p>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Your Name *</Label>
+                              <Input placeholder="Full name" value={esignNames[req.id] || ''} onChange={(e) => setEsignNames(p => ({ ...p, [req.id]: e.target.value }))} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Your Role *</Label>
+                              <Input placeholder="e.g., HR Manager" value={esignRoles[req.id] || ''} onChange={(e) => setEsignRoles(p => ({ ...p, [req.id]: e.target.value }))} />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Signature *</Label>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => clearCanvasSignature(req.id)} className="h-6 text-xs"><Eraser className="h-3 w-3 mr-1" />Clear</Button>
+                            </div>
+                            <div className="border-2 rounded-lg overflow-hidden bg-white">
+                              <canvas ref={(el) => initCanvas(req.id, el)} width={300} height={100} className="w-full cursor-crosshair touch-none"
+                                onMouseDown={(e) => startDrawingOnCanvas(req.id, e)} onMouseMove={(e) => drawOnCanvas(req.id, e)} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                                onTouchStart={(e) => startDrawingOnCanvas(req.id, e)} onTouchMove={(e) => drawOnCanvas(req.id, e)} onTouchEnd={stopDrawing} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               );
@@ -324,9 +441,48 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                         onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
                       />
                     </div>
+                    </div>
+
+                    {/* E-Signature Section */}
+                    {req.requires_esignature && requirementFiles[req.id] && (
+                      <>
+                        <Separator />
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <PenTool className="h-4 w-4 text-primary" />
+                            <span className="font-semibold text-sm">E-Signature Verification</span>
+                          </div>
+                          {req.verification_message && (
+                            <div className="bg-muted/50 rounded-lg p-3 border">
+                              <p className="text-sm">{req.verification_message}</p>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Your Name *</Label>
+                              <Input placeholder="Full name" value={esignNames[req.id] || ''} onChange={(e) => setEsignNames(p => ({ ...p, [req.id]: e.target.value }))} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Your Role *</Label>
+                              <Input placeholder="e.g., HR Manager" value={esignRoles[req.id] || ''} onChange={(e) => setEsignRoles(p => ({ ...p, [req.id]: e.target.value }))} />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Signature *</Label>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => clearCanvasSignature(req.id)} className="h-6 text-xs"><Eraser className="h-3 w-3 mr-1" />Clear</Button>
+                            </div>
+                            <div className="border-2 rounded-lg overflow-hidden bg-white">
+                              <canvas ref={(el) => initCanvas(req.id, el)} width={300} height={100} className="w-full cursor-crosshair touch-none"
+                                onMouseDown={(e) => startDrawingOnCanvas(req.id, e)} onMouseMove={(e) => drawOnCanvas(req.id, e)} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                                onTouchStart={(e) => startDrawingOnCanvas(req.id, e)} onTouchMove={(e) => drawOnCanvas(req.id, e)} onTouchEnd={stopDrawing} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
-              </Card>
+                </Card>
             );
           })}
         </div>
