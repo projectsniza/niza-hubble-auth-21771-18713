@@ -151,6 +151,42 @@ export function useSharedTemplates() {
   };
 }
 
+// Hook for super admin to view all store templates across all branches
+export function useAllStoreTemplates() {
+  const [templates, setTemplates] = useState<StoreTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+
+  const fetchTemplates = useCallback(async () => {
+    if (user?.role !== 'super_admin') {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('store_templates')
+        .select('*, organization:organizations(name), branch:branches(name)')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTemplates((data || []) as any);
+    } catch (error: unknown) {
+      console.error('Error fetching all store templates:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+
+  return { templates, isLoading, refetch: fetchTemplates };
+}
+
 export function useStoreTemplates() {
   const [templates, setTemplates] = useState<StoreTemplate[]>([]);
   const [sharedTemplates, setSharedTemplates] = useState<SharedTemplate[]>([]);
