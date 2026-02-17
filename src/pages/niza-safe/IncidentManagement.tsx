@@ -68,7 +68,7 @@ export default function IncidentManagement() {
 
   useEffect(() => {
     fetchIncidents();
-    if (user?.role === 'super_admin') {
+    if (user?.role === 'super_admin' || user?.role === 'hr') {
       fetchOrganizations();
     }
   }, [user]);
@@ -114,18 +114,39 @@ export default function IncidentManagement() {
       let orgId: string | null = null;
       let branchId: string | null = null;
 
-      // For Super Admin, use selected values
-      if (user?.role === 'super_admin') {
-        if (!selectedOrg || !selectedBranch) {
-          toast({
-            title: "Error",
-            description: "Please select organization and branch",
-            variant: "destructive",
-          });
-          return;
+      // For Super Admin or HR, use selected values or profile
+      if (user?.role === 'super_admin' || user?.role === 'hr') {
+        if (user?.role === 'super_admin') {
+          if (!selectedOrg || !selectedBranch) {
+            toast({
+              title: "Error",
+              description: "Please select organization and branch",
+              variant: "destructive",
+            });
+            return;
+          }
+          orgId = selectedOrg;
+          branchId = selectedBranch;
+        } else {
+          // HR user
+          if (selectedOrg && selectedBranch) {
+            orgId = selectedOrg;
+            branchId = selectedBranch;
+          } else if (user.organizationId && user.branchId) {
+            orgId = user.organizationId;
+            branchId = user.branchId;
+          } else if (user.organizationId && selectedBranch) {
+            orgId = user.organizationId;
+            branchId = selectedBranch;
+          } else {
+            toast({
+              title: "Error",
+              description: "Please select organization and branch",
+              variant: "destructive",
+            });
+            return;
+          }
         }
-        orgId = selectedOrg;
-        branchId = selectedBranch;
       } else {
         // For other roles, get from profile
         const { data: profile } = await supabase
@@ -462,8 +483,8 @@ export default function IncidentManagement() {
             <DialogTitle>Report {formData.incident_type === 'accident' ? 'Accident' : 'Incident'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {/* Organization and Branch selection for Super Admin */}
-            {user?.role === 'super_admin' && (
+            {/* Organization and Branch selection for Super Admin and HR */}
+            {(user?.role === 'super_admin' || (user?.role === 'hr' && !user?.branchId)) && (
               <>
                 <div className="space-y-2">
                   <Label>Organization</Label>

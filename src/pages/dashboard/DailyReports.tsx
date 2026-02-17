@@ -150,6 +150,14 @@ export default function DailyReports() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // For HR users without a branch, allow selecting one
+  const [selectedSubmitOrg, setSelectedSubmitOrg] = useState('');
+  const [selectedSubmitBranch, setSelectedSubmitBranch] = useState('');
+
+  const needsBranchSelection = user?.role === 'hr' && !user?.branchId;
+  const submitOrgId = user?.organizationId || selectedSubmitOrg;
+  const submitBranchId = user?.branchId || selectedSubmitBranch;
+
   const handleSubmitReport = async () => {
     if (!reportTitle || files.length === 0) {
       toast({
@@ -170,10 +178,10 @@ export default function DailyReports() {
       return;
     }
 
-    if (!user?.organizationId || !user?.branchId) {
+    if (!submitOrgId || !submitBranchId) {
       toast({
         title: "Error",
-        description: "You must be assigned to a branch to submit reports",
+        description: "Please select an organization and branch",
         variant: "destructive",
       });
       return;
@@ -209,8 +217,8 @@ export default function DailyReports() {
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
-        organization_id: user.organizationId,
-        branch_id: user.branchId
+        organization_id: submitOrgId,
+        branch_id: submitBranchId
       });
 
       if (error) throw error;
@@ -224,8 +232,8 @@ export default function DailyReports() {
         activityCategory: 'reports',
         title: 'New Daily Report',
         description: `${user.name} submitted "${reportTitle}" report`,
-        organizationId: user.organizationId,
-        branchId: user.branchId,
+        organizationId: submitOrgId,
+        branchId: submitBranchId,
       });
 
       toast({
@@ -357,6 +365,32 @@ export default function DailyReports() {
                 <DialogTitle>Upload Report or Invoice</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {needsBranchSelection && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Organization *</Label>
+                      <Select value={selectedSubmitOrg} onValueChange={(v) => { setSelectedSubmitOrg(v); setSelectedSubmitBranch(''); }}>
+                        <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                        <SelectContent>
+                          {organizations.map(org => (
+                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch *</Label>
+                      <Select value={selectedSubmitBranch} onValueChange={setSelectedSubmitBranch}>
+                        <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                        <SelectContent>
+                          {branches.filter(b => selectedSubmitOrg ? b.organization_id === selectedSubmitOrg : (user?.organizationId ? b.organization_id === user.organizationId : true)).map(b => (
+                            <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="reportTitle">Title *</Label>
                   <Input 

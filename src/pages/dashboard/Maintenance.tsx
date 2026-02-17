@@ -143,6 +143,15 @@ export default function Maintenance() {
     }
   };
 
+  // For HR users without a branch, allow selecting one
+  const [selectedSubmitOrg, setSelectedSubmitOrg] = useState('');
+  const [selectedSubmitBranch, setSelectedSubmitBranch] = useState('');
+
+  const needsBranchSelection = user?.role === 'hr' && !user?.branchId;
+  const submitOrgId = user?.organizationId || selectedSubmitOrg;
+  const submitBranchId = user?.branchId || selectedSubmitBranch;
+  const submitBranchOptions = branches.filter(b => submitOrgId ? b.organization_id === submitOrgId : true);
+
   const handleSubmit = async () => {
     if (!title || !description || !priority) {
       toast({
@@ -153,10 +162,10 @@ export default function Maintenance() {
       return;
     }
 
-    if (!user?.organizationId || !user?.branchId) {
+    if (!submitOrgId || !submitBranchId) {
       toast({
         title: "Error",
-        description: "You must be assigned to a branch to create tickets",
+        description: "Please select an organization and branch",
         variant: "destructive",
       });
       return;
@@ -191,8 +200,8 @@ export default function Maintenance() {
         status: 'pending',
         images: uploadedImages,
         reported_by: user.id,
-        organization_id: user.organizationId,
-        branch_id: user.branchId
+        organization_id: submitOrgId,
+        branch_id: submitBranchId
       });
 
       if (error) throw error;
@@ -387,6 +396,32 @@ export default function Maintenance() {
                 <DialogTitle>Create Maintenance Ticket</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {needsBranchSelection && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Organization *</Label>
+                      <Select value={selectedSubmitOrg} onValueChange={(v) => { setSelectedSubmitOrg(v); setSelectedSubmitBranch(''); }}>
+                        <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                        <SelectContent>
+                          {organizations.map(org => (
+                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Branch *</Label>
+                      <Select value={selectedSubmitBranch} onValueChange={setSelectedSubmitBranch}>
+                        <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                        <SelectContent>
+                          {submitBranchOptions.map(b => (
+                            <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="title">Issue Title *</Label>
                   <Input

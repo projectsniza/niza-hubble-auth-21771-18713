@@ -139,7 +139,7 @@ export default function DriveOffs() {
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4 flex-wrap">
-        {user?.role === 'super_admin' && (
+        {(user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full')) && (
           <>
             <Select 
               value={selectedOrg || 'all'} 

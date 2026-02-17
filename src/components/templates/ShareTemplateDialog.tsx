@@ -5,10 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload, X } from 'lucide-react';
 import { useSharedTemplates } from '@/hooks/useSharedTemplates';
 import { supabase } from '@/integrations/supabase/client';
+
+interface Organization {
+  id: string;
+  name: string;
+}
 
 interface Branch {
   id: string;
@@ -25,24 +30,31 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [templateType, setTemplateType] = useState('general');
-  const [isGlobal, setIsGlobal] = useState(true);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [shareScope, setShareScope] = useState<'global' | 'organization' | 'branch'>('global');
+  const [selectedOrgId, setSelectedOrgId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createSharedTemplate } = useSharedTemplates();
 
   useEffect(() => {
-    const fetchBranches = async () => {
-      const { data } = await supabase
-        .from('branches')
-        .select('id, name, organization_id')
-        .order('name');
-      setBranches(data || []);
+    const fetchData = async () => {
+      const [orgsRes, branchesRes] = await Promise.all([
+        supabase.from('organizations').select('id, name').order('name'),
+        supabase.from('branches').select('id, name, organization_id').order('name'),
+      ]);
+      setOrganizations(orgsRes.data || []);
+      setBranches(branchesRes.data || []);
     };
-    if (open) fetchBranches();
+    if (open) fetchData();
   }, [open]);
+
+  const filteredBranches = selectedOrgId
+    ? branches.filter(b => b.organization_id === selectedOrgId)
+    : branches;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -55,22 +67,25 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
 
     setIsSubmitting(true);
     try {
-      const branch = branches.find(b => b.id === selectedBranchId);
-      
+      const isGlobal = shareScope === 'global';
+      const orgId = shareScope === 'organization' ? selectedOrgId : (shareScope === 'branch' ? (branches.find(b => b.id === selectedBranchId)?.organization_id || null) : null);
+      const branchId = shareScope === 'branch' ? selectedBranchId : null;
+
       await createSharedTemplate({
         title: title.trim(),
         description: description.trim() || null,
         template_type: templateType,
         is_global: isGlobal,
-        branch_id: isGlobal ? null : selectedBranchId || null,
-        organization_id: isGlobal ? null : branch?.organization_id || null,
+        branch_id: branchId,
+        organization_id: orgId,
       }, file || undefined);
 
       // Reset form
       setTitle('');
       setDescription('');
       setTemplateType('general');
-      setIsGlobal(true);
+      setShareScope('global');
+      setSelectedOrgId('');
       setSelectedBranchId('');
       setFile(null);
       onOpenChange(false);
@@ -125,27 +140,50 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
             </Select>
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="global">Share with all stores</Label>
-            <Switch
-              id="global"
-              checked={isGlobal}
-              onCheckedChange={setIsGlobal}
-            />
+          <div className="space-y-3">
+            <Label>Share With</Label>
+            <RadioGroup value={shareScope} onValueChange={(v) => setShareScope(v as any)}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="global" id="global" />
+                <Label htmlFor="global" className="font-normal">All Stores</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="organization" id="organization" />
+                <Label htmlFor="organization" className="font-normal">Specific Organization (all branches)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="branch" id="branch" />
+                <Label htmlFor="branch" className="font-normal">Specific Branch</Label>
+              </div>
+            </RadioGroup>
           </div>
 
-          {!isGlobal && (
+          {(shareScope === 'organization' || shareScope === 'branch') && (
             <div className="space-y-2">
-              <Label>Select Store</Label>
-              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+              <Label>Select Organization</Label>
+              <Select value={selectedOrgId} onValueChange={(v) => { setSelectedOrgId(v); setSelectedBranchId(''); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a store" />
+                  <SelectValue placeholder="Select organization" />
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
+                  {organizations.map((org) => (
+                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {shareScope === 'branch' && selectedOrgId && (
+            <div className="space-y-2">
+              <Label>Select Branch</Label>
+              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredBranches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -157,11 +195,7 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
             {file ? (
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                 <span className="text-sm flex-1 truncate">{file.name}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setFile(null)}
-                >
+                <Button variant="ghost" size="icon" onClick={() => setFile(null)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -169,24 +203,14 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
               <label className="flex items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 transition-colors">
                 <Upload className="h-5 w-5 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">Click to upload file</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                />
+                <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
               </label>
             )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSubmit} 
-              disabled={!title.trim() || isSubmitting}
-            >
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={!title.trim() || isSubmitting}>
               {isSubmitting ? 'Sharing...' : 'Share Template'}
             </Button>
           </div>
