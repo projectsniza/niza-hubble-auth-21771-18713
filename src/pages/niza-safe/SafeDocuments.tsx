@@ -81,7 +81,11 @@ export default function SafeDocuments() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState('');
 
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
+  // All roles that can manage within their scope
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isHR = user?.role === 'hr';
+  const isManager = user?.role === 'manager';
+  const isAdmin = isSuperAdmin || isHR || isManager;
 
   useEffect(() => {
     fetchFoldersAndDocuments();
@@ -90,19 +94,49 @@ export default function SafeDocuments() {
   const fetchFoldersAndDocuments = async () => {
     setIsLoading(true);
     try {
-      // Fetch folders - at root show folders with show_in_safety, otherwise show children
-      let foldersQuery = supabase.from('folders').select('*').order('name');
-      
       if (currentFolderId === null) {
-        // At root level - show folders marked as show_in_safety with no parent
-        foldersQuery = foldersQuery.eq('show_in_safety', true).is('parent_id', null);
+        // Root level: show scoped safety folders
+        let scopedFolders: FolderItem[] = [];
+        if (isSuperAdmin) {
+          const { data: safetyRoot } = await supabase.from('folders')
+            .select('id').eq('path', 'Safety Documents').eq('folder_type', 'root').single();
+          if (safetyRoot) {
+            const { data } = await supabase.from('folders')
+              .select('*').eq('parent_id', safetyRoot.id).eq('folder_type', 'safety_organization').order('name');
+            scopedFolders = data || [];
+          }
+        } else if (isHR) {
+          if (user?.organizationId) {
+            const { data } = await supabase.from('folders')
+              .select('*').eq('organization_id', user.organizationId).eq('folder_type', 'safety_organization').order('name');
+            scopedFolders = data || [];
+          }
+        } else if (isManager) {
+          if (user?.branchId) {
+            const { data } = await supabase.from('folders')
+              .select('*').eq('branch_id', user.branchId).eq('folder_type', 'safety_branch').order('name');
+            scopedFolders = data || [];
+          }
+        } else {
+          // Employee sees their branch folder
+          if (user?.branchId) {
+            const { data } = await supabase.from('folders')
+              .select('*').eq('branch_id', user.branchId).eq('folder_type', 'safety_branch').order('name');
+            scopedFolders = data || [];
+          }
+        }
+        // Also include custom folders marked show_in_safety at root (legacy)
+        const { data: customFolders } = await supabase.from('folders')
+          .select('*').eq('show_in_safety', true).is('parent_id', null)
+          .not('folder_type', 'eq', 'root').not('folder_type', 'eq', 'safety_organization').not('folder_type', 'eq', 'safety_branch')
+          .order('name');
+        setFolders([...scopedFolders, ...(customFolders || [])]);
       } else {
-        foldersQuery = foldersQuery.eq('parent_id', currentFolderId);
+        // Inside a folder - show children
+        const { data: foldersData } = await supabase.from('folders')
+          .select('*').eq('parent_id', currentFolderId).order('name');
+        setFolders(foldersData || []);
       }
-      
-      const { data: foldersData } = await foldersQuery;
-      setFolders(foldersData || []);
-
       // Fetch documents in current folder
       if (currentFolderId) {
         const { data: docsData } = await supabase
@@ -141,6 +175,8 @@ export default function SafeDocuments() {
         .single();
 
       if (folder) {
+        // Stop at the Safety Documents root - don't include it
+        if (folder.folder_type === 'root') break;
         crumbs.unshift(folder);
         currentId = folder.parent_id;
       } else {
@@ -331,7 +367,7 @@ export default function SafeDocuments() {
   };
 
   const isProtectedFolder = (folder: FolderItem) => {
-    return folder.folder_type === 'root' || folder.path === 'Safety Documents';
+    return folder.folder_type === 'root' || folder.folder_type === 'safety_organization' || folder.folder_type === 'safety_branch';
   };
 
   const filteredDocuments = documents.filter(doc =>
@@ -436,7 +472,7 @@ export default function SafeDocuments() {
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-foreground truncate">{folder.name}</p>
                             <p className="text-xs text-muted-foreground capitalize">
-                              {folder.folder_type === 'root' ? 'Root folder' : 'Folder'}
+                              {folder.folder_type === 'safety_organization' ? 'Organization' : folder.folder_type === 'safety_branch' ? 'Branch' : folder.folder_type === 'root' ? 'Root' : 'Folder'}
                             </p>
                           </div>
                         </div>
