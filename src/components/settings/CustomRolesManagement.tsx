@@ -27,82 +27,33 @@ interface CustomRole {
   created_at: string;
 }
 
-// Define feature groups based on role type
-const MANAGER_FEATURES = {
-  'Employee Management': [
-    { key: 'view_employees', label: 'View Employees' },
-    { key: 'add_employees', label: 'Add Employees' },
-    { key: 'edit_employees', label: 'Edit Employees' },
-    { key: 'delete_employees', label: 'Delete Employees' },
-  ],
-  'Scheduling': [
-    { key: 'view_schedules', label: 'View Schedules' },
-    { key: 'create_rotas', label: 'Create Rotas' },
-    { key: 'manage_shifts', label: 'Manage Shifts' },
-  ],
-  'Attendance': [
-    { key: 'view_attendance', label: 'View Attendance' },
-    { key: 'manage_leave', label: 'Manage Leave Requests' },
-    { key: 'view_clockins', label: 'View Clock-ins' },
-  ],
-  'Documents': [
-    { key: 'view_documents', label: 'View Documents' },
-    { key: 'upload_documents', label: 'Upload Documents' },
-    { key: 'delete_documents', label: 'Delete Documents' },
-  ],
-  'Reports': [
-    { key: 'view_reports', label: 'View Reports' },
-    { key: 'create_reports', label: 'Create Reports' },
-    { key: 'submit_daily_reports', label: 'Submit Daily Reports' },
-  ],
-  'Training': [
-    { key: 'view_training', label: 'View Training' },
-    { key: 'assign_training', label: 'Assign Training' },
-    { key: 'create_training', label: 'Create Training' },
-  ],
-  'Maintenance': [
-    { key: 'view_maintenance', label: 'View Maintenance Tickets' },
-    { key: 'create_maintenance', label: 'Create Maintenance Tickets' },
-    { key: 'manage_maintenance', label: 'Manage Maintenance Tickets' },
-  ],
+// Define feature groups - simplified to module-level toggles
+const MANAGER_FEATURES: Record<string, { key: string; label: string }[]> = {
+  'Employee Management': [{ key: 'employee_management', label: 'Employee Management' }],
+  'Scheduling': [{ key: 'scheduling', label: 'Scheduling' }],
+  'Attendance': [{ key: 'attendance', label: 'Attendance' }],
+  'Documents': [{ key: 'documents', label: 'Documents' }],
+  'Daily Reports': [{ key: 'daily_reports', label: 'Daily Reports' }],
+  'Training': [{ key: 'training', label: 'Training' }],
+  'Maintenance': [{ key: 'maintenance', label: 'Maintenance' }],
+  'Drive-Offs': [{ key: 'drive_offs', label: 'Drive-Offs' }],
+  'Lottery': [{ key: 'lottery', label: 'Lottery' }],
+  'Events & News': [{ key: 'events', label: 'Events & News' }],
+  'Messages': [{ key: 'messages', label: 'Messages' }],
+  'Clock-ins': [{ key: 'clock_ins', label: 'Clock-ins' }],
+  'Performance': [{ key: 'performance', label: 'Performance' }],
 };
 
-const HR_FEATURES = {
+const HR_FEATURES: Record<string, { key: string; label: string }[]> = {
   ...MANAGER_FEATURES,
-  'Onboarding': [
-    { key: 'view_onboarding', label: 'View Onboarding' },
-    { key: 'manage_onboarding', label: 'Manage Onboarding' },
-    { key: 'approve_contracts', label: 'Approve Contracts' },
-  ],
-  'Payroll': [
-    { key: 'view_payroll', label: 'View Payroll' },
-    { key: 'manage_payroll', label: 'Manage Payroll' },
-  ],
-  'UK Compliance': [
-    { key: 'view_compliance', label: 'View Compliance' },
-    { key: 'manage_compliance', label: 'Manage Compliance Settings' },
-  ],
-  'Performance': [
-    { key: 'view_performance', label: 'View Performance' },
-    { key: 'manage_performance', label: 'Manage Performance Reviews' },
-  ],
+  'Payroll': [{ key: 'payroll', label: 'Payroll' }],
+  'UK Compliance': [{ key: 'uk_compliance', label: 'UK Compliance' }],
+  'Onboarding': [{ key: 'onboarding', label: 'Onboarding' }],
 };
 
-const EMPLOYEE_FEATURES = {
-  'Self Service': [
-    { key: 'view_own_profile', label: 'View Own Profile' },
-    { key: 'edit_own_profile', label: 'Edit Own Profile' },
-    { key: 'submit_leave', label: 'Submit Leave Requests' },
-    { key: 'view_schedule', label: 'View Own Schedule' },
-    { key: 'clock_in_out', label: 'Clock In/Out' },
-    { key: 'view_payslips', label: 'View Payslips' },
-    { key: 'view_own_documents', label: 'View Own Documents' },
-    { key: 'complete_training', label: 'Complete Training' },
-  ],
-  'Communication': [
-    { key: 'view_events', label: 'View Events' },
-    { key: 'use_messaging', label: 'Use Messaging' },
-  ],
+const EMPLOYEE_FEATURES: Record<string, { key: string; label: string }[]> = {
+  'Self Service': [{ key: 'self_service', label: 'Self Service' }],
+  'Communication': [{ key: 'communication', label: 'Communication' }],
 };
 
 export default function CustomRolesManagement() {

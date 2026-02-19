@@ -93,7 +93,7 @@ export default function Documents() {
   const [showDocumentDetails, setShowDocumentDetails] = useState(false);
   const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
 
-  const hasAccess = user?.role === 'super_admin';
+  const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
   useEffect(() => {
     const initializeRoot = async () => {

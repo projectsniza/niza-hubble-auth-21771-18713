@@ -30,8 +30,8 @@ export default function SubmitDocuments() {
   const { submissions, isLoading, pendingCount } = useDocumentSubmissions();
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
 
-  // Only managers and HR can access this page
-  if (!user || (user.role !== 'manager' && user.role !== 'hr')) {
+  // Managers, HR, and super_admin can access this page
+  if (!user || (user.role !== 'manager' && user.role !== 'hr' && user.role !== 'super_admin')) {
     return <Navigate to="/dashboard" replace />;
   }
 

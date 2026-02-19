@@ -2,12 +2,8 @@ import { memo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Building2, Settings2, ShieldCheck } from "lucide-react";
 
 export type BaseRole = "manager" | "hr" | "employee";
@@ -224,51 +220,32 @@ function CustomRoleFormImpl({
         </div>
       )}
 
-      {/* Feature Permissions */}
+      {/* Feature Permissions - Module-level toggles */}
       <div className="space-y-4 border-t pt-4">
         <h4 className="font-medium flex items-center gap-2">
           <ShieldCheck className="h-4 w-4" />
           Feature Permissions
         </h4>
 
-        <Accordion type="multiple" className="w-full">
-          {Object.entries(features).map(([groupName, groupFeatures]) => (
-            <AccordionItem key={groupName} value={groupName}>
-              <AccordionTrigger className="text-sm">
-                <div className="flex items-center gap-2">
-                  {groupName}
-                  <Badge variant="outline" className="text-xs">
-                    {groupFeatures.filter((f) => formData.permissions[f.key]).length}/{groupFeatures.length}
-                  </Badge>
+        <div className="space-y-3">
+          {Object.entries(features).map(([groupName, groupFeatures]) => {
+            const featureKey = groupFeatures[0]?.key;
+            if (!featureKey) return null;
+            return (
+              <div key={groupName} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="font-medium text-sm">{groupName}</p>
                 </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-2 pl-2">
-                  <div className="flex gap-2 mb-2">
-                    <Button size="sm" variant="outline" onClick={() => toggleAllInGroup(groupFeatures, true)}>
-                      Select All
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => toggleAllInGroup(groupFeatures, false)}>
-                      Deselect All
-                    </Button>
-                  </div>
-                  {groupFeatures.map((feature) => (
-                    <div key={feature.key} className="flex items-center gap-2">
-                      <Checkbox
-                        id={feature.key}
-                        checked={formData.permissions[feature.key] || false}
-                        onCheckedChange={() => togglePermission(feature.key)}
-                      />
-                      <label htmlFor={feature.key} className="text-sm cursor-pointer">
-                        {feature.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+                <Switch
+                  checked={formData.permissions[featureKey] || false}
+                  onCheckedChange={(checked) => {
+                    togglePermission(featureKey);
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Extra App Access */}

@@ -248,7 +248,7 @@ export default function DocumentSubmissionsSidebar({ open, onClose }: DocumentSu
           {/* File Upload */}
           <div className="space-y-2">
             <Label>Upload File *</Label>
-            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            <div className="border-2 border-dashed rounded-lg p-6 text-center relative">
               {file ? (
                 <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg">
                   <div className="flex items-center gap-2 truncate">
@@ -265,7 +265,7 @@ export default function DocumentSubmissionsSidebar({ open, onClose }: DocumentSu
                   </Button>
                 </div>
               ) : (
-                <div>
+                <label className="cursor-pointer block">
                   <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground mb-2">
                     Click to upload or drag and drop
@@ -273,13 +273,13 @@ export default function DocumentSubmissionsSidebar({ open, onClose }: DocumentSu
                   <p className="text-xs text-muted-foreground">
                     Max file size: 20MB
                   </p>
-                  <Input
+                  <input
                     type="file"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    className="hidden"
                     onChange={handleFileChange}
                     accept="*/*"
                   />
-                </div>
+                </label>
               )}
             </div>
           </div>
