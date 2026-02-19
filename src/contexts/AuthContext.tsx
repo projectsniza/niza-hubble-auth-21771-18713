@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: (roleResult.data?.role as UserRole) ?? 'employee',
         organizationId: profile.organization_id || undefined,
         branchId: profile.branch_id || undefined,
-        hrAccessLevel: profile.hr_access_level as HRAccessLevel | undefined,
+        hrAccessLevel: (profile.hr_access_level as HRAccessLevel) || 'full',
       };
 
       return appUser;

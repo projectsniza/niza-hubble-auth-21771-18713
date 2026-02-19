@@ -85,7 +85,7 @@ export function HolidayBalance() {
   const [editNotes, setEditNotes] = useState('');
   const [currentRefMonth, setCurrentRefMonth] = useState<Date>(new Date());
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
 
   const getFiscalYearLabel = () => {
     const yearStart = parseISO(selectedYear);
