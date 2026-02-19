@@ -55,7 +55,7 @@ export default function DailyReports() {
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
   
   // Debounce ref to prevent excessive refetches
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -154,7 +154,7 @@ export default function DailyReports() {
   const [selectedSubmitOrg, setSelectedSubmitOrg] = useState('');
   const [selectedSubmitBranch, setSelectedSubmitBranch] = useState('');
 
-  const needsBranchSelection = user?.role === 'hr' && !user?.branchId;
+  const needsBranchSelection = (user?.role === 'super_admin' || user?.role === 'hr') && !user?.branchId;
   const submitOrgId = user?.organizationId || selectedSubmitOrg;
   const submitBranchId = user?.branchId || selectedSubmitBranch;
 
@@ -284,8 +284,8 @@ export default function DailyReports() {
 
   const canDeleteReport = useCallback((report: DailyReport) => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
-    if ((user.role === 'manager' || user.role === 'hr') && report.submitted_by === user.id) return true;
+    if (user.role === 'super_admin' || user.role === 'hr') return true;
+    if (user.role === 'manager' && report.submitted_by === user.id) return true;
     return false;
   }, [user]);
 
@@ -338,7 +338,7 @@ export default function DailyReports() {
     return matchesSearch && matchesDate;
   }), [reports, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
-  const canCreateReport = user?.role === 'manager' || user?.role === 'hr';
+  const canCreateReport = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'hr';
 
   return (
     <div className="p-8 space-y-6">

@@ -116,7 +116,7 @@ export default function ClockIns() {
   const [historyFilterYear, setHistoryFilterYear] = useState(new Date().getFullYear().toString());
   const [clockInProfiles, setClockInProfiles] = useState<Record<string, { name: string; display_name: string | null }>>({});
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
   
   const [newLocation, setNewLocation] = useState({
     name: '',
@@ -746,7 +746,7 @@ export default function ClockIns() {
           <p className="text-muted-foreground mt-1">Manage employee check-in locations and geofencing</p>
         </div>
         
-        {user?.role === 'super_admin' && (
+        {(user?.role === 'super_admin' || user?.role === 'hr') && (
           <Dialog open={showAddLocation} onOpenChange={setShowAddLocation}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -893,7 +893,7 @@ export default function ClockIns() {
                   <h3 className="text-xl font-semibold text-foreground mb-2">No locations configured</h3>
                   <p className="text-muted-foreground mb-4">Add your first location to enable employee clock-ins</p>
                 </div>
-                {user?.role === 'super_admin' && (
+                {(user?.role === 'super_admin' || user?.role === 'hr') && (
                   <Button onClick={() => setShowAddLocation(true)} className="gap-2">
                     <Plus className="h-4 w-4" />
                     Add First Location
@@ -960,7 +960,7 @@ export default function ClockIns() {
                           : 'Clock In'}
                       </Button>
                     )}
-                    {user?.role === 'super_admin' && (
+                    {(user?.role === 'super_admin' || user?.role === 'hr') && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
                           <Edit className="h-4 w-4" />

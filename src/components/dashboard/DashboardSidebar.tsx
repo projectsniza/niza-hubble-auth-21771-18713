@@ -104,8 +104,8 @@ const getMenuItems = (role: string) => {
     { title: 'UK Compliance', icon: Shield, path: '/dashboard/uk-compliance' },
   ];
 
-  // Add Settings only for super_admin
-  if (role === 'super_admin') {
+  // Add Settings for super_admin and HR
+  if (role === 'super_admin' || role === 'hr') {
     items.push({ title: 'Settings', icon: Settings, path: '/dashboard/settings' });
   }
 

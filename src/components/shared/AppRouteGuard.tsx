@@ -35,8 +35,8 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
     // Super admins always have access
     if (user.role === 'super_admin') return;
 
-    // Full HR always has access
-    if (user.role === 'hr' && user.hrAccessLevel === 'full') return;
+    // All HR users have access to all apps
+    if (user.role === 'hr') return;
 
     // Check custom role app access
     if (!hasAppAccess(appKey)) {
@@ -52,7 +52,7 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
   if (!user) return null;
   
   if (user.role === 'super_admin') return <>{children}</>;
-  if (user.role === 'hr' && user.hrAccessLevel === 'full') return <>{children}</>;
+  if (user.role === 'hr') return <>{children}</>;
   if (hasAppAccess(appKey)) return <>{children}</>;
 
   return null;

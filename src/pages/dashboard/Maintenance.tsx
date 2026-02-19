@@ -57,7 +57,7 @@ export default function Maintenance() {
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
 
   // Debounce ref to prevent excessive refetches
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -147,7 +147,7 @@ export default function Maintenance() {
   const [selectedSubmitOrg, setSelectedSubmitOrg] = useState('');
   const [selectedSubmitBranch, setSelectedSubmitBranch] = useState('');
 
-  const needsBranchSelection = user?.role === 'hr' && !user?.branchId;
+  const needsBranchSelection = (user?.role === 'super_admin' || user?.role === 'hr') && !user?.branchId;
   const submitOrgId = user?.organizationId || selectedSubmitOrg;
   const submitBranchId = user?.branchId || selectedSubmitBranch;
   const submitBranchOptions = branches.filter(b => submitOrgId ? b.organization_id === submitOrgId : true);
@@ -293,8 +293,8 @@ export default function Maintenance() {
 
   const canDeleteTicket = useCallback((ticket: MaintenanceTicket) => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
-    if ((user.role === 'manager' || user.role === 'hr') && ticket.reported_by === user.id) return true;
+    if (user.role === 'super_admin' || user.role === 'hr') return true;
+    if (user.role === 'manager' && ticket.reported_by === user.id) return true;
     return false;
   }, [user]);
 
@@ -371,8 +371,8 @@ export default function Maintenance() {
     return matchesSearch;
   }), [tickets, searchQuery, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
-  const canCreateTicket = user?.role === 'manager' || user?.role === 'hr';
-  const canUpdateStatus = user?.role === 'super_admin';
+  const canCreateTicket = user?.role === 'manager' || user?.role === 'hr' || user?.role === 'super_admin';
+  const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr';
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">

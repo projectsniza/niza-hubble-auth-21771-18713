@@ -53,8 +53,8 @@ export default function Employees() {
   const showContractApprovals = user?.role === 'super_admin';
   const showApprovedContracts = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
   const showBulkUploads = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
-  const showUserManagement = user?.role === 'super_admin';
-  const showOnboardingSettings = user?.role === 'super_admin';
+  const showUserManagement = user?.role === 'super_admin' || user?.role === 'hr';
+  const showOnboardingSettings = user?.role === 'super_admin' || user?.role === 'hr';
 
   // Calculate grid columns based on visible tabs
   const getTabsGridCols = () => {
@@ -83,7 +83,7 @@ export default function Employees() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {user?.role === 'super_admin' && (
+          {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Button variant="outline" onClick={() => setShowBulkUpload(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Bulk Upload
