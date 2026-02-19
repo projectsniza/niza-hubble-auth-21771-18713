@@ -107,13 +107,13 @@ export default function Maintenance() {
       if (user.role === 'manager') {
         query = query.eq('reported_by', user.id);
       } else if (user.role === 'hr') {
-        // HR access depends on their access level
-        if (user.hrAccessLevel === 'organization' && user.organizationId) {
-          query = query.eq('organization_id', user.organizationId);
-        } else if (user.hrAccessLevel === 'branch' && user.branchId) {
+        // HR scoped by org/branch if assigned, otherwise full access
+        if (user.organizationId && user.branchId) {
           query = query.eq('branch_id', user.branchId);
+        } else if (user.organizationId) {
+          query = query.eq('organization_id', user.organizationId);
         }
-        // full_workspace HR sees all tickets (no filter)
+        // HR with no org/branch sees all tickets (same as super admin)
       }
 
       const { data, error } = await query;

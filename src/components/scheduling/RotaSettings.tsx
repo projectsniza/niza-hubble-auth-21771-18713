@@ -107,7 +107,7 @@ export function RotaSettings() {
   }
 
   // Only Super Admin and Full HR can access settings
-  if (user?.role !== 'super_admin' && !(user?.role === 'hr' && user?.hrAccessLevel === 'full')) {
+  if (user?.role !== 'super_admin' && user?.role !== 'hr') {
     return (
       <Card className="p-12 text-center">
         <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
