@@ -93,16 +93,17 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
 
   // E-signature canvas helpers
   const initCanvas = (reqId: string, canvas: HTMLCanvasElement | null) => {
+    if (!canvas) return;
+    // Only initialize if not already set (prevents wiping on re-render)
+    if (canvasRefs.current[reqId] === canvas) return;
     canvasRefs.current[reqId] = canvas;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-      }
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
     }
   };
 

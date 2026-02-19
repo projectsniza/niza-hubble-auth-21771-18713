@@ -56,7 +56,7 @@ const getMenuItems = (role: string) => {
     ];
   }
 
-  // HR role - organization/branch-restricted view
+  // HR role - same as super_admin except Contract Approvals
   if (role === 'hr') {
     return [
       { title: 'Home', icon: Home, path: '/dashboard' },
@@ -65,7 +65,9 @@ const getMenuItems = (role: string) => {
       { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },
       { title: 'Documents', icon: FileText, path: '/dashboard/documents' },
+      { title: 'Submit Documents', icon: FileText, path: '/dashboard/documents/submit' },
       { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
+      { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
