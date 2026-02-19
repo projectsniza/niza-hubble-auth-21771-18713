@@ -110,7 +110,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         </Button>
         
         <div className="flex gap-3">
-          {user?.role === 'super_admin' && (
+          {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Select value={organizationFilter} onValueChange={(v) => {
               setOrganizationFilter(v);
               setBranchFilter('all');
@@ -127,7 +127,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
             </Select>
           )}
           
-          {(user?.role === 'super_admin' || (user?.role === 'hr' && user.hrAccessLevel !== 'branch')) && (
+          {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Select value={branchFilter} onValueChange={setBranchFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All Branches" />

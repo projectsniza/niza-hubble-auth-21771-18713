@@ -62,8 +62,7 @@ export default function AppsDialog() {
   const { hasAppAccess, customRole, isLoading } = useCustomRoleAccess();
 
   // Super admins and full HR always have access to the app switcher
-  const isSuperAdminOrFullHR = user?.role === 'super_admin' || 
-    (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const isSuperAdminOrFullHR = user?.role === 'super_admin' || user?.role === 'hr';
 
   // Check if user has a custom role with any app access
   const hasAnyCustomAppAccess = customRole?.app_access && (

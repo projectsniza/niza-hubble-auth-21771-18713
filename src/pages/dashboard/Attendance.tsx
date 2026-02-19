@@ -74,7 +74,7 @@ export default function Attendance() {
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
   
   const [newLeave, setNewLeave] = useState({
     employeeId: '',
@@ -200,9 +200,9 @@ export default function Attendance() {
         start_date: newLeave.startDate,
         end_date: newLeave.endDate,
         reason: newLeave.reason || null,
-        status: user?.role === 'super_admin' ? 'approved' : 'pending',
-        approved_by: user?.role === 'super_admin' ? user?.id : null,
-        approved_at: user?.role === 'super_admin' ? new Date().toISOString() : null,
+        status: (user?.role === 'super_admin' || user?.role === 'hr') ? 'approved' : 'pending',
+        approved_by: (user?.role === 'super_admin' || user?.role === 'hr') ? user?.id : null,
+        approved_at: (user?.role === 'super_admin' || user?.role === 'hr') ? new Date().toISOString() : null,
         supporting_document_path: documentPath,
         supporting_document_name: documentName
       });

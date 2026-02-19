@@ -83,7 +83,7 @@ export default function LeaveAttendanceOverview() {
   const [filterBranch, setFilterBranch] = useState('');
 
   const isSuperAdmin = user?.role === 'super_admin';
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
 
   useEffect(() => {
     fetchData();

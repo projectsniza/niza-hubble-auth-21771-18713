@@ -91,12 +91,13 @@ export default function Settings() {
   };
 
   // Check if user has access to organization/user management
-  const canManageOrgs = user?.role === 'super_admin';
-  const canManageUsers = user?.role === 'super_admin';
-  const canManageMessages = user?.role === 'super_admin';
-  const canManageCustomRoles = user?.role === 'super_admin';
-  const canManageDocuments = user?.role === 'super_admin';
-  const canManageDepartments = user?.role === 'super_admin';
+  const isAdminOrHR = user?.role === 'super_admin' || user?.role === 'hr';
+  const canManageOrgs = isAdminOrHR;
+  const canManageUsers = isAdminOrHR;
+  const canManageMessages = isAdminOrHR;
+  const canManageCustomRoles = user?.role === 'super_admin'; // Only super admin manages custom roles
+  const canManageDocuments = isAdminOrHR;
+  const canManageDepartments = isAdminOrHR;
 
   // Show loading state while user is being fetched
   if (!user) {
