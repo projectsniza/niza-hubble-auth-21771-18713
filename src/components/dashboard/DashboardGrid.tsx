@@ -7,6 +7,27 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
+
+// Map grid paths to permission keys
+const pathToPermissionKey: Record<string, string> = {
+  '/dashboard/employees': 'employee_management',
+  '/dashboard/documents': 'documents',
+  '/dashboard/drive-offs': 'drive_offs',
+  '/dashboard/lottery': 'lottery',
+  '/dashboard/daily-reports': 'daily_reports',
+  '/dashboard/maintenance': 'maintenance',
+  '/dashboard/elearning': 'training',
+  '/dashboard/attendance': 'attendance',
+  '/dashboard/scheduling': 'scheduling',
+  '/dashboard/clock-ins': 'clock_ins',
+  '/dashboard/events': 'events',
+  '/dashboard/payroll': 'payroll',
+  '/dashboard/performance': 'performance',
+  '/dashboard/messages': 'messages',
+  '/dashboard/reminders': 'reminders',
+  '/dashboard/settings': 'settings',
+};
 
 interface GridItem {
   title: string;
@@ -36,11 +57,22 @@ const gridItems: GridItem[] = [
 
 export default function DashboardGrid() {
   const { user } = useAuth();
+  const { customRole, hasPermission } = useCustomRoleAccess();
   
-  // Add Settings card only for super_admin
-  const displayItems = user?.role === 'super_admin' 
+  // Add Settings card for super_admin and HR
+  const allItems = (user?.role === 'super_admin' || user?.role === 'hr')
     ? [...gridItems, { title: 'Settings', icon: Settings, path: '/dashboard/settings', gradient: 'from-primary to-accent' }]
     : gridItems;
+
+  // Filter based on custom role permissions
+  const displayItems = (user?.role === 'super_admin' || user?.role === 'hr')
+    ? allItems
+    : allItems.filter(item => {
+        const permKey = pathToPermissionKey[item.path];
+        if (!permKey) return true;
+        if (customRole) return hasPermission(permKey);
+        return true;
+      });
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>

@@ -81,16 +81,7 @@ export default function CreateUserDialog({
       return;
     }
 
-    if (role === 'hr') {
-      if (hrAccessLevel === 'organization' && !organizationId) {
-        toast.error('Organization-restricted HR must have an organization assigned');
-        return;
-      }
-      if (hrAccessLevel === 'branch' && !branchId) {
-        toast.error('Branch-restricted HR must have a branch assigned');
-        return;
-      }
-    }
+    // HR always gets full access - no validation needed
 
     if (role === 'employee' || role === 'manager') {
       if (!organizationId || !branchId) {
@@ -113,7 +104,7 @@ export default function CreateUserDialog({
           role,
           organization_id: organizationId || '',
           branch_id: branchId || '',
-          hr_access_level: role === 'hr' ? hrAccessLevel : '',
+          hr_access_level: role === 'hr' ? 'full' : '',
         },
       });
 
@@ -296,86 +287,19 @@ export default function CreateUserDialog({
             </div>
 
             {role === 'hr' && (
-              <div className="space-y-3">
-                <Label>HR Access Level *</Label>
-                <div className="space-y-2">
-                  <Card
-                    className={`p-3 cursor-pointer transition-all ${
-                      hrAccessLevel === 'full' 
-                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' 
-                        : 'hover:border-blue-300'
-                    }`}
-                    onClick={() => {
-                      setHrAccessLevel('full');
-                      setOrganizationId('');
-                      setBranchId('');
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-blue-500">Full HR</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Access all organizations and all branches under them
-                    </p>
-                  </Card>
-
-                  <Card
-                    className={`p-3 cursor-pointer transition-all ${
-                      hrAccessLevel === 'organization' 
-                        ? 'border-green-500 bg-green-50 ring-2 ring-green-500' 
-                        : 'hover:border-green-300'
-                    }`}
-                    onClick={() => {
-                      setHrAccessLevel('organization');
-                      setBranchId('');
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-500">Organization Restricted</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Access only one organization and all branches under it
-                    </p>
-                  </Card>
-
-                  <Card
-                    className={`p-3 cursor-pointer transition-all ${
-                      hrAccessLevel === 'branch' 
-                        ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-500' 
-                        : 'hover:border-orange-300'
-                    }`}
-                    onClick={() => setHrAccessLevel('branch')}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-orange-500">Branch Restricted</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Access only one specific branch and employees in it
-                    </p>
-                  </Card>
+              <Card className="p-3 border-blue-200 bg-blue-50">
+                <div className="flex gap-2">
+                  <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-blue-800">
+                    <p className="font-medium">HR Admin Access:</p>
+                    <p className="mt-1">HR users have access to all organizations and all branches by default. They have the same features as Super Admin except Contract Approvals.</p>
+                  </div>
                 </div>
-
-                {hrAccessLevel !== 'full' && (
-                  <Card className="p-3 border-amber-200 bg-amber-50">
-                    <div className="flex gap-2">
-                      <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <div className="text-xs text-amber-800">
-                        <p className="font-medium">Restricted HR Permissions:</p>
-                        <ul className="list-disc ml-4 mt-1 space-y-0.5">
-                          <li>Can onboard employees</li>
-                          <li>Can upload documents</li>
-                          <li>Cannot approve/sign contracts</li>
-                          <li>Cannot access outside permitted area</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-              </div>
+              </Card>
             )}
 
-            {/* Organization Selection - Required for HR (non-full), Manager, and Employee */}
-            {((role === 'hr' && hrAccessLevel !== 'full') || role === 'manager' || role === 'employee') && (
+            {/* Organization Selection - Required for Manager and Employee only */}
+            {(role === 'manager' || role === 'employee') && (
               <div className="space-y-2">
                 <Label htmlFor="organization">
                   Organization *
@@ -399,8 +323,8 @@ export default function CreateUserDialog({
               </div>
             )}
 
-            {/* Branch Selection - Required for HR (branch level), Manager, and Employee */}
-            {((role === 'hr' && hrAccessLevel === 'branch') || role === 'manager' || role === 'employee') && organizationId && (
+            {/* Branch Selection - Required for Manager and Employee */}
+            {(role === 'manager' || role === 'employee') && organizationId && (
               <div className="space-y-2">
                 <Label htmlFor="branch">
                   Branch *
