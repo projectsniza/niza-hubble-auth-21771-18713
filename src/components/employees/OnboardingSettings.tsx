@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { 
   Plus, FileText, Settings, Upload, Trash2, Edit, GripVertical, 
   FileCheck, ChevronUp, ChevronDown, Eye, Layers, Loader2, Save,
-  ClipboardList, Wallet
+  ClipboardList, Wallet, FilePen
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -77,6 +77,15 @@ interface DocumentRequirement {
   verification_message?: string | null;
 }
 
+interface SignedDocRequirement {
+  id: string;
+  name: string;
+  description: string | null;
+  is_mandatory: boolean;
+  enabled: boolean;
+  doc_order: number;
+}
+
 export default function OnboardingSettings() {
   const [activeTab, setActiveTab] = useState('forms');
   const [isLoading, setIsLoading] = useState(true);
@@ -86,15 +95,18 @@ export default function OnboardingSettings() {
   const [customPages, setCustomPages] = useState<CustomPage[]>([]);
   const [contractTemplates, setContractTemplates] = useState<ContractTemplate[]>([]);
   const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
+  const [signedDocRequirements, setSignedDocRequirements] = useState<SignedDocRequirement[]>([]);
   
   // Dialog states
   const [isPageDialogOpen, setIsPageDialogOpen] = useState(false);
   const [isFieldDialogOpen, setIsFieldDialogOpen] = useState(false);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
+  const [isSignedDocDialogOpen, setIsSignedDocDialogOpen] = useState(false);
   const [editingPage, setEditingPage] = useState<CustomPage | null>(null);
   const [editingField, setEditingField] = useState<PageField | null>(null);
   const [editingDocument, setEditingDocument] = useState<DocumentRequirement | null>(null);
+  const [editingSignedDoc, setEditingSignedDoc] = useState<SignedDocRequirement | null>(null);
   const [selectedPageForFields, setSelectedPageForFields] = useState<CustomPage | null>(null);
   
   // Form states
@@ -111,6 +123,9 @@ export default function OnboardingSettings() {
   const [docMandatory, setDocMandatory] = useState(false);
   const [docRequiresEsignature, setDocRequiresEsignature] = useState(false);
   const [docVerificationMessage, setDocVerificationMessage] = useState('');
+  const [signedDocName, setSignedDocName] = useState('');
+  const [signedDocDescription, setSignedDocDescription] = useState('');
+  const [signedDocMandatory, setSignedDocMandatory] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -186,6 +201,14 @@ export default function OnboardingSettings() {
       
       if (docsError) throw docsError;
       setDocumentRequirements(docs || []);
+      // Fetch signed document requirements
+      const { data: signedDocs, error: signedDocsError } = await supabase
+        .from('signed_document_requirements')
+        .select('*')
+        .order('doc_order');
+      
+      if (signedDocsError) throw signedDocsError;
+      setSignedDocRequirements(signedDocs || []);
     } catch (error: any) {
       toast.error('Failed to load settings: ' + error.message);
     } finally {
@@ -523,6 +546,84 @@ export default function OnboardingSettings() {
       
       if (error) throw error;
       setDocumentRequirements(docs => docs.map(d => d.id === id ? { ...d, enabled } : d));
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Signed Document Requirement CRUD
+  const handleSaveSignedDoc = async () => {
+    if (!signedDocName.trim()) {
+      toast.error('Document name is required');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      if (editingSignedDoc) {
+        const { error } = await supabase
+          .from('signed_document_requirements')
+          .update({ 
+            name: signedDocName, 
+            description: signedDocDescription, 
+            is_mandatory: signedDocMandatory
+          })
+          .eq('id', editingSignedDoc.id);
+        
+        if (error) throw error;
+        toast.success('Signed document requirement updated');
+      } else {
+        const maxOrder = Math.max(0, ...signedDocRequirements.map(d => d.doc_order));
+        const { error } = await supabase
+          .from('signed_document_requirements')
+          .insert({ 
+            name: signedDocName, 
+            description: signedDocDescription, 
+            is_mandatory: signedDocMandatory,
+            doc_order: maxOrder + 1
+          });
+        
+        if (error) throw error;
+        toast.success('Signed document requirement added');
+      }
+      
+      setIsSignedDocDialogOpen(false);
+      setSignedDocName('');
+      setSignedDocDescription('');
+      setSignedDocMandatory(true);
+      setEditingSignedDoc(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSignedDoc = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('signed_document_requirements')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Signed document requirement removed');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleToggleSignedDoc = async (id: string, enabled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('signed_document_requirements')
+        .update({ enabled })
+        .eq('id', id);
+      
+      if (error) throw error;
+      setSignedDocRequirements(docs => docs.map(d => d.id === id ? { ...d, enabled } : d));
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -964,6 +1065,101 @@ export default function OnboardingSettings() {
     </div>
   );
 
+  // Signed Documents Tab
+  const SignedDocumentsTab = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Signed Document Requirements</h3>
+          <p className="text-sm text-muted-foreground">
+            Configure documents employees must upload after signing their contract, before onboarding is completed
+          </p>
+        </div>
+        <Button onClick={() => { setSignedDocName(''); setSignedDocDescription(''); setSignedDocMandatory(true); setEditingSignedDoc(null); setIsSignedDocDialogOpen(true); }} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add Signed Document
+        </Button>
+      </div>
+
+      <Card className="p-4 bg-blue-50 border-blue-200">
+        <p className="text-sm text-blue-800">
+          These documents will be requested from the employee <strong>after</strong> the signed contract is uploaded, 
+          before the onboarding process is marked complete. Examples: ID Card Copy, DBS Certificate, Health Declaration Form.
+        </p>
+      </Card>
+
+      <div className="space-y-3">
+        {signedDocRequirements.sort((a, b) => a.doc_order - b.doc_order).map((doc) => (
+          <Card key={doc.id} className={`p-4 ${!doc.enabled ? 'opacity-60' : ''}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FilePen className="h-5 w-5 text-primary" />
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{doc.name}</span>
+                  {doc.is_mandatory && (
+                    <Badge variant="destructive" className="text-xs">Required</Badge>
+                  )}
+                  {!doc.enabled && (
+                    <Badge variant="outline" className="text-xs">Disabled</Badge>
+                  )}
+                </div>
+                {doc.description && (
+                  <p className="text-xs text-muted-foreground mt-1">{doc.description}</p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={doc.enabled}
+                  onCheckedChange={(checked) => handleToggleSignedDoc(doc.id, checked)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { 
+                    setEditingSignedDoc(doc);
+                    setSignedDocName(doc.name);
+                    setSignedDocDescription(doc.description || '');
+                    setSignedDocMandatory(doc.is_mandatory);
+                    setIsSignedDocDialogOpen(true);
+                  }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleDeleteSignedDoc(doc.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ))}
+
+        {signedDocRequirements.length === 0 && (
+          <Card className="p-8 text-center">
+            <FilePen className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">No signed document requirements configured</p>
+            <p className="text-xs text-muted-foreground mt-1">Add documents that employees must upload after signing their contract</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => { setSignedDocName(''); setSignedDocDescription(''); setSignedDocMandatory(true); setEditingSignedDoc(null); setIsSignedDocDialogOpen(true); }}
+            >
+              Add your first signed document
+            </Button>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -972,7 +1168,7 @@ export default function OnboardingSettings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="forms" className="gap-2">
             <Settings className="h-4 w-4" />
             Standard Forms
@@ -988,6 +1184,10 @@ export default function OnboardingSettings() {
           <TabsTrigger value="documents" className="gap-2">
             <FileCheck className="h-4 w-4" />
             Documents
+          </TabsTrigger>
+          <TabsTrigger value="signed-documents" className="gap-2">
+            <FilePen className="h-4 w-4" />
+            Signed Documents
           </TabsTrigger>
         </TabsList>
 
@@ -1005,6 +1205,10 @@ export default function OnboardingSettings() {
 
         <TabsContent value="documents" className="mt-6">
           <DocumentRequirementsTab />
+        </TabsContent>
+
+        <TabsContent value="signed-documents" className="mt-6">
+          <SignedDocumentsTab />
         </TabsContent>
       </Tabs>
 
@@ -1196,6 +1400,48 @@ export default function OnboardingSettings() {
             <Button onClick={handleSaveDocument} disabled={isSaving}>
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingDocument ? 'Update' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Signed Document Dialog */}
+      <Dialog open={isSignedDocDialogOpen} onOpenChange={setIsSignedDocDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingSignedDoc ? 'Edit' : 'Add'} Signed Document Requirement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Document Name *</Label>
+              <Input
+                placeholder="e.g., ID Card Copy, DBS Certificate"
+                value={signedDocName}
+                onChange={(e) => setSignedDocName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                placeholder="Describe the document..."
+                value={signedDocDescription}
+                onChange={(e) => setSignedDocDescription(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="signed-doc-mandatory"
+                checked={signedDocMandatory}
+                onCheckedChange={(checked) => setSignedDocMandatory(checked as boolean)}
+              />
+              <Label htmlFor="signed-doc-mandatory">Mandatory document</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSignedDocDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveSignedDoc} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {editingSignedDoc ? 'Update' : 'Add'}
             </Button>
           </DialogFooter>
         </DialogContent>
