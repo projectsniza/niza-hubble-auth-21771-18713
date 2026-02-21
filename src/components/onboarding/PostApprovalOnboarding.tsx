@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Check, Upload, FileSignature } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, ArrowRight, Check, Upload, FileSignature, FilePen, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,10 +13,19 @@ interface PostApprovalOnboardingProps {
   onBack: () => void;
 }
 
-const STEPS = [
-  { id: 'upload', name: 'Upload Signed Contract', icon: Upload },
-  { id: 'complete', name: 'Complete', icon: Check }
-];
+interface SignedDocRequirement {
+  id: string;
+  name: string;
+  description: string | null;
+  is_mandatory: boolean;
+}
+
+interface SignedDocUpload {
+  requirement_id: string;
+  file: File | null;
+  uploaded: boolean;
+  file_name?: string;
+}
 
 export default function PostApprovalOnboarding({ employeeId, onBack }: PostApprovalOnboardingProps) {
   const { user } = useAuth();
@@ -24,10 +34,14 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const [employee, setEmployee] = useState<any>(null);
   const [contractApproval, setContractApproval] = useState<any>(null);
   const [signedContractFile, setSignedContractFile] = useState<File | null>(null);
+  const [signedDocRequirements, setSignedDocRequirements] = useState<SignedDocRequirement[]>([]);
+  const [signedDocUploads, setSignedDocUploads] = useState<SignedDocUpload[]>([]);
+  const [hasSignedDocs, setHasSignedDocs] = useState(false);
 
   useEffect(() => {
     fetchEmployee();
     fetchContractApproval();
+    fetchSignedDocRequirements();
   }, [employeeId]);
 
   const fetchEmployee = async () => {
@@ -50,6 +64,43 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     
     if (data) setContractApproval(data);
   };
+
+  const fetchSignedDocRequirements = async () => {
+    const { data } = await supabase
+      .from('signed_document_requirements')
+      .select('*')
+      .eq('enabled', true)
+      .order('doc_order');
+    
+    if (data && data.length > 0) {
+      setSignedDocRequirements(data);
+      setHasSignedDocs(true);
+
+      // Check for existing uploads
+      const { data: existingUploads } = await supabase
+        .from('signed_document_uploads')
+        .select('requirement_id, file_name')
+        .eq('employee_id', employeeId);
+
+      const uploads: SignedDocUpload[] = data.map(req => {
+        const existing = existingUploads?.find(u => u.requirement_id === req.id);
+        return {
+          requirement_id: req.id,
+          file: null,
+          uploaded: !!existing,
+          file_name: existing?.file_name,
+        };
+      });
+      setSignedDocUploads(uploads);
+    }
+  };
+
+  // Dynamic steps based on whether signed docs exist
+  const steps = [
+    { id: 'upload', name: 'Upload Signed Contract', icon: Upload },
+    ...(hasSignedDocs ? [{ id: 'signed-docs', name: 'Signed Documents', icon: FilePen }] : []),
+    { id: 'complete', name: 'Complete', icon: Check }
+  ];
 
   const handleDownloadContract = async () => {
     if (contractApproval?.contract_file_path) {
@@ -82,7 +133,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       if (uploadError) throw uploadError;
 
-      // Update contract approval with signed contract path
       await supabase
         .from('contract_approvals')
         .update({
@@ -92,7 +142,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         })
         .eq('id', contractApproval.id);
 
-      // Save signed contract to employee's document folder
       const { data: employeeFolder } = await supabase
         .from('folders')
         .select('id')
@@ -113,7 +162,6 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         });
       }
 
-      // Update onboarding status
       await supabase
         .from('employee_onboarding')
         .update({
@@ -126,6 +174,85 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       setCurrentStep(prev => prev + 1);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to upload signed contract';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignedDocFileChange = (requirementId: string, file: File | null) => {
+    setSignedDocUploads(prev => prev.map(u => 
+      u.requirement_id === requirementId ? { ...u, file, uploaded: false } : u
+    ));
+  };
+
+  const handleUploadSignedDocs = async () => {
+    // Validate mandatory docs have files or are already uploaded
+    const mandatoryDocs = signedDocRequirements.filter(r => r.is_mandatory);
+    const missingMandatory = mandatoryDocs.filter(req => {
+      const upload = signedDocUploads.find(u => u.requirement_id === req.id);
+      return !upload?.file && !upload?.uploaded;
+    });
+
+    if (missingMandatory.length > 0) {
+      toast.error(`Please upload all mandatory documents: ${missingMandatory.map(d => d.name).join(', ')}`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const docsToUpload = signedDocUploads.filter(u => u.file && !u.uploaded);
+
+      for (const doc of docsToUpload) {
+        const file = doc.file!;
+        const fileName = `signed_doc_${employeeId}_${doc.requirement_id}_${Date.now()}.${file.name.split('.').pop()}`;
+        const filePath = `employees/${employeeId}/signed-documents/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        await supabase
+          .from('signed_document_uploads')
+          .upsert({
+            employee_id: employeeId,
+            requirement_id: doc.requirement_id,
+            file_name: file.name,
+            file_path: filePath,
+            file_type: file.type,
+            file_size: file.size,
+            uploaded_by: user?.id,
+          }, { onConflict: 'employee_id,requirement_id' });
+
+        // Also save to employee's document folder
+        const { data: employeeFolder } = await supabase
+          .from('folders')
+          .select('id')
+          .eq('employee_id', employeeId)
+          .eq('folder_type', 'employee')
+          .maybeSingle();
+
+        if (employeeFolder) {
+          const req = signedDocRequirements.find(r => r.id === doc.requirement_id);
+          await supabase.from('documents').insert({
+            title: req?.name || 'Signed Document',
+            file_name: file.name,
+            file_path: filePath,
+            file_type: file.type,
+            file_size: file.size,
+            employee_id: employeeId,
+            folder_id: employeeFolder.id,
+            uploaded_by: user?.id,
+          });
+        }
+      }
+
+      toast.success('Signed documents uploaded successfully');
+      setCurrentStep(prev => prev + 1);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to upload signed documents';
       toast.error(message);
     } finally {
       setLoading(false);
@@ -156,14 +283,19 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   };
 
   const handleNext = async () => {
-    const currentStepId = STEPS[currentStep]?.id;
+    const currentStepId = steps[currentStep]?.id;
     
     if (currentStepId === 'upload') {
       await handleUploadSignedContract();
       return;
     }
 
-    if (currentStep < STEPS.length - 1) {
+    if (currentStepId === 'signed-docs') {
+      await handleUploadSignedDocs();
+      return;
+    }
+
+    if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     }
   };
@@ -174,8 +306,16 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     }
   };
 
-  const progress = ((currentStep + 1) / STEPS.length) * 100;
-  const currentStepId = STEPS[currentStep]?.id;
+  const progress = ((currentStep + 1) / steps.length) * 100;
+  const currentStepId = steps[currentStep]?.id;
+
+  const canProceedSignedDocs = () => {
+    const mandatoryDocs = signedDocRequirements.filter(r => r.is_mandatory);
+    return mandatoryDocs.every(req => {
+      const upload = signedDocUploads.find(u => u.requirement_id === req.id);
+      return upload?.file || upload?.uploaded;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -186,15 +326,15 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         <div className="flex-1">
           <h1 className="text-2xl font-bold">Final Contract Upload</h1>
           <p className="text-muted-foreground">
-            {employee?.first_name} {employee?.last_name} - Step {currentStep + 1} of {STEPS.length}
+            {employee?.first_name} {employee?.last_name} - Step {currentStep + 1} of {steps.length}
           </p>
         </div>
       </div>
 
       <div className="space-y-4">
         <Progress value={progress} className="h-2" />
-        <div className="grid grid-cols-2 gap-4">
-          {STEPS.map((step, index) => (
+        <div className={`grid gap-4`} style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}>
+          {steps.map((step, index) => (
             <div key={step.id} className={`flex flex-col items-center gap-2 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                 <step.icon className="h-5 w-5" />
@@ -247,6 +387,74 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
           </div>
         )}
 
+        {/* Signed Documents Step */}
+        {currentStepId === 'signed-docs' && (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <FilePen className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2">Upload Signed Documents</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Upload the following documents to complete the onboarding process.
+              </p>
+            </div>
+
+            <div className="max-w-2xl mx-auto space-y-4">
+              {signedDocRequirements.map((req) => {
+                const upload = signedDocUploads.find(u => u.requirement_id === req.id);
+                const isUploaded = upload?.uploaded;
+                const hasFile = upload?.file;
+
+                return (
+                  <Card key={req.id} className={`p-4 ${isUploaded ? 'border-green-300 bg-green-50' : ''}`}>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{req.name}</span>
+                          {req.is_mandatory && (
+                            <Badge variant="destructive" className="text-xs">Required</Badge>
+                          )}
+                          {isUploaded && (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          )}
+                        </div>
+                        {req.description && (
+                          <p className="text-xs text-muted-foreground mt-1">{req.description}</p>
+                        )}
+                        {isUploaded && upload?.file_name && (
+                          <p className="text-xs text-green-700 mt-1">Previously uploaded: {upload.file_name}</p>
+                        )}
+                        {hasFile && (
+                          <p className="text-xs text-primary mt-1">Selected: {upload?.file?.name}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <input
+                          type="file"
+                          id={`signed-doc-${req.id}`}
+                          accept="*/*"
+                          className="hidden"
+                          onChange={(e) => handleSignedDocFileChange(req.id, e.target.files?.[0] || null)}
+                        />
+                        <label htmlFor={`signed-doc-${req.id}`}>
+                          <Button variant={isUploaded || hasFile ? "outline" : "default"} size="sm" className="gap-2 cursor-pointer" asChild>
+                            <span>
+                              <Upload className="h-4 w-4" />
+                              {isUploaded ? 'Replace' : hasFile ? 'Change' : 'Upload'}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Complete Step */}
         {currentStepId === 'complete' && (
           <div className="space-y-6 text-center py-8">
@@ -278,7 +486,15 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
               Previous
             </Button>
             
-            <Button onClick={handleNext} disabled={loading || (currentStepId === 'upload' && !signedContractFile)} className="gap-2">
+            <Button 
+              onClick={handleNext} 
+              disabled={
+                loading || 
+                (currentStepId === 'upload' && !signedContractFile) ||
+                (currentStepId === 'signed-docs' && !canProceedSignedDocs())
+              } 
+              className="gap-2"
+            >
               {loading ? 'Saving...' : 'Next'}
               <ArrowRight className="h-4 w-4" />
             </Button>
