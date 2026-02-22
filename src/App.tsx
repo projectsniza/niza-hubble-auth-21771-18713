@@ -57,6 +57,7 @@ const Lottery = lazy(() => import("./pages/dashboard/Lottery"));
 const Reminders = lazy(() => import("./pages/dashboard/Reminders"));
 const Notifications = lazy(() => import("./pages/dashboard/Notifications"));
 const DriveOffs = lazy(() => import("./pages/dashboard/DriveOffs"));
+const CustomerAccounts = lazy(() => import("./pages/dashboard/CustomerAccounts"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -113,6 +114,7 @@ const App = () => (
                 <Route path="reminders" element={<Reminders />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="drive-offs" element={<DriveOffs />} />
+                <Route path="customer-accounts" element={<CustomerAccounts />} />
               </Route>
               <Route path="/niza-safe" element={<NizaSafe />}>
                 <Route index element={<NizaSafeHome />} />

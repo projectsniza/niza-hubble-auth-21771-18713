@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/settings': 'settings',
   '/dashboard/safety-tasks': 'safety',
   '/dashboard/store-templates': 'templates',
+  '/dashboard/customer-accounts': 'customer_accounts',
 };
 
 const getMenuItems = (role: string) => {
@@ -77,6 +78,7 @@ const getMenuItems = (role: string) => {
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'Customer Accounts', icon: Wallet, path: '/dashboard/customer-accounts' },
       { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
     ];
   }
@@ -102,6 +104,7 @@ const getMenuItems = (role: string) => {
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+      { title: 'Customer Accounts', icon: Wallet, path: '/dashboard/customer-accounts' },
       { title: 'UK Compliance', icon: Shield, path: '/dashboard/uk-compliance' },
       { title: 'Settings', icon: Settings, path: '/dashboard/settings' },
     ];
@@ -126,6 +129,7 @@ const getMenuItems = (role: string) => {
     { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
     { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll' },
     { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
+    { title: 'Customer Accounts', icon: Wallet, path: '/dashboard/customer-accounts' },
     { title: 'UK Compliance', icon: Shield, path: '/dashboard/uk-compliance' },
   ];
 
