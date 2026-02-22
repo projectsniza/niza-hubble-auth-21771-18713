@@ -805,6 +805,177 @@ export type Database = {
           },
         ]
       }
+      customer_account_items: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          discount: number | null
+          id: string
+          monthly_account_id: string
+          purchased_date: string | null
+          tax: number | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description: string
+          discount?: number | null
+          id?: string
+          monthly_account_id: string
+          purchased_date?: string | null
+          tax?: number | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          discount?: number | null
+          id?: string
+          monthly_account_id?: string
+          purchased_date?: string | null
+          tax?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_account_items_monthly_account_id_fkey"
+            columns: ["monthly_account_id"]
+            isOneToOne: false
+            referencedRelation: "customer_monthly_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_accounts: {
+        Row: {
+          address: string | null
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_monthly_accounts: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          is_paid: boolean
+          marked_paid_by: string | null
+          month_date: string
+          notes: string | null
+          organization_id: string | null
+          paid_date: string | null
+          total_due: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          is_paid?: boolean
+          marked_paid_by?: string | null
+          month_date: string
+          notes?: string | null
+          organization_id?: string | null
+          paid_date?: string | null
+          total_due?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          is_paid?: boolean
+          marked_paid_by?: string | null
+          month_date?: string
+          notes?: string | null
+          organization_id?: string | null
+          paid_date?: string | null
+          total_due?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_monthly_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_monthly_accounts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_monthly_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_reports: {
         Row: {
           branch_id: string

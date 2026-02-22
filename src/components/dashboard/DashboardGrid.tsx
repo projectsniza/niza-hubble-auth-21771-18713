@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, LucideIcon, ArrowRight, Settings, ClipboardList, Wrench, MessageSquare,
-  CheckSquare, Car, Ticket
+  CheckSquare, Car, Ticket, Wallet
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +27,7 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/messages': 'messages',
   '/dashboard/reminders': 'reminders',
   '/dashboard/settings': 'settings',
+  '/dashboard/customer-accounts': 'customer_accounts',
 };
 
 interface GridItem {
@@ -53,6 +54,7 @@ const gridItems: GridItem[] = [
   { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-accent to-primary' },
   { title: 'Payroll', icon: DollarSign, path: '/dashboard/payroll', gradient: 'from-primary to-accent' },
   { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance', gradient: 'from-accent to-primary' },
+  { title: 'Customer Accounts', icon: Wallet, path: '/dashboard/customer-accounts', gradient: 'from-primary to-accent' },
 ];
 
 export default function DashboardGrid() {
