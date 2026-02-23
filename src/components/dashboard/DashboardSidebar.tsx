@@ -198,8 +198,8 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
 
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
-      style={{ background: 'var(--gradient-panel)' }}
+      className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
+      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
     >
       {/* Decorative SVG Background */}
       <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
@@ -211,9 +211,9 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
           </linearGradient>
         </defs>
       </svg>
-      {/* Logo - Always big and unchanged */}
-      <div className="p-4 flex items-center justify-center relative z-10 min-h-[70px]">
-        <img src={nizaCloudLogo} alt="Niza Cloud" className="h-[52px] w-auto object-contain" />
+      {/* Logo - Always big and unchanged regardless of collapse */}
+      <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: '256px' }}>
+        <img src={nizaCloudLogo} alt="Niza Cloud" className="h-16 w-auto object-contain" />
       </div>
 
       {/* Hamburger Toggle - Gmail style */}
