@@ -63,6 +63,12 @@ export interface CreateMonthlyData {
   branch_id: string;
 }
 
+export interface CustomerPendingSummary {
+  customer_id: string;
+  pending_months: number;
+  total_pending: number;
+}
+
 export function useCustomerAccounts(selectedOrg: string, selectedBranch: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -83,6 +89,32 @@ export function useCustomerAccounts(selectedOrg: string, selectedBranch: string)
       return data as CustomerAccount[];
     },
     enabled: !!user,
+  });
+
+  // Fetch pending monthly summaries for all visible customers
+  const { data: pendingSummaries = [] } = useQuery({
+    queryKey: ['customer-pending-summaries', customers.map(c => c.id).join(',')],
+    queryFn: async () => {
+      if (customers.length === 0) return [];
+      const customerIds = customers.map(c => c.id);
+      const { data, error } = await supabase
+        .from('customer_monthly_accounts')
+        .select('customer_id, total_due, is_paid')
+        .in('customer_id', customerIds)
+        .eq('is_paid', false);
+      if (error) throw error;
+
+      const summaryMap: Record<string, CustomerPendingSummary> = {};
+      (data || []).forEach(row => {
+        if (!summaryMap[row.customer_id]) {
+          summaryMap[row.customer_id] = { customer_id: row.customer_id, pending_months: 0, total_pending: 0 };
+        }
+        summaryMap[row.customer_id].pending_months += 1;
+        summaryMap[row.customer_id].total_pending += Number(row.total_due);
+      });
+      return Object.values(summaryMap);
+    },
+    enabled: customers.length > 0,
   });
 
   const createCustomer = useMutation({
@@ -130,7 +162,7 @@ export function useCustomerAccounts(selectedOrg: string, selectedBranch: string)
     },
   });
 
-  return { customers, isLoading, createCustomer, updateCustomer, deleteCustomer };
+  return { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries };
 }
 
 export function useMonthlyAccounts(customerId: string | null) {

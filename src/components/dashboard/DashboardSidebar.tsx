@@ -2,8 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { 
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
-  CalendarDays, GraduationCap, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet
+  CalendarDays, GraduationCap, LogOut, LayoutDashboard, Settings,
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -211,19 +211,22 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
           </linearGradient>
         </defs>
       </svg>
-      {/* Toggle Button - Hidden on mobile */}
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={onToggle}
-        className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </Button>
+      {/* Logo - Always big and unchanged */}
+      <div className="p-4 flex items-center justify-center relative z-10 min-h-[70px]">
+        <img src={nizaCloudLogo} alt="Niza Cloud" className="h-[52px] w-auto object-contain" />
+      </div>
 
-      {/* Logo */}
-      <div className={`${collapsed ? 'p-2' : 'p-4'} flex items-center justify-center border-b border-primary/20 relative z-10 min-h-[60px]`}>
-        <img src={nizaCloudLogo} alt="Niza Cloud" className={collapsed ? "h-10 w-auto object-contain" : "h-10"} />
+      {/* Hamburger Toggle - Gmail style */}
+      <div className={`px-3 pb-2 relative z-10 ${collapsed ? 'flex justify-center' : ''}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-10 w-10 rounded-full hover:bg-card/60 cursor-pointer hidden md:flex items-center justify-center"
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+        >
+          <Menu className="h-5 w-5 text-foreground/70" />
+        </Button>
       </div>
 
       {/* User Info */}

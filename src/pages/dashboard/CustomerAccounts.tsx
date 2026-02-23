@@ -37,7 +37,7 @@ import {
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCustomerAccounts, CustomerAccount, CreateCustomerData } from '@/hooks/useCustomerAccounts';
+import { useCustomerAccounts, CustomerAccount, CreateCustomerData, CustomerPendingSummary } from '@/hooks/useCustomerAccounts';
 import { isAdminOrHR } from '@/lib/roles';
 import CustomerAccountDetail from '@/components/customer-accounts/CustomerAccountDetail';
 
@@ -52,7 +52,7 @@ export default function CustomerAccounts() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAccount | null>(null);
 
-  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer } = useCustomerAccounts(selectedOrg, selectedBranch);
+  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries } = useCustomerAccounts(selectedOrg, selectedBranch);
 
   const canEdit = isAdminOrHR(user);
   const isManager = user?.role === 'manager';
@@ -207,17 +207,21 @@ export default function CustomerAccounts() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredCustomers.map(customer => (
-            <CustomerCard
-              key={customer.id}
-              customer={customer}
-              onView={() => setSelectedCustomer(customer)}
-              onEdit={() => handleEdit(customer)}
-              onDelete={() => setDeleteId(customer.id)}
-              canEdit={canEdit}
-            />
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredCustomers.map(customer => {
+            const pending = pendingSummaries.find(p => p.customer_id === customer.id);
+            return (
+              <CustomerCard
+                key={customer.id}
+                customer={customer}
+                pendingSummary={pending || null}
+                onView={() => setSelectedCustomer(customer)}
+                onEdit={() => handleEdit(customer)}
+                onDelete={() => setDeleteId(customer.id)}
+                canEdit={canEdit}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -257,30 +261,33 @@ export default function CustomerAccounts() {
 }
 
 // --- Customer Card Component ---
-function CustomerCard({ customer, onView, onEdit, onDelete, canEdit }: {
+function CustomerCard({ customer, pendingSummary, onView, onEdit, onDelete, canEdit }: {
   customer: CustomerAccount;
+  pendingSummary: CustomerPendingSummary | null;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   canEdit: boolean;
 }) {
+  const hasPending = pendingSummary && pendingSummary.pending_months > 0;
   const statusColor = customer.status === 'active'
     ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
     : 'bg-destructive/10 text-destructive border-destructive/30';
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-primary/20 overflow-hidden">
+    <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-primary/20 overflow-hidden">
       {/* Top color bar */}
-      <div className={`h-1.5 w-full ${customer.status === 'active' ? 'bg-gradient-to-r from-primary to-accent' : 'bg-gradient-to-r from-destructive to-orange-400'}`} />
+      <div className={`h-1.5 w-full ${hasPending ? 'bg-gradient-to-r from-destructive to-amber-500' : customer.status === 'active' ? 'bg-gradient-to-r from-primary to-accent' : 'bg-gradient-to-r from-destructive to-orange-400'}`} />
       <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
+        {/* Header row */}
+        <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold text-lg shadow-md">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold text-lg shadow-md">
               {customer.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h3 className="font-semibold text-foreground text-base">{customer.name}</h3>
-              <p className="text-xs text-muted-foreground">{customer.branches?.name || 'Unknown Branch'}</p>
+              <h3 className="font-semibold text-foreground text-base leading-tight">{customer.name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{customer.branches?.name || 'Unknown Branch'}</p>
             </div>
           </div>
           <Badge variant="outline" className={`text-[10px] px-2 ${statusColor}`}>
@@ -288,27 +295,48 @@ function CustomerCard({ customer, onView, onEdit, onDelete, canEdit }: {
           </Badge>
         </div>
 
+        {/* Contact info - compact */}
         <div className="space-y-1.5 mb-4">
-          {customer.email && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Mail className="h-3.5 w-3.5" /><span className="truncate">{customer.email}</span>
-            </div>
-          )}
           {customer.phone && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Phone className="h-3.5 w-3.5" /><span>{customer.phone}</span>
+              <Phone className="h-3.5 w-3.5 flex-shrink-0" /><span>{customer.phone}</span>
             </div>
           )}
           {customer.address && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <MapPinIcon className="h-3.5 w-3.5" /><span className="truncate">{customer.address}</span>
+              <MapPinIcon className="h-3.5 w-3.5 flex-shrink-0" /><span className="truncate">{customer.address}</span>
             </div>
           )}
         </div>
 
+        {/* Pending dues highlight */}
+        {hasPending ? (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">
+                  {pendingSummary.pending_months} month{pendingSummary.pending_months > 1 ? 's' : ''} pending
+                </span>
+              </div>
+              <span className="text-sm font-bold text-destructive">
+                £{pendingSummary.total_pending.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-600">All cleared</span>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="flex items-center gap-2">
           <Button size="sm" variant="default" className="flex-1" onClick={onView}>
-            <Eye className="h-3.5 w-3.5 mr-1" />View Account
+            <Eye className="h-3.5 w-3.5 mr-1.5" />View Account
           </Button>
           {canEdit && (
             <>
