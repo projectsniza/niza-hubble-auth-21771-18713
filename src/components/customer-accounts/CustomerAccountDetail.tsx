@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, Plus, PoundSterling, CheckCircle2, Clock, Calendar,
-  Package, Trash2, Check, X
+  Package, Trash2, Check, X, Edit
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,11 +37,14 @@ interface Props {
   customer: CustomerAccount;
   onBack: () => void;
   canEdit: boolean;
+  isSuperAdmin?: boolean;
 }
 
-export default function CustomerAccountDetail({ customer, onBack, canEdit }: Props) {
+export default function CustomerAccountDetail({ customer, onBack, canEdit, isSuperAdmin }: Props) {
   const { user } = useAuth();
   const { monthlyAccounts, isLoading, createMonthly, updateMonthly, addItem, deleteItem, markPaid } = useMonthlyAccounts(customer.id);
+  const [editAmountId, setEditAmountId] = useState<string | null>(null);
+  const [editAmountValue, setEditAmountValue] = useState('');
   const [addMonthOpen, setAddMonthOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -186,7 +189,36 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit }: Pro
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-xl font-bold">£{account.total_due.toFixed(2)}</p>
+                        {editAmountId === account.id ? (
+                          <div className="flex items-center gap-2">
+                            <span>£</span>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              value={editAmountValue} 
+                              onChange={e => setEditAmountValue(e.target.value)} 
+                              className="w-28 h-8"
+                            />
+                            <Button size="sm" variant="default" className="h-8" onClick={async () => {
+                              await updateMonthly.mutateAsync({ id: account.id, total_due: parseFloat(editAmountValue) || 0 });
+                              setEditAmountId(null);
+                            }}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => setEditAmountId(null)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <p className="text-xl font-bold">£{account.total_due.toFixed(2)}</p>
+                            {isSuperAdmin && (
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditAmountId(account.id); setEditAmountValue(String(account.total_due)); }}>
+                                <Edit className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <Badge variant="outline" className={`${status.bg} ${status.text} ${status.border}`}>{status.label}</Badge>
                     </div>

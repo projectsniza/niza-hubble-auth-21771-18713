@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { 
   Home, AlertTriangle, AlertCircle, FileText, Users, 
-  CheckSquare, ChevronLeft, ChevronRight, LogOut
+  CheckSquare, LogOut, Menu
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import nizaGroupIcon from '@/assets/niza-group-icon.png';
 
 const menuItems = [
   { title: 'Home', icon: Home, path: '/niza-safe' },
@@ -26,8 +27,8 @@ export default function NizaSafeSidebar({ collapsed, onToggle }: NizaSafeSidebar
 
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
-      style={{ background: 'var(--gradient-panel)' }}
+      className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
+      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
     >
       {/* Decorative SVG Background */}
       <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
@@ -39,20 +40,27 @@ export default function NizaSafeSidebar({ collapsed, onToggle }: NizaSafeSidebar
           </linearGradient>
         </defs>
       </svg>
-      
-      {/* Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={onToggle}
-        className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </Button>
 
       {/* Logo */}
-      <div className={`${collapsed ? 'p-2' : 'p-4'} flex items-center justify-center border-b border-primary/20 relative z-10 min-h-[60px]`}>
-        <img src={nizaCloudLogo} alt="Niza Safe" className={collapsed ? "h-10 w-auto object-contain" : "h-10"} />
+      <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: collapsed ? '80px' : '256px' }}>
+        {collapsed ? (
+          <img src={nizaGroupIcon} alt="Niza Group" className="h-12 w-auto object-contain" />
+        ) : (
+          <img src={nizaCloudLogo} alt="Niza Safe" className="h-16 w-auto object-contain" />
+        )}
+      </div>
+
+      {/* Hamburger Toggle - Gmail style */}
+      <div className={`px-3 pb-2 relative z-10 ${collapsed ? 'flex justify-center' : ''}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-10 w-10 rounded-full hover:bg-card/60 cursor-pointer hidden md:flex items-center justify-center"
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+        >
+          <Menu className="h-5 w-5 text-foreground/70" />
+        </Button>
       </div>
 
       {/* User Info */}

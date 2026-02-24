@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTemplateStats, useBrandSettings } from '@/hooks/useTemplates';
 import { useNavigate } from 'react-router-dom';
-import SharedTemplatesPanel from '@/components/templates/SharedTemplatesPanel';
+
 import { useAllStoreTemplates } from '@/hooks/useSharedTemplates';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -126,8 +126,7 @@ export default function TemplatesHome() {
         </div>
       </div>
 
-      {/* Shared Templates Panel */}
-      <SharedTemplatesPanel />
+      {/* Shared Templates Panel removed - now in its own sidebar page */}
 
       {/* Store/HR Created Templates - Super Admin Only */}
       {user?.role === 'super_admin' && (
