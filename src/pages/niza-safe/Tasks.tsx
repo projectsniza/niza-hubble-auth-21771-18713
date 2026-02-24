@@ -305,7 +305,7 @@ export default function Tasks() {
   );
   const pendingTasks = myTasks.filter(t => t.status !== 'completed');
 
-  const filteredTasks = (activeTab === 'assigned' ? myTasks : allTasks).filter(task => {
+  const filteredTasks = allTasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -384,20 +384,7 @@ export default function Tasks() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-        <TabsList>
-          <TabsTrigger value="assigned">
-            Assigned to me 
-            <span className="ml-2 bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs">{myTasks.length}</span>
-          </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="all">
-              All tasks
-              <span className="ml-2 bg-muted px-2 py-0.5 rounded-full text-xs">{allTasks.length}</span>
-            </TabsTrigger>
-          )}
-        </TabsList>
-      </Tabs>
+      {/* No tabs - show all tasks directly */}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>

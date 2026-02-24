@@ -1,41 +1,61 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Palette, ChevronLeft, ChevronRight, BadgeCheck, CreditCard, Receipt, Gift, Mail } from 'lucide-react';
+import { Home, Palette, BadgeCheck, CreditCard, Receipt, Gift, Mail, Menu, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import nizaGroupIcon from '@/assets/niza-group-icon.png';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NizaTemplatesSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
 }
 
-const menuItems = [
-  { name: 'Home', path: '/niza-templates', icon: Home, end: true },
-  { name: 'ID Card & Visitor Pass', path: '/niza-templates/id-cards', icon: BadgeCheck },
-  { name: 'Business Cards', path: '/niza-templates/business-cards', icon: CreditCard },
-  { name: 'Invoices', path: '/niza-templates/invoices', icon: Receipt },
-  { name: 'Gift Cards', path: '/niza-templates/gift-cards', icon: Gift },
-  { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
-  { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
-];
+const getMenuItems = (role: string) => {
+  const items = [
+    { name: 'Home', path: '/niza-templates', icon: Home, end: true },
+    { name: 'ID Card & Visitor Pass', path: '/niza-templates/id-cards', icon: BadgeCheck },
+    { name: 'Business Cards', path: '/niza-templates/business-cards', icon: CreditCard },
+    { name: 'Invoices', path: '/niza-templates/invoices', icon: Receipt },
+    { name: 'Gift Cards', path: '/niza-templates/gift-cards', icon: Gift },
+    { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
+    { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
+  ];
+  // Add Shared Templates sidebar for super_admin and HR only (not store/manager)
+  if (role === 'super_admin' || role === 'hr') {
+    items.push({ name: 'Shared Templates', path: '/niza-templates/shared', icon: Share2, end: false } as any);
+  }
+  return items;
+};
 
 export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTemplatesSidebarProps) {
+  const { user } = useAuth();
+  const menuItems = getMenuItems(user?.role || 'employee');
+
   return (
     <aside 
-      className={`${collapsed ? 'w-16' : 'w-64'} border-r border-primary/20 backdrop-blur-xl transition-all duration-300 flex flex-col relative h-screen sticky top-0 flex-shrink-0`}
-      style={{ background: 'var(--gradient-panel)' }}
+      className={`border-r border-primary/20 backdrop-blur-xl transition-all duration-300 flex flex-col relative h-screen sticky top-0 flex-shrink-0 overflow-hidden`}
+      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
     >
-      {/* Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={onToggle}
-        className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </Button>
+      {/* Logo */}
+      <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: collapsed ? '80px' : '256px' }}>
+        {collapsed ? (
+          <img src={nizaGroupIcon} alt="Niza Group" className="h-12 w-auto object-contain" />
+        ) : (
+          <img src={nizaCloudLogo} alt="Niza Templates" className="h-16 w-auto object-contain" />
+        )}
+      </div>
 
-      <div className={`${collapsed ? 'p-2' : 'p-4'} border-b border-primary/20 flex items-center justify-center min-h-[60px]`}>
-        <img src={nizaCloudLogo} alt="Niza Templates" className={collapsed ? "h-10 w-auto object-contain" : "h-10"} />
+      {/* Hamburger Toggle - Gmail style */}
+      <div className={`px-3 pb-2 relative z-10 ${collapsed ? 'flex justify-center' : ''}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-10 w-10 rounded-full hover:bg-card/60 cursor-pointer hidden md:flex items-center justify-center"
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+        >
+          <Menu className="h-5 w-5 text-foreground/70" />
+        </Button>
       </div>
 
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">

@@ -3,20 +3,229 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, 
-  UserCog, Settings, FileCheck, FileUp 
+  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
-
 import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
 import BulkUploadedEmployees from '@/components/employees/BulkUploadedEmployees';
-import UserManagement from '@/components/settings/UserManagement';
 import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+
+// Pending Accounts - shows only pending employee accounts
+function PendingAccountsOnly() {
+  const [pendingEmployees, setPendingEmployees] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPending();
+  }, []);
+
+  const fetchPending = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`id, first_name, last_name, email, job_title, organization_id, branch_id, account_activated, user_id, organization:organizations(name), branch:branches(name)`)
+        .eq('account_activated', false)
+        .not('status', 'eq', 'terminated')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPendingEmployees(data || []);
+    } catch (error: any) {
+      toast.error('Failed to load pending accounts');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><NizaLoaderInline /></div>;
+
+  if (pendingEmployees.length === 0) {
+    return (
+      <Card className="p-12 text-center">
+        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold">No Pending Accounts</h3>
+        <p className="text-muted-foreground">All employee accounts have been activated</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Employee</TableHead>
+            <TableHead>Job Title</TableHead>
+            <TableHead>Branch</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pendingEmployees.map(emp => (
+            <TableRow key={emp.id}>
+              <TableCell>
+                <div className="flex items-center gap-3">
+                  <Avatar><AvatarFallback className="bg-primary/10 text-primary">{emp.first_name?.charAt(0)}{emp.last_name?.charAt(0)}</AvatarFallback></Avatar>
+                  <div>
+                    <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                    <p className="text-sm text-muted-foreground">{emp.email}</p>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>{emp.job_title || '-'}</TableCell>
+              <TableCell>{emp.branch?.name || '-'}</TableCell>
+              <TableCell><Badge variant="secondary">Account Pending</Badge></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
+  );
+}
+
+// Pending Onboardings - shows employees in onboarding
+function PendingOnboardings() {
+  const navigate = useNavigate();
+  const [onboardingEmployees, setOnboardingEmployees] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchOnboarding();
+  }, []);
+
+  const fetchOnboarding = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at)`)
+        .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setOnboardingEmployees(data || []);
+    } catch (error: any) {
+      toast.error('Failed to load pending onboardings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      const { error } = await supabase.from('employees').delete().eq('id', deleteId);
+      if (error) throw error;
+      toast.success('Employee deleted');
+      setDeleteId(null);
+      fetchOnboarding();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const getStepLabel = (emp: any) => {
+    const onb = emp.onboarding?.[0];
+    if (!onb) return 'Not started';
+    if (emp.status === 'awaiting_approval') return 'Awaiting Contract Approval';
+    if (emp.status === 'awaiting_signature') return 'Awaiting Signature';
+    return `Step ${onb.current_step || 1} of 3`;
+  };
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><NizaLoaderInline /></div>;
+
+  if (onboardingEmployees.length === 0) {
+    return (
+      <Card className="p-12 text-center">
+        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold">No Pending Onboardings</h3>
+        <p className="text-muted-foreground">All employees have completed onboarding</p>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Branch</TableHead>
+              <TableHead>Progress</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {onboardingEmployees.map(emp => (
+              <TableRow key={emp.id}>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar><AvatarFallback className="bg-amber-500/10 text-amber-600">{emp.first_name?.charAt(0)}{emp.last_name?.charAt(0)}</AvatarFallback></Avatar>
+                    <div>
+                      <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                      <p className="text-sm text-muted-foreground">{emp.email}</p>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>{emp.branch?.name || '-'}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">{getStepLabel(emp)}</Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="default" onClick={() => navigate(`/dashboard/onboarding/${emp.id}`)}>
+                      <PlayCircle className="h-3.5 w-3.5 mr-1" />Continue
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(emp.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete this employee and all their onboarding data.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
 
 export default function Employees() {
   const { user } = useAuth();
@@ -26,13 +235,11 @@ export default function Employees() {
   const [activeTab, setActiveTab] = useState('employees');
 
   useEffect(() => {
-    // If employee role, redirect to their own profile
     if (user?.role === 'employee') {
       navigate('/dashboard/my-profile');
     }
   }, [user, navigate]);
 
-  // Only Super Admin, HR, and Manager can access employee management
   if (user?.role !== 'super_admin' && user?.role !== 'hr' && user?.role !== 'manager') {
     return (
       <div className="p-8">
@@ -49,20 +256,11 @@ export default function Employees() {
     setActiveTab('bulk-uploads');
   };
 
-  // Determine which tabs to show based on role
   const showContractApprovals = user?.role === 'super_admin';
   const showApprovedContracts = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
   const showBulkUploads = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
-  const showUserManagement = user?.role === 'super_admin' || user?.role === 'hr';
+  const showPendingAccounts = user?.role === 'super_admin' || user?.role === 'hr';
   const showOnboardingSettings = user?.role === 'super_admin' || user?.role === 'hr';
-
-  // Calculate grid columns based on visible tabs
-  const getTabsGridCols = () => {
-    let count = 5; // Base: Employees, Onboarding, Teams, Leave, Users (always shown for super admin)
-    if (showContractApprovals) count++;
-    if (showOnboardingSettings) count++;
-    return `grid-cols-${count}`;
-  };
 
   return (
     <div className="p-8 space-y-6">
@@ -70,7 +268,7 @@ export default function Employees() {
         <div>
           <h2 className="text-3xl font-bold text-foreground">Employee Hub</h2>
           <p className="text-muted-foreground mt-1">
-            Manage employees, onboarding, teams, users, and settings
+            Manage employees, onboarding, teams, and settings
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -102,6 +300,10 @@ export default function Employees() {
             <Users className="h-4 w-4" />
             Employees
           </TabsTrigger>
+          <TabsTrigger value="pending-onboarding" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Pending Onboardings
+          </TabsTrigger>
           {showContractApprovals && (
             <TabsTrigger value="approvals" className="gap-2">
               <FileSignature className="h-4 w-4" />
@@ -124,10 +326,10 @@ export default function Employees() {
             <Users className="h-4 w-4" />
             Teams
           </TabsTrigger>
-          {showUserManagement && (
-            <TabsTrigger value="users" className="gap-2">
+          {showPendingAccounts && (
+            <TabsTrigger value="pending-accounts" className="gap-2">
               <UserCog className="h-4 w-4" />
-              User Management
+              Pending Accounts
             </TabsTrigger>
           )}
           {showOnboardingSettings && (
@@ -142,6 +344,9 @@ export default function Employees() {
           <EmployeeList searchQuery={searchQuery} />
         </TabsContent>
 
+        <TabsContent value="pending-onboarding" className="mt-6">
+          <PendingOnboardings />
+        </TabsContent>
 
         {showContractApprovals && (
           <TabsContent value="approvals" className="mt-6">
@@ -165,9 +370,9 @@ export default function Employees() {
           <TeamManagement />
         </TabsContent>
 
-        {showUserManagement && (
-          <TabsContent value="users" className="mt-6">
-            <UserManagement />
+        {showPendingAccounts && (
+          <TabsContent value="pending-accounts" className="mt-6">
+            <PendingAccountsOnly />
           </TabsContent>
         )}
 

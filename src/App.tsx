@@ -45,6 +45,7 @@ const Invoices = lazy(() => import("./pages/niza-templates/Invoices"));
 const GiftCards = lazy(() => import("./pages/niza-templates/GiftCards"));
 const EmailSignature = lazy(() => import("./pages/niza-templates/EmailSignature"));
 const BrandSettings = lazy(() => import("./pages/niza-templates/BrandSettings"));
+const SharedTemplatesPage = lazy(() => import("./pages/niza-templates/SharedTemplates"));
 const DashboardTemplates = lazy(() => import("./pages/dashboard/Templates"));
 const Settings = lazy(() => import("./pages/dashboard/Settings"));
 const Maintenance = lazy(() => import("./pages/dashboard/Maintenance"));
@@ -133,6 +134,7 @@ const App = () => (
                 <Route path="gift-cards" element={<GiftCards />} />
                 <Route path="email-signature" element={<EmailSignature />} />
                 <Route path="brand-settings" element={<BrandSettings />} />
+                <Route path="shared" element={<SharedTemplatesPage />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

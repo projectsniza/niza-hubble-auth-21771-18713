@@ -38,7 +38,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerAccounts, CustomerAccount, CreateCustomerData, CustomerPendingSummary } from '@/hooks/useCustomerAccounts';
-import { isAdminOrHR } from '@/lib/roles';
+import { isAdminOrHR, isSuperAdmin } from '@/lib/roles';
 import CustomerAccountDetail from '@/components/customer-accounts/CustomerAccountDetail';
 
 export default function CustomerAccounts() {
@@ -103,6 +103,7 @@ export default function CustomerAccounts() {
         customer={selectedCustomer}
         onBack={() => setSelectedCustomer(null)}
         canEdit={canEdit}
+        isSuperAdmin={isSuperAdmin(user)}
       />
     );
   }

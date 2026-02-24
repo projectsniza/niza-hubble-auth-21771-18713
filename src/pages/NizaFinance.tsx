@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, FileText, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, FileText, Download, Eye, Menu } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import nizaGroupIcon from '@/assets/niza-group-icon.png';
 import { Button } from '@/components/ui/button';
 import AppsDialog from '@/components/dashboard/AppsDialog';
 import { Card } from '@/components/ui/card';
@@ -277,21 +278,29 @@ export default function NizaFinance() {
       <div className="min-h-screen flex w-full bg-background">
       {/* Sidebar */}
       <aside 
-        className={`${sidebarCollapsed ? 'w-16' : 'w-80'} transition-all duration-300 border-r border-primary/20 flex flex-col relative h-screen sticky top-0 flex-shrink-0`}
-        style={{ background: 'var(--gradient-panel)' }}
+        className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative h-screen sticky top-0 flex-shrink-0 overflow-hidden`}
+        style={{ background: 'var(--gradient-panel)', width: sidebarCollapsed ? '80px' : '320px' }}
       >
-        {/* Toggle Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="absolute -right-4 top-7 h-8 w-8 rounded-full bg-background border-2 border-primary shadow-lg hover:bg-primary hover:text-primary-foreground z-20 hidden md:flex items-center justify-center cursor-pointer"
-        >
-          {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        {/* Logo */}
+        <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: sidebarCollapsed ? '80px' : '320px' }}>
+          {sidebarCollapsed ? (
+            <img src={nizaGroupIcon} alt="Niza Group" className="h-12 w-auto object-contain" />
+          ) : (
+            <img src={nizaCloudLogo} alt="Niza Finance" className="h-16 w-auto object-contain" />
+          )}
+        </div>
 
-        <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-b border-primary/20 flex items-center justify-center min-h-[60px]`}>
-          <img src={nizaCloudLogo} alt="Niza Finance" className={sidebarCollapsed ? "h-10 w-auto object-contain" : "h-10"} />
+        {/* Hamburger Toggle - Gmail style */}
+        <div className={`px-3 pb-2 relative z-10 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="h-10 w-10 rounded-full hover:bg-card/60 cursor-pointer hidden md:flex items-center justify-center"
+            title={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
+          >
+            <Menu className="h-5 w-5 text-foreground/70" />
+          </Button>
         </div>
 
         {!sidebarCollapsed && (

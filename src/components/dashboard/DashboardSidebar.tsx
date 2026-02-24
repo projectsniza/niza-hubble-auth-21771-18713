@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import nizaGroupIcon from '@/assets/niza-group-icon.png';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
 
@@ -212,8 +213,12 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
         </defs>
       </svg>
       {/* Logo - Always big and unchanged regardless of collapse */}
-      <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: '256px' }}>
-        <img src={nizaCloudLogo} alt="Niza Cloud" className="h-16 w-auto object-contain" />
+      <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: collapsed ? '80px' : '256px' }}>
+        {collapsed ? (
+          <img src={nizaGroupIcon} alt="Niza Group" className="h-12 w-auto object-contain" />
+        ) : (
+          <img src={nizaCloudLogo} alt="Niza Cloud" className="h-16 w-auto object-contain" />
+        )}
       </div>
 
       {/* Hamburger Toggle - Gmail style */}
