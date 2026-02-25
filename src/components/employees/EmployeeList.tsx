@@ -38,7 +38,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const { user } = useAuth();
   const [organizationFilter, setOrganizationFilter] = useState('all');
   const [branchFilter, setBranchFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
 

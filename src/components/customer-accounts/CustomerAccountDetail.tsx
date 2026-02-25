@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -21,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  ArrowLeft, Plus, PoundSterling, CheckCircle2, Clock, Calendar,
+  ArrowLeft, Plus, PoundSterling, CheckCircle2, Clock, Calendar as CalendarIcon,
   Package, Trash2, Check, X, Edit
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
@@ -45,6 +48,8 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const { monthlyAccounts, isLoading, createMonthly, updateMonthly, addItem, deleteItem, markPaid } = useMonthlyAccounts(customer.id);
   const [editAmountId, setEditAmountId] = useState<string | null>(null);
   const [editAmountValue, setEditAmountValue] = useState('');
+  const [markPaidId, setMarkPaidId] = useState<string | null>(null);
+  const [paidDate, setPaidDate] = useState<Date | undefined>(new Date());
   const [addMonthOpen, setAddMonthOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -165,7 +170,7 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
       ) : monthlyAccounts.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <CalendarIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold">No Monthly Records</h3>
             <p className="text-muted-foreground">Add the first monthly account entry</p>
           </CardContent>
@@ -180,7 +185,7 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg ${status.bg}`}>
-                        <Calendar className={`h-5 w-5 ${status.text}`} />
+                        <CalendarIcon className={`h-5 w-5 ${status.text}`} />
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg">{format(new Date(account.month_date), 'MMMM yyyy')}</h3>
@@ -260,9 +265,36 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                           <Plus className="h-3.5 w-3.5 mr-1" />Add Item
                         </Button>
                         {!account.is_paid ? (
-                          <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => markPaid.mutateAsync({ id: account.id, isPaid: true })}>
-                            <Check className="h-3.5 w-3.5 mr-1" />Mark Paid
-                          </Button>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700">
+                                <Check className="h-3.5 w-3.5 mr-1" />Mark Paid
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-4" align="end">
+                              <div className="space-y-3">
+                                <p className="text-sm font-medium">Select date paid</p>
+                                <Calendar
+                                  mode="single"
+                                  selected={paidDate}
+                                  onSelect={setPaidDate}
+                                  className={cn("p-3 pointer-events-auto")}
+                                  initialFocus
+                                />
+                                <Button 
+                                  size="sm" 
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                  disabled={!paidDate}
+                                  onClick={() => {
+                                    const dateStr = paidDate ? format(paidDate, 'yyyy-MM-dd') : undefined;
+                                    markPaid.mutateAsync({ id: account.id, isPaid: true, paidDate: dateStr });
+                                  }}
+                                >
+                                  Confirm Paid {paidDate ? format(paidDate, 'dd MMM yyyy') : ''}
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => markPaid.mutateAsync({ id: account.id, isPaid: false })}>
                             <X className="h-3.5 w-3.5 mr-1" />Unmark Paid

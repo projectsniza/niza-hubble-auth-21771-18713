@@ -134,13 +134,8 @@ export default function EmployeeStatusBadge({ status, size = 'default' }: Employ
 
 export const EMPLOYEE_STATUSES = [
   { value: 'all', label: 'All Status' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'waiting_approval', label: 'Waiting Approval' },
-  { value: 'awaiting_signature', label: 'Awaiting Signature' },
-  { value: 'docs_pending', label: 'Docs Pending' },
-  { value: 'completed', label: 'Completed' },
   { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
   { value: 'inactive', label: 'Inactive' },
   { value: 'terminated', label: 'Terminated' },
 ];

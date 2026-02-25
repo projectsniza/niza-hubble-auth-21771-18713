@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, 
-  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle
+  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle, Loader2
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
@@ -37,6 +38,8 @@ import { toast } from 'sonner';
 function PendingAccountsOnly() {
   const [pendingEmployees, setPendingEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [activationData, setActivationData] = useState<{ employeeId: string; password: string } | null>(null);
 
   useEffect(() => {
     fetchPending();
@@ -47,8 +50,9 @@ function PendingAccountsOnly() {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select(`id, first_name, last_name, email, job_title, organization_id, branch_id, account_activated, user_id, organization:organizations(name), branch:branches(name)`)
+        .select(`id, first_name, last_name, email, job_title, organization_id, branch_id, account_activated, user_id, status, organization:organizations(name), branch:branches(name)`)
         .eq('account_activated', false)
+        .is('user_id', null)
         .not('status', 'eq', 'terminated')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -57,6 +61,51 @@ function PendingAccountsOnly() {
       toast.error('Failed to load pending accounts');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleActivateAccount = async (employee: any) => {
+    if (!activationData || activationData.employeeId !== employee.id) {
+      setActivationData({ employeeId: employee.id, password: '' });
+      return;
+    }
+
+    if (!activationData.password || activationData.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setActivatingId(employee.id);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: employee.email,
+        password: activationData.password,
+        options: {
+          data: {
+            name: `${employee.first_name} ${employee.last_name}`,
+            role: 'employee',
+            organization_id: employee.organization_id,
+            branch_id: employee.branch_id,
+          }
+        }
+      });
+      if (authError) throw authError;
+
+      if (authData.user) {
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update({ user_id: authData.user.id, account_activated: true, status: 'active' })
+          .eq('id', employee.id);
+        if (updateError) throw updateError;
+
+        toast.success(`Account created for ${employee.first_name} ${employee.last_name}`);
+        setActivationData(null);
+        fetchPending();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create account');
+    } finally {
+      setActivatingId(null);
     }
   };
 
@@ -81,6 +130,7 @@ function PendingAccountsOnly() {
             <TableHead>Job Title</TableHead>
             <TableHead>Branch</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -98,6 +148,31 @@ function PendingAccountsOnly() {
               <TableCell>{emp.job_title || '-'}</TableCell>
               <TableCell>{emp.branch?.name || '-'}</TableCell>
               <TableCell><Badge variant="secondary">Account Pending</Badge></TableCell>
+              <TableCell className="text-right">
+                {activationData?.employeeId === emp.id ? (
+                  <div className="flex items-center gap-2 justify-end">
+                    <div className="space-y-1">
+                      <Label htmlFor={`pw-${emp.id}`} className="text-xs">Set Password</Label>
+                      <Input
+                        id={`pw-${emp.id}`}
+                        type="password"
+                        placeholder="Min 6 characters"
+                        value={activationData.password}
+                        onChange={e => setActivationData({ ...activationData, password: e.target.value })}
+                        className="h-8 text-sm w-40"
+                      />
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setActivationData(null)}>Cancel</Button>
+                    <Button size="sm" onClick={() => handleActivateAccount(emp)} disabled={activatingId === emp.id}>
+                      {activatingId === emp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" onClick={() => handleActivateAccount(emp)}>
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />Create Account
+                  </Button>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -298,7 +373,7 @@ export default function Employees() {
         <TabsList className="w-full justify-start gap-1 h-auto flex-wrap">
           <TabsTrigger value="employees" className="gap-2">
             <Users className="h-4 w-4" />
-            Employees
+            All Employees
           </TabsTrigger>
           <TabsTrigger value="pending-onboarding" className="gap-2">
             <UserPlus className="h-4 w-4" />
