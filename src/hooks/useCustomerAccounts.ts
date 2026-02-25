@@ -264,10 +264,10 @@ export function useMonthlyAccounts(customerId: string | null) {
   });
 
   const markPaid = useMutation({
-    mutationFn: async ({ id, isPaid }: { id: string; isPaid: boolean }) => {
+    mutationFn: async ({ id, isPaid, paidDate }: { id: string; isPaid: boolean; paidDate?: string }) => {
       const { error } = await supabase.from('customer_monthly_accounts').update({
         is_paid: isPaid,
-        paid_date: isPaid ? new Date().toISOString().split('T')[0] : null,
+        paid_date: isPaid ? (paidDate || new Date().toISOString().split('T')[0]) : null,
         marked_paid_by: isPaid ? user?.id : null,
       }).eq('id', id);
       if (error) throw error;
