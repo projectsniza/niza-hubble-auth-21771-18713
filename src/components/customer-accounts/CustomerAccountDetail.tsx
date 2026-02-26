@@ -189,7 +189,11 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg">{format(new Date(account.month_date), 'MMMM yyyy')}</h3>
-                        {account.paid_date && <p className="text-xs text-muted-foreground">Paid on {format(new Date(account.paid_date), 'dd MMM yyyy')}</p>}
+                        {account.paid_date && (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/30 text-xs font-medium mt-0.5">
+                            ✓ Paid on {format(new Date(account.paid_date), 'dd MMM yyyy')}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
