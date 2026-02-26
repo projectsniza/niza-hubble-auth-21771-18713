@@ -193,23 +193,24 @@ export function HolidayBalance() {
           
           const monthly_actual: number[] = MONTHS.map((_, idx) => {
             const monthDate = addMonths(yearStart, idx);
-            const monthStart = startOfMonth(monthDate);
-            const monthEnd = endOfMonth(monthDate);
+            // Payroll period: 21st of month to 20th of next month
+            const payrollStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 21);
+            const payrollEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20);
             
             return empTimesheets.filter(t => {
               const weekStart = parseISO(t.week_start_date);
-              return weekStart >= monthStart && weekStart <= monthEnd;
+              return weekStart >= payrollStart && weekStart <= payrollEnd;
             }).reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0);
           });
 
           const monthly_holiday: number[] = MONTHS.map((_, idx) => {
             const monthDate = addMonths(yearStart, idx);
-            const monthStart = startOfMonth(monthDate);
-            const monthEnd = endOfMonth(monthDate);
+            const payrollStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 21);
+            const payrollEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20);
             
             return empTimesheets.filter(t => {
               const weekStart = parseISO(t.week_start_date);
-              return weekStart >= monthStart && weekStart <= monthEnd;
+              return weekStart >= payrollStart && weekStart <= payrollEnd;
             }).reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0);
           });
 

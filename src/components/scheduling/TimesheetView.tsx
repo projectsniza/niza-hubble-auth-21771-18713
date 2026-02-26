@@ -65,21 +65,33 @@ interface Timesheet {
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-const getMonthWeeks = (month: Date) => {
-  const monthStart = startOfMonth(month);
-  const monthEnd = endOfMonth(month);
-  const weeks = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 });
+// Payroll period: 21st of selected month to 20th of next month
+const getPayrollPeriod = (month: Date) => {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  return {
+    start: new Date(year, m, 21),
+    end: new Date(year, m + 1, 20),
+  };
+};
+
+const getPayrollWeeks = (month: Date) => {
+  const { start, end } = getPayrollPeriod(month);
+  const weeks = eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
   return weeks.slice(0, 6);
 };
 
-// Get the current week index within a month's weeks
-const getCurrentWeekIndex = (monthWeeks: Date[]) => {
+const getCurrentPayrollWeekIndex = (weeks: Date[]) => {
   const today = new Date();
-  const todayStart = startOfWeek(today, { weekStartsOn: 1 });
-  const index = monthWeeks.findIndex(week => 
-    format(week, 'yyyy-MM-dd') === format(todayStart, 'yyyy-MM-dd')
-  );
+  const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const index = weeks.findIndex(w => format(w, 'yyyy-MM-dd') === format(todayWeekStart, 'yyyy-MM-dd'));
   return index >= 0 ? index : 0;
+};
+
+const isDateInPayrollPeriod = (date: Date, payrollMonth: Date) => {
+  const { start, end } = getPayrollPeriod(payrollMonth);
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return d >= start && d <= end;
 };
 
 export function TimesheetView() {
@@ -89,9 +101,8 @@ export function TimesheetView() {
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
-    // Initialize with current week index
-    const monthWeeks = getMonthWeeks(new Date());
-    return getCurrentWeekIndex(monthWeeks);
+    const weeks = getPayrollWeeks(new Date());
+    return getCurrentPayrollWeekIndex(weeks);
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
@@ -110,7 +121,7 @@ export function TimesheetView() {
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
-  const monthWeeks = useMemo(() => getMonthWeeks(currentMonth), [currentMonth]);
+  const monthWeeks = useMemo(() => getPayrollWeeks(currentMonth), [currentMonth]);
   const currentWeekStart = monthWeeks[selectedWeekIndex] || monthWeeks[0];
   const weekEnd = currentWeekStart ? endOfWeek(currentWeekStart, { weekStartsOn: 1 }) : new Date();
   const weekDays = currentWeekStart ? eachDayOfInterval({ start: currentWeekStart, end: weekEnd }) : [];
@@ -133,8 +144,8 @@ export function TimesheetView() {
     setLoading(true);
     try {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-      const monthStart = startOfMonth(currentMonth);
-      const monthEnd = endOfMonth(currentMonth);
+      const payroll = getPayrollPeriod(currentMonth);
+      const prevPayroll = getPayrollPeriod(subMonths(currentMonth, 1));
 
       const { data: employeesData } = await supabase
         .from('employees')
@@ -164,18 +175,16 @@ export function TimesheetView() {
       const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .gte('week_start_date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(monthEnd, 'yyyy-MM-dd'));
+        .gte('week_start_date', format(payroll.start, 'yyyy-MM-dd'))
+        .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'));
       
       setAllMonthTimesheets(monthTimesheetsData || []);
 
-      const prevMonthStart = startOfMonth(subMonths(currentMonth, 1));
-      const prevMonthEnd = endOfMonth(subMonths(currentMonth, 1));
       const { data: prevMonthData } = await supabase
         .from('timesheets')
         .select('employee_id, total_adjustment_hours')
-        .gte('week_start_date', format(prevMonthStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(prevMonthEnd, 'yyyy-MM-dd'));
+        .gte('week_start_date', format(prevPayroll.start, 'yyyy-MM-dd'))
+        .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'));
       
       const adjustments: Record<string, number> = {};
       prevMonthData?.forEach(t => {
@@ -703,7 +712,9 @@ export function TimesheetView() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Staff Attendance Details</h1>
-                <p className="text-muted-foreground">For the month of {format(currentMonth, 'MMMM yyyy')}</p>
+                <p className="text-muted-foreground">
+                  Payroll: {format(getPayrollPeriod(currentMonth).start, 'dd MMM yyyy')} – {format(getPayrollPeriod(currentMonth).end, 'dd MMM yyyy')}
+                </p>
               </div>
             </div>
             
@@ -847,12 +858,15 @@ export function TimesheetView() {
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead className="w-40 sticky left-0 bg-muted/30 z-10 font-bold">NAME</TableHead>
-                    {weekDays.map((day, i) => (
-                      <TableHead key={i} colSpan={2} className="text-center border-x bg-muted/20 min-w-[100px]">
-                        <div className="font-bold">{DAYS_SHORT[i]}</div>
-                        <div className="text-[10px] text-muted-foreground font-normal">{format(day, 'dd/MM')}</div>
-                      </TableHead>
-                    ))}
+                     {weekDays.map((day, i) => {
+                      const inPayroll = isDateInPayrollPeriod(day, currentMonth);
+                      return (
+                        <TableHead key={i} colSpan={2} className={`text-center border-x min-w-[100px] ${inPayroll ? 'bg-muted/20' : 'bg-muted/50 opacity-50'}`}>
+                          <div className="font-bold">{DAYS_SHORT[i]}</div>
+                          <div className="text-[10px] text-muted-foreground font-normal">{format(day, 'dd/MM')}</div>
+                        </TableHead>
+                      );
+                    })}
                     <TableHead className="text-center bg-blue-50 dark:bg-blue-950/50 font-bold min-w-[60px]">HOURS</TableHead>
                     <TableHead className="text-center bg-amber-50 dark:bg-amber-950/50 font-bold min-w-[60px]">HOLIDAY</TableHead>
                     <TableHead className="text-center bg-rose-50 dark:bg-rose-950/50 font-bold min-w-[60px]">SICK</TableHead>
@@ -882,6 +896,7 @@ export function TimesheetView() {
                               const entry = ts.entries?.find(e => e.day_of_week === day);
                               const editingDay = inlineEditing[ts.id]?.[day];
                               const hasEdit = !!editingDay;
+                              const inPayroll = isDateInPayrollPeriod(weekDays[dayIdx], currentMonth);
                               
                               // Determine cell background based on entry type or hours
                               const holidayHours = Number(entry?.holiday_hours) || 0;
@@ -889,16 +904,20 @@ export function TimesheetView() {
                               const isHoliday = holidayHours > 0;
                               const isSick = sickHours > 0;
                               
-                              const cellBgClass = isHoliday 
-                                ? 'bg-amber-100/70 dark:bg-amber-900/30' 
-                                : isSick 
-                                  ? 'bg-rose-100/70 dark:bg-rose-900/30' 
-                                  : '';
+                              const cellBgClass = !inPayroll
+                                ? 'bg-muted/60 opacity-40'
+                                : isHoliday 
+                                  ? 'bg-amber-100/70 dark:bg-amber-900/30' 
+                                  : isSick 
+                                    ? 'bg-rose-100/70 dark:bg-rose-900/30' 
+                                    : '';
                               
                               return (
                                 <React.Fragment key={dayIdx}>
                                   <TableCell className={`text-center px-1 border-l text-[10px] ${cellBgClass}`}>
-                                    {hasEdit ? (
+                                    {!inPayroll ? (
+                                      <span className="text-muted-foreground">—</span>
+                                    ) : hasEdit ? (
                                       <Input
                                         type="time"
                                         value={editingDay?.start || entry?.shift_start_time || ''}
@@ -916,7 +935,9 @@ export function TimesheetView() {
                                     )}
                                   </TableCell>
                                   <TableCell className={`text-center px-1 border-r text-[10px] ${cellBgClass}`}>
-                                    {hasEdit ? (
+                                    {!inPayroll ? (
+                                      <span className="text-muted-foreground">—</span>
+                                    ) : hasEdit ? (
                                       <Input
                                         type="time"
                                         value={editingDay?.end || entry?.shift_end_time || ''}
