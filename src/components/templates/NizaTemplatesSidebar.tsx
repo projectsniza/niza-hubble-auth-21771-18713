@@ -10,6 +10,8 @@ interface NizaTemplatesSidebarProps {
   onToggle: () => void;
 }
 
+import { FolderOpen } from 'lucide-react';
+
 const getMenuItems = (role: string) => {
   const items = [
     { name: 'Home', path: '/niza-templates', icon: Home, end: true },
@@ -20,9 +22,12 @@ const getMenuItems = (role: string) => {
     { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
     { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
   ];
-  // Add Shared Templates sidebar for super_admin and HR only (not store/manager)
+  // Add Shared Templates and Store & HR Templates for super_admin and HR only (not store/manager)
   if (role === 'super_admin' || role === 'hr') {
-    items.push({ name: 'Shared Templates', path: '/niza-templates/shared', icon: Share2, end: false } as any);
+    items.push(
+      { name: 'Shared Templates', path: '/niza-templates/shared', icon: Share2, end: false } as any,
+      { name: 'Store & HR Templates', path: '/niza-templates/store-hr', icon: FolderOpen, end: false } as any,
+    );
   }
   return items;
 };

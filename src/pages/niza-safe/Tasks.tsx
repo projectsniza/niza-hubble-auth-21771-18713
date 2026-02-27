@@ -23,6 +23,8 @@ import { format, isPast, isWithinInterval, addDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from '@/lib/utils';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { isAdminOrHR } from '@/lib/roles';
 
 interface TaskAttachment {
   name: string;
@@ -69,6 +71,14 @@ export default function Tasks() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [createFiles, setCreateFiles] = useState<File[]>([]);
 
+  // Page-level filter
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [filterBranches, setFilterBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
+  const canFilter = isAdminOrHR(user);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -82,25 +92,62 @@ export default function Tasks() {
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
   useEffect(() => {
-    fetchTasks();
     if (isAdmin) {
       fetchEmployees();
       fetchBranches();
     }
+    if (canFilter) fetchFilterOrganizations();
+    if (user?.role === 'manager') {
+      setViewMode('branch');
+      if (user.organizationId) setFilterOrg(user.organizationId);
+      if (user.branchId) setFilterBranch(user.branchId);
+    }
   }, [user]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [user, viewMode, filterOrg, filterBranch]);
+
+  useEffect(() => {
+    if (filterOrg) fetchFilterBranchList(filterOrg);
+  }, [filterOrg]);
+
+  const fetchFilterOrganizations = async () => {
+    if (user?.role === 'hr' && user.organizationId) {
+      const { data } = await supabase.from('organizations').select('id, name').eq('id', user.organizationId);
+      setOrganizations(data || []);
+    } else {
+      const { data } = await supabase.from('organizations').select('id, name').order('name');
+      setOrganizations(data || []);
+    }
+  };
+
+  const fetchFilterBranchList = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('id, name, organization_id').eq('organization_id', orgId).order('name');
+    setFilterBranches(data || []);
+  };
 
   const fetchTasks = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('safety_tasks')
-        .select(`
-          *,
-          branch:branches(name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      let query = supabase.from('safety_tasks').select('*, branch:branches(name)').order('created_at', { ascending: false }).limit(100);
 
+      // Apply scope filter
+      if (user?.role === 'manager' && user?.branchId) {
+        query = query.eq('branch_id', user.branchId);
+      } else if (viewMode === 'branch' && filterBranch) {
+        query = query.eq('branch_id', filterBranch);
+      } else if (viewMode === 'organization' && filterOrg) {
+        query = query.eq('organization_id', filterOrg);
+      } else if (user?.role === 'hr') {
+        if (user.hrAccessLevel === 'branch' && user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        } else if (user.organizationId) {
+          query = query.eq('organization_id', user.organizationId);
+        }
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setTasks((data || []) as SafetyTask[]);
     } catch (error) {
@@ -346,6 +393,20 @@ export default function Tasks() {
           </Button>
         )}
       </div>
+
+      {canFilter && user?.role !== 'manager' && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={filterBranches}
+          viewMode={viewMode}
+          selectedOrg={filterOrg}
+          selectedBranch={filterBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setFilterOrg}
+          onBranchChange={setFilterBranch}
+          className="mb-6"
+        />
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
