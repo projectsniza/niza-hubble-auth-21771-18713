@@ -19,6 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from '@/lib/utils';
 import { FileAttachment, FileViewer } from '@/components/shared/FileAttachment';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { isAdminOrHR } from '@/lib/roles';
 
 interface FileInfo {
   name: string;
@@ -38,11 +40,17 @@ export default function IncidentManagement() {
   const [activeTab, setActiveTab] = useState('accidents');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Organizations and branches for Super Admin
+  // Organizations and branches for filter + create dialog
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
+  
+  // Page-level filter
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
+  const canFilter = isAdminOrHR(user);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -67,11 +75,17 @@ export default function IncidentManagement() {
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
 
   useEffect(() => {
-    fetchIncidents();
-    if (user?.role === 'super_admin' || user?.role === 'hr') {
-      fetchOrganizations();
+    if (canFilter) fetchOrganizations();
+    if (user?.role === 'manager') {
+      setViewMode('branch');
+      if (user.organizationId) setFilterOrg(user.organizationId);
+      if (user.branchId) setFilterBranch(user.branchId);
     }
   }, [user]);
+
+  useEffect(() => {
+    fetchIncidents();
+  }, [user, viewMode, filterOrg, filterBranch]);
 
   useEffect(() => {
     if (selectedOrg) {
@@ -80,24 +94,41 @@ export default function IncidentManagement() {
   }, [selectedOrg]);
 
   const fetchOrganizations = async () => {
-    const { data } = await supabase.from('organizations').select('*').order('name');
-    setOrganizations(data || []);
+    if (user?.role === 'hr' && user.organizationId) {
+      const { data } = await supabase.from('organizations').select('id, name').eq('id', user.organizationId);
+      setOrganizations(data || []);
+    } else {
+      const { data } = await supabase.from('organizations').select('id, name').order('name');
+      setOrganizations(data || []);
+    }
   };
 
   const fetchBranches = async (orgId: string) => {
-    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+    const { data } = await supabase.from('branches').select('id, name, organization_id').eq('organization_id', orgId).order('name');
     setBranches(data || []);
   };
 
   const fetchIncidents = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('incidents')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      let query = supabase.from('incidents').select('*').order('created_at', { ascending: false }).limit(100);
 
+      // Apply scope filter
+      if (user?.role === 'manager' && user.branchId) {
+        query = query.eq('branch_id', user.branchId);
+      } else if (viewMode === 'branch' && filterBranch) {
+        query = query.eq('branch_id', filterBranch);
+      } else if (viewMode === 'organization' && filterOrg) {
+        query = query.eq('organization_id', filterOrg);
+      } else if (user?.role === 'hr') {
+        if (user.hrAccessLevel === 'branch' && user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        } else if (user.organizationId) {
+          query = query.eq('organization_id', user.organizationId);
+        }
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setIncidents(data || []);
     } catch (error) {
@@ -318,6 +349,20 @@ export default function IncidentManagement() {
         <h1 className="text-3xl font-bold text-foreground mb-2">Incident Management</h1>
         <p className="text-muted-foreground">Record, investigate, and learn from workplace incidents</p>
       </div>
+
+      {canFilter && user?.role !== 'manager' && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={filterOrg}
+          selectedBranch={filterBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setFilterOrg}
+          onBranchChange={setFilterBranch}
+          className="mb-6"
+        />
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {incidentTypes.map((incident) => (

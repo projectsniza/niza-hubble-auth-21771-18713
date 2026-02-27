@@ -107,8 +107,10 @@ export default function SafeDocuments() {
           }
         } else if (isHR) {
           if (user?.organizationId) {
+            // HR with org scope: show the safety_organization folder for their org
             const { data } = await supabase.from('folders')
-              .select('*').eq('organization_id', user.organizationId).eq('folder_type', 'safety_organization').order('name');
+              .select('*').eq('organization_id', user.organizationId)
+              .in('folder_type', ['safety_organization', 'safety_branch']).order('name');
             scopedFolders = data || [];
           }
         } else if (isManager) {

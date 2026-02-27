@@ -1,18 +1,13 @@
-import { BadgeCheck, CreditCard, Mail, Gift, Receipt, Palette, FolderOpen, Download, Building, MapPin } from 'lucide-react';
+import { BadgeCheck, CreditCard, Mail, Gift, Receipt, Palette } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTemplateStats, useBrandSettings } from '@/hooks/useTemplates';
 import { useNavigate } from 'react-router-dom';
-
-import { useAllStoreTemplates } from '@/hooks/useSharedTemplates';
 import { useAuth } from '@/contexts/AuthContext';
-import { format } from 'date-fns';
 
 export default function TemplatesHome() {
   const { stats, isLoading } = useTemplateStats();
   const { brandSettings } = useBrandSettings();
-  const { user } = useAuth();
-  const { templates: storeTemplates, isLoading: storeLoading } = useAllStoreTemplates();
   const navigate = useNavigate();
 
   const templateTypes = [
@@ -126,72 +121,7 @@ export default function TemplatesHome() {
         </div>
       </div>
 
-      {/* Shared Templates Panel removed - now in its own sidebar page */}
-
-      {/* Store/HR Created Templates - Super Admin Only */}
-      {user?.role === 'super_admin' && (
-        <Card className="border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5" />
-              Store & HR Templates
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {storeLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
-            ) : storeTemplates.length === 0 ? (
-              <div className="text-center py-8">
-                <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">No Store Templates</h3>
-                <p className="text-sm text-muted-foreground">
-                  Templates created by store and HR accounts will appear here
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {storeTemplates.map((template: any) => (
-                  <div key={template.id} className="flex items-center gap-3 p-3 rounded-lg border hover:border-primary/30 transition-colors">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <FolderOpen className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium truncate">{template.title}</h4>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="capitalize">{template.template_type.replace('_', ' ')}</span>
-                        <span>•</span>
-                        {template.organization && (
-                          <span className="flex items-center gap-1">
-                            <Building className="h-3 w-3" />
-                            {template.organization.name}
-                          </span>
-                        )}
-                        {template.branch && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {template.branch.name}
-                          </span>
-                        )}
-                        <span>•</span>
-                        <span>{format(new Date(template.created_at), 'MMM d, yyyy')}</span>
-                      </div>
-                    </div>
-                    {template.file_path && (
-                      <Button variant="ghost" size="icon" onClick={() => window.open(template.file_path, '_blank')}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Store/HR Templates moved to dedicated sidebar page */}
 
       {/* Stats */}
       <Card>

@@ -16,6 +16,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { FileAttachment, FileViewer } from '@/components/shared/FileAttachment';
+import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { isAdminOrHR } from '@/lib/roles';
 
 interface FileInfo {
   name: string;
@@ -57,9 +59,14 @@ export default function RiskManagement() {
   const [dialogType, setDialogType] = useState<'risk' | 'coshh' | 'hazard' | 'method'>('risk');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Organizations and branches for Super Admin
+  // Page-level filter
   const [organizations, setOrganizations] = useState<OrgOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [filterOrg, setFilterOrg] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
+
+  // Create dialog org/branch selection
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
 
@@ -81,38 +88,81 @@ export default function RiskManagement() {
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
+  const canFilter = isAdminOrHR(user);
 
   useEffect(() => {
-    fetchData();
-    if (user?.role === 'super_admin') {
+    if (canFilter) {
       fetchOrganizations();
+    }
+    // Store accounts: auto-scope
+    if (user?.role === 'manager') {
+      setViewMode('branch');
+      if (user.organizationId) setFilterOrg(user.organizationId);
+      if (user.branchId) setFilterBranch(user.branchId);
     }
   }, [user]);
 
   useEffect(() => {
-    if (selectedOrg) {
-      fetchBranches(selectedOrg);
+    fetchData();
+  }, [user, filterOrg, filterBranch, viewMode]);
+
+  useEffect(() => {
+    if (filterOrg) {
+      fetchFilterBranches(filterOrg);
     }
-  }, [selectedOrg]);
+  }, [filterOrg]);
 
   const fetchOrganizations = async () => {
-    const { data } = await supabase.from('organizations').select('*').order('name');
-    setOrganizations(data || []);
+    if (user?.role === 'hr' && user.organizationId) {
+      const { data } = await supabase.from('organizations').select('id, name').eq('id', user.organizationId);
+      setOrganizations(data || []);
+    } else {
+      const { data } = await supabase.from('organizations').select('id, name').order('name');
+      setOrganizations(data || []);
+    }
   };
 
-  const fetchBranches = async (orgId: string) => {
-    const { data } = await supabase.from('branches').select('*').eq('organization_id', orgId).order('name');
+  const fetchFilterBranches = async (orgId: string) => {
+    const { data } = await supabase.from('branches').select('id, name, organization_id').eq('organization_id', orgId).order('name');
     setBranches(data || []);
+  };
+
+  const applyFilter = (query: any) => {
+    if (user?.role === 'manager' && user.branchId) {
+      return query.eq('branch_id', user.branchId);
+    }
+    if (viewMode === 'branch' && filterBranch) {
+      return query.eq('branch_id', filterBranch);
+    }
+    if (viewMode === 'organization' && filterOrg) {
+      return query.eq('organization_id', filterOrg);
+    }
+    if (user?.role === 'hr') {
+      if (user.hrAccessLevel === 'branch' && user.branchId) {
+        return query.eq('branch_id', user.branchId);
+      }
+      if (user.organizationId) {
+        return query.eq('organization_id', user.organizationId);
+      }
+    }
+    return query;
   };
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      let riskQuery = supabase.from('risk_assessments').select('*').order('created_at', { ascending: false });
+      let coshhQuery = supabase.from('coshh_assessments').select('*').order('created_at', { ascending: false });
+      let hazardQuery = supabase.from('hazard_reports').select('*').order('created_at', { ascending: false });
+      let methodQuery = supabase.from('method_statements').select('*').order('created_at', { ascending: false });
+
+      riskQuery = applyFilter(riskQuery);
+      coshhQuery = applyFilter(coshhQuery);
+      hazardQuery = applyFilter(hazardQuery);
+      methodQuery = applyFilter(methodQuery);
+
       const [riskRes, coshhRes, hazardRes, methodRes] = await Promise.all([
-        supabase.from('risk_assessments').select('*').order('created_at', { ascending: false }),
-        supabase.from('coshh_assessments').select('*').order('created_at', { ascending: false }),
-        supabase.from('hazard_reports').select('*').order('created_at', { ascending: false }),
-        supabase.from('method_statements').select('*').order('created_at', { ascending: false }),
+        riskQuery, coshhQuery, hazardQuery, methodQuery
       ]);
 
       if (riskRes.data) setRiskAssessments(riskRes.data);
@@ -134,7 +184,6 @@ export default function RiskManagement() {
       return Array.isArray(item.images) ? item.images : [];
     }
     if (type === 'coshh') {
-      // COSHH uses sds_file_path as a single file, convert to array format
       if (item.sds_file_path) {
         return [{ name: 'SDS Document', path: item.sds_file_path }];
       }
@@ -285,32 +334,24 @@ export default function RiskManagement() {
       let orgId: string | null = null;
       let branchId: string | null = null;
 
-      // For Super Admin, use selected values
       if (user?.role === 'super_admin') {
         if (!selectedOrg || !selectedBranch) {
-          toast({
-            title: "Error",
-            description: "Please select organization and branch",
-            variant: "destructive",
-          });
+          toast({ title: "Error", description: "Please select organization and branch", variant: "destructive" });
           return;
         }
         orgId = selectedOrg;
         branchId = selectedBranch;
+      } else if (user?.role === 'hr') {
+        orgId = selectedOrg || user.organizationId || null;
+        branchId = selectedBranch || user.branchId || null;
+        if (!orgId || !branchId) {
+          toast({ title: "Error", description: "Please select organization and branch", variant: "destructive" });
+          return;
+        }
       } else {
-        // For other roles, get from profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('organization_id, branch_id')
-          .eq('id', authUser?.id)
-          .single();
-
+        const { data: profile } = await supabase.from('profiles').select('organization_id, branch_id').eq('id', authUser?.id).single();
         if (!profile?.organization_id || !profile?.branch_id) {
-          toast({
-            title: "Error",
-            description: "Organization or branch not configured for your profile",
-            variant: "destructive",
-          });
+          toast({ title: "Error", description: "Organization or branch not configured", variant: "destructive" });
           return;
         }
         orgId = profile.organization_id;
@@ -321,64 +362,42 @@ export default function RiskManagement() {
       switch (dialogType) {
         case 'risk':
           ({ error } = await supabase.from('risk_assessments').insert({
-            title: formData.title,
-            description: formData.description,
-            hazard_description: formData.hazard_description,
-            control_measures: formData.control_measures,
-            risk_level: formData.risk_level,
-            organization_id: orgId!,
-            branch_id: branchId!,
-            created_by: authUser?.id,
-            evidence_files: attachedFiles as any,
+            title: formData.title, description: formData.description,
+            hazard_description: formData.hazard_description, control_measures: formData.control_measures,
+            risk_level: formData.risk_level, organization_id: orgId!, branch_id: branchId!,
+            created_by: authUser?.id, evidence_files: attachedFiles as any,
           }));
           break;
         case 'coshh':
           ({ error } = await supabase.from('coshh_assessments').insert({
-            chemical_name: formData.chemical_name,
-            storage_requirements: formData.storage_requirements,
-            exposure_limits: formData.exposure_limits,
-            organization_id: orgId!,
-            branch_id: branchId!,
-            created_by: authUser?.id,
-            sds_file_path: attachedFiles[0]?.path || null,
+            chemical_name: formData.chemical_name, storage_requirements: formData.storage_requirements,
+            exposure_limits: formData.exposure_limits, organization_id: orgId!, branch_id: branchId!,
+            created_by: authUser?.id, sds_file_path: attachedFiles[0]?.path || null,
           }));
           break;
         case 'hazard':
           ({ error } = await supabase.from('hazard_reports').insert({
-            title: formData.title,
-            description: formData.description,
-            location_details: formData.location_details,
-            priority: formData.priority,
-            organization_id: orgId!,
-            branch_id: branchId!,
-            reported_by: authUser?.id!,
+            title: formData.title, description: formData.description,
+            location_details: formData.location_details, priority: formData.priority,
+            organization_id: orgId!, branch_id: branchId!, reported_by: authUser?.id!,
             images: attachedFiles as any,
           }));
           break;
         case 'method':
           ({ error } = await supabase.from('method_statements').insert({
-            title: formData.title,
-            responsibilities: formData.responsibilities,
-            organization_id: orgId!,
-            branch_id: branchId!,
-            created_by: authUser?.id,
+            title: formData.title, responsibilities: formData.responsibilities,
+            organization_id: orgId!, branch_id: branchId!, created_by: authUser?.id,
             attachments: attachedFiles as any,
           }));
           break;
       }
-
       if (error) throw error;
-
       toast({ title: "Success", description: "Created successfully" });
       setShowCreateDialog(false);
       setAttachedFiles([]);
       fetchData();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to create", variant: "destructive" });
     }
   };
 
@@ -416,7 +435,6 @@ export default function RiskManagement() {
       hazard: 'Photos/Evidence',
       method: 'Supporting Documents',
     };
-
     return (
       <FileAttachment
         files={attachedFiles}
@@ -430,12 +448,29 @@ export default function RiskManagement() {
     );
   };
 
+  const createDialogBranches = selectedOrg ? branches.filter(b => b.organization_id === selectedOrg) : branches;
+
   return (
     <div className="p-8 max-w-7xl mx-auto animate-fade-in">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Risk Management</h1>
         <p className="text-muted-foreground">Identify, assess, and control workplace risks</p>
       </div>
+
+      {/* Org/Branch Filter - visible to super_admin and HR only */}
+      {canFilter && user?.role !== 'manager' && (
+        <OrgBranchFilter
+          organizations={organizations}
+          branches={branches}
+          viewMode={viewMode}
+          selectedOrg={filterOrg}
+          selectedBranch={filterBranch}
+          onViewModeChange={setViewMode}
+          onOrgChange={setFilterOrg}
+          onBranchChange={setFilterBranch}
+          className="mb-6"
+        />
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         {riskModules.map((module) => (
@@ -460,19 +495,10 @@ export default function RiskManagement() {
       <div className="flex items-center justify-between mb-6">
         <div className="relative w-64">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+          <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
         </div>
-        <Button 
-          onClick={() => openCreateDialog(activeTab === 'risk-assessments' ? 'risk' : activeTab === 'coshh' ? 'coshh' : activeTab === 'hazards' ? 'hazard' : 'method')}
-          className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create New
+        <Button onClick={() => openCreateDialog(activeTab === 'risk-assessments' ? 'risk' : activeTab === 'coshh' ? 'coshh' : activeTab === 'hazards' ? 'hazard' : 'method')} className="bg-gradient-to-r from-primary to-accent hover:opacity-90">
+          <Plus className="h-4 w-4 mr-2" />Create New
         </Button>
       </div>
 
@@ -487,45 +513,19 @@ export default function RiskManagement() {
         <TabsContent value="risk-assessments">
           <Card>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Risk Level</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Files</TableHead>
-                  <TableHead>Review Date</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow>
+                <TableHead>Title</TableHead><TableHead>Risk Level</TableHead><TableHead>Status</TableHead><TableHead>Files</TableHead><TableHead>Review Date</TableHead><TableHead>Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {riskAssessments.filter(item => 
-                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No risk assessments found
-                    </TableCell>
-                  </TableRow>
+                {riskAssessments.filter(item => !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No risk assessments found</TableCell></TableRow>
                 ) : (
-                  riskAssessments.filter(item => 
-                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).map((item) => (
+                  riskAssessments.filter(item => !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
-                      <TableCell>
-                        <Badge className={getRiskBadgeColor(item.risk_level)}>{item.risk_level}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {getFilesColumn(item, 'risk').length > 0 && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Paperclip className="h-4 w-4" />
-                            <span className="text-sm">{getFilesColumn(item, 'risk').length}</span>
-                          </div>
-                        )}
-                      </TableCell>
+                      <TableCell><Badge className={getRiskBadgeColor(item.risk_level)}>{item.risk_level}</Badge></TableCell>
+                      <TableCell><Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge></TableCell>
+                      <TableCell>{getFilesColumn(item, 'risk').length > 0 && (<div className="flex items-center gap-1 text-muted-foreground"><Paperclip className="h-4 w-4" /><span className="text-sm">{getFilesColumn(item, 'risk').length}</span></div>)}</TableCell>
                       <TableCell>{item.review_date ? format(new Date(item.review_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -545,41 +545,18 @@ export default function RiskManagement() {
         <TabsContent value="coshh">
           <Card>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Chemical Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>SDS</TableHead>
-                  <TableHead>SDS Expiry</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow>
+                <TableHead>Chemical Name</TableHead><TableHead>Status</TableHead><TableHead>SDS</TableHead><TableHead>SDS Expiry</TableHead><TableHead>Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {coshhAssessments.filter(item => 
-                  !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No COSHH assessments found
-                    </TableCell>
-                  </TableRow>
+                {coshhAssessments.filter(item => !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No COSHH assessments found</TableCell></TableRow>
                 ) : (
-                  coshhAssessments.filter(item => 
-                    !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).map((item) => (
+                  coshhAssessments.filter(item => !searchTerm || item.chemical_name.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.chemical_name}</TableCell>
-                      <TableCell>
-                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {item.sds_file_path && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Paperclip className="h-4 w-4" />
-                            <span className="text-sm">1</span>
-                          </div>
-                        )}
-                      </TableCell>
+                      <TableCell><Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge></TableCell>
+                      <TableCell>{item.sds_file_path && (<div className="flex items-center gap-1 text-muted-foreground"><Paperclip className="h-4 w-4" /><span className="text-sm">1</span></div>)}</TableCell>
                       <TableCell>{item.sds_expiry_date ? format(new Date(item.sds_expiry_date), 'PPP') : '-'}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -599,46 +576,19 @@ export default function RiskManagement() {
         <TabsContent value="hazards">
           <Card>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Files</TableHead>
-                  <TableHead>Reported</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow>
+                <TableHead>Title</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead>Photos</TableHead><TableHead>Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {hazardReports.filter(item => 
-                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No hazard reports found
-                    </TableCell>
-                  </TableRow>
+                {hazardReports.filter(item => !searchTerm || item.title?.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No hazard reports found</TableCell></TableRow>
                 ) : (
-                  hazardReports.filter(item => 
-                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).map((item) => (
+                  hazardReports.filter(item => !searchTerm || item.title?.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
-                      <TableCell>
-                        <Badge className={getRiskBadgeColor(item.priority)}>{item.priority}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {getFilesColumn(item, 'hazard').length > 0 && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Paperclip className="h-4 w-4" />
-                            <span className="text-sm">{getFilesColumn(item, 'hazard').length}</span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
+                      <TableCell><Badge className={getRiskBadgeColor(item.priority)}>{item.priority}</Badge></TableCell>
+                      <TableCell><Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge></TableCell>
+                      <TableCell>{getFilesColumn(item, 'hazard').length > 0 && (<div className="flex items-center gap-1 text-muted-foreground"><Paperclip className="h-4 w-4" /><span className="text-sm">{getFilesColumn(item, 'hazard').length}</span></div>)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'hazard')}><Eye className="h-4 w-4" /></Button>
@@ -657,42 +607,18 @@ export default function RiskManagement() {
         <TabsContent value="methods">
           <Card>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Files</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow>
+                <TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Files</TableHead><TableHead>Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {methodStatements.filter(item => 
-                  !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No method statements found
-                    </TableCell>
-                  </TableRow>
+                {methodStatements.filter(item => !searchTerm || item.title?.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No method statements found</TableCell></TableRow>
                 ) : (
-                  methodStatements.filter(item => 
-                    !searchTerm || item.title.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).map((item) => (
+                  methodStatements.filter(item => !searchTerm || item.title?.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.title}</TableCell>
-                      <TableCell>
-                        <Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {getFilesColumn(item, 'method').length > 0 && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Paperclip className="h-4 w-4" />
-                            <span className="text-sm">{getFilesColumn(item, 'method').length}</span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{format(new Date(item.created_at), 'PPP')}</TableCell>
+                      <TableCell><Badge className={getStatusBadgeColor(item.status)}>{item.status}</Badge></TableCell>
+                      <TableCell>{getFilesColumn(item, 'method').length > 0 && (<div className="flex items-center gap-1 text-muted-foreground"><Paperclip className="h-4 w-4" /><span className="text-sm">{getFilesColumn(item, 'method').length}</span></div>)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openViewDialog(item, 'method')}><Eye className="h-4 w-4" /></Button>
@@ -711,174 +637,75 @@ export default function RiskManagement() {
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              Create {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
-            </DialogTitle>
+            <DialogTitle>Create New {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {/* Organization and Branch selection for Super Admin */}
-            {user?.role === 'super_admin' && (
+          <div className="space-y-4 py-4">
+            {/* Org/Branch for super admin and HR */}
+            {(user?.role === 'super_admin' || (user?.role === 'hr' && !user?.branchId)) && (
               <>
                 <div className="space-y-2">
                   <Label>Organization</Label>
-                  <Select value={selectedOrg} onValueChange={setSelectedOrg}>
+                  <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSelectedBranch(''); fetchFilterBranches(v); }}>
                     <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
-                    <SelectContent>
-                      {organizations.map((org) => (
-                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Branch</Label>
                   <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!selectedOrg}>
                     <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{createDialogBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </>
             )}
 
-            {dialogType === 'coshh' ? (
+            {dialogType === 'risk' && (
               <>
-                <div className="space-y-2">
-                  <Label>Chemical Name</Label>
-                  <Input
-                    value={formData.chemical_name}
-                    onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
-                    placeholder="Enter chemical name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Storage Requirements</Label>
-                  <Textarea
-                    value={formData.storage_requirements}
-                    onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })}
-                    placeholder="Enter storage requirements"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Exposure Limits</Label>
-                  <Input
-                    value={formData.exposure_limits}
-                    onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })}
-                    placeholder="Enter exposure limits"
-                  />
-                </div>
-              </>
-            ) : dialogType === 'hazard' ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter hazard title"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe the hazard"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Location Details</Label>
-                  <Input
-                    value={formData.location_details}
-                    onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
-                    placeholder="Where is the hazard?"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} placeholder="Risk assessment title" /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Hazard Description</Label><Textarea value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Control Measures</Label><Textarea value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Risk Level</Label>
+                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({...formData, risk_level: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            ) : dialogType === 'method' ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter method statement title"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Responsibilities</Label>
-                  <Textarea
-                    value={formData.responsibilities}
-                    onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
-                    placeholder="Enter responsibilities"
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter risk assessment title"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Enter description"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Hazard Description</Label>
-                  <Textarea
-                    value={formData.hazard_description}
-                    onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
-                    placeholder="Describe the hazards"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Control Measures</Label>
-                  <Textarea
-                    value={formData.control_measures}
-                    onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
-                    placeholder="Enter control measures"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Risk Level</Label>
-                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
+                    <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
                   </Select>
                 </div>
               </>
             )}
 
-            {/* File Attachment */}
+            {dialogType === 'coshh' && (
+              <>
+                <div className="space-y-2"><Label>Chemical Name</Label><Input value={formData.chemical_name} onChange={(e) => setFormData({...formData, chemical_name: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Exposure Limits</Label><Input value={formData.exposure_limits} onChange={(e) => setFormData({...formData, exposure_limits: e.target.value})} /></div>
+              </>
+            )}
+
+            {dialogType === 'hazard' && (
+              <>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Location</Label><Input value={formData.location_details} onChange={(e) => setFormData({...formData, location_details: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Priority</Label>
+                  <Select value={formData.priority} onValueChange={(v) => setFormData({...formData, priority: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {dialogType === 'method' && (
+              <>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Responsibilities</Label><Textarea value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
+              </>
+            )}
+
             {renderFileAttachmentForm()}
           </div>
           <div className="flex justify-end gap-2">
@@ -890,75 +717,67 @@ export default function RiskManagement() {
 
       {/* View Dialog */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
-            </DialogTitle>
+            <DialogTitle>View Details</DialogTitle>
           </DialogHeader>
           {selectedItem && (
-            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-4 py-4">
               {dialogType === 'risk' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p>{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Hazard Description</Label><p>{selectedItem.hazard_description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Control Measures</Label><p>{selectedItem.control_measures || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Hazard</Label><p className="mt-1">{selectedItem.hazard_description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Control Measures</Label><p className="mt-1">{selectedItem.control_measures || '-'}</p></div>
                   <div className="flex gap-4">
-                    <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={getRiskBadgeColor(selectedItem.risk_level)}>{selectedItem.risk_level}</Badge></div>
-                    <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                    <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.risk_level)}`}>{selectedItem.risk_level}</Badge></div>
+                    <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                   </div>
-                  <FileViewer files={getFilesColumn(selectedItem, 'risk')} bucket="documents" label="Evidence Files" />
-                  {isAdmin && selectedItem.status !== 'approved' && (
-                    <div className="flex gap-2 pt-4 border-t">
-                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'risk', 'approved'); setShowViewDialog(false); }}>Approve</Button>
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label>Update Status</Label>
+                      <Select value={selectedItem.status} onValueChange={(v) => { updateStatus(selectedItem.id, 'risk', v); setShowViewDialog(false); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="approved">Approved</SelectItem></SelectContent>
+                      </Select>
                     </div>
                   )}
                 </>
               )}
               {dialogType === 'coshh' && (
                 <>
-                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="font-medium">{selectedItem.chemical_name}</p></div>
-                  <div><Label className="text-muted-foreground">Storage Requirements</Label><p>{selectedItem.storage_requirements || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p>{selectedItem.exposure_limits || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
-                  <FileViewer files={getFilesColumn(selectedItem, 'coshh')} bucket="documents" label="Safety Data Sheet" />
-                  {isAdmin && selectedItem.status !== 'approved' && (
-                    <div className="flex gap-2 pt-4 border-t">
-                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'coshh', 'approved'); setShowViewDialog(false); }}>Approve</Button>
-                    </div>
-                  )}
+                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="mt-1 font-medium">{selectedItem.chemical_name}</p></div>
+                  <div><Label className="text-muted-foreground">Storage</Label><p className="mt-1">{selectedItem.storage_requirements || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p className="mt-1">{selectedItem.exposure_limits || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
               )}
               {dialogType === 'hazard' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p>{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Location</Label><p>{selectedItem.location_details || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Location</Label><p className="mt-1">{selectedItem.location_details || '-'}</p></div>
                   <div className="flex gap-4">
-                    <div><Label className="text-muted-foreground">Priority</Label><Badge className={getRiskBadgeColor(selectedItem.priority)}>{selectedItem.priority}</Badge></div>
-                    <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
+                    <div><Label className="text-muted-foreground">Priority</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.priority)}`}>{selectedItem.priority}</Badge></div>
+                    <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                   </div>
-                  <FileViewer files={getFilesColumn(selectedItem, 'hazard')} bucket="documents" label="Photos/Evidence" />
-                  {isAdmin && selectedItem.status !== 'resolved' && (
-                    <div className="flex gap-2 pt-4 border-t">
-                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'hazard', 'resolved'); setShowViewDialog(false); }}>Mark Resolved</Button>
-                    </div>
-                  )}
                 </>
               )}
               {dialogType === 'method' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Responsibilities</Label><p>{selectedItem.responsibilities || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Status</Label><Badge className={getStatusBadgeColor(selectedItem.status)}>{selectedItem.status}</Badge></div>
-                  <FileViewer files={getFilesColumn(selectedItem, 'method')} bucket="documents" label="Supporting Documents" />
-                  {isAdmin && selectedItem.status !== 'approved' && (
-                    <div className="flex gap-2 pt-4 border-t">
-                      <Button size="sm" onClick={() => { updateStatus(selectedItem.id, 'method', 'approved'); setShowViewDialog(false); }}>Approve</Button>
-                    </div>
-                  )}
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Responsibilities</Label><p className="mt-1">{selectedItem.responsibilities || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
+              )}
+              {/* Files */}
+              {getFilesColumn(selectedItem, dialogType).length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground">Attached Files</Label>
+                  <div className="mt-2 space-y-2">
+                    <FileViewer files={getFilesColumn(selectedItem, dialogType)} bucket="documents" />
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -967,134 +786,49 @@ export default function RiskManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
-              Edit {dialogType === 'risk' ? 'Risk Assessment' : dialogType === 'coshh' ? 'COSHH Assessment' : dialogType === 'hazard' ? 'Hazard Report' : 'Method Statement'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            {dialogType === 'coshh' ? (
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            {dialogType === 'risk' && (
               <>
-                <div className="space-y-2">
-                  <Label>Chemical Name</Label>
-                  <Input
-                    value={formData.chemical_name}
-                    onChange={(e) => setFormData({ ...formData, chemical_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Storage Requirements</Label>
-                  <Textarea
-                    value={formData.storage_requirements}
-                    onChange={(e) => setFormData({ ...formData, storage_requirements: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Exposure Limits</Label>
-                  <Input
-                    value={formData.exposure_limits}
-                    onChange={(e) => setFormData({ ...formData, exposure_limits: e.target.value })}
-                  />
-                </div>
-              </>
-            ) : dialogType === 'hazard' ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Location Details</Label>
-                  <Input
-                    value={formData.location_details}
-                    onChange={(e) => setFormData({ ...formData, location_details: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Hazard Description</Label><Textarea value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Control Measures</Label><Textarea value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Risk Level</Label>
+                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({...formData, risk_level: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            ) : dialogType === 'method' ? (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Responsibilities</Label>
-                  <Textarea
-                    value={formData.responsibilities}
-                    onChange={(e) => setFormData({ ...formData, responsibilities: e.target.value })}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Hazard Description</Label>
-                  <Textarea
-                    value={formData.hazard_description}
-                    onChange={(e) => setFormData({ ...formData, hazard_description: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Control Measures</Label>
-                  <Textarea
-                    value={formData.control_measures}
-                    onChange={(e) => setFormData({ ...formData, control_measures: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Risk Level</Label>
-                  <Select value={formData.risk_level} onValueChange={(v) => setFormData({ ...formData, risk_level: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
+                    <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
                   </Select>
                 </div>
               </>
             )}
-
-            {/* File Attachment */}
+            {dialogType === 'coshh' && (
+              <>
+                <div className="space-y-2"><Label>Chemical Name</Label><Input value={formData.chemical_name} onChange={(e) => setFormData({...formData, chemical_name: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Exposure Limits</Label><Input value={formData.exposure_limits} onChange={(e) => setFormData({...formData, exposure_limits: e.target.value})} /></div>
+              </>
+            )}
+            {dialogType === 'hazard' && (
+              <>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Location</Label><Input value={formData.location_details} onChange={(e) => setFormData({...formData, location_details: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Priority</Label>
+                  <Select value={formData.priority} onValueChange={(v) => setFormData({...formData, priority: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            {dialogType === 'method' && (
+              <>
+                <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Responsibilities</Label><Textarea value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
+              </>
+            )}
             {renderFileAttachmentForm()}
           </div>
           <div className="flex justify-end gap-2">
@@ -1104,20 +838,16 @@ export default function RiskManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this record.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete this item?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

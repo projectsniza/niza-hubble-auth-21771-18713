@@ -8,14 +8,22 @@ import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import nizaGroupIcon from '@/assets/niza-group-icon.png';
 
-const menuItems = [
-  { title: 'Home', icon: Home, path: '/niza-safe' },
-  { title: 'Risk Management', icon: AlertTriangle, path: '/niza-safe/risk-management' },
-  { title: 'Incident Management', icon: AlertCircle, path: '/niza-safe/incident-management' },
-  { title: 'Documents', icon: FileText, path: '/niza-safe/documents' },
-  { title: 'Employees', icon: Users, path: '/niza-safe/employees' },
-  { title: 'Tasks', icon: CheckSquare, path: '/niza-safe/tasks' },
-];
+const getMenuItems = (role: string) => {
+  const items = [
+    { title: 'Home', icon: Home, path: '/niza-safe' },
+    { title: 'Risk Management', icon: AlertTriangle, path: '/niza-safe/risk-management' },
+    { title: 'Incident Management', icon: AlertCircle, path: '/niza-safe/incident-management' },
+  ];
+  // Hide Documents sidebar for store accounts (manager role)
+  if (role !== 'manager') {
+    items.push({ title: 'Documents', icon: FileText, path: '/niza-safe/documents' });
+  }
+  items.push(
+    { title: 'Employees', icon: Users, path: '/niza-safe/employees' },
+    { title: 'Tasks', icon: CheckSquare, path: '/niza-safe/tasks' },
+  );
+  return items;
+};
 
 interface NizaSafeSidebarProps {
   collapsed: boolean;
@@ -24,6 +32,7 @@ interface NizaSafeSidebarProps {
 
 export default function NizaSafeSidebar({ collapsed, onToggle }: NizaSafeSidebarProps) {
   const { user, logout } = useAuth();
+  const menuItems = getMenuItems(user?.role || 'employee');
 
   return (
     <aside 
