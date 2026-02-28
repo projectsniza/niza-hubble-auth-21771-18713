@@ -123,7 +123,8 @@ export default function MessagingPanel() {
     async (content: string, attachments: any[] = [], replyToId?: string, mentions?: string[]) => {
       const result = await sendMessage(content, attachments, replyToId, mentions);
       if (result) {
-        await fetchConversations();
+        // Fire and forget - don't block input clearing
+        fetchConversations();
       }
       return result;
     },

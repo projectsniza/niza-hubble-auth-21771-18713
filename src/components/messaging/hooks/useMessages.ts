@@ -25,30 +25,22 @@ export function useMessages(conversationId: string | null) {
 
       const senderIds = [...new Set(msgs?.map(m => m.sender_id) || [])];
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name, email')
-        .in('id', senderIds);
-
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .in('user_id', senderIds);
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-      const roleMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
-
-      // Get reply-to messages
+      // Parallel fetch profiles, roles, and reply messages
       const replyIds = msgs?.filter(m => m.reply_to_id).map(m => m.reply_to_id) || [];
-      const { data: replyMessages } = replyIds.length > 0
-        ? await supabase
-            .from('messages')
-            .select('*')
-            .in('id', replyIds as string[])
-        : { data: [] };
+
+      const [profilesResult, rolesResult, replyResult] = await Promise.all([
+        supabase.from('profiles').select('id, name, email').in('id', senderIds),
+        supabase.from('user_roles').select('user_id, role').in('user_id', senderIds),
+        replyIds.length > 0
+          ? supabase.from('messages').select('*').in('id', replyIds as string[])
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const profileMap = new Map(profilesResult.data?.map(p => [p.id, p]) || []);
+      const roleMap = new Map(rolesResult.data?.map(r => [r.user_id, r.role]) || []);
 
       const replyMap = new Map(
-        (replyMessages || []).map(m => [
+        (replyResult.data || []).map(m => [
           m.id,
           {
             ...m,
@@ -88,12 +80,13 @@ export function useMessages(conversationId: string | null) {
       setMessages(enrichedMsgs);
       setPinnedMessages(enrichedMsgs.filter(m => m.is_pinned));
 
-      // Mark as read
-      await supabase
+      // Mark as read (fire and forget)
+      supabase
         .from('conversation_participants')
         .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id)
+        .then(() => {});
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -222,6 +215,11 @@ export function useMessages(conversationId: string | null) {
   // Realtime subscription
   useEffect(() => {
     if (!conversationId) return;
+
+    // Reset state immediately for snappy switching
+    setMessages([]);
+    setPinnedMessages([]);
+    setLoading(true);
 
     fetchMessages();
 
