@@ -23,15 +23,21 @@ export function useEmployees(filters?: {
   
   // Track last fetch params to prevent unnecessary refetches
   const lastFetchParamsRef = useRef<string>('');
+  const isFetchingRef = useRef(false);
   
-  const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
+  const filterKey = useMemo(() => JSON.stringify(filters || {}), [
+    filters?.organizationId, filters?.branchId, filters?.managerId, filters?.status, filters?.searchQuery
+  ]);
 
   const fetchEmployees = useCallback(async (force = false) => {
     // Prevent duplicate fetches with same params unless forced
-    if (!force && lastFetchParamsRef.current === filterKey && employees.length > 0) {
+    if (!force && lastFetchParamsRef.current === filterKey) {
       setIsLoading(false);
       return;
     }
+
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     
     try {
       setIsLoading(true);
@@ -77,8 +83,9 @@ export function useEmployees(filters?: {
       console.error('Error fetching employees:', err);
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
-  }, [filterKey, filters?.organizationId, filters?.branchId, filters?.managerId, filters?.status, filters?.searchQuery, employees.length]);
+  }, [filterKey]);
 
   const createEmployee = useCallback(async (employeeData: {
     organization_id: string;
