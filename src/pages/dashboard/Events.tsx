@@ -64,10 +64,10 @@ export default function Events() {
   const categoryConfig = {
     all: { label: "All", icon: Bell, color: "from-primary to-accent" },
     announcement: { label: "Announcements", icon: Megaphone, color: "from-orange-500 to-orange-600" },
-    company: { label: "Company Events", icon: Briefcase, color: "from-blue-500 to-blue-600" },
+    company_event: { label: "Company Events", icon: Briefcase, color: "from-blue-500 to-blue-600" },
     training: { label: "Training", icon: GraduationCap, color: "from-purple-500 to-purple-600" },
     birthday: { label: "Birthdays", icon: Cake, color: "from-pink-500 to-pink-600" },
-    employee: { label: "Employee Events", icon: Users, color: "from-green-500 to-green-600" },
+    employee_event: { label: "Employee Events", icon: Users, color: "from-green-500 to-green-600" },
     urgent: { label: "Urgent", icon: Bell, color: "from-red-500 to-red-600" },
   };
 
