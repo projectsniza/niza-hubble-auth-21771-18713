@@ -352,6 +352,12 @@ export default function Maintenance() {
   const filteredTickets = useMemo(() => tickets.filter(ticket => {
     const matchesSearch = ticket.title.toLowerCase().includes(searchQuery.toLowerCase());
     
+    // Apply date filter
+    if (dateFilter && ticket.created_at) {
+      const ticketDate = format(new Date(ticket.created_at), 'yyyy-MM-dd');
+      if (ticketDate !== dateFilter) return false;
+    }
+    
     // Apply org/branch filters for super admin / full HR
     if (canViewFilters && viewMode !== 'all') {
       if (viewMode === 'organization' && selectedOrg) {
@@ -369,7 +375,7 @@ export default function Maintenance() {
     }
     
     return matchesSearch;
-  }), [tickets, searchQuery, canViewFilters, viewMode, selectedOrg, selectedBranch]);
+  }), [tickets, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateTicket = user?.role === 'manager' || user?.role === 'hr' || user?.role === 'super_admin';
   const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr';

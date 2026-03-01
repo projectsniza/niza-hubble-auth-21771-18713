@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,18 +15,19 @@ export default function OnboardingManagement() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
-  
-  const filters: any = { status: 'onboarding' };
-  
-  if (user?.role === 'manager') {
-    filters.branchId = user.branchId;
-  } else if (user?.role === 'hr') {
-    if (user.hrAccessLevel === 'branch') {
-      filters.branchId = user.branchId;
-    } else if (user.hrAccessLevel === 'organization') {
-      filters.organizationId = user.organizationId;
+  const filters = useMemo(() => {
+    const f: any = { status: 'onboarding' };
+    if (user?.role === 'manager') {
+      f.branchId = user.branchId;
+    } else if (user?.role === 'hr') {
+      if (user.hrAccessLevel === 'branch') {
+        f.branchId = user.branchId;
+      } else if (user.hrAccessLevel === 'organization') {
+        f.organizationId = user.organizationId;
+      }
     }
-  }
+    return f;
+  }, [user?.role, user?.branchId, user?.hrAccessLevel, user?.organizationId]);
 
   const { employees, isLoading } = useEmployees(filters);
 
