@@ -124,6 +124,8 @@ export default function LeaveAttendanceOverview() {
             employee:employees(first_name, last_name, user_id, organization_id, branch_id),
             leave_type:leave_types(name)
           `)
+          .lte('start_date', monthEndStr)
+          .gte('end_date', monthStartStr)
           .order('start_date', { ascending: false }),
         supabase
           .from('timesheet_entries')
