@@ -408,10 +408,24 @@ export default function Attendance() {
   );
   
   const filteredRequests = useMemo(() => {
-    if (filterType === 'all') return applyFilters(leaveRequests);
-    if (filterType === 'pending') return pendingRequests;
-    return applyFilters(leaveRequests.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType)));
-  }, [leaveRequests, filterType, pendingRequests, applyFilters]);
+    // Filter by current month
+    const monthFiltered = leaveRequests.filter(r => {
+      const start = new Date(r.start_date);
+      const end = new Date(r.end_date);
+      const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      // Include if the leave overlaps with the current month
+      return start <= monthEnd && end >= monthStart;
+    });
+    
+    let result = monthFiltered;
+    if (filterType === 'pending') {
+      result = monthFiltered.filter(r => r.status === 'pending');
+    } else if (filterType !== 'all') {
+      result = monthFiltered.filter(r => r.leave_type?.name?.toLowerCase().includes(filterType));
+    }
+    return applyFilters(result);
+  }, [leaveRequests, filterType, applyFilters, currentMonth]);
   
   const filteredEmployees = useMemo(() => {
     if (!canViewFilters || viewMode === 'all') return employees;
