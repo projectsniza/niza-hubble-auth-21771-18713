@@ -38,6 +38,8 @@ export default function DepartmentManagement() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterOrg, setFilterOrg] = useState<string>(ALL_ORGS_VALUE);
 
   useEffect(() => {
     fetchData();
@@ -214,6 +216,30 @@ export default function DepartmentManagement() {
           </div>
         </div>
 
+        {/* Search & Filter */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search departments..."
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <Select value={filterOrg} onValueChange={setFilterOrg}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Organizations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ORGS_VALUE}>All Organizations</SelectItem>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* Departments Table */}
         <div className="rounded-md border">
           <Table>
@@ -226,14 +252,20 @@ export default function DepartmentManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {departments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                    No departments configured. Add your first department above.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                departments.map((dept) => (
+              {(() => {
+                const filtered = departments.filter(dept => {
+                  if (searchQuery && !dept.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                  if (filterOrg !== ALL_ORGS_VALUE && dept.organization_id !== filterOrg && dept.organization_id !== null) return false;
+                  return true;
+                });
+                if (filtered.length === 0) return (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      No departments found.
+                    </TableCell>
+                  </TableRow>
+                );
+                return filtered.map((dept) => (
                   <TableRow key={dept.id}>
                     <TableCell>
                       {editingId === dept.id ? (
@@ -307,8 +339,8 @@ export default function DepartmentManagement() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                ));
+              })()}
             </TableBody>
           </Table>
         </div>
