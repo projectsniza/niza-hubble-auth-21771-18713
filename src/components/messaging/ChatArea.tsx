@@ -152,12 +152,17 @@ export default function ChatArea({
     }
   };
 
-  // Group messages by date
+  // Filter out messages from deleted users (no sender profile) and group by date
   const groupedMessages = useMemo(() => {
-    return messages.reduce(
+    const validMessages = messages.filter(msg => {
+      // Keep own messages always; filter out messages where sender has no name (deleted user)
+      if (msg.sender_id === user?.id) return true;
+      return msg.sender?.name && msg.sender.name !== 'Unknown';
+    });
+    return validMessages.reduce(
       (acc, msg, idx) => {
         const msgDate = new Date(msg.created_at);
-        const prevMsg = messages[idx - 1];
+        const prevMsg = validMessages[idx - 1];
         const showDateDivider = !prevMsg || !isSameDay(msgDate, new Date(prevMsg.created_at));
 
         if (showDateDivider) {
@@ -168,7 +173,7 @@ export default function ChatArea({
       },
       [] as Array<{ type: 'divider'; date: string } | { type: 'message'; message: Message }>
     );
-  }, [messages]);
+  }, [messages, user?.id]);
 
   // File handling
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

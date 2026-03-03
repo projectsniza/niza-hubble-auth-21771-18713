@@ -107,15 +107,27 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
     }
   };
 
+  const getCanvasCoords = (reqId: string, e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRefs.current[reqId];
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
   const startDrawingOnCanvas = (reqId: string, e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     setDrawingReqId(reqId);
     const canvas = canvasRefs.current[reqId];
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const { x, y } = getCanvasCoords(reqId, e);
     ctx.beginPath();
     ctx.moveTo(x, y);
   };
@@ -126,9 +138,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const { x, y } = getCanvasCoords(reqId, e);
     ctx.lineTo(x, y);
     ctx.stroke();
     setEsignHasSignature(prev => ({ ...prev, [reqId]: true }));
