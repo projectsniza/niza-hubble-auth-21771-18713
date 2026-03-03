@@ -18,10 +18,13 @@ const getMenuItems = (role: string) => {
     { name: 'ID Card & Visitor Pass', path: '/niza-templates/id-cards', icon: BadgeCheck },
     { name: 'Business Cards', path: '/niza-templates/business-cards', icon: CreditCard },
     { name: 'Invoices', path: '/niza-templates/invoices', icon: Receipt },
-    { name: 'Gift Cards', path: '/niza-templates/gift-cards', icon: Gift },
     { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
     { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
   ];
+  // Gift Cards only for super_admin and HR
+  if (role === 'super_admin' || role === 'hr') {
+    items.splice(4, 0, { name: 'Gift Cards', path: '/niza-templates/gift-cards', icon: Gift });
+  }
   // Add Shared Templates and Store & HR Templates for super_admin and HR only (not store/manager)
   if (role === 'super_admin' || role === 'hr') {
     items.push(

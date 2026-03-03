@@ -508,13 +508,14 @@ export default function BankDetailsForm({
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2" data-field="signature">
-                <RequiredLabel error={errors.signature}>Signature (Type your name)</RequiredLabel>
+                <RequiredLabel error={errors.signature}>Signature (To be signed by employee while uploading)</RequiredLabel>
                 <Input
                   value={formData.signature}
                   onChange={(e) => updateField('signature', e.target.value)}
-                  placeholder="Type your full name as signature"
-                  className={`italic ${errors.signature ? 'border-destructive' : ''}`}
+                  placeholder="To be signed by employee"
+                  className={`italic bg-muted/50 ${errors.signature ? 'border-destructive' : ''}`}
                   disabled={readOnly}
+                  readOnly={readOnly}
                 />
                 <ErrorMessage error={errors.signature} />
               </div>
