@@ -264,12 +264,7 @@ export default function ApplicationForm({
     if (!formData.declaration_agreed) {
       newErrors.declaration_agreed = 'You must agree to the declaration';
     }
-    if (!formData.signature.trim()) {
-      newErrors.signature = 'Signature is required';
-    }
-    if (!formData.signature_date) {
-      newErrors.signature_date = 'Signature date is required';
-    }
+    // Signature fields are optional - to be signed by employee while uploading
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

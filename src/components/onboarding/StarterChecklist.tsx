@@ -166,13 +166,7 @@ export default function StarterChecklist({
       newErrors.has_student_loan = 'Please answer the student loan question';
     }
 
-    // Signature section is mandatory
-    if (!formData.signature.trim()) {
-      newErrors.signature = 'Signature is required';
-    }
-    if (!formData.signature_date) {
-      newErrors.signature_date = 'Date is required';
-    }
+    // Signature fields are optional - to be signed by employee while uploading
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

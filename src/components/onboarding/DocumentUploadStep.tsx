@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { File, Plus, Lock, AlertCircle, CheckCircle, Upload, PenTool, Eraser } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,6 +61,7 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
   const [esignHasSignature, setEsignHasSignature] = useState<Record<string, boolean>>({});
   const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const [drawingReqId, setDrawingReqId] = useState<string | null>(null);
+  const [esignDialogReqId, setEsignDialogReqId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDocumentRequirements();
@@ -357,43 +359,14 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                       </div>
                     </div>
 
-                    {/* E-Signature Section for share code */}
+                    {/* E-Signature button for share code */}
                     {req.requires_esignature && requirementFiles[req.id] && (
-                      <>
-                        <Separator />
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <PenTool className="h-4 w-4 text-primary" />
-                            <span className="font-semibold text-sm">E-Signature Verification</span>
-                          </div>
-                          {req.verification_message && (
-                            <div className="bg-muted/50 rounded-lg p-3 border">
-                              <p className="text-sm">{req.verification_message}</p>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Your Name *</Label>
-                              <Input placeholder="Full name" value={esignNames[req.id] || ''} onChange={(e) => setEsignNames(p => ({ ...p, [req.id]: e.target.value }))} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Your Role *</Label>
-                              <Input placeholder="e.g., HR Manager" value={esignRoles[req.id] || ''} onChange={(e) => setEsignRoles(p => ({ ...p, [req.id]: e.target.value }))} />
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs">Signature *</Label>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => clearCanvasSignature(req.id)} className="h-6 text-xs"><Eraser className="h-3 w-3 mr-1" />Clear</Button>
-                            </div>
-                            <div className="border-2 rounded-lg overflow-hidden bg-white">
-                              <canvas ref={(el) => initCanvas(req.id, el)} width={300} height={100} className="w-full cursor-crosshair touch-none"
-                                onMouseDown={(e) => startDrawingOnCanvas(req.id, e)} onMouseMove={(e) => drawOnCanvas(req.id, e)} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
-                                onTouchStart={(e) => startDrawingOnCanvas(req.id, e)} onTouchMove={(e) => drawOnCanvas(req.id, e)} onTouchEnd={stopDrawing} />
-                            </div>
-                          </div>
-                        </div>
-                      </>
+                      <div className="pt-2">
+                        <Button type="button" variant={esignHasSignature[req.id] ? "outline" : "default"} size="sm" className="gap-2" onClick={() => setEsignDialogReqId(req.id)}>
+                          <PenTool className="h-4 w-4" />
+                          {esignHasSignature[req.id] ? 'E-Signature Added ✓' : 'Add E-Signature Verification'}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </Card>
@@ -454,43 +427,14 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                     </div>
                     </div>
 
-                    {/* E-Signature Section */}
+                    {/* E-Signature button */}
                     {req.requires_esignature && requirementFiles[req.id] && (
-                      <>
-                        <Separator />
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <PenTool className="h-4 w-4 text-primary" />
-                            <span className="font-semibold text-sm">E-Signature Verification</span>
-                          </div>
-                          {req.verification_message && (
-                            <div className="bg-muted/50 rounded-lg p-3 border">
-                              <p className="text-sm">{req.verification_message}</p>
-                            </div>
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Your Name *</Label>
-                              <Input placeholder="Full name" value={esignNames[req.id] || ''} onChange={(e) => setEsignNames(p => ({ ...p, [req.id]: e.target.value }))} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Your Role *</Label>
-                              <Input placeholder="e.g., HR Manager" value={esignRoles[req.id] || ''} onChange={(e) => setEsignRoles(p => ({ ...p, [req.id]: e.target.value }))} />
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs">Signature *</Label>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => clearCanvasSignature(req.id)} className="h-6 text-xs"><Eraser className="h-3 w-3 mr-1" />Clear</Button>
-                            </div>
-                            <div className="border-2 rounded-lg overflow-hidden bg-white">
-                              <canvas ref={(el) => initCanvas(req.id, el)} width={300} height={100} className="w-full cursor-crosshair touch-none"
-                                onMouseDown={(e) => startDrawingOnCanvas(req.id, e)} onMouseMove={(e) => drawOnCanvas(req.id, e)} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
-                                onTouchStart={(e) => startDrawingOnCanvas(req.id, e)} onTouchMove={(e) => drawOnCanvas(req.id, e)} onTouchEnd={stopDrawing} />
-                            </div>
-                          </div>
-                        </div>
-                      </>
+                      <div className="pt-2">
+                        <Button type="button" variant={esignHasSignature[req.id] ? "outline" : "default"} size="sm" className="gap-2" onClick={() => setEsignDialogReqId(req.id)}>
+                          <PenTool className="h-4 w-4" />
+                          {esignHasSignature[req.id] ? 'E-Signature Added ✓' : 'Add E-Signature Verification'}
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </Card>
@@ -606,6 +550,65 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
           <p className="text-sm text-muted-foreground mt-2">Uploading documents...</p>
         </div>
       )}
+
+      {/* E-Signature Verification Dialog */}
+      <Dialog open={!!esignDialogReqId} onOpenChange={(open) => { if (!open) setEsignDialogReqId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PenTool className="h-5 w-5 text-primary" />
+              E-Signature Verification
+            </DialogTitle>
+          </DialogHeader>
+          {esignDialogReqId && (() => {
+            const req = requirements.find(r => r.id === esignDialogReqId);
+            if (!req) return null;
+            return (
+              <div className="space-y-4">
+                {req.verification_message && (
+                  <div className="bg-muted/50 rounded-lg p-3 border">
+                    <p className="text-sm">{req.verification_message}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Your Name *</Label>
+                    <Input placeholder="Full name" value={esignNames[esignDialogReqId] || ''} onChange={(e) => setEsignNames(p => ({ ...p, [esignDialogReqId]: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Your Role *</Label>
+                    <Input placeholder="e.g., HR Manager" value={esignRoles[esignDialogReqId] || ''} onChange={(e) => setEsignRoles(p => ({ ...p, [esignDialogReqId]: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Signature *</Label>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => clearCanvasSignature(esignDialogReqId)} className="h-6 text-xs"><Eraser className="h-3 w-3 mr-1" />Clear</Button>
+                  </div>
+                  <div className="border-2 rounded-lg overflow-hidden bg-white">
+                    <canvas ref={(el) => initCanvas(esignDialogReqId, el)} width={400} height={150} className="w-full cursor-crosshair touch-none"
+                      onMouseDown={(e) => startDrawingOnCanvas(esignDialogReqId, e)} onMouseMove={(e) => drawOnCanvas(esignDialogReqId, e)} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                      onTouchStart={(e) => startDrawingOnCanvas(esignDialogReqId, e)} onTouchMove={(e) => drawOnCanvas(esignDialogReqId, e)} onTouchEnd={stopDrawing} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEsignDialogReqId(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (esignDialogReqId && esignNames[esignDialogReqId] && esignRoles[esignDialogReqId] && esignHasSignature[esignDialogReqId]) {
+                toast.success('E-Signature verification added');
+                setEsignDialogReqId(null);
+              } else {
+                toast.error('Please fill in all fields and provide a signature');
+              }
+            }}>
+              Confirm Signature
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

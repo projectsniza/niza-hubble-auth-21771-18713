@@ -141,12 +141,7 @@ export default function BankDetailsForm({
     if (!formData.account_holder_name.trim()) {
       newErrors.account_holder_name = 'Account holder name is required';
     }
-    if (!formData.signature.trim()) {
-      newErrors.signature = 'Signature is required';
-    }
-    if (!formData.signature_date) {
-      newErrors.signature_date = 'Date is required';
-    }
+    // Signature fields are optional - to be signed by employee while uploading
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
