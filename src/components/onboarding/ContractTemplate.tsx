@@ -747,7 +747,7 @@ export default function ContractTemplate({
     
     // ── Employer Section ──
     // 1. Employer signature (drawn or typed) - ABOVE the line
-    if (contractApproval?.employer_signature && contractApproval.employer_signature_type === 'drawn' && contractApproval.employer_signature.startsWith('data:image')) {
+    if (contractApproval?.employer_signature && (contractApproval.employer_signature_type === 'drawn' || contractApproval.employer_signature_type === 'uploaded') && contractApproval.employer_signature.startsWith('data:image')) {
       try {
         doc.addImage(contractApproval.employer_signature, 'PNG', margin, y, 60, 15);
         y += 18;
@@ -1203,7 +1203,7 @@ export default function ContractTemplate({
               <>
                 {/* 1. Signature/e-sign ABOVE the line */}
                 <div>
-                  {contractApproval.employer_signature_type === 'drawn' ? (
+                  {(contractApproval.employer_signature_type === 'drawn' || contractApproval.employer_signature_type === 'uploaded') && contractApproval.employer_signature.startsWith('data:image') ? (
                     <img src={contractApproval.employer_signature} alt="Signature" className="h-16" />
                   ) : (
                     <p className="text-2xl font-bold italic font-serif">{contractApproval.employer_signature}</p>

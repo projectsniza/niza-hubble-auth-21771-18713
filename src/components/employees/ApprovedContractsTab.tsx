@@ -708,7 +708,8 @@ export default function ApprovedContractsTab() {
               contractApproval={{
                 employer_signature: viewingContract.employer_signature,
                 employer_signature_type: viewingContract.employer_signature_type,
-                employer_signed_date: viewingContract.employer_signed_date
+                employer_signed_date: viewingContract.employer_signed_date,
+                contract_content: viewingContract.contract_content
               }}
               onSave={() => {}}
               onSubmit={() => setViewingContract(null)}
