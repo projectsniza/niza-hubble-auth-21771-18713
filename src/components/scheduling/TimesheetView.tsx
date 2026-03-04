@@ -239,16 +239,24 @@ export function TimesheetView() {
     }
   };
 
+  const [creatingAll, setCreatingAll] = useState(false);
+  
   const createAllTimesheets = async () => {
     const employeesWithoutTimesheet = filteredEmployees.filter(
       emp => !timesheets.some(t => t.employee_id === emp.id)
     );
+    if (employeesWithoutTimesheet.length === 0) {
+      toast.info('All employees already have timesheets for this week');
+      return;
+    }
+    setCreatingAll(true);
     let count = 0;
     for (const emp of employeesWithoutTimesheet) {
       const success = await createTimesheetForEmployee(emp);
       if (success) count++;
     }
     toast.success(`Created ${count} timesheets`);
+    setCreatingAll(false);
     fetchData();
   };
 
