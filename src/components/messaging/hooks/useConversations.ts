@@ -5,6 +5,9 @@ import type { Conversation, UserProfile } from '../types';
 
 const ORG_CHAT_NAME = 'Organization Group Chat';
 
+const isValidDisplayName = (name?: string | null) =>
+  Boolean(name && name.trim() && name.trim().toLowerCase() !== 'unknown');
+
 export function useConversations() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -79,38 +82,51 @@ export function useConversations() {
 
       const readAtMap = new Map(participantData?.map(p => [p.conversation_id, p.last_read_at]) || []);
 
-      const enrichedConvos: Conversation[] = (convos || []).map(conv => {
-        const participants = (allParticipants || [])
-          .filter(p => p.conversation_id === conv.id)
-          .map(p => {
-            const profile = profileMap.get(p.user_id);
-            return {
-              id: p.user_id,
-              name: profile?.name || 'Unknown',
-              email: profile?.email || '',
-              role: roleMap.get(p.user_id),
-            };
-          }) as UserProfile[];
+      const enrichedConvos: Conversation[] = (convos || [])
+        .map(conv => {
+          const participants = (allParticipants || [])
+            .filter(p => p.conversation_id === conv.id)
+            .map(p => {
+              const profile = profileMap.get(p.user_id);
+              if (!profile || !isValidDisplayName(profile.name)) {
+                return null;
+              }
 
-        const lastMessage = lastMessageMap.get(conv.id);
-        const lastReadAt = readAtMap.get(conv.id);
+              return {
+                id: p.user_id,
+                name: profile.name,
+                email: profile.email || '',
+                role: roleMap.get(p.user_id),
+              } as UserProfile;
+            })
+            .filter((p): p is UserProfile => p !== null);
 
-        return {
-          ...conv,
-          participants,
-          last_message: lastMessage ? {
-            ...lastMessage,
-            is_edited: lastMessage.is_edited ?? false,
-            is_deleted: lastMessage.is_deleted ?? false,
-            is_pinned: lastMessage.is_pinned ?? false,
-            pinned_by: lastMessage.pinned_by ?? null,
-            pinned_at: lastMessage.pinned_at ?? null,
-            reply_to_id: lastMessage.reply_to_id ?? null,
-            attachments: lastMessage.attachments as unknown as null,
-          } : undefined,
-          unread_count: lastMessage && lastReadAt && new Date(lastMessage.created_at) > new Date(lastReadAt) ? 1 : 0,
-        };
-      });
+          const lastMessage = lastMessageMap.get(conv.id);
+          const lastReadAt = readAtMap.get(conv.id);
+
+          return {
+            ...conv,
+            participants,
+            last_message: lastMessage
+              ? {
+                  ...lastMessage,
+                  is_edited: lastMessage.is_edited ?? false,
+                  is_deleted: lastMessage.is_deleted ?? false,
+                  is_pinned: lastMessage.is_pinned ?? false,
+                  pinned_by: lastMessage.pinned_by ?? null,
+                  pinned_at: lastMessage.pinned_at ?? null,
+                  reply_to_id: lastMessage.reply_to_id ?? null,
+                  attachments: lastMessage.attachments as unknown as null,
+                }
+              : undefined,
+            unread_count:
+              lastMessage && lastReadAt && new Date(lastMessage.created_at) > new Date(lastReadAt) ? 1 : 0,
+          };
+        })
+        .filter(conv => {
+          if (conv.is_group) return true;
+          return conv.participants?.some(p => p.id !== user.id && isValidDisplayName(p.name)) ?? false;
+        });
 
       setConversations(enrichedConvos);
     } catch (error) {
