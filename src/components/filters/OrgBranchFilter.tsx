@@ -94,21 +94,41 @@ export function OrgBranchFilter({
         </Select>
       )}
 
-      {viewMode === 'branch' && selectedOrg && (
-        <Select 
-          value={selectedBranch || 'all'} 
-          onValueChange={(v) => onBranchChange(v === 'all' ? '' : v)}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Select Branch" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Branches</SelectItem>
-            {filteredBranches.map(branch => (
-              <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {viewMode === 'branch' && (
+        <>
+          {!selectedOrg && (
+            <Select 
+              value={selectedBranch || 'all'} 
+              onValueChange={(v) => onBranchChange(v === 'all' ? '' : v)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {branches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {selectedOrg && (
+            <Select 
+              value={selectedBranch || 'all'} 
+              onValueChange={(v) => onBranchChange(v === 'all' ? '' : v)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select Branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {filteredBranches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </>
       )}
     </div>
   );

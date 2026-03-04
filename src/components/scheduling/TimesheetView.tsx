@@ -239,16 +239,24 @@ export function TimesheetView() {
     }
   };
 
+  const [creatingAll, setCreatingAll] = useState(false);
+  
   const createAllTimesheets = async () => {
     const employeesWithoutTimesheet = filteredEmployees.filter(
       emp => !timesheets.some(t => t.employee_id === emp.id)
     );
+    if (employeesWithoutTimesheet.length === 0) {
+      toast.info('All employees already have timesheets for this week');
+      return;
+    }
+    setCreatingAll(true);
     let count = 0;
     for (const emp of employeesWithoutTimesheet) {
       const success = await createTimesheetForEmployee(emp);
       if (success) count++;
     }
     toast.success(`Created ${count} timesheets`);
+    setCreatingAll(false);
     fetchData();
   };
 
@@ -521,9 +529,9 @@ export function TimesheetView() {
     return true;
   }), [employees, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
-  const employeesWithoutTimesheet = filteredEmployees.filter(
+  const employeesWithoutTimesheet = useMemo(() => filteredEmployees.filter(
     emp => !timesheets.some(t => t.employee_id === emp.id)
-  );
+  ), [filteredEmployees, timesheets]);
 
   const filteredTimesheets = useMemo(() => timesheets.filter(t => {
     const emp = t.employee;
@@ -832,9 +840,9 @@ export function TimesheetView() {
           />
         </div>
         {viewTab === 'weekly' && employeesWithoutTimesheet.length > 0 && (
-          <Button onClick={createAllTimesheets} className="shadow-sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Create All ({employeesWithoutTimesheet.length})
+          <Button onClick={createAllTimesheets} disabled={creatingAll} className="shadow-sm">
+            {creatingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+            {creatingAll ? 'Creating...' : `Create All (${employeesWithoutTimesheet.length})`}
           </Button>
         )}
       </div>

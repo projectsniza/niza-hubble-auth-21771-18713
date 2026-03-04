@@ -326,7 +326,7 @@ export default function Events() {
                     <Select value={newEvent.branchId} onValueChange={(v) => setNewEvent({ ...newEvent, branchId: v })}>
                       <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
                       <SelectContent>
-                        {branches.map(branch => (
+                        {dialogBranches.map(branch => (
                           <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                         ))}
                       </SelectContent>
