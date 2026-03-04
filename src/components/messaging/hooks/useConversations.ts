@@ -125,7 +125,7 @@ export function useConversations() {
         })
         .filter(conv => {
           if (conv.is_group) return true;
-          return conv.participants?.some(p => p.id !== user.id && isValidDisplayName(p.name)) ?? false;
+          return conv.participants?.some(p => p.id !== user?.id && isValidDisplayName(p.name)) ?? false;
         });
 
       setConversations(enrichedConvos);
