@@ -840,9 +840,9 @@ export function TimesheetView() {
           />
         </div>
         {viewTab === 'weekly' && employeesWithoutTimesheet.length > 0 && (
-          <Button onClick={createAllTimesheets} className="shadow-sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Create All ({employeesWithoutTimesheet.length})
+          <Button onClick={createAllTimesheets} disabled={creatingAll} className="shadow-sm">
+            {creatingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+            {creatingAll ? 'Creating...' : `Create All (${employeesWithoutTimesheet.length})`}
           </Button>
         )}
       </div>
