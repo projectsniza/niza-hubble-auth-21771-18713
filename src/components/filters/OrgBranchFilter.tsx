@@ -94,7 +94,7 @@ export function OrgBranchFilter({
         </Select>
       )}
 
-      {viewMode === 'branch' && selectedOrg && (
+      {viewMode === 'branch' && (
         <Select 
           value={selectedBranch || 'all'} 
           onValueChange={(v) => onBranchChange(v === 'all' ? '' : v)}

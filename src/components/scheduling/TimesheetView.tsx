@@ -521,9 +521,9 @@ export function TimesheetView() {
     return true;
   }), [employees, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
-  const employeesWithoutTimesheet = filteredEmployees.filter(
+  const employeesWithoutTimesheet = useMemo(() => filteredEmployees.filter(
     emp => !timesheets.some(t => t.employee_id === emp.id)
-  );
+  ), [filteredEmployees, timesheets]);
 
   const filteredTimesheets = useMemo(() => timesheets.filter(t => {
     const emp = t.employee;
