@@ -102,7 +102,18 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     return filters;
   }, [user, organizationFilter, branchFilter, statusFilter, searchQuery]);
 
-  const { employees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
+  const { employees: rawEmployees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
+
+  // Sort: active employees first, deactivated at bottom
+  const employees = useMemo(() => {
+    return [...rawEmployees].sort((a, b) => {
+      const aInactive = a.status === 'inactive' || a.status === 'terminated';
+      const bInactive = b.status === 'inactive' || b.status === 'terminated';
+      if (aInactive && !bInactive) return 1;
+      if (!aInactive && bInactive) return -1;
+      return 0;
+    });
+  }, [rawEmployees]);
 
   const filteredBranches = organizationFilter !== 'all' 
     ? branches.filter(b => b.organization_id === organizationFilter)
@@ -122,7 +133,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
     setIsDeactivating(true);
     try {
-      // Update employee status
       const { error } = await supabase
         .from('employees')
         .update({ 
@@ -132,7 +142,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         .eq('id', deactivateEmployee.id);
       if (error) throw error;
 
-      // Also deactivate user profile if linked
       if (deactivateEmployee.user_id) {
         await supabase
           .from('profiles')
@@ -144,11 +153,33 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       setDeactivateEmployee(null);
       setDeactivationReason('');
       setDeactivationNotes('');
-      fetchEmployees();
+      fetchEmployees(true);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsDeactivating(false);
+    }
+  };
+
+  const handleReactivateEmployee = async (employee: any) => {
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active', deactivation_reason: null })
+        .eq('id', employee.id);
+      if (error) throw error;
+
+      if (employee.user_id) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: true })
+          .eq('id', employee.user_id);
+      }
+
+      toast.success(`${employee.first_name} ${employee.last_name} has been reactivated`);
+      fetchEmployees(true);
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
