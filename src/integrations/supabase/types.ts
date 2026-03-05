@@ -299,6 +299,63 @@ export type Database = {
           },
         ]
       }
+      bulk_upload_document_settings: {
+        Row: {
+          branch_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          doc_order: number
+          enabled: boolean
+          id: string
+          is_mandatory: boolean
+          name: string
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          doc_order?: number
+          enabled?: boolean
+          id?: string
+          is_mandatory?: boolean
+          name: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          doc_order?: number
+          enabled?: boolean
+          id?: string
+          is_mandatory?: boolean
+          name?: string
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_upload_document_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_upload_document_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_uploads: {
         Row: {
           branch_id: string | null
@@ -1682,6 +1739,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           date_of_birth: string | null
+          deactivation_reason: string | null
           department: string | null
           email: string
           emergency_contact_name: string | null
@@ -1709,6 +1767,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null
+          deactivation_reason?: string | null
           department?: string | null
           email: string
           emergency_contact_name?: string | null
@@ -1736,6 +1795,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null
+          deactivation_reason?: string | null
           department?: string | null
           email?: string
           emergency_contact_name?: string | null
