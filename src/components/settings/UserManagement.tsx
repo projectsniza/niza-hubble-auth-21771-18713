@@ -450,10 +450,18 @@ export default function UserManagement() {
     : branches;
 
   // Enrich users with deactivation reasons and filter by role
-  const enrichedUsers = users.map(u => ({
-    ...u,
-    deactivation_reason: employeeDeactivationReasons.get(u.id) || null
-  }));
+  const enrichedUsers = users.map(u => {
+    const reason = employeeDeactivationReasons.get(u.id) || null;
+    const emailMatch = emailDeactivationMap.get(u.email);
+    const deactivation_reason = reason || emailMatch?.reason || null;
+    // If employee is deactivated but profile is_active wasn't updated, treat as inactive
+    const is_active = deactivation_reason && emailMatch?.status === 'inactive' ? false : u.is_active;
+    return {
+      ...u,
+      deactivation_reason,
+      is_active,
+    };
+  });
   const superAdmins = enrichedUsers.filter(u => u.role === 'super_admin');
   const hrUsers = enrichedUsers.filter(u => u.role === 'hr');
   const managers = enrichedUsers.filter(u => u.role === 'manager');
