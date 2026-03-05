@@ -133,7 +133,7 @@ export default function ClockIns() {
     fetchData();
   }, [user?.id, historyFilterMonth, historyFilterYear]);
 
-  // Timer effect for active clock-in
+  // Timer effect for active clock-in — survives app backgrounding via visibilitychange
   useEffect(() => {
     if (!activeClockIn) {
       setElapsedTime('00:00:00');
@@ -156,7 +156,19 @@ export default function ClockIns() {
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
+
+    // When user returns to the app after backgrounding, immediately recalculate timer
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updateTimer();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [activeClockIn]);
 
   const fetchData = async () => {
@@ -215,11 +227,18 @@ export default function ClockIns() {
 
       setClockIns(clockInsRes.data || []);
 
-      // Find active clock-in for current user (clocked in but not clocked out)
-      const activeSession = (clockInsRes.data || []).find(
-        (c: ClockIn) => c.user_id === user?.id && !c.clock_out_time
-      );
-      setActiveClockIn(activeSession || null);
+      // Fetch active clock-in separately (not filtered by month) so it persists across app reopens
+      if (user?.id) {
+        const { data: activeData } = await supabase
+          .from('clock_ins')
+          .select('*, branch:branches(name, organization_id), location:locations(name)')
+          .eq('user_id', user.id)
+          .is('clock_out_time', null)
+          .order('clock_in_time', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        setActiveClockIn(activeData || null);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -267,7 +286,7 @@ export default function ClockIns() {
         toast.error(errorMessage);
         setGettingLocation(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
     );
   };
 
@@ -502,7 +521,7 @@ export default function ClockIns() {
           toast.error(errorMessage);
           setClockAction(null);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
       );
     } catch (error: any) {
       console.error('Clock in error:', error);
@@ -562,7 +581,7 @@ export default function ClockIns() {
           toast.error(errorMessage);
           setClockAction(null);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
       );
     } catch (error: any) {
       toast.error(error.message || 'Failed to clock out');
