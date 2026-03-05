@@ -143,84 +143,36 @@ export default function UserManagement() {
 
     setIsSubmitting(true);
     try {
-      // Save current admin session before creating new user
-      const { data: currentSession } = await supabase.auth.getSession();
-      const adminSession = currentSession?.session;
-
-      // Create auth user with role in metadata for the trigger
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: selectedEmployee.email,
-        password: password,
-        options: {
-          data: {
-            name: displayName || `${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
-            role: selectedRole,
-            organization_id: selectedEmployee.organization_id || '',
-            branch_id: selectedEmployee.branch_id || '',
-            hr_access_level: selectedRole === 'hr' ? hrAccessLevel : ''
-          },
-          emailRedirectTo: `${window.location.origin}/`
+      // Use edge function to create user (prevents session hijacking)
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: selectedEmployee.email,
+          password: password,
+          name: displayName || `${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
+          role: selectedRole,
+          organization_id: selectedEmployee.organization_id || '',
+          branch_id: selectedEmployee.branch_id || '',
+          hr_access_level: selectedRole === 'hr' ? hrAccessLevel : ''
         }
       });
 
-      if (signUpError) throw signUpError;
-      if (!authData.user) throw new Error('Failed to create user');
+      if (fnError) throw fnError;
+      if (fnData?.error) throw new Error(fnData.error);
 
-      // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update the profile with additional details
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          organization_id: selectedEmployee.organization_id,
-          branch_id: selectedEmployee.branch_id,
-          display_name: displayName || null,
-          force_password_change: true,
-          hr_access_level: selectedRole === 'hr' ? hrAccessLevel : null
-        })
-        .eq('id', authData.user.id);
-
-      if (profileError) {
-        console.error('Profile update error:', profileError);
-      }
-
-      // Update the user role to ensure it's correct
-      const { data: existingRole } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', authData.user.id)
-        .maybeSingle();
-
-      if (existingRole) {
-        await supabase
-          .from('user_roles')
-          .update({ role: selectedRole })
-          .eq('user_id', authData.user.id);
-      } else {
-        await supabase
-          .from('user_roles')
-          .insert({ user_id: authData.user.id, role: selectedRole });
-      }
+      const newUserId = fnData?.user?.id;
+      if (!newUserId) throw new Error('Failed to create user');
 
       // Link employee to user and activate
       const { error: employeeError } = await supabase
         .from('employees')
         .update({ 
-          user_id: authData.user.id,
-          account_activated: true 
+          user_id: newUserId,
+          account_activated: true,
+          status: 'active'
         })
         .eq('id', selectedEmployee.id);
 
       if (employeeError) throw employeeError;
-
-      // Restore admin session after creating the new user
-      if (adminSession) {
-        await supabase.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token
-        });
-      }
 
       toast.success(`Account created for ${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
       setActivateDialogOpen(false);
