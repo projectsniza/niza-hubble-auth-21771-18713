@@ -338,12 +338,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          {employee.status === 'onboarding' && (
-                            <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
-                              <UserCog className="h-4 w-4 mr-2" />
-                              Continue Onboarding
-                            </DropdownMenuItem>
-                          )}
                           {(employee.status === 'inactive' || employee.status === 'terminated') && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
