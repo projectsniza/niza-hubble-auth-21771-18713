@@ -760,7 +760,7 @@ export default function UserManagement() {
             </p>
           </Card>
           <div className="grid gap-3">
-            {employees.map(user => <UserCard key={user.id} user={user} />)}
+            {employees.map(user => <UserCard key={user.id} user={user} hideDeactivateButton />)}
             {employees.length === 0 && (
               <Card className="p-8 text-center">
                 <p className="text-muted-foreground">No employee users found</p>
