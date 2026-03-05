@@ -13,8 +13,18 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Upload, FileText, Check, X, Loader2, User, Building, MapPin, 
-  Calendar, AlertCircle, CheckCircle2
+  Calendar, AlertCircle, CheckCircle2, Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,6 +74,7 @@ export default function BulkUploadedEmployees() {
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
