@@ -399,6 +399,12 @@ export default function Employees() {
               Bulk Uploads
             </TabsTrigger>
           )}
+          {showBulkUploadSettings && (
+            <TabsTrigger value="bulk-upload-settings" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Bulk Upload Settings
+            </TabsTrigger>
+          )}
           <TabsTrigger value="teams" className="gap-2">
             <Users className="h-4 w-4" />
             Teams
@@ -440,6 +446,12 @@ export default function Employees() {
         {showBulkUploads && (
           <TabsContent value="bulk-uploads" className="mt-6">
             <BulkUploadedEmployees />
+          </TabsContent>
+        )}
+
+        {showBulkUploadSettings && (
+          <TabsContent value="bulk-upload-settings" className="mt-6">
+            <BulkUploadSettings />
           </TabsContent>
         )}
 
