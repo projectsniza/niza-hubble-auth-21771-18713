@@ -54,8 +54,14 @@ export function useEmployees(filters?: {
           contract_approval:contract_approvals(id, status)
         `)
         .order('created_at', { ascending: false })
-        .limit(200)
-        .in('status', ['active', 'inactive', 'terminated']);
+        .limit(200);
+
+      // Only show active + deactivated employees unless a specific status filter is set
+      if (filters?.status) {
+        query = query.eq('status', filters.status);
+      } else {
+        query = query.in('status', ['active', 'inactive', 'terminated']);
+      }
 
       if (filters?.organizationId) {
         query = query.eq('organization_id', filters.organizationId);
@@ -65,10 +71,6 @@ export function useEmployees(filters?: {
       }
       if (filters?.managerId) {
         query = query.eq('manager_id', filters.managerId);
-      }
-      if (filters?.status) {
-        // Override the default .in() filter when a specific status is selected
-        query = query.eq('status', filters.status);
       }
       if (filters?.searchQuery) {
         query = query.or(`first_name.ilike.%${filters.searchQuery}%,last_name.ilike.%${filters.searchQuery}%,email.ilike.%${filters.searchQuery}%`);
