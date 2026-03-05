@@ -455,7 +455,8 @@ export default function UserManagement() {
     const emailMatch = emailDeactivationMap.get(u.email);
     const deactivation_reason = reason || emailMatch?.reason || null;
     // If employee is deactivated but profile is_active wasn't updated, treat as inactive
-    const is_active = deactivation_reason && emailMatch?.status === 'inactive' ? false : u.is_active;
+    const profileIsActive = (u as any).is_active;
+    const is_active = deactivation_reason && emailMatch?.status === 'inactive' ? false : profileIsActive;
     return {
       ...u,
       deactivation_reason,
