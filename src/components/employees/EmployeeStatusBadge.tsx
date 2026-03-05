@@ -135,7 +135,5 @@ export default function EmployeeStatusBadge({ status, size = 'default' }: Employ
 export const EMPLOYEE_STATUSES = [
   { value: 'all', label: 'All Status' },
   { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'terminated', label: 'Terminated' },
+  { value: 'inactive', label: 'Deactivated' },
 ];
