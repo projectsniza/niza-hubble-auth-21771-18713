@@ -44,6 +44,7 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
   const [employeeDeactivationReasons, setEmployeeDeactivationReasons] = useState<Map<string, string>>(new Map());
+  const [emailDeactivationMap, setEmailDeactivationMap] = useState<Map<string, { reason: string; status: string }>>(new Map());
   
   // Dialog states
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
