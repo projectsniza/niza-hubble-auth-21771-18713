@@ -91,11 +91,11 @@ export const STATUS_CONFIG: Record<string, {
     icon: CheckCircle
   },
   inactive: {
-    label: 'Inactive',
+    label: 'Deactivated',
     description: 'Account deactivated',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-500/10',
-    borderColor: 'border-gray-500/20',
+    color: 'text-red-600',
+    bgColor: 'bg-red-500/10',
+    borderColor: 'border-red-500/20',
     icon: UserX
   },
   terminated: {
