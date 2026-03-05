@@ -344,6 +344,15 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                               Continue Onboarding
                             </DropdownMenuItem>
                           )}
+                          {(employee.status === 'inactive' || employee.status === 'terminated') && (
+                            <DropdownMenuItem 
+                              onClick={() => handleReactivateEmployee(employee)}
+                              className="text-green-600 focus:text-green-600"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Reactivate
+                            </DropdownMenuItem>
+                          )}
                           {employee.status !== 'inactive' && employee.status !== 'terminated' && (
                             <DropdownMenuItem 
                               onClick={() => setDeactivateEmployee(employee)}
