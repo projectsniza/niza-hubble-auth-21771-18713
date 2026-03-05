@@ -189,6 +189,16 @@ export default function BulkUploadedEmployees() {
 
     setIsUploading(true);
     try {
+      // Find the employee's folder
+      const { data: folderData } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('employee_id', selectedEmployee.id)
+        .eq('folder_type', 'employee')
+        .maybeSingle();
+
+      const folderId = folderData?.id || null;
+
       for (const doc of filesToUpload) {
         if (!doc.file) continue;
         
@@ -205,7 +215,7 @@ export default function BulkUploadedEmployees() {
 
         if (uploadError) throw uploadError;
 
-        // Create document record
+        // Create document record linked to employee folder
         const { error: docError } = await supabase
           .from('documents')
           .insert({
@@ -215,6 +225,7 @@ export default function BulkUploadedEmployees() {
             file_type: doc.file.type,
             file_size: doc.file.size,
             employee_id: selectedEmployee.id,
+            folder_id: folderId,
             expiry_date: doc.expiry_date || null
           });
 

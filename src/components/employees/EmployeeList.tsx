@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -65,7 +65,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const { user } = useAuth();
   const [organizationFilter, setOrganizationFilter] = useState('all');
   const [branchFilter, setBranchFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [deactivateEmployee, setDeactivateEmployee] = useState<any>(null);
