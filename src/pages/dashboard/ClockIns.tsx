@@ -286,7 +286,7 @@ export default function ClockIns() {
         toast.error(errorMessage);
         setGettingLocation(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
     );
   };
 
@@ -521,7 +521,7 @@ export default function ClockIns() {
           toast.error(errorMessage);
           setClockAction(null);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
       );
     } catch (error: any) {
       console.error('Clock in error:', error);
@@ -581,7 +581,7 @@ export default function ClockIns() {
           toast.error(errorMessage);
           setClockAction(null);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
       );
     } catch (error: any) {
       toast.error(error.message || 'Failed to clock out');
