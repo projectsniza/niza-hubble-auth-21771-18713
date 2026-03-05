@@ -118,56 +118,39 @@ export default function PendingAccountsDialog({
     setActivatingId(employee.id);
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: employee.email,
-        password: activationData.password,
-        options: {
-          data: {
-            name: `${employee.first_name} ${employee.last_name}`,
-          }
+      // Use edge function to create user without affecting current session
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: employee.email,
+          password: activationData.password,
+          name: `${employee.first_name} ${employee.last_name}`,
+          role: 'employee',
+          organization_id: employee.organization_id,
+          branch_id: employee.branch_id,
         }
       });
 
-      if (authError) throw authError;
+      if (fnError) throw fnError;
+      if (!fnData?.success) throw new Error(fnData?.error || 'Failed to create account');
 
-      if (authData.user) {
-        // Update employee record with user_id and activated status
-        const { error: updateError } = await supabase
-          .from('employees')
-          .update({ 
-            user_id: authData.user.id,
-            account_activated: true,
-            status: 'active'
-          })
-          .eq('id', employee.id);
+      const newUserId = fnData.userId;
 
-        if (updateError) throw updateError;
+      // Update employee record with user_id and activated status
+      const { error: updateError } = await supabase
+        .from('employees')
+        .update({ 
+          user_id: newUserId,
+          account_activated: true,
+          status: 'active'
+        })
+        .eq('id', employee.id);
 
-        // Update user role to employee
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .update({ role: 'employee' })
-          .eq('user_id', authData.user.id);
+      if (updateError) throw updateError;
 
-        if (roleError) throw roleError;
-
-        // Update profile with organization and branch
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            organization_id: employee.organization_id,
-            branch_id: employee.branch_id
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
-
-        toast.success(`Account activated for ${employee.first_name} ${employee.last_name}`);
-        setActivationData(null);
-        fetchPendingEmployees();
-        onActivate?.();
-      }
+      toast.success(`Account activated for ${employee.first_name} ${employee.last_name}`);
+      setActivationData(null);
+      fetchPendingEmployees();
+      onActivate?.();
     } catch (err: unknown) {
       console.error('Error activating account:', err);
       const message = err instanceof Error ? err.message : 'Failed to activate account';

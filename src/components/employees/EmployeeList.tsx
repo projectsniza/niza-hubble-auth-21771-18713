@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -65,7 +65,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const { user } = useAuth();
   const [organizationFilter, setOrganizationFilter] = useState('all');
   const [branchFilter, setBranchFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [deactivateEmployee, setDeactivateEmployee] = useState<any>(null);
@@ -102,7 +102,18 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     return filters;
   }, [user, organizationFilter, branchFilter, statusFilter, searchQuery]);
 
-  const { employees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
+  const { employees: rawEmployees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
+
+  // Sort: active employees first, deactivated at bottom
+  const employees = useMemo(() => {
+    return [...rawEmployees].sort((a, b) => {
+      const aInactive = a.status === 'inactive' || a.status === 'terminated';
+      const bInactive = b.status === 'inactive' || b.status === 'terminated';
+      if (aInactive && !bInactive) return 1;
+      if (!aInactive && bInactive) return -1;
+      return 0;
+    });
+  }, [rawEmployees]);
 
   const filteredBranches = organizationFilter !== 'all' 
     ? branches.filter(b => b.organization_id === organizationFilter)
@@ -122,7 +133,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
     setIsDeactivating(true);
     try {
-      // Update employee status
       const { error } = await supabase
         .from('employees')
         .update({ 
@@ -132,7 +142,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         .eq('id', deactivateEmployee.id);
       if (error) throw error;
 
-      // Also deactivate user profile if linked
       if (deactivateEmployee.user_id) {
         await supabase
           .from('profiles')
@@ -144,11 +153,33 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       setDeactivateEmployee(null);
       setDeactivationReason('');
       setDeactivationNotes('');
-      fetchEmployees();
+      fetchEmployees(true);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setIsDeactivating(false);
+    }
+  };
+
+  const handleReactivateEmployee = async (employee: any) => {
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active', deactivation_reason: null })
+        .eq('id', employee.id);
+      if (error) throw error;
+
+      if (employee.user_id) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: true })
+          .eq('id', employee.user_id);
+      }
+
+      toast.success(`${employee.first_name} ${employee.last_name} has been reactivated`);
+      fetchEmployees(true);
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -311,6 +342,15 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
                               <UserCog className="h-4 w-4 mr-2" />
                               Continue Onboarding
+                            </DropdownMenuItem>
+                          )}
+                          {(employee.status === 'inactive' || employee.status === 'terminated') && (
+                            <DropdownMenuItem 
+                              onClick={() => handleReactivateEmployee(employee)}
+                              className="text-green-600 focus:text-green-600"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Reactivate
                             </DropdownMenuItem>
                           )}
                           {employee.status !== 'inactive' && employee.status !== 'terminated' && (
