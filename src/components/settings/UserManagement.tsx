@@ -112,17 +112,22 @@ export default function UserManagement() {
     try {
       const { data } = await supabase
         .from('employees')
-        .select('user_id, deactivation_reason')
-        .not('user_id', 'is', null)
+        .select('user_id, email, deactivation_reason, status')
         .not('deactivation_reason', 'is', null);
       
       const reasonMap = new Map<string, string>();
+      // Also build an email-based map for employees without user_id links
+      const emailReasonMap = new Map<string, { reason: string; status: string }>();
       data?.forEach(emp => {
         if (emp.user_id && emp.deactivation_reason) {
           reasonMap.set(emp.user_id, emp.deactivation_reason);
         }
+        if (emp.email && emp.deactivation_reason) {
+          emailReasonMap.set(emp.email, { reason: emp.deactivation_reason, status: emp.status });
+        }
       });
       setEmployeeDeactivationReasons(reasonMap);
+      setEmailDeactivationMap(emailReasonMap);
     } catch {
       // silently fail
     }
