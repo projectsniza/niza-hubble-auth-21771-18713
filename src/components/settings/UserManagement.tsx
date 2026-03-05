@@ -44,6 +44,7 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
   const [employeeDeactivationReasons, setEmployeeDeactivationReasons] = useState<Map<string, string>>(new Map());
+  const [emailDeactivationMap, setEmailDeactivationMap] = useState<Map<string, { reason: string; status: string }>>(new Map());
   
   // Dialog states
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
@@ -112,17 +113,22 @@ export default function UserManagement() {
     try {
       const { data } = await supabase
         .from('employees')
-        .select('user_id, deactivation_reason')
-        .not('user_id', 'is', null)
+        .select('user_id, email, deactivation_reason, status')
         .not('deactivation_reason', 'is', null);
       
       const reasonMap = new Map<string, string>();
+      // Also build an email-based map for employees without user_id links
+      const emailReasonMap = new Map<string, { reason: string; status: string }>();
       data?.forEach(emp => {
         if (emp.user_id && emp.deactivation_reason) {
           reasonMap.set(emp.user_id, emp.deactivation_reason);
         }
+        if (emp.email && emp.deactivation_reason) {
+          emailReasonMap.set(emp.email, { reason: emp.deactivation_reason, status: emp.status });
+        }
       });
       setEmployeeDeactivationReasons(reasonMap);
+      setEmailDeactivationMap(emailReasonMap);
     } catch {
       // silently fail
     }
@@ -444,10 +450,19 @@ export default function UserManagement() {
     : branches;
 
   // Enrich users with deactivation reasons and filter by role
-  const enrichedUsers = users.map(u => ({
-    ...u,
-    deactivation_reason: employeeDeactivationReasons.get(u.id) || null
-  }));
+  const enrichedUsers = users.map(u => {
+    const reason = employeeDeactivationReasons.get(u.id) || null;
+    const emailMatch = emailDeactivationMap.get(u.email);
+    const deactivation_reason = reason || emailMatch?.reason || null;
+    // If employee is deactivated but profile is_active wasn't updated, treat as inactive
+    const profileIsActive = (u as any).is_active;
+    const is_active = deactivation_reason && emailMatch?.status === 'inactive' ? false : profileIsActive;
+    return {
+      ...u,
+      deactivation_reason,
+      is_active,
+    };
+  });
   const superAdmins = enrichedUsers.filter(u => u.role === 'super_admin');
   const hrUsers = enrichedUsers.filter(u => u.role === 'hr');
   const managers = enrichedUsers.filter(u => u.role === 'manager');

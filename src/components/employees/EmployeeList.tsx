@@ -142,11 +142,17 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         .eq('id', deactivateEmployee.id);
       if (error) throw error;
 
+      // Deactivate linked profile (by user_id or email fallback)
       if (deactivateEmployee.user_id) {
         await supabase
           .from('profiles')
           .update({ is_active: false })
           .eq('id', deactivateEmployee.user_id);
+      } else if (deactivateEmployee.email) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('email', deactivateEmployee.email);
       }
 
       toast.success(`${deactivateEmployee.first_name} ${deactivateEmployee.last_name} has been deactivated`);
@@ -174,6 +180,11 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           .from('profiles')
           .update({ is_active: true })
           .eq('id', employee.user_id);
+      } else if (employee.email) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: true })
+          .eq('email', employee.email);
       }
 
       toast.success(`${employee.first_name} ${employee.last_name} has been reactivated`);
