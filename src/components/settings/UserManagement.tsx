@@ -491,11 +491,15 @@ export default function UserManagement() {
     ? branches.filter(b => b.organization_id === editOrgId)
     : branches;
 
-  // Filter users by role
-  const superAdmins = users.filter(u => u.role === 'super_admin');
-  const hrUsers = users.filter(u => u.role === 'hr');
-  const managers = users.filter(u => u.role === 'manager');
-  const employees = users.filter(u => u.role === 'employee');
+  // Enrich users with deactivation reasons and filter by role
+  const enrichedUsers = users.map(u => ({
+    ...u,
+    deactivation_reason: employeeDeactivationReasons.get(u.id) || null
+  }));
+  const superAdmins = enrichedUsers.filter(u => u.role === 'super_admin');
+  const hrUsers = enrichedUsers.filter(u => u.role === 'hr');
+  const managers = enrichedUsers.filter(u => u.role === 'manager');
+  const employees = enrichedUsers.filter(u => u.role === 'employee');
 
   // Filter pending employees
   const filteredPending = pendingEmployees.filter(e => 
