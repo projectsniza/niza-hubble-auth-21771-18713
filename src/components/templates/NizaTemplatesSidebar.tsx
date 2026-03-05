@@ -32,12 +32,6 @@ const getMenuItems = (role: string) => {
       { name: 'Store & HR Templates', path: '/niza-templates/store-hr', icon: FolderOpen, end: false } as any,
     );
   }
-  // Add My Templates for managers/store accounts
-  if (role === 'manager' || role === 'store') {
-    items.push(
-      { name: 'My Templates', path: '/niza-templates/my-templates', icon: FolderOpen, end: false } as any,
-    );
-  }
   return items;
 };
 

@@ -137,7 +137,6 @@ const App = () => (
                 <Route path="brand-settings" element={<BrandSettings />} />
                 <Route path="shared" element={<SharedTemplatesPage />} />
                 <Route path="store-hr" element={<StoreHRTemplatesPage />} />
-                <Route path="my-templates" element={<StoreTemplates />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
