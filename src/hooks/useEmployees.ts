@@ -46,7 +46,7 @@ export function useEmployees(filters?: {
         .select(`
           id, first_name, last_name, email, phone, job_title, department, status, 
           date_of_birth, join_date, national_insurance_number, address,
-          emergency_contact_name, emergency_contact_phone, organization_id, branch_id, team_id, manager_id,
+          emergency_contact_name, emergency_contact_phone, organization_id, branch_id, team_id, manager_id, user_id, deactivation_reason,
           organization:organizations(id, name),
           branch:branches(id, name),
           team:teams(id, name),

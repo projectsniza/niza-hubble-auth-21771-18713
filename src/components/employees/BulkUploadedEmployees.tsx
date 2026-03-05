@@ -13,8 +13,18 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Upload, FileText, Check, X, Loader2, User, Building, MapPin, 
-  Calendar, AlertCircle, CheckCircle2
+  Calendar, AlertCircle, CheckCircle2, Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -64,6 +74,7 @@ export default function BulkUploadedEmployees() {
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -88,19 +99,43 @@ export default function BulkUploadedEmployees() {
       if (empError) throw empError;
       setEmployees(empData || []);
 
-      // Fetch document requirements
+      // Fetch document requirements from bulk upload settings
       const { data: docReqs, error: docError } = await supabase
-        .from('document_requirements')
+        .from('bulk_upload_document_settings')
         .select('*')
         .eq('enabled', true)
         .order('doc_order');
 
       if (docError) throw docError;
-      setDocumentRequirements(docReqs || []);
+      setDocumentRequirements(docReqs?.map(d => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        is_mandatory: d.is_mandatory,
+        enabled: d.enabled
+      })) || []);
     } catch (error: any) {
       toast.error('Failed to load data: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!deleteId) return;
+    try {
+      // Delete documents first
+      const { data: docs } = await supabase.from('documents').select('id').eq('employee_id', deleteId);
+      if (docs && docs.length > 0) {
+        await supabase.from('documents').delete().eq('employee_id', deleteId);
+      }
+      const { error } = await supabase.from('employees').delete().eq('id', deleteId);
+      if (error) throw error;
+      toast.success('Employee deleted');
+      setDeleteId(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error('Failed to delete: ' + error.message);
     }
   };
 
@@ -306,10 +341,15 @@ export default function BulkUploadedEmployees() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" onClick={() => openUploadDialog(employee)}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Docs
-                      </Button>
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" onClick={() => openUploadDialog(employee)}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Docs
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(employee.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -440,6 +480,22 @@ export default function BulkUploadedEmployees() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this bulk uploaded employee and any uploaded documents. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEmployee} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +29,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const DEACTIVATION_REASONS = [
+  { value: 'resigned', label: 'Resigned', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { value: 'temporarily_suspended', label: 'Temporarily Suspended', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  { value: 'end_of_contract', label: 'End of Contract', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  { value: 'redundancy', label: 'Redundancy', color: 'bg-pink-100 text-pink-700 border-pink-200' },
+  { value: 'gross_misconduct', label: 'Gross Misconduct', color: 'bg-red-100 text-red-700 border-red-200' },
+  { value: 'mutual_agreement', label: 'Mutual Agreement', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+];
+
+export const getDeactivationReasonConfig = (reason: string | null) => {
+  if (!reason) return null;
+  return DEACTIVATION_REASONS.find(r => r.value === reason) || { value: reason, label: reason, color: 'bg-gray-100 text-gray-700 border-gray-200' };
+};
 
 interface EmployeeListProps {
   searchQuery: string;
@@ -41,15 +68,17 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [statusFilter, setStatusFilter] = useState('active');
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [deactivateEmployee, setDeactivateEmployee] = useState<any>(null);
+  const [deactivationReason, setDeactivationReason] = useState('');
+  const [deactivationNotes, setDeactivationNotes] = useState('');
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   
-  // Build filters based on user role
   const employeeFilters = useMemo(() => {
     const filters: any = { searchQuery };
     
-    // Apply role-based restrictions
     if (user?.role === 'manager') {
       filters.branchId = user.branchId;
     } else if (user?.role === 'hr') {
@@ -60,7 +89,6 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       }
     }
     
-    // Apply manual filters (only if not already restricted by role)
     if (organizationFilter !== 'all' && !filters.organizationId) {
       filters.organizationId = organizationFilter;
     }
@@ -87,7 +115,42 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
   };
 
-  // Status badge moved to separate component
+  const handleDeactivateEmployee = async () => {
+    if (!deactivateEmployee || !deactivationReason) {
+      toast.error('Please select a reason');
+      return;
+    }
+    setIsDeactivating(true);
+    try {
+      // Update employee status
+      const { error } = await supabase
+        .from('employees')
+        .update({ 
+          status: 'inactive', 
+          deactivation_reason: deactivationReason
+        })
+        .eq('id', deactivateEmployee.id);
+      if (error) throw error;
+
+      // Also deactivate user profile if linked
+      if (deactivateEmployee.user_id) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: false })
+          .eq('id', deactivateEmployee.user_id);
+      }
+
+      toast.success(`${deactivateEmployee.first_name} ${deactivateEmployee.last_name} has been deactivated`);
+      setDeactivateEmployee(null);
+      setDeactivationReason('');
+      setDeactivationNotes('');
+      fetchEmployees();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -187,81 +250,99 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map((employee) => (
-                <TableRow key={employee.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {getInitials(employee.first_name, employee.last_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{employee.first_name} {employee.last_name}</p>
-                        <p className="text-sm text-muted-foreground">{employee.email}</p>
+              {employees.map((employee) => {
+                const isDeactivated = employee.status === 'inactive' || employee.status === 'terminated';
+                const reasonConfig = getDeactivationReasonConfig(employee.deactivation_reason);
+                return (
+                  <TableRow key={employee.id} className={isDeactivated ? 'bg-destructive/5' : ''}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback className={isDeactivated ? "bg-destructive/20 text-destructive" : "bg-primary/10 text-primary"}>
+                            {getInitials(employee.first_name, employee.last_name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className={`font-medium ${isDeactivated ? 'text-destructive' : ''}`}>{employee.first_name} {employee.last_name}</p>
+                          <p className="text-sm text-muted-foreground">{employee.email}</p>
+                          {reasonConfig && (
+                            <Badge className={`text-xs mt-1 ${reasonConfig.color}`}>
+                              {reasonConfig.label}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{employee.job_title || '-'}</TableCell>
-                  <TableCell>{employee.department || '-'}</TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="text-sm">{employee.branch?.name || '-'}</p>
-                      <p className="text-xs text-muted-foreground">{employee.organization?.name}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {employee.join_date 
-                      ? (() => {
-                          const dt = new Date(employee.join_date);
-                          return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                        })()
-                      : '-'
-                    }
-                  </TableCell>
-                  <TableCell><EmployeeStatusBadge status={employee.status} /></TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setEditingEmployee(employee)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        {employee.status === 'onboarding' && (
-                          <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
-                            <UserCog className="h-4 w-4 mr-2" />
-                            Continue Onboarding
+                    </TableCell>
+                    <TableCell>{employee.job_title || '-'}</TableCell>
+                    <TableCell>{employee.department || '-'}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="text-sm">{employee.branch?.name || '-'}</p>
+                        <p className="text-xs text-muted-foreground">{employee.organization?.name}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {employee.join_date 
+                        ? (() => {
+                            const dt = new Date(employee.join_date);
+                            return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+                          })()
+                        : '-'
+                      }
+                    </TableCell>
+                    <TableCell><EmployeeStatusBadge status={employee.status} /></TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Profile
                           </DropdownMenuItem>
-                        )}
-                        {/* Only show delete for super_admin and HR, or managers for their own branch employees */}
-                        {(user?.role === 'super_admin' || user?.role === 'hr' || (user?.role === 'manager' && employee.branch_id === user?.branchId)) && (
-                          <DropdownMenuItem 
-                            onClick={() => setDeleteEmployeeId(employee.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
+                          <DropdownMenuItem onClick={() => setEditingEmployee(employee)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
                           </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                          {employee.status === 'onboarding' && (
+                            <DropdownMenuItem onClick={() => navigate(`/dashboard/onboarding/${employee.id}`)}>
+                              <UserCog className="h-4 w-4 mr-2" />
+                              Continue Onboarding
+                            </DropdownMenuItem>
+                          )}
+                          {employee.status !== 'inactive' && employee.status !== 'terminated' && (
+                            <DropdownMenuItem 
+                              onClick={() => setDeactivateEmployee(employee)}
+                              className="text-orange-600 focus:text-orange-600"
+                            >
+                              <Ban className="h-4 w-4 mr-2" />
+                              Deactivate
+                            </DropdownMenuItem>
+                          )}
+                          {(user?.role === 'super_admin' || user?.role === 'hr' || (user?.role === 'manager' && employee.branch_id === user?.branchId)) && (
+                            <DropdownMenuItem 
+                              onClick={() => setDeleteEmployeeId(employee.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
       )}
 
+      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteEmployeeId} onOpenChange={() => setDeleteEmployeeId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -279,6 +360,57 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Deactivation Dialog */}
+      <Dialog open={!!deactivateEmployee} onOpenChange={(open) => !open && setDeactivateEmployee(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-orange-500" />
+              Deactivate Employee
+            </DialogTitle>
+            <DialogDescription>
+              Deactivate {deactivateEmployee?.first_name} {deactivateEmployee?.last_name}. This will prevent them from accessing the system.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Reason for deactivation</Label>
+              <Select value={deactivationReason} onValueChange={setDeactivationReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEACTIVATION_REASONS.map(reason => (
+                    <SelectItem key={reason.value} value={reason.value}>
+                      {reason.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Additional notes (optional)</Label>
+              <Textarea
+                value={deactivationNotes}
+                onChange={(e) => setDeactivationNotes(e.target.value)}
+                placeholder="Any additional notes..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeactivateEmployee(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeactivateEmployee} 
+              disabled={!deactivationReason || isDeactivating}
+            >
+              {isDeactivating ? 'Deactivating...' : 'Deactivate Employee'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EditEmployeeDialog
         open={!!editingEmployee}

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, 
-  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle, Loader2
+  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle, Loader2, Settings2
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
@@ -17,6 +17,7 @@ import ContractApprovalsTab from '@/components/employees/ContractApprovalsTab';
 import ApprovedContractsTab from '@/components/employees/ApprovedContractsTab';
 import BulkUploadDialog from '@/components/employees/BulkUploadDialog';
 import BulkUploadedEmployees from '@/components/employees/BulkUploadedEmployees';
+import BulkUploadSettings from '@/components/employees/BulkUploadSettings';
 import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -334,6 +335,7 @@ export default function Employees() {
   const showContractApprovals = user?.role === 'super_admin';
   const showApprovedContracts = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
   const showBulkUploads = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
+  const showBulkUploadSettings = user?.role === 'super_admin' || user?.role === 'hr';
   const showPendingAccounts = user?.role === 'super_admin' || user?.role === 'hr';
   const showOnboardingSettings = user?.role === 'super_admin' || user?.role === 'hr';
 
@@ -397,6 +399,12 @@ export default function Employees() {
               Bulk Uploads
             </TabsTrigger>
           )}
+          {showBulkUploadSettings && (
+            <TabsTrigger value="bulk-upload-settings" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Bulk Upload Settings
+            </TabsTrigger>
+          )}
           <TabsTrigger value="teams" className="gap-2">
             <Users className="h-4 w-4" />
             Teams
@@ -438,6 +446,12 @@ export default function Employees() {
         {showBulkUploads && (
           <TabsContent value="bulk-uploads" className="mt-6">
             <BulkUploadedEmployees />
+          </TabsContent>
+        )}
+
+        {showBulkUploadSettings && (
+          <TabsContent value="bulk-upload-settings" className="mt-6">
+            <BulkUploadSettings />
           </TabsContent>
         )}
 
