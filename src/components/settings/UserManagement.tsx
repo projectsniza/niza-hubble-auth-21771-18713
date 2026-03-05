@@ -490,7 +490,9 @@ export default function UserManagement() {
     );
   }
 
-  const UserCard = ({ user }: { user: any }) => (
+  const UserCard = ({ user, hideDeactivateButton }: { user: any; hideDeactivateButton?: boolean }) => {
+    const reasonConfig = user.deactivation_reason ? getDeactivationReasonConfig(user.deactivation_reason) : null;
+    return (
     <Card key={user.id} className={`p-4 ${user.is_active === false ? 'border-destructive/50 bg-destructive/5' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
@@ -507,6 +509,11 @@ export default function UserManagement() {
               </Badge>
               {user.is_active === false && (
                 <Badge variant="destructive" className="text-xs">Deactivated</Badge>
+              )}
+              {reasonConfig && (
+                <Badge className={`text-xs ${reasonConfig.color}`}>
+                  {reasonConfig.label}
+                </Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground">{user.email}</p>
@@ -552,26 +559,30 @@ export default function UserManagement() {
           >
             <KeyRound className="h-4 w-4" />
           </Button>
-          {user.is_active !== false ? (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeactivateUser(user.id)}
-              title="Deactivate user"
-            >
-              <Power className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-green-600 hover:bg-green-50"
-              onClick={() => handleActivateUser(user.id)}
-              title="Reactivate user"
-            >
-              <CheckCircle className="h-4 w-4" />
-            </Button>
+          {!hideDeactivateButton && (
+            <>
+              {user.is_active !== false ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-destructive hover:bg-destructive/10"
+                  onClick={() => handleDeactivateUser(user.id)}
+                  title="Deactivate user"
+                >
+                  <Power className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-green-600 hover:bg-green-50"
+                  onClick={() => handleActivateUser(user.id)}
+                  title="Reactivate user"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           )}
           <Button 
             variant="outline" 
@@ -587,6 +598,7 @@ export default function UserManagement() {
       </div>
     </Card>
   );
+  };
 
   return (
     <div className="space-y-6">
