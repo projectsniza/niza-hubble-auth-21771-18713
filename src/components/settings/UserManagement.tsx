@@ -43,6 +43,7 @@ export default function UserManagement() {
   const [isLoadingPending, setIsLoadingPending] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
+  const [employeeDeactivationReasons, setEmployeeDeactivationReasons] = useState<Map<string, string>>(new Map());
   
   // Dialog states
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
@@ -70,9 +71,10 @@ export default function UserManagement() {
   const [editOrgId, setEditOrgId] = useState('');
   const [editBranchId, setEditBranchId] = useState('');
 
-  // Fetch pending employees
+  // Fetch pending employees and deactivation reasons
   useEffect(() => {
     fetchPendingEmployees();
+    fetchDeactivationReasons();
   }, []);
 
   const fetchPendingEmployees = async () => {
@@ -103,6 +105,26 @@ export default function UserManagement() {
       toast.error('Failed to load pending employees: ' + error.message);
     } finally {
       setIsLoadingPending(false);
+    }
+  };
+
+  const fetchDeactivationReasons = async () => {
+    try {
+      const { data } = await supabase
+        .from('employees')
+        .select('user_id, deactivation_reason')
+        .not('user_id', 'is', null)
+        .not('deactivation_reason', 'is', null);
+      
+      const reasonMap = new Map<string, string>();
+      data?.forEach(emp => {
+        if (emp.user_id && emp.deactivation_reason) {
+          reasonMap.set(emp.user_id, emp.deactivation_reason);
+        }
+      });
+      setEmployeeDeactivationReasons(reasonMap);
+    } catch {
+      // silently fail
     }
   };
 
