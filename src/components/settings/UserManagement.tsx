@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shield, Building2, Loader2, Edit, Trash2, Power, KeyRound, UserPlus, Search, CheckCircle, Users, Link2 } from 'lucide-react';
+import { getDeactivationReasonConfig } from '@/components/employees/EmployeeList';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Badge } from '@/components/ui/badge';
 import { useUsers } from '@/hooks/useUsers';
