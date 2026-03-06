@@ -537,112 +537,73 @@ export default function ClockIns() {
     setClockAction({ type: 'in', locationId });
 
     try {
-      // Fetch fresh location data directly from database to ensure we have correct coordinates
       const { data: locationData, error: locationError } = await supabase
         .from('locations')
         .select('*')
         .eq('id', locationId)
         .maybeSingle();
 
-      if (locationError) {
-        console.error('Error fetching location:', locationError);
-        toast.error('Failed to fetch location data');
-        setClockAction(null);
-        return;
-      }
+      if (locationError) throw locationError;
+      if (!locationData) throw new Error('Location not found. Please refresh the page.');
 
-      if (!locationData) {
-        toast.error('Location not found. Please refresh the page.');
-        setClockAction(null);
-        return;
-      }
-
-      console.log('Fresh location from DB:', locationData);
-
-      // Validate location coordinates
       if (
         locationData.latitude == null ||
         locationData.longitude == null ||
-        isNaN(Number(locationData.latitude)) ||
-        isNaN(Number(locationData.longitude))
+        Number.isNaN(Number(locationData.latitude)) ||
+        Number.isNaN(Number(locationData.longitude))
       ) {
-        console.error('Invalid location coordinates:', locationData);
-        toast.error('Location coordinates are not configured properly. Please contact admin.');
+        throw new Error('Location coordinates are not configured properly. Please contact admin.');
+      }
+
+      if (user.role === 'employee') {
+        const employeeScope = await resolveEmployeeScope();
+        if (employeeScope.branchId && employeeScope.branchId !== locationData.branch_id) {
+          throw new Error('This location is not assigned to your branch.');
+        }
+      }
+
+      const position = await getReliablePosition();
+      const { latitude, longitude, accuracy } = position.coords;
+
+      const distance = calculateDistance(
+        latitude,
+        longitude,
+        Number(locationData.latitude),
+        Number(locationData.longitude)
+      );
+      const radius = locationData.radius || 100;
+
+      if (accuracy > Math.max(radius * 2, MIN_ACCEPTABLE_ACCURACY_METERS)) {
+        throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
+      }
+
+      if (distance > radius) {
+        toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
         setClockAction(null);
         return;
       }
 
-      // Get current position
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
+      const { error } = await supabase.from('clock_ins').insert({
+        user_id: user.id,
+        branch_id: locationData.branch_id,
+        location_id: locationId,
+        clock_in_time: new Date().toISOString(),
+        clock_in_latitude: latitude,
+        clock_in_longitude: longitude,
+        clock_in_method: 'gps',
+      });
 
-            console.log('User GPS coordinates:', { latitude, longitude });
-            console.log('Location coordinates:', {
-              lat: locationData.latitude,
-              lng: locationData.longitude,
-              radius: locationData.radius,
-            });
+      if (error) throw error;
 
-            const distance = calculateDistance(
-              latitude,
-              longitude,
-              Number(locationData.latitude),
-              Number(locationData.longitude)
-            );
-            const radius = locationData.radius || 100;
-
-            console.log('Distance calculation:', { distance, radius, withinRange: distance <= radius });
-
-            if (distance > radius) {
-              toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
-              setClockAction(null);
-              return;
-            }
-
-            const { error } = await supabase.from('clock_ins').insert({
-              user_id: user.id,
-              branch_id: locationData.branch_id,
-              location_id: locationId,
-              clock_in_time: new Date().toISOString(),
-              clock_in_latitude: latitude,
-              clock_in_longitude: longitude,
-              clock_in_method: 'gps',
-            });
-
-            if (error) throw error;
-            toast.success('Clocked in successfully');
-            setClockAction(null);
-            fetchData();
-          } catch (error: any) {
-            console.error('Clock in error:', error);
-            toast.error(error.message || 'Failed to clock in');
-            setClockAction(null);
-          }
-        },
-        (geoError) => {
-          let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
-          switch (geoError.code) {
-            case geoError.PERMISSION_DENIED:
-              errorMessage =
-                'Location access denied. Please allow location access in your browser settings and refresh the page.';
-              break;
-            case geoError.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
-              break;
-            case geoError.TIMEOUT:
-              errorMessage = 'Location request timed out. Please try again.';
-              break;
-          }
-          toast.error(errorMessage);
-          setClockAction(null);
-        },
-        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-      );
+      toast.success('Clocked in successfully');
+      setClockAction(null);
+      fetchData();
     } catch (error: any) {
-      console.error('Clock in error:', error);
-      toast.error(error.message || 'Failed to clock in');
+      const message =
+        typeof error?.code === 'number'
+          ? getGeolocationErrorMessage(error as GeolocationPositionError)
+          : error?.message || 'Failed to clock in';
+      toast.error(message);
       setClockAction(null);
     }
   };
@@ -657,51 +618,30 @@ export default function ClockIns() {
     setClockAction({ type: 'out' });
 
     try {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
+      const position = await getReliablePosition();
+      const { latitude, longitude } = position.coords;
 
-            const { error } = await supabase
-              .from('clock_ins')
-              .update({
-                clock_out_time: new Date().toISOString(),
-                clock_out_latitude: latitude,
-                clock_out_longitude: longitude,
-              })
-              .eq('id', activeClockIn.id);
+      const { error } = await supabase
+        .from('clock_ins')
+        .update({
+          clock_out_time: new Date().toISOString(),
+          clock_out_latitude: latitude,
+          clock_out_longitude: longitude,
+        })
+        .eq('id', activeClockIn.id);
 
-            if (error) throw error;
-            toast.success('Clocked out successfully');
-            setActiveClockIn(null);
-            setClockAction(null);
-            fetchData();
-          } catch (error: any) {
-            toast.error(error.message || 'Failed to clock out');
-            setClockAction(null);
-          }
-        },
-        (geoError) => {
-          let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
-          switch (geoError.code) {
-            case geoError.PERMISSION_DENIED:
-              errorMessage =
-                'Location access denied. Please allow location access in your browser settings and refresh the page.';
-              break;
-            case geoError.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
-              break;
-            case geoError.TIMEOUT:
-              errorMessage = 'Location request timed out. Please try again.';
-              break;
-          }
-          toast.error(errorMessage);
-          setClockAction(null);
-        },
-        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-      );
+      if (error) throw error;
+
+      toast.success('Clocked out successfully');
+      setActiveClockIn(null);
+      setClockAction(null);
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to clock out');
+      const message =
+        typeof error?.code === 'number'
+          ? getGeolocationErrorMessage(error as GeolocationPositionError)
+          : error?.message || 'Failed to clock out';
+      toast.error(message);
       setClockAction(null);
     }
   };
