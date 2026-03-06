@@ -382,44 +382,29 @@ export default function ClockIns() {
     ? branches.filter(b => b.organization_id === newLocation.organizationId)
     : branches;
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = async () => {
     setGettingLocation(true);
-    
+
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser');
       setGettingLocation(false);
       return;
     }
-    
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setNewLocation(prev => ({
-          ...prev,
-          latitude: latitude.toFixed(8),
-          longitude: longitude.toFixed(8)
-        }));
-        toast.success('Location captured successfully');
-        setGettingLocation(false);
-      },
-      (error) => {
-        let errorMessage = 'Location request failed. Please allow location access and enable GPS, then try again.';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'Location access denied. Please allow location access in your browser settings and refresh the page.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable. Please check your GPS is enabled.';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.';
-            break;
-        }
-        toast.error(errorMessage);
-        setGettingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-    );
+
+    try {
+      const position = await getReliablePosition();
+      const { latitude, longitude, accuracy } = position.coords;
+      setNewLocation((prev) => ({
+        ...prev,
+        latitude: latitude.toFixed(8),
+        longitude: longitude.toFixed(8),
+      }));
+      toast.success(`Location captured successfully (±${Math.round(accuracy)}m)`);
+    } catch (error) {
+      toast.error(getGeolocationErrorMessage(error as GeolocationPositionError));
+    } finally {
+      setGettingLocation(false);
+    }
   };
 
   const handleCreateLocation = async () => {
