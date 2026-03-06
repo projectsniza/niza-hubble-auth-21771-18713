@@ -208,61 +208,156 @@ export default function ClockIns() {
     };
   }, [activeClockIn]);
 
+  const resolveEmployeeScope = async (): Promise<{ branchId: string | null; organizationId: string | null }> => {
+    if (!user?.id) return { branchId: null, organizationId: null };
+
+    const selectFields = 'branch_id, organization_id';
+
+    const { data: byUser } = await supabase
+      .from('employees')
+      .select(selectFields)
+      .eq('user_id', user.id)
+      .not('status', 'eq', 'terminated')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (byUser) {
+      return { branchId: byUser.branch_id, organizationId: byUser.organization_id };
+    }
+
+    // Repair missing employee link once, then retry
+    await supabase.rpc('link_my_employee_record');
+
+    const { data: linkedByUser } = await supabase
+      .from('employees')
+      .select(selectFields)
+      .eq('user_id', user.id)
+      .not('status', 'eq', 'terminated')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (linkedByUser) {
+      return { branchId: linkedByUser.branch_id, organizationId: linkedByUser.organization_id };
+    }
+
+    if (user.email) {
+      const { data: byEmail } = await supabase
+        .from('employees')
+        .select(selectFields)
+        .ilike('email', user.email)
+        .not('status', 'eq', 'terminated')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return {
+        branchId: byEmail?.branch_id ?? null,
+        organizationId: byEmail?.organization_id ?? null,
+      };
+    }
+
+    return { branchId: null, organizationId: null };
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch user's employee record to get their branch_id
-      let userBranchId: string | null = null;
+      let employeeScope: { branchId: string | null; organizationId: string | null } | null = null;
       if (user?.role === 'employee') {
-        const { data: empData } = await supabase
-          .from('employees')
-          .select('branch_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        userBranchId = empData?.branch_id || null;
+        employeeScope = await resolveEmployeeScope();
       }
+
+      const scopedBranchId =
+        user?.role === 'employee'
+          ? employeeScope?.branchId ?? user.branchId ?? null
+          : user?.role === 'manager' || (user?.role === 'hr' && user.hrAccessLevel === 'branch')
+            ? user.branchId ?? null
+            : null;
+
+      const scopedOrgId =
+        user?.role === 'employee'
+          ? employeeScope?.organizationId ?? user.organizationId ?? null
+          : user?.role === 'hr' && user.hrAccessLevel === 'organization'
+            ? user.organizationId ?? null
+            : null;
 
       // Build date range for history filter
       const monthStart = new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth), 1);
       const monthEnd = new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth) + 1, 0, 23, 59, 59);
 
-      const [locationsRes, clockInsRes, branchesRes, orgsRes] = await Promise.all([
-        supabase.from('locations').select('*').order('name'),
-        supabase.from('clock_ins')
-          .select('*, branch:branches(name, organization_id), location:locations(name)')
-          .gte('clock_in_time', monthStart.toISOString())
-          .lte('clock_in_time', monthEnd.toISOString())
-          .order('clock_in_time', { ascending: false }),
-        supabase.from('branches').select('*, organizations(name)').order('name'),
-        supabase.from('organizations').select('*').order('name')
-      ]);
-
-      // Filter locations for employees - they only see their branch's locations
-      let filteredLocations = locationsRes.data || [];
-      if (user?.role === 'employee' && userBranchId) {
-        filteredLocations = filteredLocations.filter(l => l.branch_id === userBranchId);
+      let locationsQuery = supabase.from('locations').select('*').order('name');
+      if (scopedBranchId) {
+        locationsQuery = locationsQuery.eq('branch_id', scopedBranchId);
       }
 
-      setLocations(filteredLocations);
+      let clockInsQuery = supabase
+        .from('clock_ins')
+        .select('*, branch:branches(name, organization_id), location:locations(name)')
+        .gte('clock_in_time', monthStart.toISOString())
+        .lte('clock_in_time', monthEnd.toISOString())
+        .order('clock_in_time', { ascending: false })
+        .limit(user?.role === 'employee' ? 120 : 400);
+
+      if (user?.role === 'employee' && user.id) {
+        clockInsQuery = clockInsQuery.eq('user_id', user.id);
+      } else if (scopedBranchId) {
+        clockInsQuery = clockInsQuery.eq('branch_id', scopedBranchId);
+      }
+
+      let branchesQuery = supabase.from('branches').select('*, organizations(name)').order('name');
+      if (scopedBranchId) {
+        branchesQuery = branchesQuery.eq('id', scopedBranchId);
+      } else if (scopedOrgId) {
+        branchesQuery = branchesQuery.eq('organization_id', scopedOrgId);
+      }
+
+      let orgsQuery = supabase.from('organizations').select('*').order('name');
+      if (scopedOrgId) {
+        orgsQuery = orgsQuery.eq('id', scopedOrgId);
+      }
+
+      const [locationsRes, clockInsRes, branchesRes, orgsRes] = await Promise.all([
+        locationsQuery,
+        clockInsQuery,
+        branchesQuery,
+        orgsQuery,
+      ]);
+
+      setLocations(locationsRes.data || []);
       setBranches(branchesRes.data || []);
       setOrganizations(orgsRes.data || []);
 
+      const scopedClockIns =
+        scopedOrgId && !scopedBranchId
+          ? (clockInsRes.data || []).filter((clockIn) => clockIn.branch?.organization_id === scopedOrgId)
+          : (clockInsRes.data || []);
+
+      setClockIns(scopedClockIns);
+
       // Fetch profiles for clock-in users
-      if (clockInsRes.data && clockInsRes.data.length > 0) {
-        const userIds = [...new Set(clockInsRes.data.map(c => c.user_id))];
+      if (scopedClockIns.length > 0) {
+        const userIds = [...new Set(scopedClockIns.map((c) => c.user_id))];
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, name, display_name')
           .in('id', userIds);
-        
+
         const profileMap: Record<string, { name: string; display_name: string | null }> = {};
-        profiles?.forEach(p => {
+        profiles?.forEach((p) => {
           profileMap[p.id] = { name: p.name || '', display_name: p.display_name };
         });
-        setClockInProfiles(profileMap);
-      }
 
-      setClockIns(clockInsRes.data || []);
+        // Ensure current employee always resolves to own name in history
+        if (user?.role === 'employee' && user.id && !profileMap[user.id]) {
+          profileMap[user.id] = { name: user.name, display_name: user.name };
+        }
+
+        setClockInProfiles(profileMap);
+      } else {
+        setClockInProfiles({});
+      }
 
       // Fetch active clock-in separately (not filtered by month) so it persists across app reopens
       if (user?.id) {
