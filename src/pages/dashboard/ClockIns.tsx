@@ -44,19 +44,19 @@ const dmsToDecimal = (dms: string): number | null => {
   // Pattern: 8°12'01.2"N or 77°16'43.9"E
   const pattern = /(\d+)°(\d+)'([\d.]+)"([NSEW])/i;
   const match = dms.trim().match(pattern);
-  
+
   if (match) {
     const degrees = parseFloat(match[1]);
     const minutes = parseFloat(match[2]);
     const seconds = parseFloat(match[3]);
     const direction = match[4].toUpperCase();
-    
+
     let decimal = degrees + minutes / 60 + seconds / 3600;
-    
+
     if (direction === 'S' || direction === 'W') {
       decimal = -decimal;
     }
-    
+
     return decimal;
   }
   return null;
@@ -65,29 +65,66 @@ const dmsToDecimal = (dms: string): number | null => {
 // Parse coordinates in multiple formats
 const parseCoordinate = (input: string): number | null => {
   const trimmed = input.trim();
-  
-  // Try as decimal first
-  const decimal = parseFloat(trimmed);
-  if (!isNaN(decimal)) {
-    return decimal;
+  if (!trimmed) return null;
+
+  const looksLikeDms = /[°'"NSEW]/i.test(trimmed);
+  if (looksLikeDms) {
+    return dmsToDecimal(trimmed);
   }
-  
-  // Try as DMS
-  return dmsToDecimal(trimmed);
+
+  const decimal = Number(trimmed);
+  return Number.isFinite(decimal) ? decimal : null;
+};
+
+const getGeolocationErrorMessage = (error: GeolocationPositionError): string => {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return 'Location access denied. Please allow location access in your browser settings and refresh the page.';
+    case error.POSITION_UNAVAILABLE:
+      return 'Location information unavailable. Please check your GPS is enabled.';
+    case error.TIMEOUT:
+      return 'Location request timed out. Please try again.';
+    default:
+      return 'Location request failed. Please allow location access and enable GPS, then try again.';
+  }
+};
+
+const GEOLOCATION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 30000,
+  maximumAge: 0,
+};
+
+const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
+
+const getReliablePosition = async (): Promise<GeolocationPosition> => {
+  const getPositionOnce = () =>
+    new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, GEOLOCATION_OPTIONS);
+    });
+
+  const first = await getPositionOnce();
+  if (first.coords.accuracy <= MIN_ACCEPTABLE_ACCURACY_METERS) {
+    return first;
+  }
+
+  // Retry once for mobile devices where first fix can be low-accuracy network position
+  const second = await getPositionOnce();
+  return second.coords.accuracy < first.coords.accuracy ? second : first;
 };
 
 // Format decimal to DMS string
 const decimalToDms = (decimal: number, isLat: boolean): string => {
-  const direction = isLat 
-    ? (decimal >= 0 ? 'N' : 'S') 
+  const direction = isLat
+    ? (decimal >= 0 ? 'N' : 'S')
     : (decimal >= 0 ? 'E' : 'W');
-  
+
   const abs = Math.abs(decimal);
   const degrees = Math.floor(abs);
   const minutesFloat = (abs - degrees) * 60;
   const minutes = Math.floor(minutesFloat);
   const seconds = ((minutesFloat - minutes) * 60).toFixed(1);
-  
+
   return `${degrees}°${minutes}'${seconds}"${direction}`;
 };
 
