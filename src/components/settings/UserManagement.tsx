@@ -248,16 +248,21 @@ export default function UserManagement() {
 
       if (profileError) throw profileError;
 
-      let employeeDeactivateQuery = supabase
+      const { error: employeeByUserError } = await supabase
         .from('employees')
         .update({ status: 'inactive' })
         .eq('user_id', userId);
 
-      if (targetUser?.email) {
-        employeeDeactivateQuery = employeeDeactivateQuery.or(`email.eq.${targetUser.email}`);
-      }
+      if (employeeByUserError) throw employeeByUserError;
 
-      await employeeDeactivateQuery;
+      if (targetUser?.email) {
+        const { error: employeeByEmailError } = await supabase
+          .from('employees')
+          .update({ status: 'inactive' })
+          .eq('email', targetUser.email);
+
+        if (employeeByEmailError) throw employeeByEmailError;
+      }
 
       toast.success('User deactivated');
       fetchUsers();
@@ -277,16 +282,21 @@ export default function UserManagement() {
 
       if (profileError) throw profileError;
 
-      let employeeActivateQuery = supabase
+      const { error: employeeByUserError } = await supabase
         .from('employees')
         .update({ status: 'active', deactivation_reason: null })
         .eq('user_id', userId);
 
-      if (targetUser?.email) {
-        employeeActivateQuery = employeeActivateQuery.or(`email.eq.${targetUser.email}`);
-      }
+      if (employeeByUserError) throw employeeByUserError;
 
-      await employeeActivateQuery;
+      if (targetUser?.email) {
+        const { error: employeeByEmailError } = await supabase
+          .from('employees')
+          .update({ status: 'active', deactivation_reason: null })
+          .eq('email', targetUser.email);
+
+        if (employeeByEmailError) throw employeeByEmailError;
+      }
 
       toast.success('User activated');
       fetchUsers();

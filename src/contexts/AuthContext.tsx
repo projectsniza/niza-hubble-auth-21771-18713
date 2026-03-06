@@ -70,6 +70,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const profile = profileResult.data;
       if (!profile) return null;
 
+      if (employeeByUserResult.error && employeeByUserResult.error.code !== 'PGRST116') {
+        console.error('Error fetching employee status by user:', employeeByUserResult.error);
+      }
+
       let employeeStatus = employeeByUserResult.data?.status ?? null;
 
       if (!employeeStatus && profile.email) {
