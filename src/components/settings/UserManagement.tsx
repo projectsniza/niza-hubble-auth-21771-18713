@@ -239,11 +239,26 @@ export default function UserManagement() {
 
   const handleDeactivateUser = async (userId: string) => {
     try {
-      await supabase
+      const targetUser = users.find(u => u.id === userId);
+
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ is_active: false })
         .eq('id', userId);
-      
+
+      if (profileError) throw profileError;
+
+      let employeeDeactivateQuery = supabase
+        .from('employees')
+        .update({ status: 'inactive' })
+        .eq('user_id', userId);
+
+      if (targetUser?.email) {
+        employeeDeactivateQuery = employeeDeactivateQuery.or(`email.eq.${targetUser.email}`);
+      }
+
+      await employeeDeactivateQuery;
+
       toast.success('User deactivated');
       fetchUsers();
     } catch (error: any) {
@@ -253,11 +268,26 @@ export default function UserManagement() {
 
   const handleActivateUser = async (userId: string) => {
     try {
-      await supabase
+      const targetUser = users.find(u => u.id === userId);
+
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ is_active: true })
         .eq('id', userId);
-      
+
+      if (profileError) throw profileError;
+
+      let employeeActivateQuery = supabase
+        .from('employees')
+        .update({ status: 'active', deactivation_reason: null })
+        .eq('user_id', userId);
+
+      if (targetUser?.email) {
+        employeeActivateQuery = employeeActivateQuery.or(`email.eq.${targetUser.email}`);
+      }
+
+      await employeeActivateQuery;
+
       toast.success('User activated');
       fetchUsers();
     } catch (error: any) {
