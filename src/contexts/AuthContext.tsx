@@ -36,8 +36,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchUserProfile = useCallback(async (userId: string): Promise<AppUser | null | 'deactivated'> => {
     try {
-      // Fetch profile and role in parallel for better performance
-      const [profileResult, roleResult] = await Promise.all([
+      // Fetch profile, role and employee status in parallel for better performance
+      const [profileResult, roleResult, employeeByUserResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, email, name, organization_id, branch_id, hr_access_level, is_active')
@@ -48,6 +48,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('role')
           .eq('user_id', userId)
           .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('employees')
+          .select('status, deactivation_reason, email')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle()
       ]);
@@ -63,8 +70,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const profile = profileResult.data;
       if (!profile) return null;
 
-      // Check if user is deactivated
-      if (profile.is_active === false) {
+      if (employeeByUserResult.error && employeeByUserResult.error.code !== 'PGRST116') {
+        console.error('Error fetching employee status by user:', employeeByUserResult.error);
+      }
+
+      let employeeStatus = employeeByUserResult.data?.status ?? null;
+      let employeeDeactivationReason = employeeByUserResult.data?.deactivation_reason ?? null;
+
+      if ((!employeeStatus || !employeeDeactivationReason) && profile.email) {
+        const { data: employeeByEmail, error: employeeByEmailError } = await supabase
+          .from('employees')
+          .select('status, deactivation_reason')
+          .ilike('email', profile.email)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (employeeByEmailError && employeeByEmailError.code !== 'PGRST116') {
+          console.error('Error fetching employee status by email:', employeeByEmailError);
+        }
+
+        employeeStatus = employeeByEmail?.status ?? employeeStatus;
+        employeeDeactivationReason = employeeByEmail?.deactivation_reason ?? employeeDeactivationReason;
+      }
+
+      const isEmployeeDeactivated =
+        employeeStatus === 'inactive' ||
+        employeeStatus === 'terminated' ||
+        !!employeeDeactivationReason;
+
+      // Check if user is deactivated in either profiles or employees
+      if (profile.is_active === false || isEmployeeDeactivated) {
         return 'deactivated';
       }
 

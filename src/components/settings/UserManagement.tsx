@@ -239,11 +239,31 @@ export default function UserManagement() {
 
   const handleDeactivateUser = async (userId: string) => {
     try {
-      await supabase
+      const targetUser = users.find(u => u.id === userId);
+
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ is_active: false })
         .eq('id', userId);
-      
+
+      if (profileError) throw profileError;
+
+      const { error: employeeByUserError } = await supabase
+        .from('employees')
+        .update({ status: 'inactive' })
+        .eq('user_id', userId);
+
+      if (employeeByUserError) throw employeeByUserError;
+
+      if (targetUser?.email) {
+        const { error: employeeByEmailError } = await supabase
+          .from('employees')
+          .update({ status: 'inactive' })
+          .eq('email', targetUser.email);
+
+        if (employeeByEmailError) throw employeeByEmailError;
+      }
+
       toast.success('User deactivated');
       fetchUsers();
     } catch (error: any) {
@@ -253,11 +273,31 @@ export default function UserManagement() {
 
   const handleActivateUser = async (userId: string) => {
     try {
-      await supabase
+      const targetUser = users.find(u => u.id === userId);
+
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ is_active: true })
         .eq('id', userId);
-      
+
+      if (profileError) throw profileError;
+
+      const { error: employeeByUserError } = await supabase
+        .from('employees')
+        .update({ status: 'active', deactivation_reason: null })
+        .eq('user_id', userId);
+
+      if (employeeByUserError) throw employeeByUserError;
+
+      if (targetUser?.email) {
+        const { error: employeeByEmailError } = await supabase
+          .from('employees')
+          .update({ status: 'active', deactivation_reason: null })
+          .eq('email', targetUser.email);
+
+        if (employeeByEmailError) throw employeeByEmailError;
+      }
+
       toast.success('User activated');
       fetchUsers();
     } catch (error: any) {

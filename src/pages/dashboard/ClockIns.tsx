@@ -89,6 +89,21 @@ const getGeolocationErrorMessage = (error: GeolocationPositionError): string => 
   }
 };
 
+const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
 const GEOLOCATION_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
   timeout: 30000,
@@ -96,21 +111,78 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
 };
 
 const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
+const BEST_GPS_ACCURACY_METERS = 80;
+const GEOLOCATION_WATCH_WINDOW_MS = 12000;
 
-const getReliablePosition = async (): Promise<GeolocationPosition> => {
-  const getPositionOnce = () =>
-    new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, GEOLOCATION_OPTIONS);
-    });
+const getPositionOnce = () =>
+  new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, GEOLOCATION_OPTIONS);
+  });
+
+const getReliablePosition = async (
+  target?: { latitude: number; longitude: number }
+): Promise<GeolocationPosition> => {
+  const scorePosition = (position: GeolocationPosition) => {
+    const accuracyPenalty = Math.min(position.coords.accuracy, 1500);
+    if (!target) return accuracyPenalty;
+
+    const distancePenalty = calculateDistanceMeters(
+      position.coords.latitude,
+      position.coords.longitude,
+      target.latitude,
+      target.longitude
+    );
+
+    return distancePenalty + accuracyPenalty;
+  };
 
   const first = await getPositionOnce();
-  if (first.coords.accuracy <= MIN_ACCEPTABLE_ACCURACY_METERS) {
+  if (first.coords.accuracy <= BEST_GPS_ACCURACY_METERS) {
     return first;
   }
 
-  // Retry once for mobile devices where first fix can be low-accuracy network position
-  const second = await getPositionOnce();
-  return second.coords.accuracy < first.coords.accuracy ? second : first;
+  return await new Promise<GeolocationPosition>((resolve) => {
+    let bestPosition = first;
+    let settled = false;
+    let watchId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      resolve(bestPosition);
+    };
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (scorePosition(position) < scorePosition(bestPosition)) {
+          bestPosition = position;
+        }
+
+        const bestDistance = target
+          ? calculateDistanceMeters(
+              bestPosition.coords.latitude,
+              bestPosition.coords.longitude,
+              target.latitude,
+              target.longitude
+            )
+          : 0;
+
+        if (
+          bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS &&
+          (!target || bestDistance <= Math.max(MIN_ACCEPTABLE_ACCURACY_METERS, 300))
+        ) {
+          finish();
+        }
+      },
+      () => finish(),
+      GEOLOCATION_OPTIONS
+    );
+
+    timeoutId = window.setTimeout(finish, GEOLOCATION_WATCH_WINDOW_MS);
+  });
 };
 
 // Format decimal to DMS string
@@ -562,15 +634,16 @@ export default function ClockIns() {
         }
       }
 
-      const position = await getReliablePosition();
+      const targetLatitude = Number(locationData.latitude);
+      const targetLongitude = Number(locationData.longitude);
+
+      const position = await getReliablePosition({
+        latitude: targetLatitude,
+        longitude: targetLongitude,
+      });
       const { latitude, longitude, accuracy } = position.coords;
 
-      const distance = calculateDistance(
-        latitude,
-        longitude,
-        Number(locationData.latitude),
-        Number(locationData.longitude)
-      );
+      const distance = calculateDistance(latitude, longitude, targetLatitude, targetLongitude);
       const radius = locationData.radius || 100;
 
       if (accuracy > Math.max(radius * 2, MIN_ACCEPTABLE_ACCURACY_METERS)) {
