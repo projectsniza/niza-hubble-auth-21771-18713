@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .maybeSingle(),
         supabase
           .from('employees')
-          .select('status, email')
+          .select('status, deactivation_reason, email')
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(1)
@@ -75,11 +75,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       let employeeStatus = employeeByUserResult.data?.status ?? null;
+      let employeeDeactivationReason = employeeByUserResult.data?.deactivation_reason ?? null;
 
-      if (!employeeStatus && profile.email) {
+      if ((!employeeStatus || !employeeDeactivationReason) && profile.email) {
         const { data: employeeByEmail, error: employeeByEmailError } = await supabase
           .from('employees')
-          .select('status')
+          .select('status, deactivation_reason')
           .ilike('email', profile.email)
           .order('updated_at', { ascending: false })
           .limit(1)
@@ -90,9 +91,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         employeeStatus = employeeByEmail?.status ?? employeeStatus;
+        employeeDeactivationReason = employeeByEmail?.deactivation_reason ?? employeeDeactivationReason;
       }
 
-      const isEmployeeDeactivated = employeeStatus === 'inactive' || employeeStatus === 'terminated';
+      const isEmployeeDeactivated =
+        employeeStatus === 'inactive' ||
+        employeeStatus === 'terminated' ||
+        !!employeeDeactivationReason;
 
       // Check if user is deactivated in either profiles or employees
       if (profile.is_active === false || isEmployeeDeactivated) {
