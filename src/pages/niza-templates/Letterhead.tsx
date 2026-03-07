@@ -79,14 +79,16 @@ export default function Letterhead() {
   const currentStyle = templateStyles.find(t => t.id === selectedTemplate) || templateStyles[0];
 
   const handleSaveConfig = () => {
-    if (!config.name) {
-      toast({ title: 'Please enter a name for this letterhead', variant: 'destructive' });
-      return;
+    let name = config.name;
+    if (!name) {
+      name = prompt('Enter a name for this letterhead configuration:');
+      if (!name) return;
+      setConfig({ ...config, name });
     }
-    const updated = [...savedConfigs.filter(c => c.name !== config.name), { name: config.name, config, templateId: selectedTemplate, content: bodyContent }];
+    const updated = [...savedConfigs.filter(c => c.name !== name), { name, config: { ...config, name }, templateId: selectedTemplate, content: bodyContent }];
     saveConfigs(updated);
     setSavedConfigs(updated);
-    toast({ title: `Letterhead "${config.name}" saved` });
+    toast({ title: `Letterhead "${name}" saved successfully` });
   };
 
   const handleLoadConfig = (saved: any) => {

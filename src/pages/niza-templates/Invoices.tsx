@@ -112,14 +112,16 @@ export default function Invoices() {
   };
 
   const handleSaveConfig = () => {
-    if (!settings.configName) {
-      toast({ title: 'Please enter a config name', variant: 'destructive' });
-      return;
+    let name = settings.configName;
+    if (!name) {
+      name = prompt('Enter a name for this invoice configuration:');
+      if (!name) return;
+      setSettings({ ...settings, configName: name });
     }
-    const updated = [...savedConfigs.filter(c => c.name !== settings.configName), { name: settings.configName, settings, items, templateId: selectedTemplate }];
+    const updated = [...savedConfigs.filter(c => c.name !== name), { name, settings: { ...settings, configName: name }, items, templateId: selectedTemplate }];
     saveConfigs(updated);
     setSavedConfigs(updated);
-    toast({ title: `Invoice config "${settings.configName}" saved` });
+    toast({ title: `Invoice config "${name}" saved successfully` });
   };
 
   const handleLoadConfig = (saved: any) => {
