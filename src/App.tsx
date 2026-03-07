@@ -133,6 +133,7 @@ const App = () => (
                 <Route path="id-cards" element={<IDCards />} />
                 <Route path="business-cards" element={<BusinessCards />} />
                 <Route path="invoices" element={<Invoices />} />
+                <Route path="letterhead" element={<Letterhead />} />
                 <Route path="gift-cards" element={<GiftCards />} />
                 <Route path="email-signature" element={<EmailSignature />} />
                 <Route path="brand-settings" element={<BrandSettings />} />
