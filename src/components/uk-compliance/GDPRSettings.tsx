@@ -547,6 +547,27 @@ export function GDPRSettings() {
                 <Label className="text-muted-foreground text-xs">Created</Label>
                 <p className="text-sm">{format(new Date(viewingRequest.created_at), 'dd MMM yyyy HH:mm')}</p>
               </div>
+              <div className="pt-3 border-t">
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase.from('gdpr_data_requests').delete().eq('id', viewingRequest.id);
+                      if (error) throw error;
+                      toast.success('Request deleted');
+                      setShowViewDialog(false);
+                      setViewingRequest(null);
+                      fetchData();
+                    } catch (error: unknown) {
+                      toast.error(error instanceof Error ? error.message : 'Failed to delete request');
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Request
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
