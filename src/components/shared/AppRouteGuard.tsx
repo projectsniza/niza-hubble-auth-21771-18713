@@ -38,6 +38,12 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
     // All HR users have access to all apps
     if (user.role === 'hr') return;
 
+    // Employees always have access to E-Learning
+    if (user.role === 'employee' && appKey === 'niza_elearning') return;
+
+    // Managers always have access to E-Learning
+    if (user.role === 'manager' && appKey === 'niza_elearning') return;
+
     // Check custom role app access
     if (!hasAppAccess(appKey)) {
       navigate('/dashboard', { replace: true });
@@ -53,6 +59,7 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
   
   if (user.role === 'super_admin') return <>{children}</>;
   if (user.role === 'hr') return <>{children}</>;
+  if ((user.role === 'employee' || user.role === 'manager') && appKey === 'niza_elearning') return <>{children}</>;
   if (hasAppAccess(appKey)) return <>{children}</>;
 
   return null;
