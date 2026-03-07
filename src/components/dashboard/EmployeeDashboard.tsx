@@ -505,7 +505,7 @@ export default function EmployeeDashboard() {
       }
 
       if (allowMisconfiguredPinOverride) {
-        toast.warning('Store pin looks misconfigured. Clock-in allowed using verified GPS; ask manager to update store coordinates.');
+        console.info('[ClockIn] Misconfigured pin override applied — high-accuracy GPS accepted despite large distance to store pin.');
       }
 
       const { error } = await supabase.from('clock_ins').insert({
