@@ -75,6 +75,7 @@ const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
 const BEST_GPS_ACCURACY_METERS = 80;
 const GEOLOCATION_WATCH_WINDOW_MS = 12000;
 const MISCONFIGURED_PIN_DISTANCE_METERS = 500000;
+const MIN_PRACTICAL_GEOFENCE_RADIUS_METERS = 10;
 
 const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371e3;
@@ -466,15 +467,22 @@ export default function EmployeeDashboard() {
         }
       }
 
-      const radius = nearest.radius || 100;
+      const configuredRadius = nearest.radius || 100;
+      const radius = Math.max(configuredRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS);
+
+      if (configuredRadius < MIN_PRACTICAL_GEOFENCE_RADIUS_METERS) {
+        toast.warning(
+          `Configured geofence (${configuredRadius}m) is too small for GPS reliability. Using ${radius}m minimum.`
+        );
+      }
 
       if (accuracy > Math.max(radius * 2, MIN_ACCEPTABLE_ACCURACY_METERS)) {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
-      // Account for GPS uncertainty: if accuracy is larger than radius,
-      // add half the accuracy to the measured distance for conservative check
-      const effectiveDistance = accuracy > radius ? nearestDistance + accuracy * 0.5 : nearestDistance;
+      // Light uncertainty penalty only when GPS precision is much worse than fence size.
+      const uncertaintyPenalty = accuracy > radius * 4 ? accuracy * 0.1 : 0;
+      const effectiveDistance = nearestDistance + uncertaintyPenalty;
 
       const allowMisconfiguredPinOverride =
         nearestDistance > MISCONFIGURED_PIN_DISTANCE_METERS &&
