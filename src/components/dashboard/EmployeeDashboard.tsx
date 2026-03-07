@@ -622,7 +622,7 @@ export default function EmployeeDashboard() {
               <p className="mt-1 text-xs text-muted-foreground">
                 {activeClockIn
                   ? `Started at ${format(new Date(activeClockIn.clock_in_time), 'HH:mm')}`
-                  : 'No navigation needed — use the button below'}
+                  : 'Ready to start your shift'}
               </p>
             </div>
 
