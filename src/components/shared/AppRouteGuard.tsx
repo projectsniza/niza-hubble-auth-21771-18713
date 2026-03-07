@@ -59,6 +59,7 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
   
   if (user.role === 'super_admin') return <>{children}</>;
   if (user.role === 'hr') return <>{children}</>;
+  if ((user.role === 'employee' || user.role === 'manager') && appKey === 'niza_elearning') return <>{children}</>;
   if (hasAppAccess(appKey)) return <>{children}</>;
 
   return null;
