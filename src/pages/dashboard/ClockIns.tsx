@@ -123,18 +123,10 @@ const getPositionOnce = () =>
 const getReliablePosition = async (
   target?: { latitude: number; longitude: number }
 ): Promise<GeolocationPosition> => {
+  // Score purely by accuracy — do NOT bias toward readings closer to the target,
+  // as that cherry-picks favorable GPS noise and defeats geofencing.
   const scorePosition = (position: GeolocationPosition) => {
-    const accuracyPenalty = Math.min(position.coords.accuracy, 1500);
-    if (!target) return accuracyPenalty;
-
-    const distancePenalty = calculateDistanceMeters(
-      position.coords.latitude,
-      position.coords.longitude,
-      target.latitude,
-      target.longitude
-    );
-
-    return distancePenalty + accuracyPenalty;
+    return Math.min(position.coords.accuracy, 1500);
   };
 
   const first = await getPositionOnce();
@@ -162,19 +154,8 @@ const getReliablePosition = async (
           bestPosition = position;
         }
 
-        const bestDistance = target
-          ? calculateDistanceMeters(
-              bestPosition.coords.latitude,
-              bestPosition.coords.longitude,
-              target.latitude,
-              target.longitude
-            )
-          : 0;
-
-        if (
-          bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS &&
-          (!target || bestDistance <= Math.max(MIN_ACCEPTABLE_ACCURACY_METERS, 300))
-        ) {
+        // Exit early once we have a high-accuracy fix
+        if (bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS) {
           finish();
         }
       },
@@ -651,6 +632,12 @@ export default function ClockIns() {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
+      // For strict geofencing: the user's actual position could be anywhere within the
+      // accuracy circle. Use the worst-case distance (distance + accuracy) to prevent
+      // false positives when radius is small relative to GPS accuracy.
+      // Only apply strict check when accuracy is significant relative to the radius.
+      const effectiveDistance = accuracy > radius ? distance + accuracy * 0.5 : distance;
+
       const branchActiveLocationCount = locations.filter(
         (location) => location.branch_id === locationData.branch_id && location.is_active
       ).length;
@@ -661,8 +648,8 @@ export default function ClockIns() {
         accuracy <= BEST_GPS_ACCURACY_METERS &&
         branchActiveLocationCount <= 1;
 
-      if (distance > radius && !shouldAllowMisconfiguredPinOverride) {
-        toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
+      if (effectiveDistance > radius && !shouldAllowMisconfiguredPinOverride) {
+        toast.error(`You are ${Math.round(distance)}m away (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`);
         setClockAction(null);
         return;
       }

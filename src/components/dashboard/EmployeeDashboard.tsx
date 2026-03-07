@@ -111,18 +111,10 @@ const getPositionOnce = () =>
 const getReliablePosition = async (
   target?: { latitude: number; longitude: number }
 ): Promise<GeolocationPosition> => {
+  // Score purely by accuracy — do NOT bias toward readings closer to the target,
+  // as that cherry-picks favorable GPS noise and defeats geofencing.
   const scorePosition = (position: GeolocationPosition) => {
-    const accuracyPenalty = Math.min(position.coords.accuracy, 1500);
-    if (!target) return accuracyPenalty;
-
-    const distancePenalty = calculateDistanceMeters(
-      position.coords.latitude,
-      position.coords.longitude,
-      target.latitude,
-      target.longitude
-    );
-
-    return distancePenalty + accuracyPenalty;
+    return Math.min(position.coords.accuracy, 1500);
   };
 
   const first = await getPositionOnce();
@@ -150,19 +142,8 @@ const getReliablePosition = async (
           bestPosition = position;
         }
 
-        const bestDistance = target
-          ? calculateDistanceMeters(
-              bestPosition.coords.latitude,
-              bestPosition.coords.longitude,
-              target.latitude,
-              target.longitude
-            )
-          : 0;
-
-        if (
-          bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS &&
-          (!target || bestDistance <= Math.max(MIN_ACCEPTABLE_ACCURACY_METERS, 300))
-        ) {
+        // Exit early once we have a high-accuracy fix
+        if (bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS) {
           finish();
         }
       },
@@ -491,13 +472,17 @@ export default function EmployeeDashboard() {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
+      // Account for GPS uncertainty: if accuracy is larger than radius,
+      // add half the accuracy to the measured distance for conservative check
+      const effectiveDistance = accuracy > radius ? nearestDistance + accuracy * 0.5 : nearestDistance;
+
       const allowMisconfiguredPinOverride =
         nearestDistance > MISCONFIGURED_PIN_DISTANCE_METERS &&
         accuracy <= BEST_GPS_ACCURACY_METERS &&
         locationCandidates.length === 1;
 
-      if (nearestDistance > radius && !allowMisconfiguredPinOverride) {
-        const message = `You are ${Math.round(nearestDistance)}m away from ${nearest.name}. Must be within ${radius}m to clock in.`;
+      if (effectiveDistance > radius && !allowMisconfiguredPinOverride) {
+        const message = `You are ${Math.round(nearestDistance)}m away from ${nearest.name} (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`;
         setLastClockIssue(message);
         toast.error(message);
         setClockAction(null);
