@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Users, Send, Loader2, ClipboardCheck } from 'lucide-react';
+import { Plus, Users, Send, Loader2, ClipboardCheck, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ export default function AssignedCourses() {
   const [loading, setLoading] = useState(true);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [assignForm, setAssignForm] = useState({
     course_id: '', assign_type: 'individual', employee_id: '', department: '', branch_id: '', due_date: '',
   });
@@ -65,7 +66,6 @@ export default function AssignedCourses() {
       const { error } = await supabase.from('course_assignments').insert(payload);
       if (error) throw error;
 
-      // Create progress records for assigned employees
       if (assignForm.assign_type === 'individual' && assignForm.employee_id) {
         await supabase.from('course_progress').upsert({
           course_id: assignForm.course_id,
@@ -82,6 +82,21 @@ export default function AssignedCourses() {
       toast.error(err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to unassign this course?')) return;
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from('course_assignments').delete().eq('id', id);
+      if (error) throw error;
+      setAssignments(prev => prev.filter(a => a.id !== id));
+      toast.success('Course unassigned successfully');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to unassign');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -114,16 +129,36 @@ export default function AssignedCourses() {
                 <div>
                   <h3 className="font-semibold text-foreground">{a.courses?.title || 'Unknown Course'}</h3>
                   <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                    {a.assigned_to_employee_id && <Badge variant="outline"><Users className="h-3 w-3 mr-1" /> Individual</Badge>}
+                    {a.assigned_to_employee_id && (
+                      <Badge variant="outline"><Users className="h-3 w-3 mr-1" /> Individual</Badge>
+                    )}
                     {a.assigned_to_department && <Badge variant="outline">Dept: {a.assigned_to_department}</Badge>}
                     {a.assigned_to_branch_id && <Badge variant="outline">Branch</Badge>}
                     {a.assign_all && <Badge variant="outline">All Employees</Badge>}
                     {a.due_date && <span>Due: {new Date(a.due_date).toLocaleDateString('en-GB')}</span>}
                   </div>
                 </div>
-                <Badge className={a.is_mandatory ? 'bg-red-500/10 text-red-600' : 'bg-blue-500/10 text-blue-600'}>
-                  {a.is_mandatory ? 'Mandatory' : 'Optional'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className={a.is_mandatory ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}>
+                    {a.is_mandatory ? 'Mandatory' : 'Optional'}
+                  </Badge>
+                  {canAssign && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDelete(a.id)}
+                      disabled={deletingId === a.id}
+                      title="Unassign course"
+                    >
+                      {deletingId === a.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}

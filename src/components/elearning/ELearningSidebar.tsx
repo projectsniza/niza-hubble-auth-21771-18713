@@ -13,6 +13,7 @@ const getMenuItems = (role: string) => {
     return [
       { title: 'Home', icon: Home, path: '/niza-elearning' },
       { title: 'My Courses', icon: BookOpen, path: '/niza-elearning/my-courses' },
+      { title: 'Assigned Courses', icon: ClipboardCheck, path: '/niza-elearning/assigned' },
       { title: 'Course Library', icon: Library, path: '/niza-elearning/library' },
       { title: 'Certificates', icon: Award, path: '/niza-elearning/certificates' },
     ];
