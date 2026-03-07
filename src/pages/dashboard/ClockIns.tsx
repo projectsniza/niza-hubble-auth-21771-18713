@@ -123,18 +123,10 @@ const getPositionOnce = () =>
 const getReliablePosition = async (
   target?: { latitude: number; longitude: number }
 ): Promise<GeolocationPosition> => {
+  // Score purely by accuracy — do NOT bias toward readings closer to the target,
+  // as that cherry-picks favorable GPS noise and defeats geofencing.
   const scorePosition = (position: GeolocationPosition) => {
-    const accuracyPenalty = Math.min(position.coords.accuracy, 1500);
-    if (!target) return accuracyPenalty;
-
-    const distancePenalty = calculateDistanceMeters(
-      position.coords.latitude,
-      position.coords.longitude,
-      target.latitude,
-      target.longitude
-    );
-
-    return distancePenalty + accuracyPenalty;
+    return Math.min(position.coords.accuracy, 1500);
   };
 
   const first = await getPositionOnce();
@@ -162,19 +154,8 @@ const getReliablePosition = async (
           bestPosition = position;
         }
 
-        const bestDistance = target
-          ? calculateDistanceMeters(
-              bestPosition.coords.latitude,
-              bestPosition.coords.longitude,
-              target.latitude,
-              target.longitude
-            )
-          : 0;
-
-        if (
-          bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS &&
-          (!target || bestDistance <= Math.max(MIN_ACCEPTABLE_ACCURACY_METERS, 300))
-        ) {
+        // Exit early once we have a high-accuracy fix
+        if (bestPosition.coords.accuracy <= BEST_GPS_ACCURACY_METERS) {
           finish();
         }
       },
