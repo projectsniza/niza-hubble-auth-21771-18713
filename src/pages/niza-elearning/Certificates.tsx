@@ -34,32 +34,28 @@ export default function Certificates() {
     if (!user) return;
     setLoading(true);
     try {
-      const promises: Promise<any>[] = [];
-
+      let certsPromise;
       if (isAdmin) {
-        // Admins see all certificates
-        promises.push(
-          supabase
-            .from('elearning_certificates')
-            .select('*, courses(title, description)')
-            .order('issued_at', { ascending: false })
-            .limit(200)
-        );
+        certsPromise = supabase
+          .from('elearning_certificates')
+          .select('*, courses(title, description)')
+          .order('issued_at', { ascending: false })
+          .limit(200)
+          .then(r => r);
       } else {
         const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user.id).single();
         if (!emp) { setLoading(false); return; }
-        promises.push(
-          supabase
-            .from('elearning_certificates')
-            .select('*, courses(title, description)')
-            .eq('employee_id', emp.id)
-            .order('issued_at', { ascending: false })
-        );
+        certsPromise = supabase
+          .from('elearning_certificates')
+          .select('*, courses(title, description)')
+          .eq('employee_id', emp.id)
+          .order('issued_at', { ascending: false })
+          .then(r => r);
       }
 
-      promises.push(supabase.from('certificate_designs').select('*').order('created_at'));
+      const designsPromise = supabase.from('certificate_designs').select('*').order('created_at').then(r => r);
+      const results = await Promise.all([certsPromise, designsPromise]);
 
-      const results = await Promise.all(promises);
       setCertificates(results[0].data || []);
       setDesigns(results[1].data || []);
     } catch (err) {
