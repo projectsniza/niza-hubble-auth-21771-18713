@@ -79,7 +79,7 @@ export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTempla
               } ${
                 isActive
                   ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25'
-                  : 'text-muted-foreground hover:bg-primary/10 hover:text-foreground'
+                  : 'text-foreground hover:bg-primary/10'
               }`
             }
             title={collapsed ? item.name : undefined}
