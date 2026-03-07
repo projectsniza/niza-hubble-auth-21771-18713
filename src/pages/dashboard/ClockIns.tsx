@@ -651,10 +651,24 @@ export default function ClockIns() {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
-      if (distance > radius) {
+      const branchActiveLocationCount = locations.filter(
+        (location) => location.branch_id === locationData.branch_id && location.is_active
+      ).length;
+
+      const shouldAllowMisconfiguredPinOverride =
+        user.role === 'employee' &&
+        distance > MISCONFIGURED_PIN_DISTANCE_METERS &&
+        accuracy <= BEST_GPS_ACCURACY_METERS &&
+        branchActiveLocationCount <= 1;
+
+      if (distance > radius && !shouldAllowMisconfiguredPinOverride) {
         toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
         setClockAction(null);
         return;
+      }
+
+      if (shouldAllowMisconfiguredPinOverride) {
+        toast.warning('Store pin looks misconfigured. Clock-in allowed with verified GPS. Ask manager to update location coordinates.');
       }
 
       const { error } = await supabase.from('clock_ins').insert({
@@ -664,7 +678,7 @@ export default function ClockIns() {
         clock_in_time: new Date().toISOString(),
         clock_in_latitude: latitude,
         clock_in_longitude: longitude,
-        clock_in_method: 'gps',
+        clock_in_method: shouldAllowMisconfiguredPinOverride ? 'gps_override' : 'gps',
       });
 
       if (error) throw error;
