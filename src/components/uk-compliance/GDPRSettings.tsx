@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Shield, Clock, FileText, UserX, Plus, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Shield, Clock, FileText, Plus, CheckCircle, AlertTriangle, Pencil, Trash2, Eye } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 
 interface RetentionPolicy {
@@ -32,6 +32,8 @@ interface DataRequest {
   due_date: string;
   created_at: string;
   employee_id: string;
+  notes: string;
+  rejection_reason: string;
 }
 
 const dataCategories = [
@@ -57,6 +59,10 @@ export function GDPRSettings() {
   const [loading, setLoading] = useState(true);
   const [showPolicyDialog, setShowPolicyDialog] = useState(false);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [editingPolicy, setEditingPolicy] = useState<RetentionPolicy | null>(null);
+  const [editingRequest, setEditingRequest] = useState<DataRequest | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<DataRequest | null>(null);
   const [newPolicy, setNewPolicy] = useState({
     data_category: '',
     retention_period_months: 84,
@@ -90,43 +96,102 @@ export function GDPRSettings() {
     }
   };
 
-  const handleAddPolicy = async () => {
+  const openEditPolicy = (policy: RetentionPolicy) => {
+    setEditingPolicy(policy);
+    setNewPolicy({
+      data_category: policy.data_category,
+      retention_period_months: policy.retention_period_months,
+      legal_basis: policy.legal_basis,
+      description: policy.description || ''
+    });
+    setShowPolicyDialog(true);
+  };
+
+  const openEditRequest = (request: DataRequest) => {
+    setEditingRequest(request);
+    setNewRequest({
+      request_type: request.request_type,
+      requester_name: request.requester_name,
+      requester_email: request.requester_email,
+      notes: request.notes || ''
+    });
+    setShowRequestDialog(true);
+  };
+
+  const resetPolicyForm = () => {
+    setEditingPolicy(null);
+    setNewPolicy({ data_category: '', retention_period_months: 84, legal_basis: 'legal_obligation', description: '' });
+    setShowPolicyDialog(false);
+  };
+
+  const resetRequestForm = () => {
+    setEditingRequest(null);
+    setNewRequest({ request_type: 'access', requester_name: '', requester_email: '', notes: '' });
+    setShowRequestDialog(false);
+  };
+
+  const handleSavePolicy = async () => {
     try {
-      const { error } = await supabase.from('gdpr_retention_policies').insert({
-        ...newPolicy,
-        created_by: (await supabase.auth.getUser()).data.user?.id
-      });
-
-      if (error) throw error;
-
-      toast.success('Retention policy added');
-      setShowPolicyDialog(false);
-      setNewPolicy({ data_category: '', retention_period_months: 84, legal_basis: 'legal_obligation', description: '' });
+      if (editingPolicy) {
+        const { error } = await supabase.from('gdpr_retention_policies').update({
+          data_category: newPolicy.data_category,
+          retention_period_months: newPolicy.retention_period_months,
+          legal_basis: newPolicy.legal_basis,
+          description: newPolicy.description
+        }).eq('id', editingPolicy.id);
+        if (error) throw error;
+        toast.success('Policy updated');
+      } else {
+        const { error } = await supabase.from('gdpr_retention_policies').insert({
+          ...newPolicy,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+        if (error) throw error;
+        toast.success('Policy added');
+      }
+      resetPolicyForm();
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to add policy';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to save policy');
     }
   };
 
-  const handleAddRequest = async () => {
+  const handleDeletePolicy = async (id: string) => {
     try {
-      const dueDate = addDays(new Date(), 30); // GDPR requires 30 day response
-      const { error } = await supabase.from('gdpr_data_requests').insert({
-        ...newRequest,
-        due_date: format(dueDate, 'yyyy-MM-dd'),
-        status: 'pending'
-      });
-
+      const { error } = await supabase.from('gdpr_retention_policies').update({ is_active: false }).eq('id', id);
       if (error) throw error;
-
-      toast.success('Data request logged');
-      setShowRequestDialog(false);
-      setNewRequest({ request_type: 'access', requester_name: '', requester_email: '', notes: '' });
+      toast.success('Policy deactivated');
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to log data request';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to deactivate policy');
+    }
+  };
+
+  const handleSaveRequest = async () => {
+    try {
+      if (editingRequest) {
+        const { error } = await supabase.from('gdpr_data_requests').update({
+          request_type: newRequest.request_type,
+          requester_name: newRequest.requester_name,
+          requester_email: newRequest.requester_email,
+          notes: newRequest.notes
+        }).eq('id', editingRequest.id);
+        if (error) throw error;
+        toast.success('Request updated');
+      } else {
+        const dueDate = addDays(new Date(), 30);
+        const { error } = await supabase.from('gdpr_data_requests').insert({
+          ...newRequest,
+          due_date: format(dueDate, 'yyyy-MM-dd'),
+          status: 'pending'
+        });
+        if (error) throw error;
+        toast.success('Data request logged');
+      }
+      resetRequestForm();
+      fetchData();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save request');
     }
   };
 
@@ -137,15 +202,12 @@ export function GDPRSettings() {
         updates.completed_at = new Date().toISOString();
         updates.completed_by = (await supabase.auth.getUser()).data.user?.id;
       }
-
       const { error } = await supabase.from('gdpr_data_requests').update(updates).eq('id', id);
       if (error) throw error;
-
       toast.success('Request updated');
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to update request';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to update request');
     }
   };
 
@@ -200,62 +262,9 @@ export function GDPRSettings() {
                 <CardTitle>Retention Policies</CardTitle>
                 <CardDescription>Define how long different types of data should be retained</CardDescription>
               </div>
-              <Dialog open={showPolicyDialog} onOpenChange={setShowPolicyDialog}>
-                <DialogTrigger asChild>
-                  <Button><Plus className="h-4 w-4 mr-2" />Add Policy</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add Retention Policy</DialogTitle>
-                    <DialogDescription>Define data retention rules for GDPR compliance</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Data Category</Label>
-                      <Select value={newPolicy.data_category} onValueChange={(v) => setNewPolicy({ ...newPolicy, data_category: v })}>
-                        <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                        <SelectContent>
-                          {dataCategories.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Retention Period (months)</Label>
-                      <Input
-                        type="number"
-                        value={newPolicy.retention_period_months}
-                        onChange={(e) => setNewPolicy({ ...newPolicy, retention_period_months: parseInt(e.target.value) })}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">UK default: 84 months (7 years) for employment records</p>
-                    </div>
-                    <div>
-                      <Label>Legal Basis</Label>
-                      <Select value={newPolicy.legal_basis} onValueChange={(v) => setNewPolicy({ ...newPolicy, legal_basis: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {legalBases.map((basis) => (
-                            <SelectItem key={basis.value} value={basis.value}>{basis.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Description</Label>
-                      <Textarea
-                        value={newPolicy.description}
-                        onChange={(e) => setNewPolicy({ ...newPolicy, description: e.target.value })}
-                        placeholder="Describe the policy and any exceptions..."
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowPolicyDialog(false)}>Cancel</Button>
-                    <Button onClick={handleAddPolicy} disabled={!newPolicy.data_category}>Save Policy</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => { resetPolicyForm(); setShowPolicyDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />Add Policy
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -265,6 +274,7 @@ export function GDPRSettings() {
                     <TableHead>Retention Period</TableHead>
                     <TableHead>Legal Basis</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,11 +292,23 @@ export function GDPRSettings() {
                           {policy.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => openEditPolicy(policy)} title="Edit">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {policy.is_active && (
+                            <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeletePolicy(policy.id)} title="Deactivate">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {policies.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         No retention policies defined. Add your first policy to ensure GDPR compliance.
                       </TableCell>
                     </TableRow>
@@ -304,60 +326,9 @@ export function GDPRSettings() {
                 <CardTitle>Data Subject Requests</CardTitle>
                 <CardDescription>Track and manage GDPR data requests (30-day response required)</CardDescription>
               </div>
-              <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
-                <DialogTrigger asChild>
-                  <Button><Plus className="h-4 w-4 mr-2" />Log Request</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Log Data Request</DialogTitle>
-                    <DialogDescription>Record a data subject access request</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Request Type</Label>
-                      <Select value={newRequest.request_type} onValueChange={(v) => setNewRequest({ ...newRequest, request_type: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="access">Data Access Request</SelectItem>
-                          <SelectItem value="erasure">Right to Erasure</SelectItem>
-                          <SelectItem value="rectification">Rectification</SelectItem>
-                          <SelectItem value="portability">Data Portability</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Requester Name</Label>
-                      <Input
-                        value={newRequest.requester_name}
-                        onChange={(e) => setNewRequest({ ...newRequest, requester_name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Requester Email</Label>
-                      <Input
-                        type="email"
-                        value={newRequest.requester_email}
-                        onChange={(e) => setNewRequest({ ...newRequest, requester_email: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Notes</Label>
-                      <Textarea
-                        value={newRequest.notes}
-                        onChange={(e) => setNewRequest({ ...newRequest, notes: e.target.value })}
-                        placeholder="Additional details about the request..."
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowRequestDialog(false)}>Cancel</Button>
-                    <Button onClick={handleAddRequest} disabled={!newRequest.requester_name || !newRequest.requester_email}>
-                      Log Request
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => { resetRequestForm(); setShowRequestDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />Log Request
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -390,19 +361,27 @@ export function GDPRSettings() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {request.status !== 'completed' && (
-                            <div className="flex gap-2">
-                              {request.status === 'pending' && (
-                                <Button size="sm" variant="outline" onClick={() => handleUpdateRequestStatus(request.id, 'in_progress')}>
-                                  Start
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => { setViewingRequest(request); setShowViewDialog(true); }} title="View">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {request.status !== 'completed' && (
+                              <>
+                                <Button size="icon" variant="ghost" onClick={() => openEditRequest(request)} title="Edit">
+                                  <Pencil className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <Button size="sm" onClick={() => handleUpdateRequestStatus(request.id, 'completed')}>
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Complete
-                              </Button>
-                            </div>
-                          )}
+                                {request.status === 'pending' && (
+                                  <Button size="sm" variant="outline" onClick={() => handleUpdateRequestStatus(request.id, 'in_progress')}>
+                                    Start
+                                  </Button>
+                                )}
+                                <Button size="sm" onClick={() => handleUpdateRequestStatus(request.id, 'completed')}>
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Complete
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -420,6 +399,158 @@ export function GDPRSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Policy Dialog (Add/Edit) */}
+      <Dialog open={showPolicyDialog} onOpenChange={(open) => { if (!open) resetPolicyForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPolicy ? 'Edit Retention Policy' : 'Add Retention Policy'}</DialogTitle>
+            <DialogDescription>Define data retention rules for GDPR compliance</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Data Category</Label>
+              <Select value={newPolicy.data_category} onValueChange={(v) => setNewPolicy({ ...newPolicy, data_category: v })}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {dataCategories.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Retention Period (months)</Label>
+              <Input
+                type="number"
+                value={newPolicy.retention_period_months}
+                onChange={(e) => setNewPolicy({ ...newPolicy, retention_period_months: parseInt(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">UK default: 84 months (7 years) for employment records</p>
+            </div>
+            <div>
+              <Label>Legal Basis</Label>
+              <Select value={newPolicy.legal_basis} onValueChange={(v) => setNewPolicy({ ...newPolicy, legal_basis: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {legalBases.map((basis) => (
+                    <SelectItem key={basis.value} value={basis.value}>{basis.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={newPolicy.description}
+                onChange={(e) => setNewPolicy({ ...newPolicy, description: e.target.value })}
+                placeholder="Describe the policy and any exceptions..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetPolicyForm}>Cancel</Button>
+            <Button onClick={handleSavePolicy} disabled={!newPolicy.data_category}>
+              {editingPolicy ? 'Update Policy' : 'Save Policy'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Dialog (Add/Edit) */}
+      <Dialog open={showRequestDialog} onOpenChange={(open) => { if (!open) resetRequestForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingRequest ? 'Edit Data Request' : 'Log Data Request'}</DialogTitle>
+            <DialogDescription>Record a data subject access request</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Request Type</Label>
+              <Select value={newRequest.request_type} onValueChange={(v) => setNewRequest({ ...newRequest, request_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="access">Data Access Request</SelectItem>
+                  <SelectItem value="erasure">Right to Erasure</SelectItem>
+                  <SelectItem value="rectification">Rectification</SelectItem>
+                  <SelectItem value="portability">Data Portability</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Requester Name</Label>
+              <Input
+                value={newRequest.requester_name}
+                onChange={(e) => setNewRequest({ ...newRequest, requester_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Requester Email</Label>
+              <Input
+                type="email"
+                value={newRequest.requester_email}
+                onChange={(e) => setNewRequest({ ...newRequest, requester_email: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={newRequest.notes}
+                onChange={(e) => setNewRequest({ ...newRequest, notes: e.target.value })}
+                placeholder="Additional details about the request..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetRequestForm}>Cancel</Button>
+            <Button onClick={handleSaveRequest} disabled={!newRequest.requester_name || !newRequest.requester_email}>
+              {editingRequest ? 'Update Request' : 'Log Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Request Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Details</DialogTitle>
+          </DialogHeader>
+          {viewingRequest && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Type</Label>
+                  <p className="font-medium">{getRequestTypeBadge(viewingRequest.request_type)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <p>{getStatusBadge(viewingRequest.status)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Requester</Label>
+                  <p className="font-medium">{viewingRequest.requester_name}</p>
+                  <p className="text-sm text-muted-foreground">{viewingRequest.requester_email}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Due Date</Label>
+                  <p className="font-medium">{format(new Date(viewingRequest.due_date), 'dd MMM yyyy')}</p>
+                </div>
+              </div>
+              {viewingRequest.notes && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Notes</Label>
+                  <p className="text-sm">{viewingRequest.notes}</p>
+                </div>
+              )}
+              <div>
+                <Label className="text-muted-foreground text-xs">Created</Label>
+                <p className="text-sm">{format(new Date(viewingRequest.created_at), 'dd MMM yyyy HH:mm')}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

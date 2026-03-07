@@ -6,14 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Calculator, TrendingUp, AlertTriangle, Plus, Users, Settings } from 'lucide-react';
-import { format, subMonths, differenceInDays, isWithinInterval } from 'date-fns';
+import { Calculator, TrendingUp, Plus, Users, Settings, Pencil, Trash2, Eye } from 'lucide-react';
+import { format, subMonths, differenceInDays } from 'date-fns';
 
 interface AbsenceRecord {
   id: string;
@@ -24,6 +23,7 @@ interface AbsenceRecord {
   days_count: number;
   return_to_work_completed: boolean;
   reason: string;
+  notes: string;
   employees?: { first_name: string; last_name: string };
 }
 
@@ -39,9 +39,9 @@ interface BradfordThreshold {
 interface EmployeeBradford {
   employee_id: string;
   employee_name: string;
-  spells: number; // S = number of separate absence spells
-  days: number; // D = total days absent
-  score: number; // Bradford Score = S² × D
+  spells: number;
+  days: number;
+  score: number;
   action: string | null;
   color: string;
 }
@@ -52,8 +52,14 @@ export function BradfordFactor() {
   const [bradfordScores, setBradfordScores] = useState<EmployeeBradford[]>([]);
   const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [showAbsenceDialog, setShowAbsenceDialog] = useState(false);
   const [showThresholdDialog, setShowThresholdDialog] = useState(false);
+  const [showViewAbsenceDialog, setShowViewAbsenceDialog] = useState(false);
+  const [editingAbsence, setEditingAbsence] = useState<AbsenceRecord | null>(null);
+  const [editingThreshold, setEditingThreshold] = useState<BradfordThreshold | null>(null);
+  const [viewingAbsence, setViewingAbsence] = useState<AbsenceRecord | null>(null);
+
   const [newAbsence, setNewAbsence] = useState({
     employee_id: '',
     absence_type: 'sickness',
@@ -75,7 +81,6 @@ export function BradfordFactor() {
   const fetchData = async () => {
     try {
       const twelveMonthsAgo = subMonths(new Date(), 12);
-      
       const [absencesRes, thresholdsRes, employeesRes] = await Promise.all([
         supabase.from('absence_records').select('*, employees(first_name, last_name)')
           .gte('start_date', format(twelveMonthsAgo, 'yyyy-MM-dd'))
@@ -88,7 +93,6 @@ export function BradfordFactor() {
       if (thresholdsRes.data) setThresholds(thresholdsRes.data);
       if (employeesRes.data) setEmployees(employeesRes.data);
 
-      // Calculate Bradford scores
       if (absencesRes.data && thresholdsRes.data && employeesRes.data) {
         calculateBradfordScores(absencesRes.data, thresholdsRes.data, employeesRes.data);
       }
@@ -105,13 +109,9 @@ export function BradfordFactor() {
     employeeData: { id: string; first_name: string; last_name: string }[]
   ) => {
     const employeeAbsences: Record<string, { spells: number; days: number; name: string }> = {};
-
-    // Initialize all employees
     employeeData.forEach(emp => {
       employeeAbsences[emp.id] = { spells: 0, days: 0, name: `${emp.first_name} ${emp.last_name}` };
     });
-
-    // Count spells and days for each employee
     absenceData.forEach(absence => {
       if (employeeAbsences[absence.employee_id]) {
         employeeAbsences[absence.employee_id].spells += 1;
@@ -119,15 +119,11 @@ export function BradfordFactor() {
       }
     });
 
-    // Calculate Bradford scores and determine actions
     const scores: EmployeeBradford[] = Object.entries(employeeAbsences)
       .map(([employeeId, data]) => {
-        const score = Math.pow(data.spells, 2) * data.days; // S² × D
-        
-        // Find applicable threshold
+        const score = Math.pow(data.spells, 2) * data.days;
         let action: string | null = null;
-        let color = '#10B981'; // Green for low scores
-        
+        let color = '#10B981';
         for (const threshold of thresholdData.sort((a, b) => b.threshold_score - a.threshold_score)) {
           if (score >= threshold.threshold_score) {
             action = threshold.action_required;
@@ -135,64 +131,63 @@ export function BradfordFactor() {
             break;
           }
         }
-
-        return {
-          employee_id: employeeId,
-          employee_name: data.name,
-          spells: data.spells,
-          days: data.days,
-          score,
-          action,
-          color
-        };
+        return { employee_id: employeeId, employee_name: data.name, spells: data.spells, days: data.days, score, action, color };
       })
       .sort((a, b) => b.score - a.score);
 
     setBradfordScores(scores);
   };
 
-  const handleAddAbsence = async () => {
-    try {
-      const daysCount = differenceInDays(new Date(newAbsence.end_date), new Date(newAbsence.start_date)) + 1;
-      
-      const { error } = await supabase.from('absence_records').insert({
-        employee_id: newAbsence.employee_id,
-        absence_type: newAbsence.absence_type,
-        start_date: newAbsence.start_date,
-        end_date: newAbsence.end_date,
-        days_count: daysCount,
-        reason: newAbsence.reason,
-        created_by: (await supabase.auth.getUser()).data.user?.id
-      });
-
-      if (error) throw error;
-
-      toast.success('Absence recorded');
-      setShowAbsenceDialog(false);
-      setNewAbsence({ employee_id: '', absence_type: 'sickness', start_date: '', end_date: '', reason: '' });
-      fetchData();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to record absence';
-      toast.error(message);
-    }
+  // === Absence CRUD ===
+  const resetAbsenceForm = () => {
+    setEditingAbsence(null);
+    setNewAbsence({ employee_id: '', absence_type: 'sickness', start_date: '', end_date: '', reason: '' });
+    setShowAbsenceDialog(false);
   };
 
-  const handleAddThreshold = async () => {
+  const openEditAbsence = (absence: AbsenceRecord) => {
+    setEditingAbsence(absence);
+    setNewAbsence({
+      employee_id: absence.employee_id,
+      absence_type: absence.absence_type,
+      start_date: absence.start_date,
+      end_date: absence.end_date,
+      reason: absence.reason || ''
+    });
+    setShowAbsenceDialog(true);
+  };
+
+  const handleSaveAbsence = async () => {
     try {
-      const { error } = await supabase.from('bradford_thresholds').insert({
-        ...newThreshold,
-        created_by: (await supabase.auth.getUser()).data.user?.id
-      });
-
-      if (error) throw error;
-
-      toast.success('Threshold added');
-      setShowThresholdDialog(false);
-      setNewThreshold({ threshold_score: 100, action_required: 'informal_discussion', description: '', color: '#FCD34D' });
+      const daysCount = differenceInDays(new Date(newAbsence.end_date), new Date(newAbsence.start_date)) + 1;
+      if (editingAbsence) {
+        const { error } = await supabase.from('absence_records').update({
+          employee_id: newAbsence.employee_id,
+          absence_type: newAbsence.absence_type,
+          start_date: newAbsence.start_date,
+          end_date: newAbsence.end_date,
+          days_count: daysCount,
+          reason: newAbsence.reason
+        }).eq('id', editingAbsence.id);
+        if (error) throw error;
+        toast.success('Absence updated');
+      } else {
+        const { error } = await supabase.from('absence_records').insert({
+          employee_id: newAbsence.employee_id,
+          absence_type: newAbsence.absence_type,
+          start_date: newAbsence.start_date,
+          end_date: newAbsence.end_date,
+          days_count: daysCount,
+          reason: newAbsence.reason,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+        if (error) throw error;
+        toast.success('Absence recorded');
+      }
+      resetAbsenceForm();
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to add threshold';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to save absence');
     }
   };
 
@@ -203,19 +198,71 @@ export function BradfordFactor() {
         return_to_work_date: format(new Date(), 'yyyy-MM-dd'),
         return_to_work_by: (await supabase.auth.getUser()).data.user?.id
       }).eq('id', id);
-
       if (error) throw error;
       toast.success('Return to work recorded');
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to record return to work';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to record return to work');
+    }
+  };
+
+  // === Threshold CRUD ===
+  const resetThresholdForm = () => {
+    setEditingThreshold(null);
+    setNewThreshold({ threshold_score: 100, action_required: 'informal_discussion', description: '', color: '#FCD34D' });
+    setShowThresholdDialog(false);
+  };
+
+  const openEditThreshold = (threshold: BradfordThreshold) => {
+    setEditingThreshold(threshold);
+    setNewThreshold({
+      threshold_score: threshold.threshold_score,
+      action_required: threshold.action_required,
+      description: threshold.description || '',
+      color: threshold.color || '#FCD34D'
+    });
+    setShowThresholdDialog(true);
+  };
+
+  const handleSaveThreshold = async () => {
+    try {
+      if (editingThreshold) {
+        const { error } = await supabase.from('bradford_thresholds').update({
+          threshold_score: newThreshold.threshold_score,
+          action_required: newThreshold.action_required,
+          description: newThreshold.description,
+          color: newThreshold.color
+        }).eq('id', editingThreshold.id);
+        if (error) throw error;
+        toast.success('Threshold updated');
+      } else {
+        const { error } = await supabase.from('bradford_thresholds').insert({
+          ...newThreshold,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
+        if (error) throw error;
+        toast.success('Threshold added');
+      }
+      resetThresholdForm();
+      fetchData();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save threshold');
+    }
+  };
+
+  const handleDeactivateThreshold = async (id: string) => {
+    try {
+      const { error } = await supabase.from('bradford_thresholds').update({ is_active: false }).eq('id', id);
+      if (error) throw error;
+      toast.success('Threshold deactivated');
+      fetchData();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to deactivate threshold');
     }
   };
 
   const getActionBadge = (action: string | null) => {
     if (!action) return <Badge variant="outline" className="bg-green-100 text-green-800">No Action</Badge>;
-    
     const labels: Record<string, string> = {
       informal_discussion: 'Informal Discussion',
       verbal_warning: 'Verbal Warning',
@@ -223,7 +270,6 @@ export function BradfordFactor() {
       final_warning: 'Final Warning',
       dismissal: 'Dismissal Review'
     };
-    
     return <Badge variant="destructive">{labels[action] || action}</Badge>;
   };
 
@@ -266,7 +312,7 @@ export function BradfordFactor() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {bradfordScores.length > 0 
+              {bradfordScores.length > 0
                 ? Math.round(bradfordScores.reduce((sum, s) => sum + s.score, 0) / bradfordScores.length)
                 : 0}
             </div>
@@ -320,10 +366,7 @@ export function BradfordFactor() {
                       </TableCell>
                       <TableCell>
                         <div className="w-24">
-                          <Progress 
-                            value={Math.min((emp.score / 600) * 100, 100)} 
-                            className="h-2"
-                          />
+                          <Progress value={Math.min((emp.score / 600) * 100, 100)} className="h-2" />
                         </div>
                       </TableCell>
                       <TableCell>{getActionBadge(emp.action)}</TableCell>
@@ -362,72 +405,9 @@ export function BradfordFactor() {
                 <CardTitle>Absence Records</CardTitle>
                 <CardDescription>All absences in the last 12 months</CardDescription>
               </div>
-              <Dialog open={showAbsenceDialog} onOpenChange={setShowAbsenceDialog}>
-                <DialogTrigger asChild>
-                  <Button><Plus className="h-4 w-4 mr-2" />Record Absence</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Record Absence</DialogTitle>
-                    <DialogDescription>Log an employee absence for Bradford calculation</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Employee</Label>
-                      <Select value={newAbsence.employee_id} onValueChange={(v) => setNewAbsence({ ...newAbsence, employee_id: v })}>
-                        <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                        <SelectContent>
-                          {employees.map((emp) => (
-                            <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Absence Type</Label>
-                      <Select value={newAbsence.absence_type} onValueChange={(v) => setNewAbsence({ ...newAbsence, absence_type: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sickness">Sickness</SelectItem>
-                          <SelectItem value="unauthorised">Unauthorised</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Start Date</Label>
-                        <Input
-                          type="date"
-                          value={newAbsence.start_date}
-                          onChange={(e) => setNewAbsence({ ...newAbsence, start_date: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label>End Date</Label>
-                        <Input
-                          type="date"
-                          value={newAbsence.end_date}
-                          onChange={(e) => setNewAbsence({ ...newAbsence, end_date: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Reason (optional)</Label>
-                      <Input
-                        value={newAbsence.reason}
-                        onChange={(e) => setNewAbsence({ ...newAbsence, reason: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowAbsenceDialog(false)}>Cancel</Button>
-                    <Button onClick={handleAddAbsence} disabled={!newAbsence.employee_id || !newAbsence.start_date || !newAbsence.end_date}>
-                      Record Absence
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => { resetAbsenceForm(); setShowAbsenceDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />Record Absence
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -460,11 +440,19 @@ export function BradfordFactor() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {!absence.return_to_work_completed && (
-                          <Button size="sm" variant="outline" onClick={() => handleRTW(absence.id)}>
-                            Complete RTW
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => { setViewingAbsence(absence); setShowViewAbsenceDialog(true); }} title="View">
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
+                          <Button size="icon" variant="ghost" onClick={() => openEditAbsence(absence)} title="Edit">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {!absence.return_to_work_completed && (
+                            <Button size="sm" variant="outline" onClick={() => handleRTW(absence.id)}>
+                              Complete RTW
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -488,60 +476,9 @@ export function BradfordFactor() {
                 <CardTitle>Bradford Thresholds</CardTitle>
                 <CardDescription>Define trigger points for management action</CardDescription>
               </div>
-              <Dialog open={showThresholdDialog} onOpenChange={setShowThresholdDialog}>
-                <DialogTrigger asChild>
-                  <Button><Plus className="h-4 w-4 mr-2" />Add Threshold</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add Bradford Threshold</DialogTitle>
-                    <DialogDescription>Define when management action is required</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Threshold Score</Label>
-                      <Input
-                        type="number"
-                        value={newThreshold.threshold_score}
-                        onChange={(e) => setNewThreshold({ ...newThreshold, threshold_score: parseInt(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Action Required</Label>
-                      <Select value={newThreshold.action_required} onValueChange={(v) => setNewThreshold({ ...newThreshold, action_required: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="informal_discussion">Informal Discussion</SelectItem>
-                          <SelectItem value="verbal_warning">Verbal Warning</SelectItem>
-                          <SelectItem value="written_warning">Written Warning</SelectItem>
-                          <SelectItem value="final_warning">Final Warning</SelectItem>
-                          <SelectItem value="dismissal">Dismissal Review</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Description</Label>
-                      <Input
-                        value={newThreshold.description}
-                        onChange={(e) => setNewThreshold({ ...newThreshold, description: e.target.value })}
-                        placeholder="What action should be taken..."
-                      />
-                    </div>
-                    <div>
-                      <Label>Color (for display)</Label>
-                      <Input
-                        type="color"
-                        value={newThreshold.color}
-                        onChange={(e) => setNewThreshold({ ...newThreshold, color: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowThresholdDialog(false)}>Cancel</Button>
-                    <Button onClick={handleAddThreshold}>Add Threshold</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => { resetThresholdForm(); setShowThresholdDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />Add Threshold
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -551,6 +488,7 @@ export function BradfordFactor() {
                     <TableHead>Action Required</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Color</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -562,14 +500,173 @@ export function BradfordFactor() {
                       <TableCell>
                         <div className="w-6 h-6 rounded" style={{ backgroundColor: threshold.color }} />
                       </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => openEditThreshold(threshold)} title="Edit">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeactivateThreshold(threshold.id)} title="Deactivate">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
+                  {thresholds.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        No thresholds configured. Add thresholds to trigger management actions.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Absence Dialog (Add/Edit) */}
+      <Dialog open={showAbsenceDialog} onOpenChange={(open) => { if (!open) resetAbsenceForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingAbsence ? 'Edit Absence' : 'Record Absence'}</DialogTitle>
+            <DialogDescription>Log an employee absence for Bradford calculation</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Employee</Label>
+              <Select value={newAbsence.employee_id} onValueChange={(v) => setNewAbsence({ ...newAbsence, employee_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Absence Type</Label>
+              <Select value={newAbsence.absence_type} onValueChange={(v) => setNewAbsence({ ...newAbsence, absence_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sickness">Sickness</SelectItem>
+                  <SelectItem value="unauthorised">Unauthorised</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Start Date</Label>
+                <Input type="date" value={newAbsence.start_date} onChange={(e) => setNewAbsence({ ...newAbsence, start_date: e.target.value })} />
+              </div>
+              <div>
+                <Label>End Date</Label>
+                <Input type="date" value={newAbsence.end_date} onChange={(e) => setNewAbsence({ ...newAbsence, end_date: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Reason (optional)</Label>
+              <Input value={newAbsence.reason} onChange={(e) => setNewAbsence({ ...newAbsence, reason: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetAbsenceForm}>Cancel</Button>
+            <Button onClick={handleSaveAbsence} disabled={!newAbsence.employee_id || !newAbsence.start_date || !newAbsence.end_date}>
+              {editingAbsence ? 'Update Absence' : 'Record Absence'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Threshold Dialog (Add/Edit) */}
+      <Dialog open={showThresholdDialog} onOpenChange={(open) => { if (!open) resetThresholdForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingThreshold ? 'Edit Threshold' : 'Add Bradford Threshold'}</DialogTitle>
+            <DialogDescription>Define when management action is required</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Threshold Score</Label>
+              <Input type="number" value={newThreshold.threshold_score} onChange={(e) => setNewThreshold({ ...newThreshold, threshold_score: parseInt(e.target.value) })} />
+            </div>
+            <div>
+              <Label>Action Required</Label>
+              <Select value={newThreshold.action_required} onValueChange={(v) => setNewThreshold({ ...newThreshold, action_required: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="informal_discussion">Informal Discussion</SelectItem>
+                  <SelectItem value="verbal_warning">Verbal Warning</SelectItem>
+                  <SelectItem value="written_warning">Written Warning</SelectItem>
+                  <SelectItem value="final_warning">Final Warning</SelectItem>
+                  <SelectItem value="dismissal">Dismissal Review</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input value={newThreshold.description} onChange={(e) => setNewThreshold({ ...newThreshold, description: e.target.value })} placeholder="What action should be taken..." />
+            </div>
+            <div>
+              <Label>Color (for display)</Label>
+              <Input type="color" value={newThreshold.color} onChange={(e) => setNewThreshold({ ...newThreshold, color: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetThresholdForm}>Cancel</Button>
+            <Button onClick={handleSaveThreshold}>
+              {editingThreshold ? 'Update Threshold' : 'Add Threshold'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Absence Dialog */}
+      <Dialog open={showViewAbsenceDialog} onOpenChange={setShowViewAbsenceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Absence Details</DialogTitle>
+          </DialogHeader>
+          {viewingAbsence && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Employee</Label>
+                  <p className="font-medium">{viewingAbsence.employees?.first_name} {viewingAbsence.employees?.last_name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Type</Label>
+                  <p><Badge variant="outline" className="capitalize">{viewingAbsence.absence_type}</Badge></p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Dates</Label>
+                  <p className="font-medium">{format(new Date(viewingAbsence.start_date), 'dd MMM yyyy')} – {format(new Date(viewingAbsence.end_date), 'dd MMM yyyy')}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Days</Label>
+                  <p className="font-medium">{viewingAbsence.days_count}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">RTW Interview</Label>
+                  <p>
+                    <Badge variant={viewingAbsence.return_to_work_completed ? 'default' : 'secondary'}>
+                      {viewingAbsence.return_to_work_completed ? 'Completed' : 'Pending'}
+                    </Badge>
+                  </p>
+                </div>
+              </div>
+              {viewingAbsence.reason && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Reason</Label>
+                  <p className="text-sm">{viewingAbsence.reason}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
