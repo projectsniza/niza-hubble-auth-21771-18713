@@ -114,6 +114,7 @@ const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
 const BEST_GPS_ACCURACY_METERS = 80;
 const GEOLOCATION_WATCH_WINDOW_MS = 12000;
 const MISCONFIGURED_PIN_DISTANCE_METERS = 500000;
+const MIN_PRACTICAL_GEOFENCE_RADIUS_METERS = 10;
 
 const getPositionOnce = () =>
   new Promise<GeolocationPosition>((resolve, reject) => {
@@ -478,12 +479,17 @@ export default function ClockIns() {
     console.log('Saving coordinates:', { lat, lng });
     
     try {
+      const parsedRadius = Number.parseInt(newLocation.radius, 10);
+      const normalizedRadius = Number.isFinite(parsedRadius)
+        ? Math.max(parsedRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS)
+        : 100;
+
       const { error } = await supabase.from('locations').insert({
         name: newLocation.name,
         address: newLocation.address || null,
         latitude: parseFloat(lat.toFixed(8)),
         longitude: parseFloat(lng.toFixed(8)),
-        radius: parseInt(newLocation.radius),
+        radius: normalizedRadius,
         branch_id: newLocation.branchId,
         qr_enabled: newLocation.qrEnabled,
         created_by: user?.id
@@ -514,6 +520,11 @@ export default function ClockIns() {
     console.log('Updating coordinates:', { lat, lng });
     
     try {
+      const parsedRadius = Number.parseInt(newLocation.radius, 10);
+      const normalizedRadius = Number.isFinite(parsedRadius)
+        ? Math.max(parsedRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS)
+        : 100;
+
       const { error } = await supabase
         .from('locations')
         .update({
@@ -521,7 +532,7 @@ export default function ClockIns() {
           address: newLocation.address || null,
           latitude: parseFloat(lat.toFixed(8)),
           longitude: parseFloat(lng.toFixed(8)),
-          radius: parseInt(newLocation.radius),
+          radius: normalizedRadius,
           qr_enabled: newLocation.qrEnabled
         })
         .eq('id', selectedLocation.id);
@@ -626,17 +637,22 @@ export default function ClockIns() {
       const { latitude, longitude, accuracy } = position.coords;
 
       const distance = calculateDistance(latitude, longitude, targetLatitude, targetLongitude);
-      const radius = locationData.radius || 100;
+      const configuredRadius = locationData.radius || 100;
+      const radius = Math.max(configuredRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS);
+
+      if (configuredRadius < MIN_PRACTICAL_GEOFENCE_RADIUS_METERS) {
+        toast.warning(
+          `Configured geofence (${configuredRadius}m) is too small for GPS reliability. Using ${radius}m minimum.`
+        );
+      }
 
       if (accuracy > Math.max(radius * 2, MIN_ACCEPTABLE_ACCURACY_METERS)) {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
-      // For strict geofencing: the user's actual position could be anywhere within the
-      // accuracy circle. Use the worst-case distance (distance + accuracy) to prevent
-      // false positives when radius is small relative to GPS accuracy.
-      // Only apply strict check when accuracy is significant relative to the radius.
-      const effectiveDistance = accuracy > radius ? distance + accuracy * 0.5 : distance;
+      // Light uncertainty penalty only when GPS precision is much worse than fence size.
+      const uncertaintyPenalty = accuracy > radius * 4 ? accuracy * 0.1 : 0;
+      const effectiveDistance = distance + uncertaintyPenalty;
 
       const branchActiveLocationCount = locations.filter(
         (location) => location.branch_id === locationData.branch_id && location.is_active
@@ -649,7 +665,7 @@ export default function ClockIns() {
         branchActiveLocationCount <= 1;
 
       if (effectiveDistance > radius && !shouldAllowMisconfiguredPinOverride) {
-        toast.error(`You are ${Math.round(distance)}m away (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`);
+        toast.error(`You are ${Math.round(distance)}m away from ${locationData.name} (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`);
         setClockAction(null);
         return;
       }
@@ -875,12 +891,14 @@ export default function ClockIns() {
         <Label>Geofence Radius (meters)</Label>
         <Input 
           type="number"
+          min={MIN_PRACTICAL_GEOFENCE_RADIUS_METERS}
+          step={1}
           value={newLocation.radius}
           onChange={(e) => setNewLocation({ ...newLocation, radius: e.target.value })}
           placeholder="100" 
         />
         <p className="text-xs text-muted-foreground">
-          Employees must be within this distance to clock in
+          Employees must be within this distance to clock in (minimum {MIN_PRACTICAL_GEOFENCE_RADIUS_METERS}m for GPS reliability)
         </p>
       </div>
       <Button onClick={isEdit ? handleUpdateLocation : handleCreateLocation} className="w-full">
