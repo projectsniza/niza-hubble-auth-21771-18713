@@ -113,6 +113,7 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
 const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
 const BEST_GPS_ACCURACY_METERS = 80;
 const GEOLOCATION_WATCH_WINDOW_MS = 12000;
+const MISCONFIGURED_PIN_DISTANCE_METERS = 500000;
 
 const getPositionOnce = () =>
   new Promise<GeolocationPosition>((resolve, reject) => {
