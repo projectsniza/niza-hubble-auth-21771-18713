@@ -678,7 +678,7 @@ export default function ClockIns() {
         clock_in_time: new Date().toISOString(),
         clock_in_latitude: latitude,
         clock_in_longitude: longitude,
-        clock_in_method: shouldAllowMisconfiguredPinOverride ? 'gps_override' : 'gps',
+        clock_in_method: 'gps',
       });
 
       if (error) throw error;

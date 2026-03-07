@@ -228,7 +228,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         await supabase.auth.signOut();
         return { error: 'Your account has been deactivated. Please contact your administrator.' };
       }
-      
+
+      if (!result) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        return { error: 'Unable to load your account. Please contact your administrator.' };
+      }
+
       // Set user and session state immediately so navigation works
       setSession(data.session);
       setUser(result);

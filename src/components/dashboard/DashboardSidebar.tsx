@@ -262,8 +262,8 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
               className={({ isActive }) => `
                 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group
                 ${collapsed ? 'justify-center' : ''}
-                ${isActive 
-                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25' 
+                ${isActive
+                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25'
                   : 'text-foreground/70 hover:bg-card/50 hover:text-foreground'
                 }
               `}
@@ -290,12 +290,26 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
             </NavLink>
           );
         })}
+
+        {!collapsed && (
+          <Button
+            variant="ghost"
+            className="w-full gap-3 justify-start text-destructive hover:bg-destructive/10 hover:text-destructive md:hidden mt-2"
+            onClick={async () => {
+              await logout();
+              handleNavClick();
+            }}
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            <span className="font-medium">Logout</span>
+          </Button>
+        )}
       </nav>
 
-      {/* Logout - Always visible, especially important for mobile */}
-      <div className="p-2 border-t border-primary/20 relative z-10">
-        <Button 
-          variant="ghost" 
+      {/* Logout */}
+      <div className="p-2 border-t border-primary/20 relative z-10 hidden md:block">
+        <Button
+          variant="ghost"
           className={`w-full gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive ${collapsed ? 'justify-center px-0' : 'justify-start'}`}
           onClick={logout}
         >

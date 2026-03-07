@@ -49,40 +49,43 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
-      toast({ 
-        title: 'Validation Error', 
+      toast({
+        title: 'Validation Error',
         description: 'Please enter both email and password',
-        variant: 'destructive' 
+        variant: 'destructive'
       });
       return;
     }
 
     setIsLoading(true);
-    
-    const { error } = await login(email, password);
-    
-    if (error) {
-      toast({ 
-        title: 'Login failed', 
-        description: error,
-        variant: 'destructive' 
-      });
+
+    try {
+      const { error } = await login(email, password);
+
+      if (error) {
+        toast({
+          title: 'Login failed',
+          description: error,
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Save or clear credentials based on remember me
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
+      } else {
+        localStorage.removeItem(REMEMBER_ME_KEY);
+      }
+
+      toast({ title: 'Welcome back!', description: 'Login successful' });
+      // Don't navigate here - let the useEffect handle navigation once user state updates
+      // The useEffect at line 43 will navigate when user becomes truthy
+    } finally {
       setIsLoading(false);
-      return;
     }
-    
-    // Save or clear credentials based on remember me
-    if (rememberMe) {
-      localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
-    } else {
-      localStorage.removeItem(REMEMBER_ME_KEY);
-    }
-    
-    toast({ title: 'Welcome back!', description: 'Login successful' });
-    // Don't navigate here - let the useEffect handle navigation once user state updates
-    // The useEffect at line 43 will navigate when user becomes truthy
   };
 
   // Show nothing while checking auth status
