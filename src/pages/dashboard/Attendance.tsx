@@ -630,38 +630,124 @@ export default function Attendance() {
               </div>
 
               <div className="flex flex-wrap gap-2 md:gap-4 mb-4 md:mb-6">
-                {absenceTypes.map((type) => (
-                  <div key={type.name} className="flex items-center gap-1.5">
-                    <div className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${type.color}`}></div>
-                    <span className="text-xs md:text-sm text-muted-foreground">{type.name}</span>
-                  </div>
-                ))}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-blue-500"></div>
+                  <span className="text-xs md:text-sm text-muted-foreground">Approved</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-amber-500"></div>
+                  <span className="text-xs md:text-sm text-muted-foreground">Pending</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-red-500"></div>
+                  <span className="text-xs md:text-sm text-muted-foreground">Rejected</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-emerald-500"></div>
+                  <span className="text-xs md:text-sm text-muted-foreground">Holiday</span>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between mb-3 md:mb-4">
-                <Button variant="ghost" size="sm" onClick={goToPreviousMonth} className="text-xs md:text-sm px-2">
-                  <ChevronLeft className="h-4 w-4 mr-0 md:mr-2" />
-                  <span className="hidden sm:inline">Previous</span>
-                </Button>
-                <h3 className="text-sm md:text-lg font-semibold">
-                  {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                </h3>
-                <Button variant="ghost" size="sm" onClick={goToNextMonth} className="text-xs md:text-sm px-2">
-                  <span className="hidden sm:inline">Next</span>
-                  <ChevronRight className="h-4 w-4 ml-0 md:ml-2" />
-                </Button>
-              </div>
+              {(() => {
+                // Build sets of dates for highlighting
+                const leaveDateMap = new Map<string, { type: string; status: string; leaveTypeName: string }[]>();
+                leaveRequests.forEach(req => {
+                  const start = new Date(req.start_date);
+                  const end = new Date(req.end_date);
+                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const key = format(d, 'yyyy-MM-dd');
+                    if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
+                    leaveDateMap.get(key)!.push({
+                      type: 'leave',
+                      status: req.status,
+                      leaveTypeName: req.leave_type?.name || 'Leave'
+                    });
+                  }
+                });
+                mandatoryLeave.forEach(ml => {
+                  const start = new Date(ml.start_date);
+                  const end = new Date(ml.end_date);
+                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const key = format(d, 'yyyy-MM-dd');
+                    if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
+                    leaveDateMap.get(key)!.push({
+                      type: 'mandatory',
+                      status: 'mandatory',
+                      leaveTypeName: ml.title
+                    });
+                  }
+                });
 
-              <div className="border rounded-lg overflow-x-auto">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  month={currentMonth}
-                  onMonthChange={setCurrentMonth}
-                  className="w-full"
-                />
-              </div>
+                const approvedDates = [...leaveDateMap.entries()]
+                  .filter(([, items]) => items.some(i => i.status === 'approved'))
+                  .map(([key]) => new Date(key));
+                const pendingDates = [...leaveDateMap.entries()]
+                  .filter(([, items]) => items.some(i => i.status === 'pending') && !items.some(i => i.status === 'approved'))
+                  .map(([key]) => new Date(key));
+                const mandatoryDates = [...leaveDateMap.entries()]
+                  .filter(([, items]) => items.some(i => i.type === 'mandatory'))
+                  .map(([key]) => new Date(key));
+
+                const selectedDateKey = date ? format(date, 'yyyy-MM-dd') : null;
+                const selectedDateItems = selectedDateKey ? leaveDateMap.get(selectedDateKey) || [] : [];
+
+                return (
+                  <>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        month={currentMonth}
+                        onMonthChange={setCurrentMonth}
+                        className="w-full"
+                        modifiers={{
+                          approved: approvedDates,
+                          pending: pendingDates,
+                          mandatory: mandatoryDates,
+                        }}
+                        modifiersStyles={{
+                          approved: { backgroundColor: 'rgb(59 130 246 / 0.2)', borderRadius: '6px', color: 'rgb(37 99 235)' },
+                          pending: { backgroundColor: 'rgb(245 158 11 / 0.2)', borderRadius: '6px', color: 'rgb(217 119 6)' },
+                          mandatory: { backgroundColor: 'rgb(16 185 129 / 0.2)', borderRadius: '6px', color: 'rgb(5 150 105)' },
+                        }}
+                      />
+                    </div>
+
+                    {/* Selected date detail */}
+                    {date && (
+                      <div className="mt-3 md:mt-4 p-3 md:p-4 bg-muted/50 rounded-lg">
+                        <h4 className="font-semibold text-sm md:text-base mb-2">
+                          {format(date, 'EEEE, dd MMMM yyyy')}
+                        </h4>
+                        {selectedDateItems.length === 0 ? (
+                          <p className="text-xs md:text-sm text-muted-foreground">No leave or holidays on this date</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {selectedDateItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                  item.type === 'mandatory' ? 'bg-emerald-500' :
+                                  item.status === 'approved' ? 'bg-blue-500' :
+                                  item.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'
+                                }`} />
+                                <span className="text-xs md:text-sm">{item.leaveTypeName}</span>
+                                <Badge variant={
+                                  item.type === 'mandatory' ? 'default' :
+                                  item.status === 'approved' ? 'default' :
+                                  item.status === 'pending' ? 'secondary' : 'destructive'
+                                } className="text-xs ml-auto">
+                                  {item.type === 'mandatory' ? 'Holiday' : item.status}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* My Leave Requests List */}
               <div className="mt-4 md:mt-6">
