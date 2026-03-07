@@ -192,12 +192,10 @@ export default function Letterhead() {
           <p className="text-muted-foreground mt-1">Create branded letterheads with dynamic content</p>
         </div>
         <div className="flex gap-2">
-          {savedConfigs.length > 0 && (
-            <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
-              <FolderOpen className="h-4 w-4" />
-              Saved ({savedConfigs.length})
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Saved Configs{savedConfigs.length > 0 ? ` (${savedConfigs.length})` : ''}
+          </Button>
           <Button onClick={() => { setConfig(defaultConfig); setBodyContent(''); setDialogOpen(true); }} className="gap-2">
             <Plus className="h-4 w-4" />
             Create Letterhead

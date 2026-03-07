@@ -273,12 +273,10 @@ export default function Invoices() {
           <p className="text-muted-foreground mt-1">Create and customize professional invoices</p>
         </div>
         <div className="flex gap-2">
-          {savedConfigs.length > 0 && (
-            <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
-              <FolderOpen className="h-4 w-4" />
-              Saved ({savedConfigs.length})
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Saved Configs{savedConfigs.length > 0 ? ` (${savedConfigs.length})` : ''}
+          </Button>
           <Button onClick={() => { setSettings(defaultSettings); setItems(defaultItems); setDialogOpen(true); }} className="gap-2">
             <Settings className="h-4 w-4" />
             Create Invoice
