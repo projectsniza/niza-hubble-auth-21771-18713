@@ -72,6 +72,7 @@ const Reminders = lazy(() => import("./pages/dashboard/Reminders"));
 const Notifications = lazy(() => import("./pages/dashboard/Notifications"));
 const DriveOffs = lazy(() => import("./pages/dashboard/DriveOffs"));
 const CustomerAccounts = lazy(() => import("./pages/dashboard/CustomerAccounts"));
+const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -163,6 +164,7 @@ const App = () => (
                 <Route path="shared" element={<SharedTemplatesPage />} />
                 <Route path="store-hr" element={<StoreHRTemplatesPage />} />
               </Route>
+              <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
