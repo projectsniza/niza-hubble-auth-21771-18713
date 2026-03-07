@@ -44,7 +44,6 @@ const getMenuItems = (role: string) => {
     return [
       { title: 'My Dashboard', icon: Home, path: '/dashboard' },
       { title: 'My Profile', icon: User, path: '/dashboard/my-profile' },
-      { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
       { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
       { title: 'Clock In/Out', icon: MapPin, path: '/dashboard/clock-ins' },
       { title: 'My Schedule', icon: Calendar, path: '/dashboard/scheduling' },

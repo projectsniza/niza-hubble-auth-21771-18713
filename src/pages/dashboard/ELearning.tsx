@@ -676,16 +676,16 @@ export default function ELearning() {
   );
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">Training Management</h2>
-          <p className="text-muted-foreground mt-1">
-            {isAdminOrHR ? 'Create and manage training assignments' : isManager ? 'Create and complete trainings for your branch' : 'View training assignments for your branch'}
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">Training Management</h2>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
+            {isAdminOrHR ? 'Create and manage training assignments' : isManager ? 'Create and complete trainings' : 'View training assignments'}
           </p>
         </div>
         {canCreateTraining && (
-          <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+          <Button size="sm" onClick={() => setShowCreateDialog(true)} className="gap-2 w-fit">
             <Plus className="h-4 w-4" />
             Create Training
           </Button>
@@ -750,22 +750,22 @@ export default function ELearning() {
       </Card>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all" className="gap-2">
-            All Trainings
-            <Badge variant="secondary">{counts.all}</Badge>
+        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-4 no-scrollbar">
+          <TabsTrigger value="all" className="gap-1 md:gap-2 text-xs md:text-sm whitespace-nowrap">
+            All
+            <Badge variant="secondary" className="text-xs">{counts.all}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2">
+          <TabsTrigger value="pending" className="gap-1 md:gap-2 text-xs md:text-sm whitespace-nowrap">
             Pending
-            <Badge variant="secondary">{counts.pending}</Badge>
+            <Badge variant="secondary" className="text-xs">{counts.pending}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="in_progress" className="gap-2">
+          <TabsTrigger value="in_progress" className="gap-1 md:gap-2 text-xs md:text-sm whitespace-nowrap">
             In Progress
-            <Badge variant="secondary">{counts.in_progress}</Badge>
+            <Badge variant="secondary" className="text-xs">{counts.in_progress}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="completed" className="gap-2">
+          <TabsTrigger value="completed" className="gap-1 md:gap-2 text-xs md:text-sm whitespace-nowrap">
             Completed
-            <Badge variant="secondary">{counts.completed}</Badge>
+            <Badge variant="secondary" className="text-xs">{counts.completed}</Badge>
           </TabsTrigger>
         </TabsList>
 
