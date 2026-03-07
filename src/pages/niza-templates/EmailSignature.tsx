@@ -41,7 +41,7 @@ const defaultData: SignatureData = {
 };
 
 const templates = [
-  { id: 1, name: 'Classic Professional', hasPhoto: false },
+  { id: 1, name: 'Niza Professional', hasPhoto: false },
   { id: 2, name: 'Modern Minimal', hasPhoto: false },
   { id: 3, name: 'Executive Portrait', hasPhoto: true },
   { id: 4, name: 'Corporate Banner', hasPhoto: false },
