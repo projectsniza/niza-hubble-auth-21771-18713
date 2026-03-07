@@ -290,23 +290,10 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
           );
         })}
 
-        {!collapsed && (
-          <Button
-            variant="ghost"
-            className="w-full gap-3 justify-start text-destructive hover:bg-destructive/10 hover:text-destructive md:hidden mt-2"
-            onClick={async () => {
-              await logout();
-              handleNavClick();
-            }}
-          >
-            <LogOut className="h-5 w-5 flex-shrink-0" />
-            <span className="font-medium">Logout</span>
-          </Button>
-        )}
       </nav>
 
-      {/* Logout */}
-      <div className="p-2 border-t border-primary/20 relative z-10 hidden md:block">
+      {/* Logout - visible on all screen sizes */}
+      <div className="p-2 border-t border-primary/20 relative z-10 flex-shrink-0">
         <Button
           variant="ghost"
           className={`w-full gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive ${collapsed ? 'justify-center px-0' : 'justify-start'}`}
