@@ -568,34 +568,34 @@ export default function Attendance() {
     const pendingCount = leaveRequests.filter(r => r.status === 'pending').length;
 
     return (
-      <div className="p-8 animate-fade-in">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Calendar & Leave Management</h1>
-          <Button onClick={() => setShowEmployeeLeaveRequest(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+      <div className="p-4 md:p-8 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
+          <h1 className="text-xl md:text-3xl font-bold text-foreground">Calendar & Leave</h1>
+          <Button size="sm" onClick={() => setShowEmployeeLeaveRequest(true)}>
+            <Plus className="h-4 w-4 mr-1 md:mr-2" />
             Request Leave
           </Button>
         </div>
         
         <Tabs defaultValue="calendar" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="pending">
-              Pending requests
-              <Badge variant="secondary" className="ml-2">{pendingCount}</Badge>
+          <TabsList className="w-full overflow-x-auto flex no-scrollbar mb-4 md:mb-6">
+            <TabsTrigger value="calendar" className="text-xs md:text-sm whitespace-nowrap">Calendar</TabsTrigger>
+            <TabsTrigger value="pending" className="text-xs md:text-sm whitespace-nowrap">
+              Pending
+              <Badge variant="secondary" className="ml-1 md:ml-2 text-xs">{pendingCount}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="mandatory">Mandatory leave</TabsTrigger>
+            <TabsTrigger value="mandatory" className="text-xs md:text-sm whitespace-nowrap">Mandatory</TabsTrigger>
           </TabsList>
 
           <TabsContent value="calendar">
-            <Card className="p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-4">
+            <Card className="p-3 md:p-6">
+              <div className="flex flex-col gap-3 mb-4 md:mb-6">
+                <div className="flex flex-wrap items-center gap-2">
                   <Select 
                     value={currentMonth.getMonth().toString()}
                     onValueChange={(v) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(v)))}
                   >
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-[120px] md:w-[140px] text-xs md:text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -611,7 +611,7 @@ export default function Attendance() {
                     value={currentMonth.getFullYear().toString()}
                     onValueChange={(v) => setCurrentMonth(new Date(parseInt(v), currentMonth.getMonth()))}
                   >
-                    <SelectTrigger className="w-[100px]">
+                    <SelectTrigger className="w-[80px] md:w-[100px] text-xs md:text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -622,37 +622,37 @@ export default function Attendance() {
                     </SelectContent>
                   </Select>
 
-                  <Button variant="outline" size="sm" onClick={goToToday}>
-                    <CalendarIcon className="h-4 w-4 mr-2" />
+                  <Button variant="outline" size="sm" onClick={goToToday} className="text-xs md:text-sm">
+                    <CalendarIcon className="h-3 w-3 md:h-4 md:w-4 mr-1" />
                     Today
                   </Button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-4 mb-6">
+              <div className="flex flex-wrap gap-2 md:gap-4 mb-4 md:mb-6">
                 {absenceTypes.map((type) => (
-                  <div key={type.name} className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${type.color}`}></div>
-                    <span className="text-sm text-muted-foreground">{type.name}</span>
+                  <div key={type.name} className="flex items-center gap-1.5">
+                    <div className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${type.color}`}></div>
+                    <span className="text-xs md:text-sm text-muted-foreground">{type.name}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="flex items-center justify-between mb-4">
-                <Button variant="ghost" size="sm" onClick={goToPreviousMonth}>
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Previous month
+              <div className="flex items-center justify-between mb-3 md:mb-4">
+                <Button variant="ghost" size="sm" onClick={goToPreviousMonth} className="text-xs md:text-sm px-2">
+                  <ChevronLeft className="h-4 w-4 mr-0 md:mr-2" />
+                  <span className="hidden sm:inline">Previous</span>
                 </Button>
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-sm md:text-lg font-semibold">
                   {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </h3>
-                <Button variant="ghost" size="sm" onClick={goToNextMonth}>
-                  Next month
-                  <ChevronRight className="h-4 w-4 ml-2" />
+                <Button variant="ghost" size="sm" onClick={goToNextMonth} className="text-xs md:text-sm px-2">
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="h-4 w-4 ml-0 md:ml-2" />
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <Calendar
                   mode="single"
                   selected={date}
@@ -664,36 +664,80 @@ export default function Attendance() {
               </div>
 
               {/* My Leave Requests List */}
-              <div className="mt-6">
-                <h3 className="font-semibold mb-4">My Leave Requests ({leaveRequests.length})</h3>
+              <div className="mt-4 md:mt-6">
+                <h3 className="font-semibold text-sm md:text-base mb-3 md:mb-4">My Leave Requests ({leaveRequests.length})</h3>
+                <div className="overflow-x-auto -mx-3 md:mx-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs md:text-sm">Type</TableHead>
+                        <TableHead className="text-xs md:text-sm">From</TableHead>
+                        <TableHead className="text-xs md:text-sm">To</TableHead>
+                        <TableHead className="text-xs md:text-sm hidden sm:table-cell">Days</TableHead>
+                        <TableHead className="text-xs md:text-sm">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {leaveRequests.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-6 md:py-8 text-muted-foreground text-sm">
+                            No leave requests found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        leaveRequests.map(req => (
+                          <TableRow key={req.id}>
+                            <TableCell className="text-xs md:text-sm">{req.leave_type?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm whitespace-nowrap">{format(new Date(req.start_date), 'dd MMM')}</TableCell>
+                            <TableCell className="text-xs md:text-sm whitespace-nowrap">{format(new Date(req.end_date), 'dd MMM')}</TableCell>
+                            <TableCell className="text-xs md:text-sm hidden sm:table-cell">{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                            <TableCell>
+                              <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
+                                {req.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <Card className="p-3 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4">My Pending Requests</h3>
+              <div className="overflow-x-auto -mx-3 md:mx-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>From</TableHead>
-                      <TableHead>To</TableHead>
-                      <TableHead>Days</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead className="text-xs md:text-sm">Type</TableHead>
+                      <TableHead className="text-xs md:text-sm">From</TableHead>
+                      <TableHead className="text-xs md:text-sm">To</TableHead>
+                      <TableHead className="text-xs md:text-sm hidden sm:table-cell">Days</TableHead>
+                      <TableHead className="text-xs md:text-sm hidden md:table-cell">Reason</TableHead>
+                      <TableHead className="text-xs md:text-sm">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {leaveRequests.length === 0 ? (
+                    {leaveRequests.filter(r => r.status === 'pending').length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          No leave requests found
+                        <TableCell colSpan={6} className="text-center py-6 md:py-8 text-muted-foreground text-sm">
+                          No pending requests
                         </TableCell>
                       </TableRow>
                     ) : (
-                      leaveRequests.map(req => (
+                      leaveRequests.filter(r => r.status === 'pending').map(req => (
                         <TableRow key={req.id}>
-                          <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
-                          <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
-                          <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
-                          <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                          <TableCell className="text-xs md:text-sm">{req.leave_type?.name || 'N/A'}</TableCell>
+                          <TableCell className="text-xs md:text-sm whitespace-nowrap">{format(new Date(req.start_date), 'dd MMM')}</TableCell>
+                          <TableCell className="text-xs md:text-sm whitespace-nowrap">{format(new Date(req.end_date), 'dd MMM')}</TableCell>
+                          <TableCell className="text-xs md:text-sm hidden sm:table-cell">{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                          <TableCell className="max-w-[200px] truncate text-xs md:text-sm hidden md:table-cell">{req.reason || '-'}</TableCell>
                           <TableCell>
-                            <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
-                              {req.status}
-                            </Badge>
+                            <Badge variant="secondary" className="text-xs">Pending</Badge>
                           </TableCell>
                         </TableRow>
                       ))
@@ -704,63 +748,23 @@ export default function Attendance() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="pending">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">My Pending Requests</h3>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>From</TableHead>
-                    <TableHead>To</TableHead>
-                    <TableHead>Days</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leaveRequests.filter(r => r.status === 'pending').length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        No pending requests
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    leaveRequests.filter(r => r.status === 'pending').map(req => (
-                      <TableRow key={req.id}>
-                        <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
-                        <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
-                        <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
-                        <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{req.reason || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">Pending</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="mandatory">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Public Holidays & Mandatory Leave</h3>
+            <Card className="p-3 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Public Holidays & Mandatory Leave</h3>
               {mandatoryLeave.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No mandatory leave periods set</p>
+                <p className="text-muted-foreground text-center py-6 md:py-8 text-sm">No mandatory leave periods set</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {mandatoryLeave.map(ml => (
-                    <div key={ml.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div>
-                        <p className="font-medium">{ml.title}</p>
-                        <p className="text-sm text-muted-foreground">
+                    <div key={ml.id} className="flex items-center justify-between p-3 md:p-4 bg-muted rounded-lg gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm md:text-base">{ml.title}</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
                           {format(new Date(ml.start_date), 'dd MMM')} - {format(new Date(ml.end_date), 'dd MMM yyyy')}
                         </p>
-                        {ml.description && <p className="text-sm text-muted-foreground mt-1">{ml.description}</p>}
+                        {ml.description && <p className="text-xs md:text-sm text-muted-foreground mt-1 truncate">{ml.description}</p>}
                       </div>
-                      <Badge variant={ml.is_paid ? 'default' : 'secondary'}>
+                      <Badge variant={ml.is_paid ? 'default' : 'secondary'} className="text-xs flex-shrink-0">
                         {ml.is_paid ? 'Paid' : 'Unpaid'}
                       </Badge>
                     </div>
