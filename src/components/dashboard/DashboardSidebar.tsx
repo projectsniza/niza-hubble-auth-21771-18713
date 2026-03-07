@@ -297,7 +297,10 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
         <Button
           variant="ghost"
           className={`w-full gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive ${collapsed ? 'justify-center px-0' : 'justify-start'}`}
-          onClick={logout}
+          onClick={async () => {
+            await logout();
+            handleNavClick();
+          }}
         >
           <LogOut className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="font-medium">Logout</span>}
