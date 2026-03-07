@@ -235,11 +235,11 @@ export default function Events() {
   };
 
   return (
-    <div className="p-8 animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Events & Announcements</h1>
-          <p className="text-muted-foreground">Stay updated with all company activities and important news</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1 md:mb-2">Events & Announcements</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Stay updated with company activities</p>
         </div>
         <div className="flex gap-2">
           {canCreateEvent && (
@@ -371,11 +371,11 @@ export default function Events() {
         />
       )}
 
-      <Card className="mb-6 p-4 border-primary/20 bg-gradient-to-r from-card to-card/50">
+      <Card className="mb-4 md:mb-6 p-3 md:p-4 border-primary/20 bg-gradient-to-r from-card to-card/50">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search events, announcements..."
+            placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -383,9 +383,9 @@ export default function Events() {
         </div>
       </Card>
 
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-muted-foreground mb-3">QUICK FILTERS</h3>
-        <div className="flex flex-wrap gap-2">
+      <div className="mb-4 md:mb-6">
+        <h3 className="text-xs md:text-sm font-semibold text-muted-foreground mb-2 md:mb-3">QUICK FILTERS</h3>
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {Object.keys(categoryConfig).map(category => (
             <QuickFilterButton key={category} category={category} count={counts[category] || 0} />
           ))}
@@ -422,53 +422,53 @@ export default function Events() {
             {filteredEvents.map(event => {
               const config = categoryConfig[event.event_type as keyof typeof categoryConfig] || categoryConfig.announcement;
               return (
-                <Card key={event.id} className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-4">
-                      <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center`}>
-                        <config.icon className="h-6 w-6 text-white" />
+                <Card key={event.id} className="p-4 md:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-0 sm:justify-between">
+                    <div className="flex gap-3 md:gap-4">
+                      <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center flex-shrink-0`}>
+                        <config.icon className="h-5 w-5 md:h-6 md:w-6 text-white" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          {event.is_pinned && <Pin className="h-4 w-4 text-primary" />}
-                          <h3 className="font-semibold text-foreground">{event.title}</h3>
+                          {event.is_pinned && <Pin className="h-3 w-3 md:h-4 md:w-4 text-primary" />}
+                          <h3 className="font-semibold text-sm md:text-base text-foreground">{event.title}</h3>
                         </div>
                         {event.description && (
-                          <p className="text-muted-foreground text-sm mb-2">{event.description}</p>
+                          <p className="text-muted-foreground text-xs md:text-sm mb-2 line-clamp-2">{event.description}</p>
                         )}
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground flex-wrap">
                           {event.event_date && (
                             <span className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              {format(new Date(event.event_date), 'dd MMM yyyy, HH:mm')}
+                              <Calendar className="h-3 w-3 md:h-4 md:w-4" />
+                              {format(new Date(event.event_date), 'dd MMM yyyy')}
                             </span>
                           )}
                           <span className="flex items-center gap-1">
-                            <Eye className="h-4 w-4" />
-                            {event.views_count || 0} views
+                            <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                            {event.views_count || 0}
                           </span>
                           {event.attending_count !== null && event.attending_count > 0 && (
                             <span className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              {event.attending_count} attending
+                              <Users className="h-3 w-3 md:h-4 md:w-4" />
+                              {event.attending_count}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="capitalize">{event.visibility}</Badge>
-                      <Badge className={`bg-gradient-to-r ${config.color} text-white border-0`}>
+                    <div className="flex items-center gap-1.5 md:gap-2 flex-wrap ml-13 sm:ml-0">
+                      <Badge variant="outline" className="capitalize text-xs">{event.visibility}</Badge>
+                      <Badge className={`bg-gradient-to-r ${config.color} text-white border-0 text-xs`}>
                         {config.label}
                       </Badge>
                       {(user?.role === 'super_admin' || user?.role === 'hr') && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="h-7 w-7 md:h-8 md:w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleteEventId(event.id)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
                         </Button>
                       )}
                     </div>

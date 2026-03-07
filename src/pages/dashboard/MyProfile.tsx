@@ -182,26 +182,26 @@ export default function MyProfile() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">My Profile</h1>
+    <div className="p-4 md:p-8 space-y-4 md:space-y-6">
+      <h1 className="text-2xl md:text-3xl font-bold text-foreground">My Profile</h1>
 
       {/* Profile Header */}
-      <Card className="p-8">
-        <div className="flex items-start gap-6">
-          <Avatar className="h-24 w-24">
-            <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
+      <Card className="p-4 md:p-8">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 md:gap-6">
+          <Avatar className="h-16 w-16 md:h-24 md:w-24">
+            <AvatarFallback className="bg-primary text-primary-foreground text-lg md:text-2xl">
               {getInitials(employee?.first_name && employee?.last_name ? `${employee.first_name} ${employee.last_name}` : user.name)}
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-foreground">
+          <div className="flex-1 text-center sm:text-left w-full">
+            <h2 className="text-xl md:text-2xl font-bold text-foreground">
               {employee ? `${employee.first_name} ${employee.last_name}` : user.name}
             </h2>
-            <p className="text-lg text-muted-foreground mb-4">{employee?.job_title || user.role}</p>
+            <p className="text-sm md:text-lg text-muted-foreground mb-3 md:mb-4">{employee?.job_title || user.role}</p>
             
-            <div className="flex items-center gap-3 mb-6">
-              <Badge variant="secondary" className="text-sm">
+            <div className="flex items-center justify-center sm:justify-start gap-2 md:gap-3 mb-4 md:mb-6 flex-wrap">
+              <Badge variant="secondary" className="text-xs md:text-sm">
                 {employee?.department || user.role}
               </Badge>
               <Badge className={employee?.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
@@ -209,27 +209,27 @@ export default function MyProfile() {
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-              <div className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-muted-foreground" />
-                <span className="text-foreground">{employee?.email || user.email}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+              <div className="flex items-center gap-2 text-sm md:text-base">
+                <Mail className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
+                <span className="text-foreground truncate">{employee?.email || user.email}</span>
               </div>
               {employee?.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
+                <div className="flex items-center gap-2 text-sm md:text-base">
+                  <Phone className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
                   <span className="text-foreground">{employee.phone}</span>
                 </div>
               )}
               {employee?.join_date && (
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                <div className="flex items-center gap-2 text-sm md:text-base">
+                  <CalendarIcon className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
                   <span className="text-foreground">Joined: {format(new Date(employee.join_date), 'PPP')}</span>
                 </div>
               )}
               {employee?.address && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-foreground">{employee.address}</span>
+                <div className="flex items-center gap-2 text-sm md:text-base">
+                  <MapPin className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-foreground truncate">{employee.address}</span>
                 </div>
               )}
             </div>
@@ -238,51 +238,51 @@ export default function MyProfile() {
       </Card>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <CalendarIcon className="h-6 w-6 text-primary" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+        <Card className="p-3 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 bg-primary/10 rounded-lg">
+              <CalendarIcon className="h-4 w-4 md:h-6 md:w-6 text-primary" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Leave Requests</p>
-              <p className="text-2xl font-bold text-foreground">{leaveRequests.length}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <Clock className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Upcoming Shifts</p>
-              <p className="text-2xl font-bold text-foreground">{shifts.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Leave</p>
+              <p className="text-lg md:text-2xl font-bold text-foreground">{leaveRequests.length}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <FileText className="h-6 w-6 text-primary" />
+        <Card className="p-3 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 bg-primary/10 rounded-lg">
+              <Clock className="h-4 w-4 md:h-6 md:w-6 text-primary" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Documents</p>
-              <p className="text-2xl font-bold text-foreground">{documents.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Shifts</p>
+              <p className="text-lg md:text-2xl font-bold text-foreground">{shifts.length}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <FileText className="h-6 w-6 text-primary" />
+        <Card className="p-3 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 bg-primary/10 rounded-lg">
+              <FileText className="h-4 w-4 md:h-6 md:w-6 text-primary" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Training Courses</p>
-              <p className="text-2xl font-bold text-foreground">{trainings.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Docs</p>
+              <p className="text-lg md:text-2xl font-bold text-foreground">{documents.length}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-3 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 bg-primary/10 rounded-lg">
+              <FileText className="h-4 w-4 md:h-6 md:w-6 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Training</p>
+              <p className="text-lg md:text-2xl font-bold text-foreground">{trainings.length}</p>
             </div>
           </div>
         </Card>
@@ -290,21 +290,21 @@ export default function MyProfile() {
 
       {/* Tabs */}
       <Tabs defaultValue="leave" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="leave">My Leave</TabsTrigger>
-          <TabsTrigger value="schedule">My Schedule</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="payslips">Payslips</TabsTrigger>
-          <TabsTrigger value="training">Training</TabsTrigger>
-          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 no-scrollbar">
+          <TabsTrigger value="leave" className="text-xs md:text-sm whitespace-nowrap">My Leave</TabsTrigger>
+          <TabsTrigger value="schedule" className="text-xs md:text-sm whitespace-nowrap">Schedule</TabsTrigger>
+          <TabsTrigger value="documents" className="text-xs md:text-sm whitespace-nowrap">Docs</TabsTrigger>
+          <TabsTrigger value="payslips" className="text-xs md:text-sm whitespace-nowrap">Payslips</TabsTrigger>
+          <TabsTrigger value="training" className="text-xs md:text-sm whitespace-nowrap">Training</TabsTrigger>
+          <TabsTrigger value="attendance" className="text-xs md:text-sm whitespace-nowrap">Attendance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="leave">
-          <Card className="p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-foreground">My Leave</h3>
-              <Button onClick={() => setShowLeaveDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
+          <Card className="p-4 md:p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 md:mb-6">
+              <h3 className="text-lg md:text-xl font-bold text-foreground">My Leave</h3>
+              <Button size="sm" onClick={() => setShowLeaveDialog(true)}>
+                <Plus className="h-4 w-4 mr-1 md:mr-2" />
                 Request Leave
               </Button>
             </div>
