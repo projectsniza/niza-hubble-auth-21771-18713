@@ -632,6 +632,12 @@ export default function ClockIns() {
         throw new Error(`GPS accuracy is too low (±${Math.round(accuracy)}m). Please move outdoors and try again.`);
       }
 
+      // For strict geofencing: the user's actual position could be anywhere within the
+      // accuracy circle. Use the worst-case distance (distance + accuracy) to prevent
+      // false positives when radius is small relative to GPS accuracy.
+      // Only apply strict check when accuracy is significant relative to the radius.
+      const effectiveDistance = accuracy > radius ? distance + accuracy * 0.5 : distance;
+
       const branchActiveLocationCount = locations.filter(
         (location) => location.branch_id === locationData.branch_id && location.is_active
       ).length;
@@ -642,8 +648,8 @@ export default function ClockIns() {
         accuracy <= BEST_GPS_ACCURACY_METERS &&
         branchActiveLocationCount <= 1;
 
-      if (distance > radius && !shouldAllowMisconfiguredPinOverride) {
-        toast.error(`You are ${Math.round(distance)}m away. Must be within ${radius}m to clock in.`);
+      if (effectiveDistance > radius && !shouldAllowMisconfiguredPinOverride) {
+        toast.error(`You are ${Math.round(distance)}m away (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`);
         setClockAction(null);
         return;
       }
