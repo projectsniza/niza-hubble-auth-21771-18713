@@ -45,11 +45,11 @@ const defaultConfig: LetterheadConfig = {
 };
 
 const templateStyles = [
-  { id: 1, name: 'Corporate Classic', accent: '#0066B3' },
-  { id: 2, name: 'Modern Teal', accent: '#0D9488' },
-  { id: 3, name: 'Elegant Navy', accent: '#1E3A5F' },
-  { id: 4, name: 'Professional Green', accent: '#059669' },
-  { id: 5, name: 'Executive Dark', accent: '#1F2937' },
+  { id: 1, name: 'Niza Classic', accent: '#0066B3' },
+  { id: 2, name: 'Deep Navy', accent: '#004C8C' },
+  { id: 3, name: 'Sky Blue', accent: '#00A3E0' },
+  { id: 4, name: 'Corporate Slate', accent: '#1B3A5C' },
+  { id: 5, name: 'Executive Blue', accent: '#2C5F8A' },
 ];
 
 const STORAGE_KEY = 'niza_letterhead_configs';
@@ -79,14 +79,16 @@ export default function Letterhead() {
   const currentStyle = templateStyles.find(t => t.id === selectedTemplate) || templateStyles[0];
 
   const handleSaveConfig = () => {
-    if (!config.name) {
-      toast({ title: 'Please enter a name for this letterhead', variant: 'destructive' });
-      return;
+    let name = config.name;
+    if (!name) {
+      name = prompt('Enter a name for this letterhead configuration:');
+      if (!name) return;
+      setConfig({ ...config, name });
     }
-    const updated = [...savedConfigs.filter(c => c.name !== config.name), { name: config.name, config, templateId: selectedTemplate, content: bodyContent }];
+    const updated = [...savedConfigs.filter(c => c.name !== name), { name, config: { ...config, name }, templateId: selectedTemplate, content: bodyContent }];
     saveConfigs(updated);
     setSavedConfigs(updated);
-    toast({ title: `Letterhead "${config.name}" saved` });
+    toast({ title: `Letterhead "${name}" saved successfully` });
   };
 
   const handleLoadConfig = (saved: any) => {
@@ -190,12 +192,10 @@ export default function Letterhead() {
           <p className="text-muted-foreground mt-1">Create branded letterheads with dynamic content</p>
         </div>
         <div className="flex gap-2">
-          {savedConfigs.length > 0 && (
-            <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
-              <FolderOpen className="h-4 w-4" />
-              Saved ({savedConfigs.length})
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Saved Configs{savedConfigs.length > 0 ? ` (${savedConfigs.length})` : ''}
+          </Button>
           <Button onClick={() => { setConfig(defaultConfig); setBodyContent(''); setDialogOpen(true); }} className="gap-2">
             <Plus className="h-4 w-4" />
             Create Letterhead
@@ -341,11 +341,13 @@ export default function Letterhead() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Saved Letterheads</DialogTitle></DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {savedConfigs.map((saved) => (
+            {savedConfigs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No saved configs yet. Create a letterhead and click "Save Config" to save.</p>
+            ) : savedConfigs.map((saved) => (
               <div key={saved.name} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => handleLoadConfig(saved)}>
                 <div>
                   <p className="font-medium text-sm">{saved.name}</p>
-                  <p className="text-xs text-muted-foreground">{saved.config.companyName || 'No company set'}</p>
+                  <p className="text-xs text-muted-foreground">{saved.config.companyName || 'No company set'}{saved.config.branchName ? ` • ${saved.config.branchName}` : ''}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteConfig(saved.name); }}>Delete</Button>
               </div>

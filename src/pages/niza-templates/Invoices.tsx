@@ -71,11 +71,11 @@ const defaultItems: InvoiceItem[] = [
 ];
 
 const templateStyles = [
-  { id: 1, name: 'Professional Blue', accent: '#0066B3' },
-  { id: 2, name: 'Modern Teal', accent: '#0D9488' },
-  { id: 3, name: 'Classic Navy', accent: '#1E3A5F' },
-  { id: 4, name: 'Elegant Charcoal', accent: '#374151' },
-  { id: 5, name: 'Corporate Green', accent: '#059669' },
+  { id: 1, name: 'Niza Professional', accent: '#0066B3' },
+  { id: 2, name: 'Deep Navy', accent: '#004C8C' },
+  { id: 3, name: 'Sky Blue', accent: '#00A3E0' },
+  { id: 4, name: 'Corporate Slate', accent: '#1B3A5C' },
+  { id: 5, name: 'Executive Blue', accent: '#2C5F8A' },
 ];
 
 const INV_STORAGE_KEY = 'niza_invoice_configs';
@@ -112,14 +112,16 @@ export default function Invoices() {
   };
 
   const handleSaveConfig = () => {
-    if (!settings.configName) {
-      toast({ title: 'Please enter a config name', variant: 'destructive' });
-      return;
+    let name = settings.configName;
+    if (!name) {
+      name = prompt('Enter a name for this invoice configuration:');
+      if (!name) return;
+      setSettings({ ...settings, configName: name });
     }
-    const updated = [...savedConfigs.filter(c => c.name !== settings.configName), { name: settings.configName, settings, items, templateId: selectedTemplate }];
+    const updated = [...savedConfigs.filter(c => c.name !== name), { name, settings: { ...settings, configName: name }, items, templateId: selectedTemplate }];
     saveConfigs(updated);
     setSavedConfigs(updated);
-    toast({ title: `Invoice config "${settings.configName}" saved` });
+    toast({ title: `Invoice config "${name}" saved successfully` });
   };
 
   const handleLoadConfig = (saved: any) => {
@@ -271,12 +273,10 @@ export default function Invoices() {
           <p className="text-muted-foreground mt-1">Create and customize professional invoices</p>
         </div>
         <div className="flex gap-2">
-          {savedConfigs.length > 0 && (
-            <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
-              <FolderOpen className="h-4 w-4" />
-              Saved ({savedConfigs.length})
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setLoadDialogOpen(true)} className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Saved Configs{savedConfigs.length > 0 ? ` (${savedConfigs.length})` : ''}
+          </Button>
           <Button onClick={() => { setSettings(defaultSettings); setItems(defaultItems); setDialogOpen(true); }} className="gap-2">
             <Settings className="h-4 w-4" />
             Create Invoice
@@ -418,11 +418,13 @@ export default function Invoices() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Saved Invoice Configs</DialogTitle></DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {savedConfigs.map((saved) => (
+            {savedConfigs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No saved configs yet. Create an invoice and click "Save Config" to save.</p>
+            ) : savedConfigs.map((saved) => (
               <div key={saved.name} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => handleLoadConfig(saved)}>
                 <div>
                   <p className="font-medium text-sm">{saved.name}</p>
-                  <p className="text-xs text-muted-foreground">{saved.settings.companyName || 'No company set'}</p>
+                  <p className="text-xs text-muted-foreground">{saved.settings.companyName || 'No company set'}{saved.settings.branchName ? ` • ${saved.settings.branchName}` : ''}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteConfig(saved.name); }}>Delete</Button>
               </div>
