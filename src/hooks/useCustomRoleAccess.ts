@@ -6,6 +6,7 @@ export interface AppAccess {
   niza_safe: boolean;
   niza_finance: boolean;
   niza_templates: boolean;
+  niza_elearning: boolean;
 }
 
 interface CustomRoleData {
@@ -63,6 +64,7 @@ export function useCustomRoleAccess() {
           niza_safe: false,
           niza_finance: false,
           niza_templates: false,
+          niza_elearning: false,
         };
 
         if (role.app_access && typeof role.app_access === 'object') {
@@ -71,6 +73,7 @@ export function useCustomRoleAccess() {
             niza_safe: Boolean(access.niza_safe),
             niza_finance: Boolean(access.niza_finance),
             niza_templates: Boolean(access.niza_templates),
+            niza_elearning: Boolean(access.niza_elearning),
           };
         }
 
