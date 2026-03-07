@@ -517,6 +517,77 @@ export type Database = {
           },
         ]
       }
+      certificate_designs: {
+        Row: {
+          accent_color: string
+          background_color: string
+          border_color: string
+          border_style: string
+          created_at: string
+          created_by: string | null
+          custom_footer_text: string | null
+          font_family: string
+          id: string
+          is_default: boolean
+          name: string
+          organization_id: string | null
+          show_logo: boolean
+          show_signature: boolean
+          signature_name: string | null
+          signature_title: string | null
+          text_color: string
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string
+          background_color?: string
+          border_color?: string
+          border_style?: string
+          created_at?: string
+          created_by?: string | null
+          custom_footer_text?: string | null
+          font_family?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          show_logo?: boolean
+          show_signature?: boolean
+          signature_name?: string | null
+          signature_title?: string | null
+          text_color?: string
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string
+          background_color?: string
+          border_color?: string
+          border_style?: string
+          created_at?: string
+          created_by?: string | null
+          custom_footer_text?: string | null
+          font_family?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          show_logo?: boolean
+          show_signature?: boolean
+          signature_name?: string | null
+          signature_title?: string | null
+          text_color?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificate_designs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clock_ins: {
         Row: {
           branch_id: string
@@ -2052,29 +2123,41 @@ export type Database = {
         Row: {
           certificate_number: string
           course_id: string
+          course_title: string | null
           created_at: string | null
+          design_id: string | null
           employee_id: string
+          employee_name: string | null
           id: string
           issued_at: string | null
           pdf_path: string | null
+          verification_token: string | null
         }
         Insert: {
           certificate_number: string
           course_id: string
+          course_title?: string | null
           created_at?: string | null
+          design_id?: string | null
           employee_id: string
+          employee_name?: string | null
           id?: string
           issued_at?: string | null
           pdf_path?: string | null
+          verification_token?: string | null
         }
         Update: {
           certificate_number?: string
           course_id?: string
+          course_title?: string | null
           created_at?: string | null
+          design_id?: string | null
           employee_id?: string
+          employee_name?: string | null
           id?: string
           issued_at?: string | null
           pdf_path?: string | null
+          verification_token?: string | null
         }
         Relationships: [
           {
@@ -2082,6 +2165,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "elearning_certificates_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "certificate_designs"
             referencedColumns: ["id"]
           },
           {
