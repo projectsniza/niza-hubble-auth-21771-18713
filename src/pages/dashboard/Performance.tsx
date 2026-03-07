@@ -250,9 +250,9 @@ export default function Performance() {
       if (error) throw error;
 
       toast.success('Review deleted successfully');
+      setReviews(prev => prev.filter(r => r.id !== reviewToDelete.id));
       setShowDeleteReview(false);
       setReviewToDelete(null);
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete review');
     }
