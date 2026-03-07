@@ -12,6 +12,7 @@ export interface AppAccess {
   niza_safe: boolean;
   niza_finance: boolean;
   niza_templates: boolean;
+  niza_elearning: boolean;
 }
 
 export type FeatureDef = { key: string; label: string };
@@ -291,6 +292,19 @@ function CustomRoleFormImpl({
               checked={formData.app_access.niza_templates}
               onCheckedChange={(checked) =>
                 setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_templates: checked } }))
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 border rounded-lg">
+            <div>
+              <p className="font-medium text-sm">Niza E-Learning</p>
+              <p className="text-xs text-muted-foreground">Training courses & certifications</p>
+            </div>
+            <Switch
+              checked={formData.app_access.niza_elearning}
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_elearning: checked } }))
               }
             />
           </div>

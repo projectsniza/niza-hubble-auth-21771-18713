@@ -51,6 +51,7 @@ const getMenuItems = (role: string) => {
       { title: 'Safety', icon: Shield, path: '/dashboard/safety-tasks' },
       { title: 'Pay Slips', icon: DollarSign, path: '/dashboard/payroll' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
+      { title: 'E-Learning', icon: GraduationCap, path: '/niza-elearning' },
       { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events' },
       { title: 'Performance', icon: TrendingUp, path: '/dashboard/performance' },
       { title: 'Settings', icon: Settings, path: '/dashboard/settings' },

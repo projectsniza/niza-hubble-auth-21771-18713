@@ -1,4 +1,4 @@
-import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users } from "lucide-react";
+import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users, GraduationCap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ interface AppItem {
   icon: React.ReactNode;
   path: string;
   gradient: string;
-  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates';
+  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning';
 }
 
 const apps: AppItem[] = [
@@ -27,7 +27,6 @@ const apps: AppItem[] = [
     icon: <Users className="h-7 w-7" />,
     path: "/dashboard",
     gradient: "from-blue-500 to-cyan-600",
-    // HR is always accessible for users who can see the dialog
   },
   {
     name: "Niza Safe",
@@ -53,6 +52,14 @@ const apps: AppItem[] = [
     gradient: "from-purple-500 to-pink-600",
     accessKey: 'niza_templates',
   },
+  {
+    name: "Niza E-Learning",
+    description: "Training Courses & Certifications",
+    icon: <GraduationCap className="h-7 w-7" />,
+    path: "/niza-elearning",
+    gradient: "from-orange-500 to-amber-600",
+    accessKey: 'niza_elearning',
+  },
 ];
 
 export default function AppsDialog() {
@@ -68,7 +75,8 @@ export default function AppsDialog() {
   const hasAnyCustomAppAccess = customRole?.app_access && (
     customRole.app_access.niza_safe || 
     customRole.app_access.niza_finance || 
-    customRole.app_access.niza_templates
+    customRole.app_access.niza_templates ||
+    customRole.app_access.niza_elearning
   );
 
   // Show dialog for: super admin, full HR, or users with custom role app access

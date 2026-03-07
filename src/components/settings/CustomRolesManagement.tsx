@@ -74,6 +74,7 @@ export default function CustomRolesManagement() {
     niza_safe: false,
     niza_finance: false,
     niza_templates: false,
+    niza_elearning: false,
   };
   
   // Form state
@@ -123,6 +124,7 @@ export default function CustomRolesManagement() {
             niza_safe: Boolean(access.niza_safe),
             niza_finance: Boolean(access.niza_finance),
             niza_templates: Boolean(access.niza_templates),
+            niza_elearning: Boolean(access.niza_elearning),
           };
         }
         

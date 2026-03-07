@@ -37,6 +37,17 @@ const SafeDocuments = lazy(() => import("./pages/niza-safe/SafeDocuments"));
 const SafeEmployees = lazy(() => import("./pages/niza-safe/SafeEmployees"));
 const Tasks = lazy(() => import("./pages/niza-safe/Tasks"));
 const NizaFinance = lazy(() => import("./pages/NizaFinance"));
+const NizaELearning = lazy(() => import("./pages/NizaELearning"));
+const ELearningHome = lazy(() => import("./pages/niza-elearning/Home"));
+const CourseLibrary = lazy(() => import("./pages/niza-elearning/CourseLibrary"));
+const MyCourses = lazy(() => import("./pages/niza-elearning/MyCourses"));
+const CourseBuilder = lazy(() => import("./pages/niza-elearning/CourseBuilder"));
+const CourseViewer = lazy(() => import("./pages/niza-elearning/CourseViewer"));
+const AssignedCourses = lazy(() => import("./pages/niza-elearning/AssignedCourses"));
+const ELCertificates = lazy(() => import("./pages/niza-elearning/Certificates"));
+const ELAssessments = lazy(() => import("./pages/niza-elearning/Assessments"));
+const LearningAnalytics = lazy(() => import("./pages/niza-elearning/LearningAnalytics"));
+const ELSettings = lazy(() => import("./pages/niza-elearning/LearningSettings"));
 const NizaTemplates = lazy(() => import("./pages/NizaTemplates"));
 const TemplatesHome = lazy(() => import("./pages/niza-templates/Home"));
 const IDCards = lazy(() => import("./pages/niza-templates/IDCards"));
@@ -128,6 +139,18 @@ const App = () => (
                 <Route path="tasks" element={<Tasks />} />
               </Route>
               <Route path="/niza-finance" element={<NizaFinance />} />
+              <Route path="/niza-elearning" element={<NizaELearning />}>
+                <Route index element={<ELearningHome />} />
+                <Route path="library" element={<CourseLibrary />} />
+                <Route path="my-courses" element={<MyCourses />} />
+                <Route path="builder" element={<CourseBuilder />} />
+                <Route path="course/:courseId" element={<CourseViewer />} />
+                <Route path="assigned" element={<AssignedCourses />} />
+                <Route path="certificates" element={<ELCertificates />} />
+                <Route path="assessments" element={<ELAssessments />} />
+                <Route path="analytics" element={<LearningAnalytics />} />
+                <Route path="settings" element={<ELSettings />} />
+              </Route>
               <Route path="/niza-templates" element={<NizaTemplates />}>
                 <Route index element={<TemplatesHome />} />
                 <Route path="id-cards" element={<IDCards />} />
