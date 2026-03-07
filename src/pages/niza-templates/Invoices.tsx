@@ -71,11 +71,11 @@ const defaultItems: InvoiceItem[] = [
 ];
 
 const templateStyles = [
-  { id: 1, name: 'Professional Blue', accent: '#0066B3' },
-  { id: 2, name: 'Modern Teal', accent: '#0D9488' },
-  { id: 3, name: 'Classic Navy', accent: '#1E3A5F' },
-  { id: 4, name: 'Elegant Charcoal', accent: '#374151' },
-  { id: 5, name: 'Corporate Green', accent: '#059669' },
+  { id: 1, name: 'Niza Professional', accent: '#0066B3' },
+  { id: 2, name: 'Deep Navy', accent: '#004C8C' },
+  { id: 3, name: 'Sky Blue', accent: '#00A3E0' },
+  { id: 4, name: 'Corporate Slate', accent: '#1B3A5C' },
+  { id: 5, name: 'Executive Blue', accent: '#2C5F8A' },
 ];
 
 const INV_STORAGE_KEY = 'niza_invoice_configs';

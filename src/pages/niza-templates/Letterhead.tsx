@@ -45,11 +45,11 @@ const defaultConfig: LetterheadConfig = {
 };
 
 const templateStyles = [
-  { id: 1, name: 'Corporate Classic', accent: '#0066B3' },
-  { id: 2, name: 'Modern Teal', accent: '#0D9488' },
-  { id: 3, name: 'Elegant Navy', accent: '#1E3A5F' },
-  { id: 4, name: 'Professional Green', accent: '#059669' },
-  { id: 5, name: 'Executive Dark', accent: '#1F2937' },
+  { id: 1, name: 'Niza Classic', accent: '#0066B3' },
+  { id: 2, name: 'Deep Navy', accent: '#004C8C' },
+  { id: 3, name: 'Sky Blue', accent: '#00A3E0' },
+  { id: 4, name: 'Corporate Slate', accent: '#1B3A5C' },
+  { id: 5, name: 'Executive Blue', accent: '#2C5F8A' },
 ];
 
 const STORAGE_KEY = 'niza_letterhead_configs';

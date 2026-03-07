@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBrandSettings } from '@/hooks/useTemplates';
 import { captureElementToCanvas } from '@/lib/captureElementToCanvas';
 import jsPDF from 'jspdf';
+import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface BusinessCardData {
   name: string;
@@ -39,11 +40,11 @@ const defaultData: BusinessCardData = {
 };
 
 const templateStyles = [
-  { id: 1, name: 'Corporate Blue', accent: '#0057D9' },
-  { id: 2, name: 'Modern Dark', accent: '#1a1a2e' },
-  { id: 3, name: 'Elegant Teal', accent: '#0D9488' },
-  { id: 4, name: 'Professional Navy', accent: '#1E3A5F' },
-  { id: 5, name: 'Executive Green', accent: '#059669' },
+  { id: 1, name: 'Niza Classic', accent: '#0066B3' },
+  { id: 2, name: 'Deep Navy', accent: '#004C8C' },
+  { id: 3, name: 'Sky Blue', accent: '#00A3E0' },
+  { id: 4, name: 'Corporate Slate', accent: '#1B3A5C' },
+  { id: 5, name: 'Executive Blue', accent: '#2C5F8A' },
 ];
 
 export default function BusinessCards() {
@@ -55,7 +56,7 @@ export default function BusinessCards() {
   const cardRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const logoUrl = brandSettings?.primary_logo_path;
+  const logoUrl = brandSettings?.primary_logo_path || nizaLogo;
   const currentStyle = templateStyles.find(t => t.id === selectedTemplate) || templateStyles[0];
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

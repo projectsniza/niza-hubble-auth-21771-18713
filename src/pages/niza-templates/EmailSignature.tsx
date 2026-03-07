@@ -58,7 +58,7 @@ export default function EmailSignature() {
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const logoUrl = brandSettings?.primary_logo_path;
-  const primaryColor = brandSettings?.primary_color || '#0057D9';
+  const primaryColor = brandSettings?.primary_color || '#0066B3';
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
