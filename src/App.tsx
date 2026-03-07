@@ -42,6 +42,7 @@ const TemplatesHome = lazy(() => import("./pages/niza-templates/Home"));
 const IDCards = lazy(() => import("./pages/niza-templates/IDCards"));
 const BusinessCards = lazy(() => import("./pages/niza-templates/BusinessCards"));
 const Invoices = lazy(() => import("./pages/niza-templates/Invoices"));
+const Letterhead = lazy(() => import("./pages/niza-templates/Letterhead"));
 const GiftCards = lazy(() => import("./pages/niza-templates/GiftCards"));
 const EmailSignature = lazy(() => import("./pages/niza-templates/EmailSignature"));
 const BrandSettings = lazy(() => import("./pages/niza-templates/BrandSettings"));
@@ -132,6 +133,7 @@ const App = () => (
                 <Route path="id-cards" element={<IDCards />} />
                 <Route path="business-cards" element={<BusinessCards />} />
                 <Route path="invoices" element={<Invoices />} />
+                <Route path="letterhead" element={<Letterhead />} />
                 <Route path="gift-cards" element={<GiftCards />} />
                 <Route path="email-signature" element={<EmailSignature />} />
                 <Route path="brand-settings" element={<BrandSettings />} />
