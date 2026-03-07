@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Palette, BadgeCheck, CreditCard, Receipt, Gift, Mail, Menu, Share2 } from 'lucide-react';
+import { Home, Palette, BadgeCheck, CreditCard, Receipt, Gift, Mail, Menu, Share2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import nizaGroupIcon from '@/assets/niza-group-icon.png';
@@ -18,6 +18,7 @@ const getMenuItems = (role: string) => {
     { name: 'ID Card & Visitor Pass', path: '/niza-templates/id-cards', icon: BadgeCheck },
     { name: 'Business Cards', path: '/niza-templates/business-cards', icon: CreditCard },
     { name: 'Invoices', path: '/niza-templates/invoices', icon: Receipt },
+    { name: 'Letterhead', path: '/niza-templates/letterhead', icon: FileText },
     { name: 'Email Signature', path: '/niza-templates/email-signature', icon: Mail },
     { name: 'Brand Settings', path: '/niza-templates/brand-settings', icon: Palette },
   ];
