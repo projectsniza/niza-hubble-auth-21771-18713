@@ -341,11 +341,13 @@ export default function Letterhead() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Saved Letterheads</DialogTitle></DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {savedConfigs.map((saved) => (
+            {savedConfigs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No saved configs yet. Create a letterhead and click "Save Config" to save.</p>
+            ) : savedConfigs.map((saved) => (
               <div key={saved.name} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => handleLoadConfig(saved)}>
                 <div>
                   <p className="font-medium text-sm">{saved.name}</p>
-                  <p className="text-xs text-muted-foreground">{saved.config.companyName || 'No company set'}</p>
+                  <p className="text-xs text-muted-foreground">{saved.config.companyName || 'No company set'}{saved.config.branchName ? ` • ${saved.config.branchName}` : ''}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteConfig(saved.name); }}>Delete</Button>
               </div>
