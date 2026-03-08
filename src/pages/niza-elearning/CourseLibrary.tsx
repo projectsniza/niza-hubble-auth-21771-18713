@@ -53,7 +53,7 @@ export default function CourseLibrary() {
   const fetchData = async () => {
     setLoading(true);
     const [coursesRes, catsRes] = await Promise.all([
-      supabase.from('courses').select('*').eq('status', 'published').order('created_at', { ascending: false }).limit(100),
+      supabase.from('courses').select('*').eq('status', 'published').order('created_at', { ascending: false }),
       supabase.from('course_categories').select('*').order('name'),
     ]);
     setCourses(coursesRes.data || []);

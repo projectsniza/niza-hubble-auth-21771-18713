@@ -40,7 +40,6 @@ export default function Certificates() {
           .from('elearning_certificates')
           .select('*')
           .order('issued_at', { ascending: false })
-          .limit(200)
           .then(r => r);
       } else {
         const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user.id).single();

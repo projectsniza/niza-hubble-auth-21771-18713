@@ -52,30 +52,35 @@ export default function ELearningHome() {
     if (!user) return;
     setLoading(true);
     try {
-      let employeeId: string | null = null;
+      // Always resolve the employee ID for the current user (admins are employees too)
+      const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user.id).maybeSingle();
+      const employeeId = emp?.id || null;
 
-      // Get employee id for non-admin users
-      if (!isAdmin) {
-        const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user.id).maybeSingle();
-        employeeId = emp?.id || null;
-        if (!employeeId) {
-          setLoading(false);
-          return;
-        }
+      // If not an admin and no employee record, nothing to show
+      if (!isAdmin && !employeeId) {
+        setLoading(false);
+        return;
       }
 
       const coursesRes = await supabase.from('courses').select('id', { count: 'exact' }).eq('status', 'published');
 
-      // For progress, don't limit — we need accurate counts
+      // Always scope progress/certs to the current user's employee record
       let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)');
       let certsQuery = supabase.from('elearning_certificates').select('id', { count: 'exact' });
 
       if (employeeId) {
         progressQuery = progressQuery.eq('employee_id', employeeId);
         certsQuery = certsQuery.eq('employee_id', employeeId);
+
         // Fetch learning stats from DB for accurate star tier
         const { data: lStats } = await supabase.from('employee_learning_stats').select('*').eq('employee_id', employeeId).maybeSingle();
         setLearningStats(lStats);
+      } else {
+        // Admin with no employee record — show zero personal stats
+        setStats({ totalCourses: coursesRes.count || 0, completedCourses: 0, inProgressCourses: 0, certificates: 0, learningHours: 0, averageScore: 0 });
+        setRecentCourses([]);
+        setLoading(false);
+        return;
       }
 
       const [progressRes, certsRes] = await Promise.all([progressQuery, certsQuery]);

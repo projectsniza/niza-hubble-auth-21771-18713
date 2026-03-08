@@ -183,11 +183,19 @@ export default function CourseViewer() {
           .select('id', { count: 'exact', head: true })
           .eq('employee_id', employeeId);
 
+        // Calculate total learning hours from all course progress
+        const { data: allProgress } = await supabase
+          .from('course_progress')
+          .select('total_time_minutes')
+          .eq('employee_id', employeeId);
+        const totalLearningHours = (allProgress || []).reduce((acc, p) => acc + (p.total_time_minutes || 0), 0) / 60;
+
         // Update learning stats
         await supabase.from('employee_learning_stats').upsert({
           employee_id: employeeId,
           courses_completed: coursesCount,
           certificates_earned: certsCount || 0,
+          total_learning_hours: Math.round(totalLearningHours * 100) / 100,
           star_tier: tierName,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'employee_id' });
@@ -197,7 +205,8 @@ export default function CourseViewer() {
           navigate('/niza-elearning/certificates');
         }, 2000);
       } else if (currentLessonIndex < totalLessons - 1) {
-        setCurrentLessonIndex(currentLessonIndex + 1);
+        // Brief delay so user sees the completed state before advancing
+        setTimeout(() => setCurrentLessonIndex(currentLessonIndex + 1), 800);
       }
     } catch (err: any) {
       toast.error(err.message);

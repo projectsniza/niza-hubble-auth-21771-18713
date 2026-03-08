@@ -40,7 +40,7 @@ export default function Assessments() {
     setLoading(true);
     const [aRes, cRes] = await Promise.all([
       supabase.from('course_assessments').select('*, courses(title)').order('created_at', { ascending: false }),
-      supabase.from('courses').select('id, title'),
+      supabase.from('courses').select('id, title').eq('status', 'published'),
     ]);
     setAssessments(aRes.data || []);
     setCourses(cRes.data || []);
