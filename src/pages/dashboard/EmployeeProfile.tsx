@@ -6,12 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Mail, Phone, MapPin, Building2, Clock, Edit } from 'lucide-react';
+import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Mail, Phone, MapPin, Building2, Clock, Edit, Star, Award, BookOpen, TrendingUp } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
+import { Progress } from '@/components/ui/progress';
 
 export default function EmployeeProfile() {
   const { id } = useParams();
@@ -24,6 +25,8 @@ export default function EmployeeProfile() {
   const [salaryStructure, setSalaryStructure] = useState<any>(null);
   const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [formResponses, setFormResponses] = useState<any[]>([]);
+  const [learningStats, setLearningStats] = useState<any>(null);
+  const [completedCourses, setCompletedCourses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -103,6 +106,23 @@ export default function EmployeeProfile() {
         .select('*')
         .eq('employee_id', id);
       setFormResponses(responses || []);
+
+      // Fetch learning stats
+      const { data: stats } = await supabase
+        .from('employee_learning_stats')
+        .select('*')
+        .eq('employee_id', id)
+        .maybeSingle();
+      setLearningStats(stats);
+
+      // Fetch completed courses
+      const { data: progress } = await supabase
+        .from('course_progress')
+        .select('*, course:courses(title, estimated_duration_minutes)')
+        .eq('employee_id', id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+      setCompletedCourses(progress || []);
 
     } catch (error) {
       console.error('Error fetching employee data:', error);
@@ -369,6 +389,91 @@ export default function EmployeeProfile() {
                   </div>
                 </div>
               )}
+            </Card>
+            {/* Learning Achievements */}
+            <Card className="p-6 md:col-span-2">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Award className="h-5 w-5 text-primary" />
+                Learning Achievements
+              </h3>
+              {(() => {
+                const coursesCompleted = learningStats?.courses_completed || 0;
+                const certificates = learningStats?.certificates_earned || 0;
+                const hours = learningStats?.total_learning_hours || 0;
+                const starTier = learningStats?.star_tier || 'Rising Star';
+                
+                const tierConfig: Record<string, { color: string; next: number }> = {
+                  'Rising Star': { color: 'text-yellow-500', next: 10 },
+                  'Bright Star': { color: 'text-orange-500', next: 25 },
+                  'Super Star': { color: 'text-blue-500', next: 50 },
+                  'Mega Star': { color: 'text-purple-500', next: 100 },
+                  'Supernova': { color: 'text-red-500', next: 100 },
+                };
+                const tier = tierConfig[starTier] || tierConfig['Rising Star'];
+                const progressPct = Math.min((coursesCompleted / tier.next) * 100, 100);
+
+                return (
+                  <div className="space-y-4">
+                    {/* Star Ranking */}
+                    <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                      <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                        <Star className="h-6 w-6 text-yellow-500 fill-yellow-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-semibold ${tier.color}`}>{starTier}</p>
+                        <p className="text-xs text-muted-foreground">{coursesCompleted} courses completed</p>
+                        <Progress value={progressPct} className="h-2 mt-1" />
+                        {starTier !== 'Supernova' && (
+                          <p className="text-xs text-muted-foreground mt-1">{tier.next - coursesCompleted} more to next tier</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center p-3 rounded-lg bg-muted/50">
+                        <BookOpen className="h-5 w-5 mx-auto mb-1 text-primary" />
+                        <p className="text-lg font-bold">{coursesCompleted}</p>
+                        <p className="text-xs text-muted-foreground">Courses</p>
+                      </div>
+                      <div className="text-center p-3 rounded-lg bg-muted/50">
+                        <Award className="h-5 w-5 mx-auto mb-1 text-primary" />
+                        <p className="text-lg font-bold">{certificates}</p>
+                        <p className="text-xs text-muted-foreground">Certificates</p>
+                      </div>
+                      <div className="text-center p-3 rounded-lg bg-muted/50">
+                        <Clock className="h-5 w-5 mx-auto mb-1 text-primary" />
+                        <p className="text-lg font-bold">{hours > 0 ? `${Number(hours).toFixed(1)}h` : '0h'}</p>
+                        <p className="text-xs text-muted-foreground">Hours</p>
+                      </div>
+                    </div>
+
+                    {/* Completed Courses */}
+                    {completedCourses.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">Recently Completed</p>
+                        {completedCourses.slice(0, 5).map(cp => (
+                          <div key={cp.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <BookOpen className="h-4 w-4 text-primary" />
+                              <div>
+                                <p className="text-sm font-medium">{cp.course?.title || 'Course'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {cp.completed_at ? format(new Date(cp.completed_at), 'dd MMM yyyy') : 'Completed'}
+                                  {cp.course?.estimated_duration_minutes && ` • ${cp.course.estimated_duration_minutes} min`}
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant="default" className="text-xs">Completed</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-2">No courses completed yet</p>
+                    )}
+                  </div>
+                );
+              })()}
             </Card>
           </div>
         </TabsContent>
