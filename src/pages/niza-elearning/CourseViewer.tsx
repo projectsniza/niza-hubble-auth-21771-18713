@@ -57,7 +57,7 @@ export default function CourseViewer() {
         lessons = lessonsData || [];
         const modsWithLessons = mods.map(m => ({
           ...m,
-          lessons: (lessons || []).filter(l => l.module_id === m.id).map(l => ({ ...l, content: Array.isArray(l.content) ? l.content : [] })),
+          lessons: lessons.filter(l => l.module_id === m.id).map(l => ({ ...l, content: Array.isArray(l.content) ? l.content : [] })),
         }));
         setModules(modsWithLessons);
       }
@@ -67,15 +67,16 @@ export default function CourseViewer() {
         const { data: prog } = await supabase.from('course_progress').select('*').eq('course_id', courseId).eq('employee_id', emp.id).maybeSingle();
         setProgress(prog);
 
-        // Get lesson progress
-        const allLessonIds = mods?.flatMap(m => {
-          const modLessons = (mods as any[]).find(mod => mod.id === m.id);
-          return [];
-        }) || [];
+        // Get lesson progress for all lessons in this course
+        const allLessonIds = lessons.map(l => l.id);
         
-        const { data: lp } = await supabase.from('lesson_progress').select('lesson_id, completed').eq('employee_id', emp.id);
+        let lpData: any[] = [];
+        if (allLessonIds.length > 0) {
+          const { data } = await supabase.from('lesson_progress').select('lesson_id, completed').eq('employee_id', emp.id).in('lesson_id', allLessonIds);
+          lpData = data || [];
+        }
         const lpMap: Record<string, boolean> = {};
-        (lp || []).forEach(l => { lpMap[l.lesson_id] = l.completed || false; });
+        lpData.forEach(l => { lpMap[l.lesson_id] = l.completed || false; });
         setLessonProgress(lpMap);
       }
     } catch (err) {
