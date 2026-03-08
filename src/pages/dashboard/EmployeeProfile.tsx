@@ -6,12 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Mail, Phone, MapPin, Building2, Clock, Edit } from 'lucide-react';
+import { ChevronRight, User, FileText, Briefcase, DollarSign, Calendar, Shield, Download, Mail, Phone, MapPin, Building2, Clock, Edit, Star, Award, BookOpen, TrendingUp } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
+import { Progress } from '@/components/ui/progress';
 
 export default function EmployeeProfile() {
   const { id } = useParams();
@@ -24,6 +25,8 @@ export default function EmployeeProfile() {
   const [salaryStructure, setSalaryStructure] = useState<any>(null);
   const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [formResponses, setFormResponses] = useState<any[]>([]);
+  const [learningStats, setLearningStats] = useState<any>(null);
+  const [completedCourses, setCompletedCourses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
