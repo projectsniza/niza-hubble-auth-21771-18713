@@ -38,7 +38,7 @@ export default function Certificates() {
       if (isAdmin) {
         certsPromise = supabase
           .from('elearning_certificates')
-          .select('*, courses(title, description)')
+          .select('*')
           .order('issued_at', { ascending: false })
           .limit(200)
           .then(r => r);
@@ -47,7 +47,7 @@ export default function Certificates() {
         if (!emp) { setLoading(false); return; }
         certsPromise = supabase
           .from('elearning_certificates')
-          .select('*, courses(title, description)')
+          .select('*')
           .eq('employee_id', emp.id)
           .order('issued_at', { ascending: false })
           .then(r => r);
@@ -157,7 +157,7 @@ function CertificateGrid({ certificates, onPreview }: { certificates: any[]; onP
                 <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20">Certificate</Badge>
               </div>
             </div>
-            <h3 className="font-bold text-foreground">{cert.course_title || cert.courses?.title}</h3>
+            <h3 className="font-bold text-foreground">{cert.course_title || 'Untitled Course'}</h3>
             {cert.employee_name && (
               <p className="text-sm text-muted-foreground mt-1">{cert.employee_name}</p>
             )}

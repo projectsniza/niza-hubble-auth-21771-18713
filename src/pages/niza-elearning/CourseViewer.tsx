@@ -126,20 +126,68 @@ export default function CourseViewer() {
 
       if (newPercent >= 100) {
         toast.success('🎉 Course completed!');
+
+        // Count total completed courses for this employee
+        const { count: totalCoursesCompleted } = await supabase
+          .from('course_progress')
+          .select('id', { count: 'exact', head: true })
+          .eq('employee_id', employeeId)
+          .eq('status', 'completed');
+
+        const coursesCount = (totalCoursesCompleted || 0);
+
+        // Determine star tier
+        const tierName = coursesCount >= 101 ? 'Supernova'
+          : coursesCount >= 51 ? 'Platinum Star'
+          : coursesCount >= 31 ? 'Gold Star'
+          : coursesCount >= 11 ? 'Silver Star'
+          : coursesCount >= 1 ? 'Rising Star'
+          : 'No Tier';
+
+        // Get employee name for certificate
+        const { data: empData } = await supabase
+          .from('employees')
+          .select('first_name, last_name')
+          .eq('id', employeeId)
+          .maybeSingle();
+        const empName = empData ? `${empData.first_name} ${empData.last_name}` : 'Employee';
+
         // Generate certificate if enabled
         if (course?.certificate_enabled) {
+          const verificationToken = crypto.randomUUID();
+          // Get default design
+          const { data: defaultDesign } = await supabase
+            .from('certificate_designs')
+            .select('id')
+            .eq('is_default', true)
+            .maybeSingle();
+
           await supabase.from('elearning_certificates').insert({
             course_id: courseId!,
             employee_id: employeeId,
             certificate_number: `CERT-${Date.now()}`,
+            course_title: course.title,
+            employee_name: empName,
+            verification_token: verificationToken,
+            issued_at: new Date().toISOString(),
+            design_id: defaultDesign?.id || null,
           });
-          // Update learning stats
-          await supabase.from('employee_learning_stats').upsert({
-            employee_id: employeeId,
-            courses_completed: newCompleted,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'employee_id' });
         }
+
+        // Count certificates
+        const { count: certsCount } = await supabase
+          .from('elearning_certificates')
+          .select('id', { count: 'exact', head: true })
+          .eq('employee_id', employeeId);
+
+        // Update learning stats
+        await supabase.from('employee_learning_stats').upsert({
+          employee_id: employeeId,
+          courses_completed: coursesCount,
+          certificates_earned: certsCount || 0,
+          star_tier: tierName,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'employee_id' });
       } else if (currentLessonIndex < totalLessons - 1) {
         setCurrentLessonIndex(currentLessonIndex + 1);
       }
