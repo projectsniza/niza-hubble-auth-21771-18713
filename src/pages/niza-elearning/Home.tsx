@@ -40,6 +40,7 @@ export default function ELearningHome() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({ totalCourses: 0, completedCourses: 0, inProgressCourses: 0, certificates: 0, learningHours: 0, averageScore: 0 });
   const [recentCourses, setRecentCourses] = useState<any[]>([]);
+  const [learningStats, setLearningStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr';
 
@@ -65,12 +66,16 @@ export default function ELearningHome() {
 
       const coursesRes = await supabase.from('courses').select('id', { count: 'exact' }).eq('status', 'published');
 
-      let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)').limit(10);
+      // For progress, don't limit — we need accurate counts
+      let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)');
       let certsQuery = supabase.from('elearning_certificates').select('id', { count: 'exact' });
 
       if (employeeId) {
         progressQuery = progressQuery.eq('employee_id', employeeId);
         certsQuery = certsQuery.eq('employee_id', employeeId);
+        // Fetch learning stats from DB for accurate star tier
+        const { data: lStats } = await supabase.from('employee_learning_stats').select('*').eq('employee_id', employeeId).maybeSingle();
+        setLearningStats(lStats);
       }
 
       const [progressRes, certsRes] = await Promise.all([progressQuery, certsQuery]);
@@ -98,7 +103,10 @@ export default function ELearningHome() {
     }
   };
 
-  const tier = getStarTier(stats.completedCourses);
+  // Use DB stats for star tier if available, otherwise calculate from local data
+  const tier = learningStats?.star_tier 
+    ? getStarTierByKey(learningStats.star_tier) 
+    : getStarTier(stats.completedCourses);
 
   if (loading) return <div className="flex items-center justify-center h-64"><NizaLoaderInline /></div>;
 
