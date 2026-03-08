@@ -50,9 +50,11 @@ export default function CourseViewer() {
 
       // Get modules + lessons
       const { data: mods } = await supabase.from('course_modules').select('*').eq('course_id', courseId).order('sort_order');
+      let lessons: any[] = [];
       if (mods) {
         const modIds = mods.map(m => m.id);
-        const { data: lessons } = await supabase.from('course_lessons').select('*').in('module_id', modIds).order('sort_order');
+        const { data: lessonsData } = await supabase.from('course_lessons').select('*').in('module_id', modIds).order('sort_order');
+        lessons = lessonsData || [];
         const modsWithLessons = mods.map(m => ({
           ...m,
           lessons: (lessons || []).filter(l => l.module_id === m.id).map(l => ({ ...l, content: Array.isArray(l.content) ? l.content : [] })),
@@ -137,12 +139,12 @@ export default function CourseViewer() {
         const coursesCount = (totalCoursesCompleted || 0);
 
         // Determine star tier
-        const tierName = coursesCount >= 101 ? 'Supernova'
-          : coursesCount >= 51 ? 'Platinum Star'
-          : coursesCount >= 31 ? 'Gold Star'
-          : coursesCount >= 11 ? 'Silver Star'
-          : coursesCount >= 1 ? 'Rising Star'
-          : 'No Tier';
+        const tierName = coursesCount >= 101 ? 'supernova'
+          : coursesCount >= 51 ? 'platinum_star'
+          : coursesCount >= 31 ? 'gold_star'
+          : coursesCount >= 11 ? 'silver_star'
+          : coursesCount >= 1 ? 'rising_star'
+          : 'none';
 
         // Get employee name for certificate
         const { data: empData } = await supabase
