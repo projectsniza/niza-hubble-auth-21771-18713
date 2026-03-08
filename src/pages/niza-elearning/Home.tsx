@@ -47,11 +47,29 @@ export default function ELearningHome() {
     if (!user) return;
     setLoading(true);
     try {
-      const [coursesRes, progressRes, certsRes] = await Promise.all([
-        supabase.from('courses').select('id', { count: 'exact' }).eq('status', 'published'),
-        supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)').limit(10),
-        supabase.from('elearning_certificates').select('id', { count: 'exact' }),
-      ]);
+      let employeeId: string | null = null;
+
+      // Get employee id for non-admin users
+      if (!isAdmin) {
+        const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user.id).maybeSingle();
+        employeeId = emp?.id || null;
+        if (!employeeId) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      const coursesRes = await supabase.from('courses').select('id', { count: 'exact' }).eq('status', 'published');
+
+      let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)').limit(10);
+      let certsQuery = supabase.from('elearning_certificates').select('id', { count: 'exact' });
+
+      if (employeeId) {
+        progressQuery = progressQuery.eq('employee_id', employeeId);
+        certsQuery = certsQuery.eq('employee_id', employeeId);
+      }
+
+      const [progressRes, certsRes] = await Promise.all([progressQuery, certsQuery]);
 
       const totalCourses = coursesRes.count || 0;
       const progress = progressRes.data || [];
