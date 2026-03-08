@@ -107,6 +107,23 @@ export default function EmployeeProfile() {
         .eq('employee_id', id);
       setFormResponses(responses || []);
 
+      // Fetch learning stats
+      const { data: stats } = await supabase
+        .from('employee_learning_stats')
+        .select('*')
+        .eq('employee_id', id)
+        .maybeSingle();
+      setLearningStats(stats);
+
+      // Fetch completed courses
+      const { data: progress } = await supabase
+        .from('course_progress')
+        .select('*, course:courses(title, estimated_duration_minutes)')
+        .eq('employee_id', id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false });
+      setCompletedCourses(progress || []);
+
     } catch (error) {
       console.error('Error fetching employee data:', error);
     } finally {
