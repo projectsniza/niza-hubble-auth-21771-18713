@@ -4,24 +4,57 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { BookOpen, Users, Award, TrendingUp, Clock, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 
 export default function LearningAnalytics() {
+  const { user } = useAuth();
   const [stats, setStats] = useState({ totalCourses: 0, totalAssignments: 0, totalCompleted: 0, totalCertificates: 0, averageCompletion: 0 });
   const [employeeStats, setEmployeeStats] = useState<any[]>([]);
   const [courseStats, setCourseStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchAnalytics(); }, []);
+  useEffect(() => { fetchAnalytics(); }, [user]);
 
   const fetchAnalytics = async () => {
+    if (!user) return;
     setLoading(true);
     try {
+      // Determine scope based on user role
+      let scopedEmployeeIds: string[] | null = null;
+
+      if (user.role !== 'super_admin') {
+        // HR/Manager: scope to their org/branch
+        let empQuery = supabase.from('employees').select('id');
+        if (user.organizationId) {
+          empQuery = empQuery.eq('organization_id', user.organizationId);
+        }
+        if (user.branchId) {
+          empQuery = empQuery.eq('branch_id', user.branchId);
+        }
+        const { data: scopedEmps } = await empQuery;
+        scopedEmployeeIds = (scopedEmps || []).map(e => e.id);
+        if (scopedEmployeeIds.length === 0) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Build scoped queries
+      let progressQuery = supabase.from('course_progress').select('*, employees(first_name, last_name), courses(title)');
+      let certsQuery = supabase.from('elearning_certificates').select('id', { count: 'exact' });
+      let assignQuery = supabase.from('course_assignments').select('id', { count: 'exact' });
+
+      if (scopedEmployeeIds) {
+        progressQuery = progressQuery.in('employee_id', scopedEmployeeIds);
+        certsQuery = certsQuery.in('employee_id', scopedEmployeeIds);
+      }
+
       const [coursesRes, progressRes, certsRes, assignRes] = await Promise.all([
         supabase.from('courses').select('id, title', { count: 'exact' }).eq('status', 'published'),
-        supabase.from('course_progress').select('*, employees(first_name, last_name), courses(title)'),
-        supabase.from('elearning_certificates').select('id', { count: 'exact' }),
-        supabase.from('course_assignments').select('id', { count: 'exact' }),
+        progressQuery,
+        certsQuery,
+        assignQuery,
       ]);
 
       const progress = progressRes.data || [];
