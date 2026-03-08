@@ -19,16 +19,20 @@ interface DashboardStats {
 }
 
 const STAR_TIERS = [
-  { min: 0, max: 0, name: 'No Tier', color: 'text-muted-foreground', bg: 'bg-muted' },
-  { min: 1, max: 10, name: 'Rising Star', color: 'text-yellow-600', bg: 'bg-yellow-500/10' },
-  { min: 11, max: 30, name: 'Silver Star', color: 'text-slate-400', bg: 'bg-slate-300/10' },
-  { min: 31, max: 50, name: 'Gold Star', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  { min: 51, max: 100, name: 'Platinum Star', color: 'text-blue-400', bg: 'bg-blue-400/10' },
-  { min: 101, max: Infinity, name: 'Supernova', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  { min: 0, max: 0, name: 'No Tier', key: 'none', color: 'text-muted-foreground', bg: 'bg-muted' },
+  { min: 1, max: 10, name: 'Rising Star', key: 'rising_star', color: 'text-yellow-600', bg: 'bg-yellow-500/10' },
+  { min: 11, max: 30, name: 'Silver Star', key: 'silver_star', color: 'text-slate-400', bg: 'bg-slate-300/10' },
+  { min: 31, max: 50, name: 'Gold Star', key: 'gold_star', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  { min: 51, max: 100, name: 'Platinum Star', key: 'platinum_star', color: 'text-blue-400', bg: 'bg-blue-400/10' },
+  { min: 101, max: Infinity, name: 'Supernova', key: 'supernova', color: 'text-purple-500', bg: 'bg-purple-500/10' },
 ];
 
 function getStarTier(coursesCompleted: number) {
   return STAR_TIERS.find(t => coursesCompleted >= t.min && coursesCompleted <= t.max) || STAR_TIERS[0];
+}
+
+function getStarTierByKey(key: string) {
+  return STAR_TIERS.find(t => t.key === key) || STAR_TIERS[0];
 }
 
 export default function ELearningHome() {
@@ -36,6 +40,7 @@ export default function ELearningHome() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({ totalCourses: 0, completedCourses: 0, inProgressCourses: 0, certificates: 0, learningHours: 0, averageScore: 0 });
   const [recentCourses, setRecentCourses] = useState<any[]>([]);
+  const [learningStats, setLearningStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr';
 
@@ -61,12 +66,16 @@ export default function ELearningHome() {
 
       const coursesRes = await supabase.from('courses').select('id', { count: 'exact' }).eq('status', 'published');
 
-      let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)').limit(10);
+      // For progress, don't limit — we need accurate counts
+      let progressQuery = supabase.from('course_progress').select('*, courses(title, thumbnail_path, estimated_duration_minutes, template_style)');
       let certsQuery = supabase.from('elearning_certificates').select('id', { count: 'exact' });
 
       if (employeeId) {
         progressQuery = progressQuery.eq('employee_id', employeeId);
         certsQuery = certsQuery.eq('employee_id', employeeId);
+        // Fetch learning stats from DB for accurate star tier
+        const { data: lStats } = await supabase.from('employee_learning_stats').select('*').eq('employee_id', employeeId).maybeSingle();
+        setLearningStats(lStats);
       }
 
       const [progressRes, certsRes] = await Promise.all([progressQuery, certsQuery]);
@@ -94,7 +103,10 @@ export default function ELearningHome() {
     }
   };
 
-  const tier = getStarTier(stats.completedCourses);
+  // Use DB stats for star tier if available, otherwise calculate from local data
+  const tier = learningStats?.star_tier 
+    ? getStarTierByKey(learningStats.star_tier) 
+    : getStarTier(stats.completedCourses);
 
   if (loading) return <div className="flex items-center justify-center h-64"><NizaLoaderInline /></div>;
 

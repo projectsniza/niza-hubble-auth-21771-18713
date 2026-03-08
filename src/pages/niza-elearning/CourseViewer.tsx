@@ -50,12 +50,14 @@ export default function CourseViewer() {
 
       // Get modules + lessons
       const { data: mods } = await supabase.from('course_modules').select('*').eq('course_id', courseId).order('sort_order');
+      let lessons: any[] = [];
       if (mods) {
         const modIds = mods.map(m => m.id);
-        const { data: lessons } = await supabase.from('course_lessons').select('*').in('module_id', modIds).order('sort_order');
+        const { data: lessonsData } = await supabase.from('course_lessons').select('*').in('module_id', modIds).order('sort_order');
+        lessons = lessonsData || [];
         const modsWithLessons = mods.map(m => ({
           ...m,
-          lessons: (lessons || []).filter(l => l.module_id === m.id).map(l => ({ ...l, content: Array.isArray(l.content) ? l.content : [] })),
+          lessons: lessons.filter(l => l.module_id === m.id).map(l => ({ ...l, content: Array.isArray(l.content) ? l.content : [] })),
         }));
         setModules(modsWithLessons);
       }
@@ -65,15 +67,16 @@ export default function CourseViewer() {
         const { data: prog } = await supabase.from('course_progress').select('*').eq('course_id', courseId).eq('employee_id', emp.id).maybeSingle();
         setProgress(prog);
 
-        // Get lesson progress
-        const allLessonIds = mods?.flatMap(m => {
-          const modLessons = (mods as any[]).find(mod => mod.id === m.id);
-          return [];
-        }) || [];
+        // Get lesson progress for all lessons in this course
+        const allLessonIds = lessons.map(l => l.id);
         
-        const { data: lp } = await supabase.from('lesson_progress').select('lesson_id, completed').eq('employee_id', emp.id);
+        let lpData: any[] = [];
+        if (allLessonIds.length > 0) {
+          const { data } = await supabase.from('lesson_progress').select('lesson_id, completed').eq('employee_id', emp.id).in('lesson_id', allLessonIds);
+          lpData = data || [];
+        }
         const lpMap: Record<string, boolean> = {};
-        (lp || []).forEach(l => { lpMap[l.lesson_id] = l.completed || false; });
+        lpData.forEach(l => { lpMap[l.lesson_id] = l.completed || false; });
         setLessonProgress(lpMap);
       }
     } catch (err) {
@@ -137,12 +140,12 @@ export default function CourseViewer() {
         const coursesCount = (totalCoursesCompleted || 0);
 
         // Determine star tier
-        const tierName = coursesCount >= 101 ? 'Supernova'
-          : coursesCount >= 51 ? 'Platinum Star'
-          : coursesCount >= 31 ? 'Gold Star'
-          : coursesCount >= 11 ? 'Silver Star'
-          : coursesCount >= 1 ? 'Rising Star'
-          : 'No Tier';
+        const tierName = coursesCount >= 101 ? 'supernova'
+          : coursesCount >= 51 ? 'platinum_star'
+          : coursesCount >= 31 ? 'gold_star'
+          : coursesCount >= 11 ? 'silver_star'
+          : coursesCount >= 1 ? 'rising_star'
+          : 'none';
 
         // Get employee name for certificate
         const { data: empData } = await supabase
@@ -188,6 +191,11 @@ export default function CourseViewer() {
           star_tier: tierName,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'employee_id' });
+
+        // Navigate to certificates or my-courses after a short delay
+        setTimeout(() => {
+          navigate('/niza-elearning/certificates');
+        }, 2000);
       } else if (currentLessonIndex < totalLessons - 1) {
         setCurrentLessonIndex(currentLessonIndex + 1);
       }
