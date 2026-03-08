@@ -191,6 +191,11 @@ export default function CourseViewer() {
           star_tier: tierName,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'employee_id' });
+
+        // Navigate to certificates or my-courses after a short delay
+        setTimeout(() => {
+          navigate('/niza-elearning/certificates');
+        }, 2000);
       } else if (currentLessonIndex < totalLessons - 1) {
         setCurrentLessonIndex(currentLessonIndex + 1);
       }
