@@ -38,7 +38,7 @@ export default function Certificates() {
       if (isAdmin) {
         certsPromise = supabase
           .from('elearning_certificates')
-          .select('*, courses(title, description)')
+          .select('*')
           .order('issued_at', { ascending: false })
           .limit(200)
           .then(r => r);
@@ -47,7 +47,7 @@ export default function Certificates() {
         if (!emp) { setLoading(false); return; }
         certsPromise = supabase
           .from('elearning_certificates')
-          .select('*, courses(title, description)')
+          .select('*')
           .eq('employee_id', emp.id)
           .order('issued_at', { ascending: false })
           .then(r => r);
