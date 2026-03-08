@@ -157,7 +157,7 @@ function CertificateGrid({ certificates, onPreview }: { certificates: any[]; onP
                 <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20">Certificate</Badge>
               </div>
             </div>
-            <h3 className="font-bold text-foreground">{cert.course_title || cert.courses?.title}</h3>
+            <h3 className="font-bold text-foreground">{cert.course_title || 'Untitled Course'}</h3>
             {cert.employee_name && (
               <p className="text-sm text-muted-foreground mt-1">{cert.employee_name}</p>
             )}
