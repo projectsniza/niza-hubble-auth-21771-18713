@@ -325,7 +325,22 @@ export default function BankDetailsForm({
     const declText = 'I confirm that the bank details provided above are correct and that payments should be made to this account.';
     const declLines = doc.splitTextToSize(declText, contentWidth);
     doc.text(declLines, labelX, y);
-    y += declLines.length * 4 + 6;
+    y += declLines.length * 4 + 4;
+
+    // Declaration checkbox in PDF
+    const drawCheckbox = (x: number, yPos: number, checked: boolean) => {
+      const size = 3;
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.3);
+      doc.rect(x, yPos - size, size, size);
+      if (checked) {
+        doc.line(x + 0.5, yPos - size / 2, x + size / 2, yPos - 0.5);
+        doc.line(x + size / 2, yPos - 0.5, x + size - 0.5, yPos - size + 0.5);
+      }
+    };
+    drawCheckbox(labelX, y, formData.declaration_agreed === true);
+    doc.text('  I agree to the above declaration', labelX + 5, y);
+    y += lineHeight + 4;
 
     // Format date as DD/MM/YYYY
     const formatDateDisplay = (dateStr: string) => {

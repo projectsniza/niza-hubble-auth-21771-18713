@@ -424,7 +424,7 @@ export default function StarterChecklist({
     }
 
     // ── Employee declaration ──
-    checkNewPage(30);
+    checkNewPage(40);
     y += 2;
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
@@ -434,6 +434,17 @@ export default function StarterChecklist({
     doc.text('Employee declaration', margin + 3, y + 1);
     doc.setTextColor(0, 0, 0);
     y += 10;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const declText = 'I confirm that the information I have given on this form is correct and complete to the best of my knowledge and belief.';
+    const declLines = doc.splitTextToSize(declText, contentWidth);
+    doc.text(declLines, margin, y);
+    y += declLines.length * 4 + 4;
+
+    drawCheckbox(margin, y, formData.declaration_agreed === true);
+    doc.text('  I agree to the above declaration', margin + 5, y);
+    y += lineHeight + 4;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
