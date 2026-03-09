@@ -82,6 +82,16 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label htmlFor="niNumber">National Insurance Number *</Label>
+              <Input
+                id="niNumber"
+                placeholder="e.g., AB 12 34 56 C"
+                value={niNumber}
+                onChange={(e) => setNiNumber(e.target.value.toUpperCase())}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="position">Position *</Label>
               <Select value={position} onValueChange={setPosition}>
                 <SelectTrigger id="position">
@@ -96,7 +106,9 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="branch">Branch *</Label>
               <Select value={branch} onValueChange={setBranch}>

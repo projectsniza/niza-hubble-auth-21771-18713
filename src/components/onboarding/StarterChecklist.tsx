@@ -598,13 +598,14 @@ export default function StarterChecklist({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <span className="font-bold">6</span> National Insurance number (if known)
+          <span className="font-bold">6</span> National Insurance number (if known)
                 </Label>
                 <Input
                   value={formData.national_insurance}
-                  onChange={(e) => updateField('national_insurance', e.target.value.toUpperCase())}
+                  readOnly
+                  disabled
                   placeholder="AB 12 34 56 C"
-                  disabled={readOnly}
+                  className="bg-muted/50 cursor-not-allowed"
                 />
               </div>
               <div className="space-y-2" data-field="employment_start_date">

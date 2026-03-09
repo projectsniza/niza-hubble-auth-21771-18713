@@ -512,15 +512,14 @@ export default function BankDetailsForm({
                 />
               </div>
               <div className="space-y-2" data-field="signature_date">
-                <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>
+                <Label>Date</Label>
                 <Input
                   type="date"
-                  value={formData.signature_date}
-                  onChange={(e) => updateField('signature_date', e.target.value)}
-                  disabled={readOnly}
-                  className={errors.signature_date ? 'border-destructive' : ''}
+                  value=""
+                  readOnly
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed"
                 />
-                <ErrorMessage error={errors.signature_date} />
               </div>
             </div>
           </div>
