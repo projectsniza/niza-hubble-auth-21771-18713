@@ -1292,7 +1292,7 @@ export default function ApplicationForm({
                 <ErrorMessage error={errors['referee1.contact']} />
               </div>
               <div className="space-y-2" data-field="referee1.relationship">
-                <RequiredLabel error={errors['referee1.relationship']}>Relationship</RequiredLabel>
+                <Label>Relationship</Label>
                 <Input
                   value={formData.referee1.relationship}
                   onChange={(e) => updateField('referee1', { ...formData.referee1, relationship: e.target.value })}
