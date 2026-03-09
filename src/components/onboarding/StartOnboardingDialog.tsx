@@ -20,11 +20,12 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
   const [email, setEmail] = useState('');
   const [position, setPosition] = useState('');
   const [branch, setBranch] = useState('');
+  const [niNumber, setNiNumber] = useState('');
   const [startDate, setStartDate] = useState<Date>();
   const { toast } = useToast();
 
   const handleSubmit = () => {
-    if (!name || !email || !position || !branch || !startDate) {
+    if (!name || !email || !position || !branch || !niNumber || !startDate) {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields',
@@ -43,6 +44,7 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
     setEmail('');
     setPosition('');
     setBranch('');
+    setNiNumber('');
     setStartDate(undefined);
     onOpenChange(false);
   };
@@ -80,6 +82,16 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label htmlFor="niNumber">National Insurance Number *</Label>
+              <Input
+                id="niNumber"
+                placeholder="e.g., AB 12 34 56 C"
+                value={niNumber}
+                onChange={(e) => setNiNumber(e.target.value.toUpperCase())}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="position">Position *</Label>
               <Select value={position} onValueChange={setPosition}>
                 <SelectTrigger id="position">
@@ -94,7 +106,9 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="branch">Branch *</Label>
               <Select value={branch} onValueChange={setBranch}>

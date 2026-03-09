@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Download, Save, ArrowLeft, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ interface FormData {
   account_number: string;
   building_society_roll: string;
   account_holder_name: string;
+  declaration_agreed: boolean;
   signature: string;
   signature_date: string;
 }
@@ -62,6 +64,7 @@ export default function BankDetailsForm({
     account_number: '',
     building_society_roll: '',
     account_holder_name: `${employeeData.first_name} ${employeeData.last_name}`,
+    declaration_agreed: false,
     signature: '',
     signature_date: ''
   });
@@ -99,7 +102,7 @@ export default function BankDetailsForm({
     }
   };
 
-  const updateField = (field: keyof FormData, value: string) => {
+  const updateField = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => {
@@ -140,6 +143,10 @@ export default function BankDetailsForm({
     }
     if (!formData.account_holder_name.trim()) {
       newErrors.account_holder_name = 'Account holder name is required';
+    }
+    // Declaration is mandatory
+    if (!formData.declaration_agreed) {
+      newErrors.declaration_agreed = 'You must agree to the declaration';
     }
     // Signature fields are optional - to be signed by employee while uploading
 
@@ -318,7 +325,22 @@ export default function BankDetailsForm({
     const declText = 'I confirm that the bank details provided above are correct and that payments should be made to this account.';
     const declLines = doc.splitTextToSize(declText, contentWidth);
     doc.text(declLines, labelX, y);
-    y += declLines.length * 4 + 6;
+    y += declLines.length * 4 + 4;
+
+    // Declaration checkbox in PDF
+    const drawCheckbox = (x: number, yPos: number, checked: boolean) => {
+      const size = 3;
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.3);
+      doc.rect(x, yPos - size, size, size);
+      if (checked) {
+        doc.line(x + 0.5, yPos - size / 2, x + size / 2, yPos - 0.5);
+        doc.line(x + size / 2, yPos - 0.5, x + size - 0.5, yPos - size + 0.5);
+      }
+    };
+    drawCheckbox(labelX, y, formData.declaration_agreed === true);
+    doc.text('  I agree to the above declaration', labelX + 5, y);
+    y += lineHeight + 4;
 
     // Format date as DD/MM/YYYY
     const formatDateDisplay = (dateStr: string) => {
@@ -495,35 +517,40 @@ export default function BankDetailsForm({
             <ErrorMessage error={errors.account_holder_name} />
           </div>
 
-          {/* Signature */}
+          {/* Declaration & Signature */}
           <div className="border-t pt-6 mt-6">
             <h3 className="font-semibold text-lg mb-4">Declaration</h3>
             <p className="text-sm text-muted-foreground mb-4">
               I confirm that the bank details provided above are correct and that payments should be made to this account.
             </p>
+            <div className="flex items-center gap-2 mb-4" data-field="declaration_agreed">
+              <Checkbox
+                checked={formData.declaration_agreed}
+                onCheckedChange={(checked) => updateField('declaration_agreed', !!checked)}
+                disabled={readOnly}
+              />
+              <RequiredLabel error={errors.declaration_agreed}>I agree to the above declaration</RequiredLabel>
+              <ErrorMessage error={errors.declaration_agreed} />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2" data-field="signature">
-                <RequiredLabel error={errors.signature}>Signature (To be signed by employee while uploading)</RequiredLabel>
+              <Label>Signature (To be signed by employee while uploading)</Label>
                 <Input
-                  value={formData.signature}
-                  onChange={(e) => updateField('signature', e.target.value)}
-                  placeholder="To be signed by employee"
-                  className={`italic bg-muted/50 ${errors.signature ? 'border-destructive' : ''}`}
-                  disabled={readOnly}
-                  readOnly={readOnly}
+                  value="To be signed by employee while uploading"
+                  readOnly
+                  disabled
+                  className="italic bg-muted/50 cursor-not-allowed"
                 />
-                <ErrorMessage error={errors.signature} />
               </div>
               <div className="space-y-2" data-field="signature_date">
-                <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>
+                <Label>Date</Label>
                 <Input
                   type="date"
-                  value={formData.signature_date}
-                  onChange={(e) => updateField('signature_date', e.target.value)}
-                  disabled={readOnly}
-                  className={errors.signature_date ? 'border-destructive' : ''}
+                  value=""
+                  readOnly
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed"
                 />
-                <ErrorMessage error={errors.signature_date} />
               </div>
             </div>
           </div>

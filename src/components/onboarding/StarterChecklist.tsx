@@ -42,6 +42,7 @@ interface FormData {
   repaying_direct: boolean | null;
   student_loan_type: 'plan1' | 'plan2' | '';
   finished_before_april: boolean | null;
+  declaration_agreed: boolean;
   signature: string;
   name_printed: string;
   signature_date: string;
@@ -76,6 +77,7 @@ export default function StarterChecklist({
     repaying_direct: null,
     student_loan_type: '',
     finished_before_april: null,
+    declaration_agreed: false,
     signature: '',
     name_printed: '',
     signature_date: ''
@@ -164,6 +166,11 @@ export default function StarterChecklist({
     // Student loan question is mandatory
     if (formData.has_student_loan === null) {
       newErrors.has_student_loan = 'Please answer the student loan question';
+    }
+
+    // Declaration is mandatory
+    if (!formData.declaration_agreed) {
+      newErrors.declaration_agreed = 'You must agree to the declaration';
     }
 
     // Signature fields are optional - to be signed by employee while uploading
@@ -417,7 +424,7 @@ export default function StarterChecklist({
     }
 
     // ── Employee declaration ──
-    checkNewPage(30);
+    checkNewPage(40);
     y += 2;
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
@@ -427,6 +434,17 @@ export default function StarterChecklist({
     doc.text('Employee declaration', margin + 3, y + 1);
     doc.setTextColor(0, 0, 0);
     y += 10;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const declText = 'I confirm that the information I have given on this form is correct and complete to the best of my knowledge and belief.';
+    const declLines = doc.splitTextToSize(declText, contentWidth);
+    doc.text(declLines, margin, y);
+    y += declLines.length * 4 + 4;
+
+    drawCheckbox(margin, y, formData.declaration_agreed === true);
+    doc.text('  I agree to the above declaration', margin + 5, y);
+    y += lineHeight + 4;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
@@ -598,13 +616,14 @@ export default function StarterChecklist({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <span className="font-bold">6</span> National Insurance number (if known)
+          <span className="font-bold">6</span> National Insurance number (if known)
                 </Label>
                 <Input
                   value={formData.national_insurance}
-                  onChange={(e) => updateField('national_insurance', e.target.value.toUpperCase())}
+                  readOnly
+                  disabled
                   placeholder="AB 12 34 56 C"
-                  disabled={readOnly}
+                  className="bg-muted/50 cursor-not-allowed"
                 />
               </div>
               <div className="space-y-2" data-field="employment_start_date">
@@ -802,31 +821,42 @@ export default function StarterChecklist({
           </p>
         </div>
 
-        {/* Signature */}
+        {/* Declaration & Signature */}
         <div className="mb-6">
+          <div className="bg-primary text-primary-foreground p-3 rounded-t-lg -mx-8 px-8 mb-4">
+            <h3 className="font-bold">Employee declaration</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            I confirm that the information I have given on this form is correct and complete to the best of my knowledge and belief.
+          </p>
+          <div className="flex items-center gap-2 mb-4" data-field="declaration_agreed">
+            <Checkbox
+              checked={formData.declaration_agreed}
+              onCheckedChange={(checked) => updateField('declaration_agreed', checked)}
+              disabled={readOnly}
+            />
+            <RequiredLabel error={errors.declaration_agreed}>I agree to the above declaration</RequiredLabel>
+            <ErrorMessage error={errors.declaration_agreed} />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2" data-field="signature">
-              <RequiredLabel error={errors.signature}>Signature (To be signed by employee while uploading)</RequiredLabel>
+              <Label>Signature (To be signed by employee while uploading)</Label>
               <Input
-                value={formData.signature}
-                onChange={(e) => updateField('signature', e.target.value)}
-                placeholder="To be signed by employee"
-                disabled={readOnly}
-                readOnly={readOnly}
-                className={`font-serif italic text-lg bg-muted/50 ${errors.signature ? 'border-destructive' : ''}`}
+                value="To be signed by employee while uploading"
+                readOnly
+                disabled
+                className="font-serif italic text-lg bg-muted/50 cursor-not-allowed"
               />
-              <ErrorMessage error={errors.signature} />
             </div>
             <div className="space-y-2" data-field="signature_date">
-              <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>
+              <Label>Date</Label>
               <Input
                 type="date"
-                value={formData.signature_date}
-                onChange={(e) => updateField('signature_date', e.target.value)}
-                disabled={readOnly}
-                className={errors.signature_date ? 'border-destructive' : ''}
+                value=""
+                readOnly
+                disabled
+                className="bg-muted/50 cursor-not-allowed"
               />
-              <ErrorMessage error={errors.signature_date} />
             </div>
           </div>
         </div>

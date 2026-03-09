@@ -349,14 +349,6 @@ const DocumentUploadStep = forwardRef<DocumentUploadStepRef, DocumentUploadStepP
                           </label>
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-amber-800 dark:text-amber-300">Expiry Date</Label>
-                        <Input 
-                          type="date"
-                          value={requirementExpiry[req.id] || ''}
-                          onChange={(e) => handleRequirementExpiryChange(req.id, e.target.value)}
-                        />
-                      </div>
                     </div>
 
                     {/* E-Signature button for share code */}

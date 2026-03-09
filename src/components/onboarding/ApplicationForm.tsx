@@ -249,16 +249,7 @@ export default function ApplicationForm({
       newErrors.has_convictions = 'Please answer the convictions question';
     }
 
-    // Section 8: References - at least first referee is mandatory
-    if (!formData.referee1.name.trim()) {
-      newErrors['referee1.name'] = 'Referee 1 name is required';
-    }
-    if (!formData.referee1.telephone.trim() && !formData.referee1.email.trim()) {
-      newErrors['referee1.contact'] = 'Referee 1 phone or email is required';
-    }
-    if (!formData.referee1.relationship.trim()) {
-      newErrors['referee1.relationship'] = 'Referee 1 relationship is required';
-    }
+    // Section 8: References - optional (no validation required)
 
     // Declaration - mandatory
     if (!formData.declaration_agreed) {
@@ -1254,16 +1245,16 @@ export default function ApplicationForm({
 
         {/* Section 8: References */}
         <div className="border-b pb-6 mb-6">
-          <h3 className="font-bold text-lg mb-4">8. References</h3>
+          <h3 className="font-bold text-lg mb-4">8. References <span className="text-muted-foreground text-sm font-normal">(Optional)</span></h3>
           <p className="text-sm text-muted-foreground mb-4">
             Please give the names and addresses of two persons as referees who we can approach now for references. No approach will be made to your present or previous employers before an offer of employment is made.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Referee 1 */}
             <div className="space-y-3 p-4 border rounded-lg">
-              <h4 className="font-medium">Referee 1 <span className="text-destructive">*</span></h4>
+              <h4 className="font-medium">Referee 1</h4>
               <div className="space-y-2" data-field="referee1.name">
-                <RequiredLabel error={errors['referee1.name']}>Name</RequiredLabel>
+                <Label>Name</Label>
                 <Input
                   value={formData.referee1.name}
                   onChange={(e) => updateField('referee1', { ...formData.referee1, name: e.target.value })}
@@ -1301,7 +1292,7 @@ export default function ApplicationForm({
                 <ErrorMessage error={errors['referee1.contact']} />
               </div>
               <div className="space-y-2" data-field="referee1.relationship">
-                <RequiredLabel error={errors['referee1.relationship']}>Relationship</RequiredLabel>
+                <Label>Relationship</Label>
                 <Input
                   value={formData.referee1.relationship}
                   onChange={(e) => updateField('referee1', { ...formData.referee1, relationship: e.target.value })}
@@ -1384,16 +1375,13 @@ export default function ApplicationForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2" data-field="signature">
-              <RequiredLabel error={errors.signature}>Signature (To be signed by employee while uploading)</RequiredLabel>
+              <Label>Signature (To be signed by employee while uploading)</Label>
               <Input
-                value={formData.signature}
-                onChange={(e) => updateField('signature', e.target.value)}
-                placeholder="To be signed by employee"
-                disabled={readOnly}
-                readOnly={readOnly}
-                className={`font-serif italic text-lg bg-muted/50 ${errors.signature ? 'border-destructive' : ''}`}
+                value="To be signed by employee while uploading"
+                readOnly
+                disabled
+                className="font-serif italic text-lg bg-muted/50 cursor-not-allowed"
               />
-              <ErrorMessage error={errors.signature} />
             </div>
             <div className="space-y-2" data-field="signature_date">
               <RequiredLabel error={errors.signature_date}>Date</RequiredLabel>

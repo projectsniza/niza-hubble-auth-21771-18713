@@ -1144,26 +1144,12 @@ export default function ContractTemplate({
           
           {/* Employee Section */}
           <div className="border p-6 rounded-lg mb-8 space-y-2">
-            {/* 1. Signature drawing */}
+            {/* 1. Signature area - blocked/read-only */}
             <div>
-              <div className="rounded-md border bg-background p-2">
-                <canvas
-                  ref={employeeCanvasRef}
-                  width={500}
-                  height={140}
-                  className="h-20 w-full cursor-crosshair rounded bg-background"
-                  onMouseDown={startEmployeeDrawing}
-                  onMouseMove={drawEmployee}
-                  onMouseUp={stopEmployeeDrawing}
-                  onMouseLeave={stopEmployeeDrawing}
-                />
-                {!readOnly && (
-                  <div className="flex justify-end mt-2">
-                    <Button variant="outline" size="sm" onClick={clearEmployeeSignature}>
-                      Clear
-                    </Button>
-                  </div>
-                )}
+              <div className="rounded-md border bg-muted/30 p-2">
+                <div className="h-20 w-full rounded bg-muted/20 flex items-center justify-center">
+                  <p className="text-sm text-muted-foreground italic">Signature area — to be signed on printed copy</p>
+                </div>
               </div>
             </div>
             <p className="text-muted-foreground tracking-widest">______________________________</p>
@@ -1177,23 +1163,7 @@ export default function ContractTemplate({
             {/* 4. Date */}
             <div className="flex items-center gap-2">
               <span>Date:</span>
-              {readOnly ? (
-                <span>{(() => {
-                  const d = contractData.employee_signed_date;
-                  if (!d) return '';
-                  const parts = d.split('-');
-                  const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
-                  if (isNaN(dt.getTime())) return d;
-                  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                })()}</span>
-              ) : (
-                <Input
-                  type="date"
-                  value={contractData.employee_signed_date || ''}
-                  onChange={(e) => updateField('employee_signed_date', e.target.value)}
-                  className="h-9 max-w-xs"
-                />
-              )}
+              <span className="text-muted-foreground">______________________________</span>
             </div>
           </div>
 
@@ -1227,20 +1197,13 @@ export default function ContractTemplate({
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
                 })()}</p>
               </>
-            ) : isApprovalMode && user?.role === 'super_admin' ? (
-              <div>
-                <div className="border-b-2 border-dotted h-16 mb-2"></div>
-                <p className="text-muted-foreground tracking-widest mb-1">______________________________</p>
-                <p className="text-xs text-muted-foreground mb-3">(Authorized Signature)</p>
-                <p className="mb-4">Signed on behalf of the Employer</p>
-                <Button onClick={() => setShowSignatureDialog(true)} className="gap-2">
-                  <PenTool className="h-4 w-4" />
-                  Sign Contract
-                </Button>
-              </div>
             ) : (
               <div className="space-y-2">
-                <div className="border-b-2 border-dotted h-16"></div>
+                <div className="rounded-md border bg-muted/30 p-2">
+                  <div className="h-16 w-full rounded bg-muted/20 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground italic">Signature area — to be signed on printed copy</p>
+                  </div>
+                </div>
                 <p className="text-muted-foreground tracking-widest">______________________________</p>
                 <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
