@@ -1245,16 +1245,16 @@ export default function ApplicationForm({
 
         {/* Section 8: References */}
         <div className="border-b pb-6 mb-6">
-          <h3 className="font-bold text-lg mb-4">8. References</h3>
+          <h3 className="font-bold text-lg mb-4">8. References <span className="text-muted-foreground text-sm font-normal">(Optional)</span></h3>
           <p className="text-sm text-muted-foreground mb-4">
             Please give the names and addresses of two persons as referees who we can approach now for references. No approach will be made to your present or previous employers before an offer of employment is made.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Referee 1 */}
             <div className="space-y-3 p-4 border rounded-lg">
-              <h4 className="font-medium">Referee 1 <span className="text-destructive">*</span></h4>
+              <h4 className="font-medium">Referee 1</h4>
               <div className="space-y-2" data-field="referee1.name">
-                <RequiredLabel error={errors['referee1.name']}>Name</RequiredLabel>
+                <Label>Name</Label>
                 <Input
                   value={formData.referee1.name}
                   onChange={(e) => updateField('referee1', { ...formData.referee1, name: e.target.value })}
