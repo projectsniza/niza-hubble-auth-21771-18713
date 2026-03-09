@@ -511,7 +511,7 @@ export default function BankDetailsForm({
             <div className="flex items-center gap-2 mb-4" data-field="declaration_agreed">
               <Checkbox
                 checked={formData.declaration_agreed}
-                onCheckedChange={(checked) => updateField('declaration_agreed', checked ? 'true' : '')}
+                onCheckedChange={(checked) => updateField('declaration_agreed', !!checked)}
                 disabled={readOnly}
               />
               <RequiredLabel error={errors.declaration_agreed}>I agree to the above declaration</RequiredLabel>
