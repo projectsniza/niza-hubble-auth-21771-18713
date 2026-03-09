@@ -249,16 +249,7 @@ export default function ApplicationForm({
       newErrors.has_convictions = 'Please answer the convictions question';
     }
 
-    // Section 8: References - at least first referee is mandatory
-    if (!formData.referee1.name.trim()) {
-      newErrors['referee1.name'] = 'Referee 1 name is required';
-    }
-    if (!formData.referee1.telephone.trim() && !formData.referee1.email.trim()) {
-      newErrors['referee1.contact'] = 'Referee 1 phone or email is required';
-    }
-    if (!formData.referee1.relationship.trim()) {
-      newErrors['referee1.relationship'] = 'Referee 1 relationship is required';
-    }
+    // Section 8: References - optional (no validation required)
 
     // Declaration - mandatory
     if (!formData.declaration_agreed) {
