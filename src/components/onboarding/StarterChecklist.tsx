@@ -42,6 +42,7 @@ interface FormData {
   repaying_direct: boolean | null;
   student_loan_type: 'plan1' | 'plan2' | '';
   finished_before_april: boolean | null;
+  declaration_agreed: boolean;
   signature: string;
   name_printed: string;
   signature_date: string;
