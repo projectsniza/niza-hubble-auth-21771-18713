@@ -63,6 +63,7 @@ export default function BankDetailsForm({
     account_number: '',
     building_society_roll: '',
     account_holder_name: `${employeeData.first_name} ${employeeData.last_name}`,
+    declaration_agreed: false,
     signature: '',
     signature_date: ''
   });
