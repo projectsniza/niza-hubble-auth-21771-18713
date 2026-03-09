@@ -143,6 +143,10 @@ export default function BankDetailsForm({
     if (!formData.account_holder_name.trim()) {
       newErrors.account_holder_name = 'Account holder name is required';
     }
+    // Declaration is mandatory
+    if (!formData.declaration_agreed) {
+      newErrors.declaration_agreed = 'You must agree to the declaration';
+    }
     // Signature fields are optional - to be signed by employee while uploading
 
     setErrors(newErrors);

@@ -168,6 +168,11 @@ export default function StarterChecklist({
       newErrors.has_student_loan = 'Please answer the student loan question';
     }
 
+    // Declaration is mandatory
+    if (!formData.declaration_agreed) {
+      newErrors.declaration_agreed = 'You must agree to the declaration';
+    }
+
     // Signature fields are optional - to be signed by employee while uploading
 
     setErrors(newErrors);
