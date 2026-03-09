@@ -25,7 +25,7 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
   const { toast } = useToast();
 
   const handleSubmit = () => {
-    if (!name || !email || !position || !branch || !startDate) {
+    if (!name || !email || !position || !branch || !niNumber || !startDate) {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields',
