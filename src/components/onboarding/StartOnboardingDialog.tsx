@@ -20,6 +20,7 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
   const [email, setEmail] = useState('');
   const [position, setPosition] = useState('');
   const [branch, setBranch] = useState('');
+  const [niNumber, setNiNumber] = useState('');
   const [startDate, setStartDate] = useState<Date>();
   const { toast } = useToast();
 
