@@ -102,7 +102,7 @@ export default function BankDetailsForm({
     }
   };
 
-  const updateField = (field: keyof FormData, value: string) => {
+  const updateField = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => {
