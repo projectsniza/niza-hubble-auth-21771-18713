@@ -1197,20 +1197,13 @@ export default function ContractTemplate({
                   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
                 })()}</p>
               </>
-            ) : isApprovalMode && user?.role === 'super_admin' ? (
-              <div>
-                <div className="border-b-2 border-dotted h-16 mb-2"></div>
-                <p className="text-muted-foreground tracking-widest mb-1">______________________________</p>
-                <p className="text-xs text-muted-foreground mb-3">(Authorized Signature)</p>
-                <p className="mb-4">Signed on behalf of the Employer</p>
-                <Button onClick={() => setShowSignatureDialog(true)} className="gap-2">
-                  <PenTool className="h-4 w-4" />
-                  Sign Contract
-                </Button>
-              </div>
             ) : (
               <div className="space-y-2">
-                <div className="border-b-2 border-dotted h-16"></div>
+                <div className="rounded-md border bg-muted/30 p-2">
+                  <div className="h-16 w-full rounded bg-muted/20 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground italic">Signature area — to be signed on printed copy</p>
+                  </div>
+                </div>
                 <p className="text-muted-foreground tracking-widest">______________________________</p>
                 <p className="text-xs text-muted-foreground">(Authorized Signature)</p>
                 <div className="h-2" />
