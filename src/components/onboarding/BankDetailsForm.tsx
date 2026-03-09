@@ -34,6 +34,7 @@ interface FormData {
   account_number: string;
   building_society_roll: string;
   account_holder_name: string;
+  declaration_agreed: boolean;
   signature: string;
   signature_date: string;
 }
