@@ -44,6 +44,7 @@ export default function StartOnboardingDialog({ open, onOpenChange }: StartOnboa
     setEmail('');
     setPosition('');
     setBranch('');
+    setNiNumber('');
     setStartDate(undefined);
     onOpenChange(false);
   };
