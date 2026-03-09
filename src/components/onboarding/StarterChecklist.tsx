@@ -77,6 +77,7 @@ export default function StarterChecklist({
     repaying_direct: null,
     student_loan_type: '',
     finished_before_april: null,
+    declaration_agreed: false,
     signature: '',
     name_printed: '',
     signature_date: ''
