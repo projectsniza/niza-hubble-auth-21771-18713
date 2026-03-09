@@ -810,8 +810,23 @@ export default function StarterChecklist({
           </p>
         </div>
 
-        {/* Signature */}
+        {/* Declaration & Signature */}
         <div className="mb-6">
+          <div className="bg-primary text-primary-foreground p-3 rounded-t-lg -mx-8 px-8 mb-4">
+            <h3 className="font-bold">Employee declaration</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            I confirm that the information I have given on this form is correct and complete to the best of my knowledge and belief.
+          </p>
+          <div className="flex items-center gap-2 mb-4" data-field="declaration_agreed">
+            <Checkbox
+              checked={formData.declaration_agreed}
+              onCheckedChange={(checked) => updateField('declaration_agreed', checked)}
+              disabled={readOnly}
+            />
+            <RequiredLabel error={errors.declaration_agreed}>I agree to the above declaration</RequiredLabel>
+            <ErrorMessage error={errors.declaration_agreed} />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2" data-field="signature">
               <Label>Signature (To be signed by employee while uploading)</Label>
