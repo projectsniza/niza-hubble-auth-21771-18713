@@ -81,10 +81,16 @@ export default function OnboardingManagement() {
     );
   }
 
-  // Include both onboarding and pending status employees
+  // Include both onboarding and pending status employees, exclude approved contracts
   const onboardingEmployees = employees.filter(e => {
     const matchesStatus = e.status === 'onboarding' || (e.status === 'pending' && e.onboarding?.[0]?.current_step > 0);
     if (!matchesStatus) return false;
+    // Exclude employees whose contract has been approved
+    const onboarding = e.onboarding?.[0];
+    if (onboarding?.contract_approved) return false;
+    // Also exclude if contract_approvals status is 'approved'
+    const contractApproval = e.contract_approval?.[0];
+    if (contractApproval?.status === 'approved') return false;
     if (!searchQuery.trim()) return true;
     const fullName = `${e.first_name} ${e.last_name}`.toLowerCase();
     return fullName.includes(searchQuery.toLowerCase());
