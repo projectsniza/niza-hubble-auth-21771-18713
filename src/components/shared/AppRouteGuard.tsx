@@ -65,6 +65,8 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
   
   if (user.role === 'super_admin') return <>{children}</>;
   if (user.role === 'hr') return <>{children}</>;
+  // Block store/manager from Templates and Finance
+  if (user.role === 'manager' && (appKey === 'niza_templates' || appKey === 'niza_finance')) return null;
   if ((user.role === 'employee' || user.role === 'manager') && appKey === 'niza_elearning') return <>{children}</>;
   if (hasAppAccess(appKey)) return <>{children}</>;
 

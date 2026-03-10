@@ -105,6 +105,11 @@ export default function AppsDialog() {
     // HR app is always accessible for those who can see the dialog
     if (!app.accessKey) return true;
 
+    // Permanently block Niza Templates and Niza Finance for store/manager roles
+    if (user?.role === 'manager' && (app.accessKey === 'niza_templates' || app.accessKey === 'niza_finance')) {
+      return false;
+    }
+
     // For other apps, check access
     return hasAppAccess(app.accessKey);
   });
