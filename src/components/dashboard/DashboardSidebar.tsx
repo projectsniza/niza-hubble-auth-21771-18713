@@ -208,7 +208,7 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
 
   return (
     <aside 
-      className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
+      className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden md:h-screen h-full md:sticky top-0 flex-shrink-0`}
       style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
     >
       {/* Decorative SVG Background */}
