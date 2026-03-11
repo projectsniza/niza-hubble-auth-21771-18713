@@ -389,13 +389,12 @@ export default function MyProfile() {
                   <TableHead>Document</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Uploaded</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       No documents
                     </TableCell>
                   </TableRow>
@@ -405,11 +404,6 @@ export default function MyProfile() {
                       <TableCell className="font-medium">{doc.title}</TableCell>
                       <TableCell>{doc.file_type || '-'}</TableCell>
                       <TableCell>{format(new Date(doc.created_at), 'PPP')}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))
                 )}
