@@ -147,12 +147,12 @@ export function useNotificationCounts() {
 
       // Pending reminders (due today or overdue)
       let pendingReminders = 0;
-      const { count: reminderCount } = await supabase
+      const { count: reminderCount } = await (supabase
         .from('reminders')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }) as any)
         .eq('status', 'pending')
         .lte('due_date', new Date().toISOString());
-      pendingReminders = reminderCount || 0;
+      pendingReminders = (reminderCount as number) || 0;
 
       // Daily reports submitted today
       let dailyReports = 0;
