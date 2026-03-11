@@ -290,13 +290,11 @@ export default function MyProfile() {
 
       {/* Tabs */}
       <Tabs defaultValue="leave" className="w-full">
-        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 no-scrollbar">
+        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-4 no-scrollbar">
           <TabsTrigger value="leave" className="text-xs md:text-sm whitespace-nowrap">My Leave</TabsTrigger>
           <TabsTrigger value="schedule" className="text-xs md:text-sm whitespace-nowrap">Schedule</TabsTrigger>
           <TabsTrigger value="documents" className="text-xs md:text-sm whitespace-nowrap">Docs</TabsTrigger>
           <TabsTrigger value="payslips" className="text-xs md:text-sm whitespace-nowrap">Payslips</TabsTrigger>
-          <TabsTrigger value="training" className="text-xs md:text-sm whitespace-nowrap">Training</TabsTrigger>
-          <TabsTrigger value="attendance" className="text-xs md:text-sm whitespace-nowrap">Attendance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="leave">
