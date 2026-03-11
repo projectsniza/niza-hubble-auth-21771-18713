@@ -78,7 +78,15 @@ export function useEmployees(filters?: {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        // Retry on transient errors
+        if (error.message?.includes('fetch') || error.message?.includes('503')) {
+          isFetchingRef.current = false;
+          await new Promise(r => setTimeout(r, 1500));
+          return fetchEmployees(true);
+        }
+        throw error;
+      }
       setEmployees(data || []);
       lastFetchParamsRef.current = filterKey;
     } catch (err: unknown) {

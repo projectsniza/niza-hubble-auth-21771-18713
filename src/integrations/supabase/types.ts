@@ -2013,6 +2013,7 @@ export type Database = {
           amount_drive_off: number
           branch_id: string
           cashier_name: string
+          closure_reason: string | null
           created_at: string
           created_by: string | null
           date_handed_to_guardian: string | null
@@ -2044,6 +2045,7 @@ export type Database = {
           amount_drive_off: number
           branch_id: string
           cashier_name: string
+          closure_reason?: string | null
           created_at?: string
           created_by?: string | null
           date_handed_to_guardian?: string | null
@@ -2075,6 +2077,7 @@ export type Database = {
           amount_drive_off?: number
           branch_id?: string
           cashier_name?: string
+          closure_reason?: string | null
           created_at?: string
           created_by?: string | null
           date_handed_to_guardian?: string | null

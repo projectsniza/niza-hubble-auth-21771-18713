@@ -1,0 +1,1 @@
+ALTER TABLE public.drive_offs ADD COLUMN IF NOT EXISTS closure_reason text DEFAULT NULL;

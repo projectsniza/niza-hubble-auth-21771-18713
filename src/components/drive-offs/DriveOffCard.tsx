@@ -19,11 +19,22 @@ import {
   FileText,
   Video,
   Image as ImageIcon,
-  ExternalLink
+  ExternalLink,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { DriveOff } from '@/hooks/useDriveOffs';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+
+const CLOSURE_REASON_LABELS: Record<string, string> = {
+  'fuel_guardian_closed': 'Closed by Fuel Guardian',
+  'paid_by_customer': 'Paid by Customer',
+  'employee_mistake': 'Employee Mistake',
+  'written_off': 'Written Off',
+  'police_resolved': 'Resolved by Police',
+  'insurance_claim': 'Insurance Claim',
+};
 
 interface DriveOffCardProps {
   driveOff: DriveOff;
@@ -35,8 +46,9 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
   const [showFiles, setShowFiles] = useState(false);
   const isPaymentStatus = driveOff.tracking_status === 'payment';
   const unpaidAmount = driveOff.amount_drive_off - (driveOff.total_amount_received || 0);
-  const isPaid = unpaidAmount <= 0;
+  const isPaid = unpaidAmount <= 0 && (driveOff.total_amount_received || 0) > 0;
   const files = (driveOff as any).supporting_files || [];
+  const closureReason = (driveOff as any).closure_reason;
 
   const openFile = async (filePath: string) => {
     const { data } = await supabase.storage.from('drive-off-files').createSignedUrl(filePath, 3600);
@@ -87,23 +99,41 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
     }
   };
 
+  // Payment status tag - always visible
+  const getPaymentTag = () => {
+    if (isPaid) {
+      return (
+        <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Payment Completed
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-red-500/20 text-red-500 border-red-500/30">
+        <XCircle className="h-3 w-3 mr-1" />
+        Payment Pending
+      </Badge>
+    );
+  };
+
   return (
     <Card className={cn(
       "overflow-hidden transition-all hover:shadow-lg",
-      isPaymentStatus && !isPaid && "border-destructive/50 bg-destructive/5"
+      !isPaid && "border-destructive/50 bg-destructive/5"
     )}>
       <CardContent className="p-0">
         {/* Header with Number Plate */}
         <div className={cn(
           "p-4 flex items-center justify-between",
-          isPaymentStatus && !isPaid 
+          !isPaid 
             ? "bg-destructive/10" 
             : "bg-muted/50"
         )}>
           <div className="flex items-center gap-3">
             <div className={cn(
               "px-4 py-2 rounded-md border-2 font-mono",
-              isPaymentStatus && !isPaid
+              !isPaid
                 ? "bg-destructive text-destructive-foreground border-destructive font-black text-2xl"
                 : "bg-yellow-400 text-black border-black font-bold text-xl"
             )}>
@@ -116,6 +146,7 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
             )}
           </div>
           <div className="flex items-center gap-2">
+            {getPaymentTag()}
             <Button 
               variant="ghost" 
               size="icon"
@@ -141,16 +172,18 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
             <div className="flex items-center gap-2">
               <PoundSterling className={cn(
                 "h-6 w-6",
-                isPaymentStatus && !isPaid ? "text-destructive" : "text-primary"
+                !isPaid ? "text-destructive" : "text-primary"
               )} />
               <span className={cn(
                 "text-3xl font-bold",
-                isPaymentStatus && !isPaid ? "text-destructive" : ""
+                !isPaid ? "text-destructive" : ""
               )}>
                 £{driveOff.amount_drive_off.toFixed(2)}
               </span>
             </div>
-            {getStatusBadge()}
+            <div className="flex items-center gap-2">
+              {getStatusBadge()}
+            </div>
           </div>
 
           {/* Details Grid */}
@@ -193,16 +226,12 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
             )}
           </div>
 
-          {/* Payment Info */}
-          {driveOff.total_amount_received > 0 && (
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-              <CreditCard className="h-4 w-4" />
-              <span>Received: £{driveOff.total_amount_received.toFixed(2)}</span>
-              {driveOff.payment_received_date && (
-                <span className="text-muted-foreground">
-                  on {format(new Date(driveOff.payment_received_date), 'dd/MM/yyyy')}
-                </span>
-              )}
+          {/* Closure Reason */}
+          {closureReason && (
+            <div className="flex items-center gap-2 text-sm">
+              <Badge className="bg-primary/10 text-primary border-primary/20">
+                {CLOSURE_REASON_LABELS[closureReason] || closureReason}
+              </Badge>
             </div>
           )}
 
@@ -234,6 +263,24 @@ export function DriveOffCard({ driveOff, onEdit, onDelete }: DriveOffCardProps) 
               </Button>
             </div>
           )}
+
+          {/* Payment Info - at bottom */}
+          <div className="border-t pt-3 mt-2 space-y-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment Received (Site)</h4>
+            {(driveOff.total_amount_received || 0) > 0 ? (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CreditCard className="h-4 w-4" />
+                <span>Total Received: £{(driveOff.total_amount_received || 0).toFixed(2)}</span>
+                {driveOff.payment_received_date && (
+                  <span className="text-muted-foreground">
+                    on {format(new Date(driveOff.payment_received_date), 'dd/MM/yyyy')}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No payment received yet</p>
+            )}
+          </div>
 
           {/* Branch */}
           <div className="text-xs text-muted-foreground pt-2 border-t">

@@ -188,26 +188,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       (event, newSession) => {
         if (!mounted || !isInitialized) return;
         
-        // Only process if session actually changed
         if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        } else if (event === 'SIGNED_IN') {
           setSession(newSession);
           if (newSession?.user) {
-            // Defer profile fetch to avoid deadlock
             setTimeout(async () => {
               if (mounted) {
                 const result = await fetchUserProfile(newSession.user.id);
                 if (mounted) {
                   if (result === 'deactivated') {
-                    // User is deactivated - sign them out
                     await supabase.auth.signOut();
                     setSession(null);
                     setUser(null);
-                  } else {
+                  } else if (result) {
                     setUser(result);
                   }
+                }
+              }
+            }, 0);
+          }
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Only update session, don't re-fetch profile unless user is null
+          setSession(newSession);
+          if (!user && newSession?.user) {
+            setTimeout(async () => {
+              if (mounted) {
+                const result = await fetchUserProfile(newSession.user.id);
+                if (mounted && result && result !== 'deactivated') {
+                  setUser(result);
                 }
               }
             }, 0);
