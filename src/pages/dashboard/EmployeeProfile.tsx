@@ -513,40 +513,6 @@ export default function EmployeeProfile() {
           </Card>
         </TabsContent>
 
-        {/* Contracts Tab */}
-        <TabsContent value="contracts" className="mt-6">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Employment Contracts</h3>
-            {contracts.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No contracts found</p>
-            ) : (
-              <div className="space-y-3">
-                {contracts.map(contract => (
-                  <div key={contract.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Briefcase className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium">{contract.contract_file_name || 'Employment Contract'}</p>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={contract.status === 'approved' ? 'default' : contract.status === 'rejected' ? 'destructive' : 'secondary'}>
-                            {contract.status}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Submitted {format(new Date(contract.submitted_at), 'dd MMM yyyy')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
         {/* Payroll Tab */}
         <TabsContent value="payroll" className="mt-6 space-y-6">
           {/* Salary Structure */}
@@ -601,38 +567,6 @@ export default function EmployeeProfile() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* Forms Tab */}
-        <TabsContent value="forms" className="mt-6">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Onboarding Form Responses</h3>
-            {formResponses.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No form responses found</p>
-            ) : (
-              <div className="space-y-3">
-                {formResponses.map(response => (
-                  <div key={response.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium capitalize">{response.form_type.replace('_', ' ')}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {response.signed_at 
-                            ? `Signed ${format(new Date(response.signed_at), 'dd MMM yyyy')}`
-                            : 'Not signed'}
-                        </p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm">View</Button>
                   </div>
                 ))}
               </div>
