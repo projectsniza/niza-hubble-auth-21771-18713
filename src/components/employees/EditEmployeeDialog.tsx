@@ -9,6 +9,8 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
+import { useAuth } from '@/contexts/AuthContext';
+import { logActivity } from '@/hooks/useActivityLogs';
 
 interface EditEmployeeDialogProps {
   open: boolean;
