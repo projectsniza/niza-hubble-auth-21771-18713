@@ -6,8 +6,10 @@ import {
   CheckSquare, Car, Ticket, Wallet
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 
 // Map grid paths to permission keys
 const pathToPermissionKey: Record<string, string> = {
@@ -28,6 +30,20 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/reminders': 'reminders',
   '/dashboard/settings': 'settings',
   '/dashboard/customer-accounts': 'customer_accounts',
+};
+
+// Map grid paths to notification count keys
+const pathToCountKey: Record<string, string> = {
+  '/dashboard/employees': 'employees',
+  '/dashboard/messages': 'messages',
+  '/dashboard/attendance': 'attendance',
+  '/dashboard/maintenance': 'maintenance',
+  '/dashboard/events': 'events',
+  '/dashboard/documents': 'documents',
+  '/dashboard/drive-offs': 'drive_offs',
+  '/dashboard/reminders': 'reminders',
+  '/dashboard/daily-reports': 'daily_reports',
+  '/dashboard/performance': 'performance',
 };
 
 interface GridItem {
@@ -60,6 +76,7 @@ const gridItems: GridItem[] = [
 export default function DashboardGrid() {
   const { user } = useAuth();
   const { customRole, hasPermission } = useCustomRoleAccess();
+  const { counts } = useNotificationCounts();
   
   // Add Settings card for super_admin and HR
   const allItems = (user?.role === 'super_admin' || user?.role === 'hr')
@@ -75,6 +92,12 @@ export default function DashboardGrid() {
         if (customRole) return hasPermission(permKey);
         return true;
       });
+
+  const getCountForPath = (path: string): number => {
+    const key = pathToCountKey[path];
+    if (!key) return 0;
+    return (counts as any)[key] || 0;
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
@@ -95,35 +118,47 @@ export default function DashboardGrid() {
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 relative z-10">
-        {displayItems.map((item) => (
-          <Link key={item.path} to={item.path} className="group">
-            <Card className="relative h-32 md:h-48 overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:hover:-translate-y-2">
-              {/* Gradient Overlay */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-              
-              {/* Content */}
-              <div className="relative h-full flex flex-col items-center justify-center p-3 md:p-6 text-center">
-                {/* Icon Container */}
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-2 md:mb-4 group-hover:scale-110 transition-all duration-300 shadow-lg`}>
-                  <item.icon className="h-6 w-6 md:h-8 md:w-8 text-white" />
+        {displayItems.map((item) => {
+          const notifCount = getCountForPath(item.path);
+          return (
+            <Link key={item.path} to={item.path} className="group">
+              <Card className="relative h-32 md:h-48 overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:hover:-translate-y-2">
+                {/* Notification Badge */}
+                {notifCount > 0 && (
+                  <div className="absolute top-2 right-2 z-20">
+                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs font-bold">
+                      {notifCount > 99 ? '99+' : notifCount}
+                    </Badge>
+                  </div>
+                )}
+                
+                {/* Gradient Overlay */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
+                
+                {/* Content */}
+                <div className="relative h-full flex flex-col items-center justify-center p-3 md:p-6 text-center">
+                  {/* Icon Container */}
+                  <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-2 md:mb-4 group-hover:scale-110 transition-all duration-300 shadow-lg`}>
+                    <item.icon className="h-6 w-6 md:h-8 md:w-8 text-white" />
+                  </div>
+                  
+                  {/* Title */}
+                  <h3 className="font-semibold md:font-bold text-sm md:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                    {item.title}
+                  </h3>
+                  
+                  {/* Arrow Icon - Hidden on mobile */}
+                  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
+                    <ArrowRight className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                  </div>
                 </div>
                 
-                {/* Title */}
-                <h3 className="font-semibold md:font-bold text-sm md:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                  {item.title}
-                </h3>
-                
-                {/* Arrow Icon - Hidden on mobile */}
-                <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
-                  <ArrowRight className="h-4 w-4 md:h-5 md:w-5 text-primary" />
-                </div>
-              </div>
-              
-              {/* Shine Effect */}
-              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            </Card>
-          </Link>
-        ))}
+                {/* Shine Effect */}
+                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

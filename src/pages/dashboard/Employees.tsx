@@ -22,6 +22,7 @@ import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   AlertDialog,
@@ -198,11 +199,20 @@ function PendingOnboardings() {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at)`)
+        .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at, contract_approved, contract_submitted_for_approval), contract_approval:contract_approvals(id, status)`)
         .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval'])
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setOnboardingEmployees(data || []);
+      // Filter out employees whose contract is submitted or approved
+      const filtered = (data || []).filter(emp => {
+        const onb = emp.onboarding?.[0];
+        const ca = emp.contract_approval?.[0];
+        if (onb?.contract_approved) return false;
+        if (onb?.contract_submitted_for_approval) return false;
+        if (ca?.status === 'pending' || ca?.status === 'approved') return false;
+        return true;
+      });
+      setOnboardingEmployees(filtered);
     } catch (error: any) {
       toast.error('Failed to load pending onboardings');
     } finally {
@@ -309,6 +319,7 @@ export default function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [activeTab, setActiveTab] = useState('employees');
+  const { counts } = useNotificationCounts();
 
   useEffect(() => {
     if (user?.role === 'employee') {
@@ -380,11 +391,17 @@ export default function Employees() {
           <TabsTrigger value="pending-onboarding" className="gap-2">
             <UserPlus className="h-4 w-4" />
             Pending Onboardings
+            {counts.pending_onboardings > 0 && (
+              <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.pending_onboardings}</Badge>
+            )}
           </TabsTrigger>
           {showContractApprovals && (
             <TabsTrigger value="approvals" className="gap-2">
               <FileSignature className="h-4 w-4" />
               Contract Approvals
+              {counts.contract_approvals > 0 && (
+                <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.contract_approvals}</Badge>
+              )}
             </TabsTrigger>
           )}
           {showApprovedContracts && (
@@ -413,6 +430,9 @@ export default function Employees() {
             <TabsTrigger value="pending-accounts" className="gap-2">
               <UserCog className="h-4 w-4" />
               Pending Accounts
+              {counts.pending_accounts > 0 && (
+                <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.pending_accounts}</Badge>
+              )}
             </TabsTrigger>
           )}
           {showOnboardingSettings && (
