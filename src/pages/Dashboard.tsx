@@ -42,7 +42,7 @@ export default function Dashboard() {
       {/* Mobile Sidebar Sheet */}
       {isMobile && (
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetContent side="left" className="p-0 w-[280px]">
+          <SheetContent side="left" className="p-0 w-[280px] flex flex-col h-full">
             <DashboardSidebar
               collapsed={false}
               onToggle={() => setMobileMenuOpen(false)}
