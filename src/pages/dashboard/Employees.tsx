@@ -198,11 +198,20 @@ function PendingOnboardings() {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at)`)
+        .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at, contract_approved, contract_submitted_for_approval), contract_approval:contract_approvals(id, status)`)
         .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval'])
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setOnboardingEmployees(data || []);
+      // Filter out employees whose contract is submitted or approved
+      const filtered = (data || []).filter(emp => {
+        const onb = emp.onboarding?.[0];
+        const ca = emp.contract_approval?.[0];
+        if (onb?.contract_approved) return false;
+        if (onb?.contract_submitted_for_approval) return false;
+        if (ca?.status === 'pending' || ca?.status === 'approved') return false;
+        return true;
+      });
+      setOnboardingEmployees(filtered);
     } catch (error: any) {
       toast.error('Failed to load pending onboardings');
     } finally {
