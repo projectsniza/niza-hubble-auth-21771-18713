@@ -390,13 +390,14 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         {/* Signed Documents Step */}
         {currentStepId === 'signed-docs' && (
           <div className="space-y-6">
-            <div className="text-center mb-6">
+           <div className="text-center mb-6">
               <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
                 <FilePen className="h-10 w-10 text-primary" />
               </div>
               <h2 className="text-2xl font-semibold mb-2">Upload Signed Documents</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Upload the following documents to complete the onboarding process.
+              <p className="text-muted-foreground max-w-lg mx-auto">
+                Download and print the Application Form, Starter Checklist, and Bank Details. 
+                Get the employee to sign them physically, then scan or photograph and upload each signed document below.
               </p>
             </div>
 

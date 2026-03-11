@@ -14,8 +14,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 
 const LEARNING_MODES = [
   { value: 'assigned_only', label: 'Assigned Courses Only', desc: 'Employees can only access courses assigned to them' },
-  { value: 'open', label: 'Open Learning', desc: 'Employees can learn any course in the library' },
-  { value: 'hybrid', label: 'Hybrid Mode', desc: 'Assigned courses required + optional courses available' },
+  { value: 'hybrid', label: 'Hybrid Mode', desc: 'Assigned courses required + employees can also start any course on their own' },
 ];
 
 export default function LearningSettings() {

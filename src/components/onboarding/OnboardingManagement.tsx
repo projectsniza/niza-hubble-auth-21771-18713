@@ -91,6 +91,8 @@ export default function OnboardingManagement() {
     // Also exclude if contract_approvals status is 'approved'
     const contractApproval = e.contract_approval?.[0];
     if (contractApproval?.status === 'approved') return false;
+    // Also exclude if contract has been submitted for approval (pending or approved)
+    if (contractApproval?.status === 'pending' || onboarding?.contract_submitted_for_approval) return false;
     if (!searchQuery.trim()) return true;
     const fullName = `${e.first_name} ${e.last_name}`.toLowerCase();
     return fullName.includes(searchQuery.toLowerCase());

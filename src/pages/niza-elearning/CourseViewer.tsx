@@ -256,6 +256,9 @@ export default function CourseViewer() {
             <PlayCircle className="h-5 w-5 mr-2" /> Start Course
           </Button>
         )}
+        {!employeeId && (
+          <p className="text-sm text-muted-foreground italic">Link your employee profile to start this course.</p>
+        )}
       </div>
     );
   }
