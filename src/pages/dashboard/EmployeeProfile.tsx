@@ -253,9 +253,7 @@ export default function EmployeeProfile() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="contracts">Contracts</TabsTrigger>
           <TabsTrigger value="payroll">Payroll</TabsTrigger>
-          <TabsTrigger value="forms">Onboarding Forms</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
