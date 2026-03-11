@@ -42,6 +42,8 @@ const MANAGER_FEATURES: Record<string, { key: string; label: string }[]> = {
   'Messages': [{ key: 'messages', label: 'Messages' }],
   'Clock-ins': [{ key: 'clock_ins', label: 'Clock-ins' }],
   'Performance': [{ key: 'performance', label: 'Performance' }],
+  'Templates': [{ key: 'templates', label: 'Templates' }],
+  'Customer Accounts': [{ key: 'customer_accounts', label: 'Customer Accounts' }],
 };
 
 const HR_FEATURES: Record<string, { key: string; label: string }[]> = {

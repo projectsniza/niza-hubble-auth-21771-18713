@@ -166,7 +166,9 @@ export default function AddEmployee() {
       });
       
       setFormSettings(settings);
+      return settings;
     }
+    return formSettings;
   };
 
   const fetchEmployee = async (id: string) => {

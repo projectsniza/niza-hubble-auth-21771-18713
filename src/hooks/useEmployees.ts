@@ -50,7 +50,7 @@ export function useEmployees(filters?: {
           organization:organizations(id, name),
           branch:branches(id, name),
           team:teams(id, name),
-          onboarding:employee_onboarding(id, current_step, completed_at, contract_approved),
+          onboarding:employee_onboarding(id, current_step, completed_at, contract_approved, contract_submitted_for_approval),
           contract_approval:contract_approvals(id, status)
         `)
         .order('created_at', { ascending: false })
