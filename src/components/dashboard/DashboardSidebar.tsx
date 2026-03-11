@@ -185,7 +185,16 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
       case '/dashboard/events':
         return counts.events;
       case '/dashboard/documents':
+      case '/dashboard/documents/submit':
         return counts.documents;
+      case '/dashboard/drive-offs':
+        return counts.drive_offs;
+      case '/dashboard/reminders':
+        return counts.reminders;
+      case '/dashboard/daily-reports':
+        return counts.daily_reports;
+      case '/dashboard/performance':
+        return counts.performance;
       default:
         return 0;
     }
