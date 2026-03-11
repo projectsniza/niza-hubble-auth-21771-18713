@@ -543,68 +543,6 @@ export function DriveOffFormDialog({
               </div>
             </div>
 
-            {/* Payment Received */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg border-b pb-2">Payment Received (Site)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <FormField
-                  control={form.control}
-                  name="total_amount_received"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Total Received (£)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="payment_received_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="payment_till_1"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Till 1 (£)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="payment_till_2"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Till 2 (£)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
             {/* Tracking Status */}
             <div className="space-y-4">
               <h3 className="font-semibold text-lg border-b pb-2">Tracking Status</h3>
@@ -695,6 +633,68 @@ export function DriveOffFormDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Payment Received (Site) - at bottom */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg border-b pb-2">Payment Received (Site)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <FormField
+                  control={form.control}
+                  name="total_amount_received"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total Received (£)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="payment_received_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="payment_till_1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Till 1 (£)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="payment_till_2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Till 2 (£)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
