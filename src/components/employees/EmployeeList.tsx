@@ -358,7 +358,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                               Reactivate
                             </DropdownMenuItem>
                           )}
-                          {employee.status !== 'inactive' && employee.status !== 'terminated' && (
+                          {employee.status !== 'inactive' && employee.status !== 'terminated' && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => setDeactivateEmployee(employee)}
                               className="text-orange-600 focus:text-orange-600"
