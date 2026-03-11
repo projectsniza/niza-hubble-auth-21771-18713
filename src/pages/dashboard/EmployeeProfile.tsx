@@ -496,9 +496,16 @@ export default function EmployeeProfile() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
+                    {user?.role === 'super_admin' && doc.folder_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/dashboard/documents?folderId=${doc.folder_id}&docId=${doc.id}`)}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-1" />
+                        Open in Documents
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
