@@ -668,6 +668,38 @@ export function DriveOffFormDialog({
                   />
                 )}
               </div>
+
+              {/* Closure Reason */}
+              <div className="mt-4">
+                <FormField
+                  control={form.control}
+                  name="closure_reason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Closure Reason</FormLabel>
+                      <Select 
+                        onValueChange={(v) => field.onChange(v === 'none' ? null : v)} 
+                        value={field.value || 'none'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="How was this resolved?" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Not Set</SelectItem>
+                          {CLOSURE_REASONS.map((reason) => (
+                            <SelectItem key={reason.value} value={reason.value}>
+                              {reason.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             {/* Notes & Remarks */}
