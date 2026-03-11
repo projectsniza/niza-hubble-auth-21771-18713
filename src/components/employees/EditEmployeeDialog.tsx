@@ -25,6 +25,7 @@ export default function EditEmployeeDialog({
   employee, 
   onSuccess 
 }: EditEmployeeDialogProps) {
+  const { user } = useAuth();
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   const [isSubmitting, setIsSubmitting] = useState(false);
