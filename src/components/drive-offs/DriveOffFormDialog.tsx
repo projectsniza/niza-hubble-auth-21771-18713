@@ -178,6 +178,7 @@ export function DriveOffFormDialog({
         date_handed_to_guardian: editingDriveOff.date_handed_to_guardian || '',
         head_office_notes: editingDriveOff.head_office_notes || '',
         remarks: editingDriveOff.remarks || '',
+        closure_reason: (editingDriveOff as any).closure_reason || null,
       });
 
       // Load existing files
