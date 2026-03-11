@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const fetchUserProfile = useCallback(async (userId: string): Promise<AppUser | null | 'deactivated'> => {
+  const fetchUserProfile = useCallback(async (userId: string, retryCount = 0): Promise<AppUser | null | 'deactivated'> => {
     try {
       // Fetch profile, role and employee status in parallel for better performance
       const [profileResult, roleResult, employeeByUserResult] = await Promise.all([
@@ -59,8 +59,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .maybeSingle()
       ]);
 
+      // Retry on 503/network errors (up to 2 retries)
+      const hasServerError = [profileResult.error, roleResult.error, employeeByUserResult.error].some(
+        err => err && (err.message?.includes('503') || err.message?.includes('fetch') || err.code === 'PGRST301')
+      );
+      if (hasServerError && retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return fetchUserProfile(userId, retryCount + 1);
+      }
+
       if (profileResult.error) {
-        // PGRST116 = no rows found
         if (profileResult.error.code !== 'PGRST116') {
           console.error('Error fetching profile:', profileResult.error);
         }
@@ -123,6 +131,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       return appUser;
     } catch (error) {
+      // Retry on network errors
+      if (retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return fetchUserProfile(userId, retryCount + 1);
+      }
       console.error('Error in fetchUserProfile:', error);
       return null;
     }
