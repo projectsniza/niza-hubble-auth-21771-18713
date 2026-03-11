@@ -171,7 +171,7 @@ export default function AddEmployee() {
     return formSettings;
   };
 
-  const fetchEmployee = async (id: string) => {
+  const fetchEmployee = async (id: string, loadedSettings?: FormSettings) => {
     const { data } = await supabase
       .from('employees')
       .select('*, employee_onboarding(*)')
@@ -204,13 +204,9 @@ export default function AddEmployee() {
         additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
       });
       
-      // Determine the correct step to resume based on completed form responses
-      // This is more robust than using stored step index which can be misaligned
-      // when form settings change
       if (data.employee_onboarding?.[0]) {
         const onboarding = data.employee_onboarding[0];
         
-        // Check which form responses exist to determine furthest completed step
         const { data: formResponses } = await supabase
           .from('onboarding_form_responses')
           .select('form_type')
@@ -218,22 +214,29 @@ export default function AddEmployee() {
         
         const completedForms = new Set((formResponses || []).map((r: any) => r.form_type));
         
-        // Check if contract was submitted
         const { data: contractApproval } = await supabase
           .from('contract_approvals')
           .select('id, status')
           .eq('employee_id', id)
           .maybeSingle();
         
-        // Determine the step to resume - find the first incomplete step
-        // We need to wait for formSettings to load, so use a callback approach
+        // Use passed-in settings to avoid stale state
+        const activeSettings = loadedSettings || formSettings;
+        const getStepsForSettings = (s: FormSettings) => {
+          return BASE_STEPS.filter(step => {
+            if (step.id === 'application') return s.application;
+            if (step.id === 'checklist') return s.checklist;
+            if (step.id === 'bank_details') return s.bank_details;
+            return true;
+          });
+        };
+        
         const determineStep = () => {
-          const steps = getActiveSteps();
+          const steps = getStepsForSettings(activeSettings);
           
           for (let i = 0; i < steps.length; i++) {
             const stepId = steps[i].id;
             if (stepId === 'basic') {
-              // Basic details are always done if we have an employee record
               continue;
             }
             if (stepId === 'application' && !completedForms.has('application_form')) {
@@ -246,7 +249,6 @@ export default function AddEmployee() {
               return i;
             }
             if (stepId === 'documents') {
-              // Check stored step - if it's past documents, skip
               const storedStep = onboarding.current_step || 1;
               const docsStepIndex = steps.findIndex(s => s.id === 'documents');
               if (storedStep - 1 <= docsStepIndex) {
@@ -255,19 +257,17 @@ export default function AddEmployee() {
               continue;
             }
             if (stepId === 'contract') {
-              // If no contract approval submitted yet, go to contract
               if (!contractApproval) {
                 return i;
               }
-              // If contract is submitted/approved, they shouldn't be here
               continue;
             }
           }
           
-          // Fallback to stored step or last step
           const storedStep = onboarding.current_step;
           if (storedStep && storedStep > 0) {
-            return Math.min(storedStep - 1, steps.length - 1);
+            const steps2 = getStepsForSettings(activeSettings);
+            return Math.min(storedStep - 1, steps2.length - 1);
           }
           return 0;
         };
