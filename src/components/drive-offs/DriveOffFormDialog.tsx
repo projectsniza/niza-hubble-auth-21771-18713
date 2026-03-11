@@ -284,6 +284,7 @@ export function DriveOffFormDialog({
       head_office_notes: values.head_office_notes,
       remarks: values.remarks,
       organization_id: branch?.organization_id,
+      closure_reason: values.closure_reason || null,
       supporting_files: supportingFiles,
     };
     await onSubmit(formData);
