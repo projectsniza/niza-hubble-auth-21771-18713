@@ -124,11 +124,13 @@ export default function AddEmployee() {
 
   useEffect(() => {
     fetchOrganizations();
-    fetchFormSettings();
     fetchDepartments();
-    if (employeeId) {
-      fetchEmployee(employeeId);
-    }
+    // Load form settings first, then fetch employee (which depends on formSettings)
+    fetchFormSettings().then(() => {
+      if (employeeId) {
+        fetchEmployee(employeeId);
+      }
+    });
   }, [employeeId]);
 
   useEffect(() => {
