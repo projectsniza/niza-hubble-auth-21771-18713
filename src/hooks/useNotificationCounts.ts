@@ -28,16 +28,6 @@ const ZERO_COUNTS: NotificationCounts = {
   customer_accounts: 0, pending_onboardings: 0, contract_approvals: 0, pending_accounts: 0
 };
 
-async function safeCount(queryFn: () => Promise<{ count: number | null; error: any }>): Promise<number> {
-  try {
-    const { count, error } = await queryFn();
-    if (error) return 0;
-    return count || 0;
-  } catch {
-    return 0;
-  }
-}
-
 export function useNotificationCounts() {
   const { user } = useAuth();
   const [counts, setCounts] = useState<NotificationCounts>({ ...ZERO_COUNTS });
@@ -50,99 +40,62 @@ export function useNotificationCounts() {
       const isAdmin = ['super_admin', 'hr', 'manager'].includes(user.role);
       const notEmployee = user.role !== 'employee';
       const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const today = new Date(); today.setHours(0,0,0,0);
 
-      // Run all counts in parallel
-      const [
-        messages,
-        pendingLeave,
-        pendingMaintenance,
-        newEvents,
-        onboardingCount,
-        contractApprovalsCount,
-        pendingAccountsCount,
-        pendingDocs,
-        driveOffsCount,
-        pendingReminders,
-        dailyReportsCount,
-        pendingPerformance
-      ] = await Promise.all([
-        // Messages
-        (async () => {
-          try {
-            const { data: participations } = await supabase
-              .from('conversation_participants')
-              .select('conversation_id, last_read_at')
-              .eq('user_id', user.id);
-            if (!participations?.length) return 0;
-            let total = 0;
-            const results = await Promise.allSettled(
-              participations.map(p =>
-                supabase
-                  .from('messages')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('conversation_id', p.conversation_id)
-                  .neq('sender_id', user.id)
-                  .gt('created_at', p.last_read_at || '1970-01-01')
-              )
-            );
-            for (const r of results) {
-              if (r.status === 'fulfilled') total += r.value.count || 0;
-            }
-            return total;
-          } catch { return 0; }
-        })(),
+      // Messages
+      let messages = 0;
+      try {
+        const { data: participations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, last_read_at')
+          .eq('user_id', user.id);
+        if (participations?.length) {
+          const results = await Promise.allSettled(
+            participations.map(p =>
+              supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', p.conversation_id)
+                .neq('sender_id', user.id)
+                .gt('created_at', p.last_read_at || '1970-01-01')
+            )
+          );
+          for (const r of results) {
+            if (r.status === 'fulfilled') messages += r.value.count || 0;
+          }
+        }
+      } catch { /* ignore */ }
 
-        // Pending leave
-        isAdmin
-          ? safeCount(() => supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'))
-          : 0,
+      // All other counts - run in parallel, each in try-catch
+      let pendingLeave = 0, pendingMaintenance = 0, newEvents = 0;
+      let onboardingCount = 0, contractApprovalsCount = 0, pendingAccountsCount = 0;
+      let pendingDocs = 0, driveOffsCount = 0, pendingReminders = 0;
+      let dailyReportsCount = 0, pendingPerformance = 0;
 
-        // Maintenance
-        notEmployee
-          ? safeCount(() => supabase.from('maintenance_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']))
-          : 0,
+      const promises: Promise<void>[] = [];
 
-        // Events
-        safeCount(() => supabase.from('events').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo)),
+      if (isAdmin) {
+        promises.push((async () => { try { const r = await supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'); pendingLeave = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('employees').select('*', { count: 'exact', head: true }).eq('status', 'onboarding'); onboardingCount = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('contract_approvals').select('*', { count: 'exact', head: true }).eq('status', 'pending'); contractApprovalsCount = r.count || 0; } catch {} })());
+      }
 
-        // Onboarding
-        isAdmin
-          ? safeCount(() => supabase.from('employees').select('*', { count: 'exact', head: true }).eq('status', 'onboarding'))
-          : 0,
+      if (['super_admin', 'hr'].includes(user.role)) {
+        promises.push((async () => { try { const r = await supabase.from('employees').select('*', { count: 'exact', head: true }).eq('account_activated', false).eq('status', 'active'); pendingAccountsCount = r.count || 0; } catch {} })());
+      }
 
-        // Contract approvals
-        isAdmin
-          ? safeCount(() => supabase.from('contract_approvals').select('*', { count: 'exact', head: true }).eq('status', 'pending'))
-          : 0,
+      if (notEmployee) {
+        promises.push((async () => { try { const r = await supabase.from('maintenance_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']); pendingMaintenance = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('documents').select('*', { count: 'exact', head: true }).lte('follow_up_date', new Date().toISOString()).is('verified_at', null); pendingDocs = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('drive_offs').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo); driveOffsCount = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('daily_reports').select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString()); dailyReportsCount = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('performance_reviews').select('*', { count: 'exact', head: true }).eq('status', 'pending'); pendingPerformance = r.count || 0; } catch {} })());
+      }
 
-        // Pending accounts
-        ['super_admin', 'hr'].includes(user.role)
-          ? safeCount(() => supabase.from('employees').select('*', { count: 'exact', head: true }).eq('account_activated', false).eq('status', 'active'))
-          : 0,
+      promises.push((async () => { try { const r = await supabase.from('events').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo); newEvents = r.count || 0; } catch {} })());
+      promises.push((async () => { try { const r = await (supabase.from('reminders').select('*', { count: 'exact', head: true }) as any).eq('status', 'pending').lte('due_date', new Date().toISOString()); pendingReminders = r.count || 0; } catch {} })());
 
-        // Documents
-        notEmployee
-          ? safeCount(() => supabase.from('documents').select('*', { count: 'exact', head: true }).lte('follow_up_date', new Date().toISOString()).is('verified_at', null))
-          : 0,
-
-        // Drive-offs
-        notEmployee
-          ? safeCount(() => supabase.from('drive_offs').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo))
-          : 0,
-
-        // Reminders
-        safeCount(() => (supabase.from('reminders').select('*', { count: 'exact', head: true }) as any).eq('status', 'pending').lte('due_date', new Date().toISOString())),
-
-        // Daily reports
-        notEmployee
-          ? (async () => { const t = new Date(); t.setHours(0,0,0,0); return safeCount(() => supabase.from('daily_reports').select('*', { count: 'exact', head: true }).gte('created_at', t.toISOString())); })()
-          : 0,
-
-        // Performance
-        notEmployee
-          ? safeCount(() => supabase.from('performance_reviews').select('*', { count: 'exact', head: true }).eq('status', 'pending'))
-          : 0,
-      ]);
+      await Promise.allSettled(promises);
 
       setCounts({
         messages,
