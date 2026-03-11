@@ -113,6 +113,22 @@ export default function EditEmployeeDialog({
 
       if (error) throw error;
 
+      // Log activity for notifications
+      if (user) {
+        await logActivity({
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          activityType: 'employee_profile_edit',
+          activityCategory: 'employees',
+          title: 'Employee Profile Updated',
+          description: `${user.name} updated ${formData.first_name} ${formData.last_name}'s profile`,
+          organizationId: formData.organization_id || undefined,
+          branchId: formData.branch_id || undefined,
+          metadata: { employee_id: employee.id },
+        });
+      }
+
       toast.success('Employee updated successfully');
       onSuccess();
       onOpenChange(false);
