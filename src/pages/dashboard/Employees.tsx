@@ -22,6 +22,7 @@ import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   AlertDialog,
