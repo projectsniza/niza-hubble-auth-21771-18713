@@ -643,7 +643,7 @@ export default function AddEmployee() {
                   <Input type="date" value={formData.dateOfBirth} onChange={(e) => updateFormData({ dateOfBirth: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>National Insurance Number</Label>
+                  <Label>National Insurance Number *</Label>
                   <Input value={formData.nationalInsuranceNumber} onChange={(e) => updateFormData({ nationalInsuranceNumber: e.target.value })} placeholder="AB 12 34 56 C" />
                 </div>
               </div>
