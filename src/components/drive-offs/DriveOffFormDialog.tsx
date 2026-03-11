@@ -37,6 +37,15 @@ const FUEL_TYPES = ['UNLEADED', 'DIESEL', 'SUPER UNLEADED', 'PREMIUM DIESEL', 'L
 const PUMP_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const TILL_NUMBERS = [1, 2, 3, 4, 5];
 
+const CLOSURE_REASONS = [
+  { value: 'fuel_guardian_closed', label: 'Closed by Fuel Guardian' },
+  { value: 'paid_by_customer', label: 'Paid by Customer' },
+  { value: 'employee_mistake', label: 'Employee Mistake' },
+  { value: 'written_off', label: 'Written Off' },
+  { value: 'police_resolved', label: 'Resolved by Police' },
+  { value: 'insurance_claim', label: 'Insurance Claim' },
+];
+
 const formSchema = z.object({
   branch_id: z.string().min(1, 'Branch is required'),
   drive_off_date: z.string().min(1, 'Date is required'),
@@ -61,6 +70,7 @@ const formSchema = z.object({
   date_handed_to_guardian: z.string().optional(),
   head_office_notes: z.string().optional(),
   remarks: z.string().optional(),
+  closure_reason: z.string().nullable().optional(),
 });
 
 interface SupportingFile {

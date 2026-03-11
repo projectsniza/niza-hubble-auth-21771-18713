@@ -62,6 +62,7 @@ export interface DriveOffFormData {
   date_handed_to_guardian?: string;
   head_office_notes?: string;
   remarks?: string;
+  closure_reason?: string | null;
   supporting_files?: any[];
 }
 
