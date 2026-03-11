@@ -200,10 +200,75 @@ export default function AddEmployee() {
         additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
       });
       
-      // Set current step based on onboarding progress
+      // Determine the correct step to resume based on completed form responses
+      // This is more robust than using stored step index which can be misaligned
+      // when form settings change
       if (data.employee_onboarding?.[0]) {
         const onboarding = data.employee_onboarding[0];
-        setCurrentStep(onboarding.current_step - 1 || 0);
+        
+        // Check which form responses exist to determine furthest completed step
+        const { data: formResponses } = await supabase
+          .from('onboarding_form_responses')
+          .select('form_type')
+          .eq('employee_id', id);
+        
+        const completedForms = new Set((formResponses || []).map((r: any) => r.form_type));
+        
+        // Check if contract was submitted
+        const { data: contractApproval } = await supabase
+          .from('contract_approvals')
+          .select('id, status')
+          .eq('employee_id', id)
+          .maybeSingle();
+        
+        // Determine the step to resume - find the first incomplete step
+        // We need to wait for formSettings to load, so use a callback approach
+        const determineStep = () => {
+          const steps = getActiveSteps();
+          
+          for (let i = 0; i < steps.length; i++) {
+            const stepId = steps[i].id;
+            if (stepId === 'basic') {
+              // Basic details are always done if we have an employee record
+              continue;
+            }
+            if (stepId === 'application' && !completedForms.has('application_form')) {
+              return i;
+            }
+            if (stepId === 'checklist' && !completedForms.has('starter_checklist')) {
+              return i;
+            }
+            if (stepId === 'bank_details' && !completedForms.has('bank_details')) {
+              return i;
+            }
+            if (stepId === 'documents') {
+              // Check stored step - if it's past documents, skip
+              const storedStep = onboarding.current_step || 1;
+              const docsStepIndex = steps.findIndex(s => s.id === 'documents');
+              if (storedStep - 1 <= docsStepIndex) {
+                return i;
+              }
+              continue;
+            }
+            if (stepId === 'contract') {
+              // If no contract approval submitted yet, go to contract
+              if (!contractApproval) {
+                return i;
+              }
+              // If contract is submitted/approved, they shouldn't be here
+              continue;
+            }
+          }
+          
+          // Fallback to stored step or last step
+          const storedStep = onboarding.current_step;
+          if (storedStep && storedStep > 0) {
+            return Math.min(storedStep - 1, steps.length - 1);
+          }
+          return 0;
+        };
+        
+        setCurrentStep(determineStep());
       }
     }
   };
