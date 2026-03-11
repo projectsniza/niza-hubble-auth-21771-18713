@@ -128,6 +128,7 @@ export function DriveOffFormDialog({
       date_handed_to_guardian: '',
       head_office_notes: '',
       remarks: '',
+      closure_reason: null,
     },
   });
 
