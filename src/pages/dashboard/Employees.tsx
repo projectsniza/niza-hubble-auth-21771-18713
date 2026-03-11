@@ -391,11 +391,17 @@ export default function Employees() {
           <TabsTrigger value="pending-onboarding" className="gap-2">
             <UserPlus className="h-4 w-4" />
             Pending Onboardings
+            {counts.pending_onboardings > 0 && (
+              <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.pending_onboardings}</Badge>
+            )}
           </TabsTrigger>
           {showContractApprovals && (
             <TabsTrigger value="approvals" className="gap-2">
               <FileSignature className="h-4 w-4" />
               Contract Approvals
+              {counts.contract_approvals > 0 && (
+                <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.contract_approvals}</Badge>
+              )}
             </TabsTrigger>
           )}
           {showApprovedContracts && (
@@ -424,6 +430,9 @@ export default function Employees() {
             <TabsTrigger value="pending-accounts" className="gap-2">
               <UserCog className="h-4 w-4" />
               Pending Accounts
+              {counts.pending_accounts > 0 && (
+                <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-[10px] ml-1">{counts.pending_accounts}</Badge>
+              )}
             </TabsTrigger>
           )}
           {showOnboardingSettings && (
