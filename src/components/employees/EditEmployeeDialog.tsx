@@ -9,6 +9,8 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
+import { useAuth } from '@/contexts/AuthContext';
+import { logActivity } from '@/hooks/useActivityLogs';
 
 interface EditEmployeeDialogProps {
   open: boolean;
@@ -23,6 +25,7 @@ export default function EditEmployeeDialog({
   employee, 
   onSuccess 
 }: EditEmployeeDialogProps) {
+  const { user } = useAuth();
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,6 +112,22 @@ export default function EditEmployeeDialog({
         .eq('id', employee.id);
 
       if (error) throw error;
+
+      // Log activity for notifications
+      if (user) {
+        await logActivity({
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          activityType: 'employee_profile_edit',
+          activityCategory: 'employees',
+          title: 'Employee Profile Updated',
+          description: `${user.name} updated ${formData.first_name} ${formData.last_name}'s profile`,
+          organizationId: formData.organization_id || undefined,
+          branchId: formData.branch_id || undefined,
+          metadata: { employee_id: employee.id },
+        });
+      }
 
       toast.success('Employee updated successfully');
       onSuccess();

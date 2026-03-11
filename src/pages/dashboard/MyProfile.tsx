@@ -290,13 +290,11 @@ export default function MyProfile() {
 
       {/* Tabs */}
       <Tabs defaultValue="leave" className="w-full">
-        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-6 no-scrollbar">
+        <TabsList className="w-full overflow-x-auto flex md:grid md:grid-cols-4 no-scrollbar">
           <TabsTrigger value="leave" className="text-xs md:text-sm whitespace-nowrap">My Leave</TabsTrigger>
           <TabsTrigger value="schedule" className="text-xs md:text-sm whitespace-nowrap">Schedule</TabsTrigger>
           <TabsTrigger value="documents" className="text-xs md:text-sm whitespace-nowrap">Docs</TabsTrigger>
           <TabsTrigger value="payslips" className="text-xs md:text-sm whitespace-nowrap">Payslips</TabsTrigger>
-          <TabsTrigger value="training" className="text-xs md:text-sm whitespace-nowrap">Training</TabsTrigger>
-          <TabsTrigger value="attendance" className="text-xs md:text-sm whitespace-nowrap">Attendance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="leave">
@@ -391,13 +389,12 @@ export default function MyProfile() {
                   <TableHead>Document</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Uploaded</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       No documents
                     </TableCell>
                   </TableRow>
@@ -407,11 +404,6 @@ export default function MyProfile() {
                       <TableCell className="font-medium">{doc.title}</TableCell>
                       <TableCell>{doc.file_type || '-'}</TableCell>
                       <TableCell>{format(new Date(doc.created_at), 'PPP')}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -458,77 +450,8 @@ export default function MyProfile() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="training">
-          <Card className="p-8">
-            <h3 className="text-xl font-bold mb-6 text-foreground">My Training</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Course</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Assigned</TableHead>
-                  <TableHead>Completed</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {trainings.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      No training courses
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  trainings.map((training) => (
-                    <TableRow key={training.id}>
-                      <TableCell className="font-medium">{training.trainings?.title || '-'}</TableCell>
-                      <TableCell>
-                        <Badge className={getStatusBadge(training.status)}>{training.status}</Badge>
-                      </TableCell>
-                      <TableCell>{format(new Date(training.created_at), 'PPP')}</TableCell>
-                      <TableCell>{training.completed_at ? format(new Date(training.completed_at), 'PPP') : '-'}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="attendance">
-          <Card className="p-8">
-            <h3 className="text-xl font-bold mb-6 text-foreground">Attendance History</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Clock In</TableHead>
-                  <TableHead>Clock Out</TableHead>
-                  <TableHead>Method</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clockIns.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      No attendance records
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  clockIns.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>{format(new Date(record.clock_in_time), 'PPP')}</TableCell>
-                      <TableCell>{format(new Date(record.clock_in_time), 'HH:mm')}</TableCell>
-                      <TableCell>{record.clock_out_time ? format(new Date(record.clock_out_time), 'HH:mm') : '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{record.clock_in_method}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
+
       </Tabs>
 
       {/* Leave Request Dialog */}

@@ -204,76 +204,85 @@ export default function AddEmployee() {
         additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
       });
       
-      if (data.employee_onboarding?.[0]) {
-        const onboarding = data.employee_onboarding[0];
+      // Always determine resume step based on form responses and contract status
+      const onboarding = data.employee_onboarding?.[0];
+      
+      const { data: formResponses } = await supabase
+        .from('onboarding_form_responses')
+        .select('form_type')
+        .eq('employee_id', id);
+      
+      const completedForms = new Set((formResponses || []).map((r: any) => r.form_type));
+      
+      const { data: contractApproval } = await supabase
+        .from('contract_approvals')
+        .select('id, status')
+        .eq('employee_id', id)
+        .maybeSingle();
+
+      // Check if documents have been uploaded
+      const { count: docCount } = await supabase
+        .from('documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('employee_id', id);
+      
+      // Use passed-in settings to avoid stale state
+      const activeSettings = loadedSettings || formSettings;
+      const getStepsForSettings = (s: FormSettings) => {
+        return BASE_STEPS.filter(step => {
+          if (step.id === 'application') return s.application;
+          if (step.id === 'checklist') return s.checklist;
+          if (step.id === 'bank_details') return s.bank_details;
+          return true;
+        });
+      };
+      
+      const determineStep = () => {
+        const steps = getStepsForSettings(activeSettings);
         
-        const { data: formResponses } = await supabase
-          .from('onboarding_form_responses')
-          .select('form_type')
-          .eq('employee_id', id);
-        
-        const completedForms = new Set((formResponses || []).map((r: any) => r.form_type));
-        
-        const { data: contractApproval } = await supabase
-          .from('contract_approvals')
-          .select('id, status')
-          .eq('employee_id', id)
-          .maybeSingle();
-        
-        // Use passed-in settings to avoid stale state
-        const activeSettings = loadedSettings || formSettings;
-        const getStepsForSettings = (s: FormSettings) => {
-          return BASE_STEPS.filter(step => {
-            if (step.id === 'application') return s.application;
-            if (step.id === 'checklist') return s.checklist;
-            if (step.id === 'bank_details') return s.bank_details;
-            return true;
-          });
-        };
-        
-        const determineStep = () => {
-          const steps = getStepsForSettings(activeSettings);
-          
-          for (let i = 0; i < steps.length; i++) {
-            const stepId = steps[i].id;
-            if (stepId === 'basic') {
-              continue;
-            }
-            if (stepId === 'application' && !completedForms.has('application_form')) {
+        // Basic details are always complete if the employee record exists
+        for (let i = 0; i < steps.length; i++) {
+          const stepId = steps[i].id;
+          if (stepId === 'basic') {
+            continue; // Employee exists, basic details are done
+          }
+          if (stepId === 'application' && !completedForms.has('application_form')) {
+            return i;
+          }
+          if (stepId === 'checklist' && !completedForms.has('starter_checklist')) {
+            return i;
+          }
+          if (stepId === 'bank_details' && !completedForms.has('bank_details')) {
+            return i;
+          }
+          if (stepId === 'documents') {
+            // If no documents uploaded yet, stop here
+            if (!docCount || docCount === 0) {
               return i;
             }
-            if (stepId === 'checklist' && !completedForms.has('starter_checklist')) {
-              return i;
-            }
-            if (stepId === 'bank_details' && !completedForms.has('bank_details')) {
-              return i;
-            }
-            if (stepId === 'documents') {
+            // If onboarding record tracks we haven't passed docs step
+            if (onboarding) {
               const storedStep = onboarding.current_step || 1;
               const docsStepIndex = steps.findIndex(s => s.id === 'documents');
               if (storedStep - 1 <= docsStepIndex) {
                 return i;
               }
-              continue;
             }
-            if (stepId === 'contract') {
-              if (!contractApproval) {
-                return i;
-              }
-              continue;
+            continue;
+          }
+          if (stepId === 'contract') {
+            if (!contractApproval) {
+              return i;
             }
+            continue;
           }
-          
-          const storedStep = onboarding.current_step;
-          if (storedStep && storedStep > 0) {
-            const steps2 = getStepsForSettings(activeSettings);
-            return Math.min(storedStep - 1, steps2.length - 1);
-          }
-          return 0;
-        };
+        }
         
-        setCurrentStep(determineStep());
-      }
+        // All steps completed, go to last step
+        return steps.length - 1;
+      };
+      
+      setCurrentStep(determineStep());
     }
   };
 

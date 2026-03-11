@@ -86,7 +86,15 @@ export default function NotificationBell() {
     }
     setOpen(false);
     
-    // Navigate based on activity category
+    // Navigate based on activity category and metadata
+    const metadata = activity.metadata as Record<string, unknown> || {};
+    
+    // If there's an employee_id in metadata, navigate to that employee's profile
+    if (metadata.employee_id && activity.activity_category === 'employees') {
+      navigate(`/dashboard/employees/${metadata.employee_id}`);
+      return;
+    }
+    
     switch (activity.activity_category) {
       case 'documents':
         navigate('/dashboard/documents?tab=submissions');
