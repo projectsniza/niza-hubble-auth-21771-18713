@@ -194,7 +194,7 @@ function PendingOnboardings() {
     fetchOnboarding();
   }, []);
 
-  const fetchOnboarding = async () => {
+  const fetchOnboarding = async (retryCount = 0) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -202,7 +202,14 @@ function PendingOnboardings() {
         .select(`id, first_name, last_name, email, status, organization_id, branch_id, organization:organizations(name), branch:branches(name), onboarding:employee_onboarding(id, current_step, completed_at, contract_approved, contract_submitted_for_approval), contract_approval:contract_approvals(id, status)`)
         .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval'])
         .order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        // Retry on transient errors
+        if (retryCount < 2 && (error.message?.includes('fetch') || error.message?.includes('503'))) {
+          await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
+          return fetchOnboarding(retryCount + 1);
+        }
+        throw error;
+      }
       // Filter out employees whose contract is submitted or approved
       const filtered = (data || []).filter(emp => {
         const onb = emp.onboarding?.[0];
@@ -214,7 +221,11 @@ function PendingOnboardings() {
       });
       setOnboardingEmployees(filtered);
     } catch (error: any) {
-      toast.error('Failed to load pending onboardings');
+      console.error('Failed to load pending onboardings:', error);
+      // Only show toast on final failure, not on every retry
+      if (onboardingEmployees.length === 0) {
+        toast.error('Failed to load pending onboardings. Please refresh the page.');
+      }
     } finally {
       setIsLoading(false);
     }
