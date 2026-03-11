@@ -126,9 +126,9 @@ export default function AddEmployee() {
     fetchOrganizations();
     fetchDepartments();
     // Load form settings first, then fetch employee (which depends on formSettings)
-    fetchFormSettings().then(() => {
+    fetchFormSettings().then((loadedSettings) => {
       if (employeeId) {
-        fetchEmployee(employeeId);
+        fetchEmployee(employeeId, loadedSettings);
       }
     });
   }, [employeeId]);
