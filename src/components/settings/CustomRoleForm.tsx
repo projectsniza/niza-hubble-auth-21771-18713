@@ -270,31 +270,35 @@ function CustomRoleFormImpl({
             />
           </div>
 
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Finance</p>
-              <p className="text-xs text-muted-foreground">Financial reports & P&L</p>
+          {formData.base_role !== 'manager' && (
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <p className="font-medium text-sm">Niza Finance</p>
+                <p className="text-xs text-muted-foreground">Profit & Loss Calculator</p>
+              </div>
+              <Switch
+                checked={formData.app_access.niza_finance}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_finance: checked } }))
+                }
+              />
             </div>
-            <Switch
-              checked={formData.app_access.niza_finance}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_finance: checked } }))
-              }
-            />
-          </div>
+          )}
 
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Templates</p>
-              <p className="text-xs text-muted-foreground">Business cards, ID cards, etc.</p>
+          {formData.base_role !== 'manager' && (
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <p className="font-medium text-sm">Niza Templates</p>
+                <p className="text-xs text-muted-foreground">Templates & Brand Assets</p>
+              </div>
+              <Switch
+                checked={formData.app_access.niza_templates}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_templates: checked } }))
+                }
+              />
             </div>
-            <Switch
-              checked={formData.app_access.niza_templates}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_templates: checked } }))
-              }
-            />
-          </div>
+          )}
 
           <div className="flex items-center justify-between p-3 border rounded-lg">
             <div>

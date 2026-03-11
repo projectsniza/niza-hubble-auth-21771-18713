@@ -349,7 +349,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          {(employee.status === 'inactive' || employee.status === 'terminated') && (
+                          {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
                               className="text-green-600 focus:text-green-600"
