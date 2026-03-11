@@ -318,6 +318,7 @@ export default function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [activeTab, setActiveTab] = useState('employees');
+  const { counts } = useNotificationCounts();
 
   useEffect(() => {
     if (user?.role === 'employee') {
