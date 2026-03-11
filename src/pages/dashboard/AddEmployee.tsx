@@ -329,6 +329,10 @@ export default function AddEmployee() {
         toast.error('Please fill in all required fields (Name, Email, Organization, Branch)');
         return;
       }
+      if (!formData.nationalInsuranceNumber) {
+        toast.error('National Insurance Number is required');
+        return;
+      }
       if (!formData.emergencyContactName || !formData.emergencyContactPhone) {
         toast.error('Emergency contact name and phone are required');
         return;
