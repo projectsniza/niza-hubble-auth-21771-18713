@@ -147,9 +147,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check for existing session FIRST before setting up listener
     const initializeAuth = async () => {
       try {
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
-        
+        const {
+          data: { session: existingSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
         if (!mounted) return;
+
+        if (sessionError) {
+          const refreshTokenInvalid =
+            sessionError.code === 'refresh_token_not_found' ||
+            sessionError.message?.includes('Refresh Token Not Found');
+
+          if (refreshTokenInvalid) {
+            await supabase.auth.signOut({ scope: 'local' });
+          }
+
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
 
         if (existingSession?.user) {
           setSession(existingSession);

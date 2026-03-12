@@ -5,6 +5,28 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryingFetch: typeof fetch = async (input, init) => {
+  const maxRetries = 2;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await fetch(input, init);
+      if (!RETRYABLE_STATUS_CODES.has(response.status) || attempt === maxRetries) {
+        return response;
+      }
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+    }
+
+    await sleep(300 * Math.pow(2, attempt));
+  }
+
+  return fetch(input, init);
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -13,5 +35,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    fetch: retryingFetch,
+  },
 });

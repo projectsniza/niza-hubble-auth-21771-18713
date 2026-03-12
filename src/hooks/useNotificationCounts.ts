@@ -93,7 +93,7 @@ export function useNotificationCounts() {
       }
 
       promises.push((async () => { try { const r = await supabase.from('events').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo); newEvents = r.count || 0; } catch {} })());
-      promises.push((async () => { try { const r = await (supabase.from('reminders').select('*', { count: 'exact', head: true }) as any).eq('status', 'pending').lte('due_date', new Date().toISOString()); pendingReminders = r.count || 0; } catch {} })());
+      promises.push((async () => { try { const r = await (supabase.from('reminders').select('id', { count: 'exact', head: true }) as any).eq('is_completed', false).not('is_dismissed', 'is', true).lte('reminder_date', new Date().toISOString()); pendingReminders = r.count || 0; } catch {} })());
 
       await Promise.allSettled(promises);
 
