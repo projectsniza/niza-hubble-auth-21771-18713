@@ -1270,6 +1270,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           description: string | null
+          difficulty_level: string | null
           estimated_duration_minutes: number | null
           id: string
           organization_id: string | null
@@ -1279,6 +1280,7 @@ export type Database = {
           thumbnail_path: string | null
           title: string
           updated_at: string | null
+          xp_reward: number | null
         }
         Insert: {
           branch_id?: string | null
@@ -1287,6 +1289,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          difficulty_level?: string | null
           estimated_duration_minutes?: number | null
           id?: string
           organization_id?: string | null
@@ -1296,6 +1299,7 @@ export type Database = {
           thumbnail_path?: string | null
           title: string
           updated_at?: string | null
+          xp_reward?: number | null
         }
         Update: {
           branch_id?: string | null
@@ -1304,6 +1308,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          difficulty_level?: string | null
           estimated_duration_minutes?: number | null
           id?: string
           organization_id?: string | null
@@ -1313,6 +1318,7 @@ export type Database = {
           thumbnail_path?: string | null
           title?: string
           updated_at?: string | null
+          xp_reward?: number | null
         }
         Relationships: [
           {
