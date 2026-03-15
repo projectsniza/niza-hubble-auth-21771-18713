@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, GripVertical, Type, List, Image, Video, FileText, Info, Quote, AlertCircle, Highlighter } from 'lucide-react';
+import ImageUploadBlock from '@/components/elearning/ImageUploadBlock';
 
 export interface ContentBlock {
   id: string;
@@ -18,7 +19,7 @@ const BLOCK_TYPES = [
   { value: 'subheading', label: 'Subheading', icon: Type },
   { value: 'paragraph', label: 'Paragraph', icon: FileText },
   { value: 'bullet_points', label: 'Bullet Points', icon: List },
-  { value: 'image', label: 'Image URL', icon: Image },
+  { value: 'image', label: 'Image', icon: Image },
   { value: 'video', label: 'Video URL', icon: Video },
   { value: 'note', label: 'Note', icon: AlertCircle },
   { value: 'highlight', label: 'Highlight Box', icon: Highlighter },
@@ -76,13 +77,37 @@ export default function LessonContentEditor({ content, onChange }: Props) {
     }
   };
 
-  const renderBlockEditor = (block: ContentBlock) => {
+  const moveBlock = (index: number, direction: 'up' | 'down') => {
+    const newContent = [...content];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newContent.length) return;
+    [newContent[index], newContent[targetIndex]] = [newContent[targetIndex], newContent[index]];
+    onChange(newContent);
+  };
+
+  const renderBlockEditor = (block: ContentBlock, index: number) => {
     const blockType = BLOCK_TYPES.find(t => t.value === block.type);
     const Icon = blockType?.icon || Type;
 
     return (
-      <div key={block.id} className="border rounded-lg p-3 group">
+      <div key={block.id} className="border rounded-lg p-3 group hover:border-primary/30 transition-colors">
         <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-col gap-0.5">
+            <button 
+              onClick={() => moveBlock(index, 'up')} 
+              disabled={index === 0}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-[10px] leading-none"
+            >
+              ▲
+            </button>
+            <button 
+              onClick={() => moveBlock(index, 'down')} 
+              disabled={index === content.length - 1}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-[10px] leading-none"
+            >
+              ▼
+            </button>
+          </div>
           <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
           <Icon className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs font-medium text-muted-foreground uppercase">{blockType?.label}</span>
@@ -96,7 +121,7 @@ export default function LessonContentEditor({ content, onChange }: Props) {
           <div className="space-y-1.5">
             {block.items?.map((item, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground text-xs font-mono">{i + 1}.</span>
                 <Input value={item} onChange={(e) => updateBulletItem(block.id, i, e.target.value)} className="h-8 text-sm" placeholder="Bullet point..." />
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeBulletItem(block.id, i)}>
                   <Trash2 className="h-3 w-3" />
@@ -107,9 +132,17 @@ export default function LessonContentEditor({ content, onChange }: Props) {
               <Plus className="h-3 w-3 mr-1" /> Add Item
             </Button>
           </div>
-        ) : block.type === 'image' || block.type === 'video' ? (
+        ) : block.type === 'image' ? (
+          <ImageUploadBlock
+            currentUrl={block.url}
+            caption={block.content}
+            onUpload={(url) => updateBlock(block.id, { url })}
+            onCaptionChange={(caption) => updateBlock(block.id, { content: caption })}
+            compact
+          />
+        ) : block.type === 'video' ? (
           <div className="space-y-2">
-            <Input value={block.url || ''} onChange={(e) => updateBlock(block.id, { url: e.target.value })} placeholder={`${block.type === 'image' ? 'Image' : 'Video'} URL...`} className="text-sm" />
+            <Input value={block.url || ''} onChange={(e) => updateBlock(block.id, { url: e.target.value })} placeholder="Video embed URL (YouTube, Vimeo)..." className="text-sm" />
             <Input value={block.content} onChange={(e) => updateBlock(block.id, { content: e.target.value })} placeholder="Caption (optional)" className="text-sm" />
           </div>
         ) : block.type === 'heading' || block.type === 'subheading' ? (
@@ -123,7 +156,7 @@ export default function LessonContentEditor({ content, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      {content.map(renderBlockEditor)}
+      {content.map((block, index) => renderBlockEditor(block, index))}
 
       <div className="flex items-center gap-2 pt-2 border-t">
         <Select value={addType} onValueChange={setAddType}>
