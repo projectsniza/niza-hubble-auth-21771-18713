@@ -9,19 +9,30 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, GraduationCap, BookOpen, ChevronDown, ChevronUp, Loader2, Eye, Archive, Send } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Edit, Trash2, GraduationCap, BookOpen, ChevronDown, ChevronUp, Loader2, Eye, Archive, Send, Zap, Trophy, Target, Shield, Star, Award } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import LessonContentEditor from '@/components/elearning/LessonContentEditor';
+import ImageUploadBlock from '@/components/elearning/ImageUploadBlock';
+import { DifficultyBadge } from '@/components/elearning/GamificationElements';
+import { cn } from '@/lib/utils';
 
 const TEMPLATE_OPTIONS = [
-  { value: 'classic', label: 'Classic Learning', desc: 'Corporate training with clean layout' },
-  { value: 'step_by_step', label: 'Step-by-Step', desc: 'Procedural training with progress tracking' },
-  { value: 'visual', label: 'Visual Learning', desc: 'Image-heavy with infographics' },
-  { value: 'interactive', label: 'Interactive', desc: 'Quizzes and scenario-based learning' },
-  { value: 'microlearning', label: 'Microlearning', desc: 'Short card-based quick lessons' },
+  { value: 'classic', label: 'Classic Learning', desc: 'Corporate training with clean layout', icon: BookOpen },
+  { value: 'step_by_step', label: 'Step-by-Step', desc: 'Procedural training with progress tracking', icon: Target },
+  { value: 'visual', label: 'Visual Learning', desc: 'Image-heavy with infographics', icon: Eye },
+  { value: 'interactive', label: 'Interactive', desc: 'Quizzes and scenario-based learning', icon: Zap },
+  { value: 'microlearning', label: 'Microlearning', desc: 'Short card-based quick lessons', icon: Star },
+];
+
+const DIFFICULTY_OPTIONS = [
+  { value: 'beginner', label: 'Beginner', desc: 'Entry-level, no prior knowledge needed' },
+  { value: 'intermediate', label: 'Intermediate', desc: 'Some existing knowledge required' },
+  { value: 'advanced', label: 'Advanced', desc: 'Requires strong foundations' },
+  { value: 'expert', label: 'Expert', desc: 'For specialists and experienced staff' },
 ];
 
 interface Course {
@@ -34,6 +45,9 @@ interface Course {
   certificate_enabled: boolean;
   status: string;
   category_id: string | null;
+  thumbnail_path: string | null;
+  difficulty_level?: string | null;
+  xp_reward?: number | null;
   created_at: string;
 }
 
@@ -73,16 +87,13 @@ export default function CourseBuilder() {
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Course form
   const [courseForm, setCourseForm] = useState({
     title: '', description: '', template_style: 'classic', estimated_duration_minutes: 30,
-    passing_score: 70, certificate_enabled: true, category_id: '',
+    passing_score: 80, certificate_enabled: true, category_id: '',
+    thumbnail_path: '', difficulty_level: 'beginner', xp_reward: 0,
   });
 
-  // Module form
   const [moduleForm, setModuleForm] = useState({ title: '', description: '' });
-
-  // Lesson form
   const [lessonForm, setLessonForm] = useState({ title: '', content: [] as any[], estimated_duration_minutes: 5 });
 
   useEffect(() => {
@@ -105,7 +116,6 @@ export default function CourseBuilder() {
   const fetchModules = async (courseId: string) => {
     const { data: mods } = await supabase.from('course_modules').select('*').eq('course_id', courseId).order('sort_order');
     if (mods) {
-      // Fetch lessons for each module
       const moduleIds = mods.map(m => m.id);
       const { data: lessons } = await supabase.from('course_lessons').select('*').in('module_id', moduleIds).order('sort_order');
       const modulesWithLessons = mods.map(m => ({
@@ -120,6 +130,7 @@ export default function CourseBuilder() {
     if (!courseForm.title) { toast.error('Course title is required'); return; }
     setIsSubmitting(true);
     try {
+      const xp = courseForm.xp_reward || courseForm.estimated_duration_minutes;
       const { error } = await supabase.from('courses').insert({
         title: courseForm.title,
         description: courseForm.description || null,
@@ -128,13 +139,14 @@ export default function CourseBuilder() {
         passing_score: courseForm.passing_score,
         certificate_enabled: courseForm.certificate_enabled,
         category_id: courseForm.category_id || null,
+        thumbnail_path: courseForm.thumbnail_path || null,
         created_by: user?.id,
         status: 'draft',
       });
       if (error) throw error;
       toast.success('Course created');
       setShowCourseDialog(false);
-      setCourseForm({ title: '', description: '', template_style: 'classic', estimated_duration_minutes: 30, passing_score: 70, certificate_enabled: true, category_id: '' });
+      resetCourseForm();
       fetchCourses();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create course');
@@ -155,6 +167,7 @@ export default function CourseBuilder() {
         passing_score: courseForm.passing_score,
         certificate_enabled: courseForm.certificate_enabled,
         category_id: courseForm.category_id || null,
+        thumbnail_path: courseForm.thumbnail_path || null,
       }).eq('id', selectedCourse.id);
       if (error) throw error;
       toast.success('Course updated');
@@ -251,6 +264,10 @@ export default function CourseBuilder() {
     }
   };
 
+  const resetCourseForm = () => {
+    setCourseForm({ title: '', description: '', template_style: 'classic', estimated_duration_minutes: 30, passing_score: 80, certificate_enabled: true, category_id: '', thumbnail_path: '', difficulty_level: 'beginner', xp_reward: 0 });
+  };
+
   const openEditCourse = (course: Course) => {
     setSelectedCourse(course);
     setCourseForm({
@@ -261,6 +278,9 @@ export default function CourseBuilder() {
       passing_score: course.passing_score,
       certificate_enabled: course.certificate_enabled,
       category_id: course.category_id || '',
+      thumbnail_path: course.thumbnail_path || '',
+      difficulty_level: course.difficulty_level || 'beginner',
+      xp_reward: course.xp_reward || 0,
     });
     setShowCourseDialog(true);
   };
@@ -287,9 +307,9 @@ export default function CourseBuilder() {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'published') return <Badge className="bg-green-500/10 text-green-600">Published</Badge>;
+    if (status === 'published') return <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">Published</Badge>;
     if (status === 'archived') return <Badge className="bg-muted text-muted-foreground">Archived</Badge>;
-    return <Badge className="bg-yellow-500/10 text-yellow-600">Draft</Badge>;
+    return <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/30">Draft</Badge>;
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><NizaLoaderInline /></div>;
@@ -298,11 +318,16 @@ export default function CourseBuilder() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Course Builder</h1>
-          <p className="text-muted-foreground mt-1">Create and manage training courses</p>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            </div>
+            Course Builder
+          </h1>
+          <p className="text-muted-foreground mt-1 ml-[52px]">Create gamified training courses with XP rewards</p>
         </div>
-        <Button onClick={() => { setSelectedCourse(null); setCourseForm({ title: '', description: '', template_style: 'classic', estimated_duration_minutes: 30, passing_score: 70, certificate_enabled: true, category_id: '' }); setShowCourseDialog(true); }} className="bg-gradient-to-r from-orange-500 to-amber-600 text-white">
-          <Plus className="h-4 w-4 mr-2" /> New Course
+        <Button onClick={() => { setSelectedCourse(null); resetCourseForm(); setShowCourseDialog(true); }} className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground gap-2 shadow-lg shadow-primary/20">
+          <Plus className="h-4 w-4" /> New Course
         </Button>
       </div>
 
@@ -312,25 +337,33 @@ export default function CourseBuilder() {
           <div className="text-center py-16">
             <GraduationCap className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-muted-foreground">No courses yet</h3>
-            <p className="text-sm text-muted-foreground">Create your first training course</p>
+            <p className="text-sm text-muted-foreground">Create your first gamified training course</p>
           </div>
         ) : (
           courses.map(course => (
-            <Card key={course.id} className="border-primary/20">
+            <Card key={course.id} className="border-primary/10 hover:border-primary/20 transition-colors overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleCourseExpand(course.id)}>
                     {expandedCourse === course.id ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+                    {course.thumbnail_path ? (
+                      <img src={course.thumbnail_path} alt="" className="w-12 h-12 rounded-lg object-cover border" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                        <GraduationCap className="h-5 w-5 text-primary/50" />
+                      </div>
+                    )}
                     <div>
-                      <h3 className="font-semibold text-foreground">{course.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
+                      <h3 className="font-bold text-foreground">{course.title}</h3>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {getStatusBadge(course.status)}
                         <span className="text-xs text-muted-foreground">{course.estimated_duration_minutes} min</span>
                         <Badge variant="outline" className="text-xs">{TEMPLATE_OPTIONS.find(t => t.value === course.template_style)?.label}</Badge>
+                        <DifficultyBadge level={(course.difficulty_level as any) || 'beginner'} />
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" onClick={() => handlePublishCourse(course.id, course.status)} title={course.status === 'published' ? 'Unpublish' : 'Publish'}>
                       {course.status === 'published' ? <Archive className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                     </Button>
@@ -343,33 +376,30 @@ export default function CourseBuilder() {
                   </div>
                 </div>
 
-                {/* Expanded: Modules & Lessons */}
                 {expandedCourse === course.id && (
                   <div className="mt-4 ml-8 space-y-3">
-                    <Button variant="outline" size="sm" onClick={() => { setModuleForm({ title: '', description: '' }); setShowModuleDialog(true); }}>
-                      <Plus className="h-3 w-3 mr-1" /> Add Module
+                    <Button variant="outline" size="sm" onClick={() => { setModuleForm({ title: '', description: '' }); setShowModuleDialog(true); }} className="gap-1">
+                      <Plus className="h-3 w-3" /> Add Module
                     </Button>
                     {modules.map(mod => (
-                      <div key={mod.id} className="border rounded-lg p-3">
+                      <div key={mod.id} className="border rounded-lg p-3 bg-card/50">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setExpandedModule(expandedModule === mod.id ? null : mod.id)}>
                             {expandedModule === mod.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                             <h4 className="font-medium text-sm">{mod.title}</h4>
                             <Badge variant="outline" className="text-xs">{mod.lessons?.length || 0} lessons</Badge>
                           </div>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setDeleteTarget({ type: 'module', id: mod.id, name: mod.title }); setShowDeleteDialog(true); }}>
-                              <Trash2 className="h-3 w-3 text-destructive" />
-                            </Button>
-                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setDeleteTarget({ type: 'module', id: mod.id, name: mod.title }); setShowDeleteDialog(true); }}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
                         </div>
                         {expandedModule === mod.id && (
                           <div className="mt-2 ml-6 space-y-2">
-                            <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setSelectedModule(mod); setSelectedLesson(null); setLessonForm({ title: '', content: [], estimated_duration_minutes: 5 }); setShowLessonDialog(true); }}>
-                              <Plus className="h-3 w-3 mr-1" /> Add Lesson
+                            <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => { setSelectedModule(mod); setSelectedLesson(null); setLessonForm({ title: '', content: [], estimated_duration_minutes: 5 }); setShowLessonDialog(true); }}>
+                              <Plus className="h-3 w-3" /> Add Lesson
                             </Button>
                             {mod.lessons?.map(lesson => (
-                              <div key={lesson.id} className="flex items-center justify-between p-2 border rounded hover:bg-card/50">
+                              <div key={lesson.id} className="flex items-center justify-between p-2 border rounded hover:bg-muted/30 transition-colors">
                                 <div className="flex items-center gap-2">
                                   <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
                                   <span className="text-sm">{lesson.title}</span>
@@ -399,65 +429,147 @@ export default function CourseBuilder() {
 
       {/* Create/Edit Course Dialog */}
       <Dialog open={showCourseDialog} onOpenChange={setShowCourseDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedCourse ? 'Edit Course' : 'Create New Course'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              {selectedCourse ? 'Edit Course' : 'Create New Course'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Thumbnail */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">Course Thumbnail</Label>
+              <ImageUploadBlock
+                currentUrl={courseForm.thumbnail_path}
+                onUpload={(url) => setCourseForm(p => ({ ...p, thumbnail_path: url }))}
+                placeholder="Upload a course thumbnail image"
+                folder="course-thumbnails"
+              />
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
               <Label>Course Title *</Label>
-              <Input value={courseForm.title} onChange={(e) => setCourseForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g., Workplace Safety Training" />
+              <Input value={courseForm.title} onChange={(e) => setCourseForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g., CPD: Workplace Safety Training" />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea value={courseForm.description} onChange={(e) => setCourseForm(p => ({ ...p, description: e.target.value }))} rows={3} placeholder="Course description..." />
             </div>
+
+            <Separator />
+
+            {/* Template Selection */}
             <div className="space-y-2">
-              <Label>Course Template *</Label>
-              <Select value={courseForm.template_style} onValueChange={(v) => setCourseForm(p => ({ ...p, template_style: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TEMPLATE_OPTIONS.map(t => (
-                    <SelectItem key={t.value} value={t.value}>
-                      <div>
-                        <span className="font-medium">{t.label}</span>
-                        <span className="text-xs text-muted-foreground ml-2">{t.desc}</span>
+              <Label className="text-sm font-bold flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" /> Course Template *
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {TEMPLATE_OPTIONS.map(t => {
+                  const Icon = t.icon;
+                  return (
+                    <div 
+                      key={t.value}
+                      onClick={() => setCourseForm(p => ({ ...p, template_style: t.value }))}
+                      className={cn(
+                        "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                        courseForm.template_style === t.value 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">{t.label}</span>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      <p className="text-[10px] text-muted-foreground mt-1">{t.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            <Separator />
+
+            {/* Gamification Settings */}
+            <div className="space-y-4">
+              <Label className="text-sm font-bold flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" /> Gamification Settings
+              </Label>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Difficulty Level</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {DIFFICULTY_OPTIONS.map(d => (
+                    <div 
+                      key={d.value}
+                      onClick={() => setCourseForm(p => ({ ...p, difficulty_level: d.value }))}
+                      className={cn(
+                        "p-2 rounded-lg border-2 cursor-pointer transition-all text-center",
+                        courseForm.difficulty_level === d.value 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border hover:border-primary/30"
+                      )}
+                    >
+                      <span className="text-xs font-bold">{d.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs">XP Reward (0 = auto)</Label>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-500" />
+                    <Input type="number" value={courseForm.xp_reward || ''} onChange={(e) => setCourseForm(p => ({ ...p, xp_reward: parseInt(e.target.value) || 0 }))} placeholder="Auto-calculated" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Leave 0 to auto-calculate from lessons</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Passing Score (%)</Label>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-emerald-500" />
+                    <Input type="number" value={courseForm.passing_score || ''} onChange={(e) => setCourseForm(p => ({ ...p, passing_score: parseInt(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Duration (minutes)</Label>
                 <Input type="number" value={courseForm.estimated_duration_minutes || ''} onChange={(e) => setCourseForm(p => ({ ...p, estimated_duration_minutes: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-2">
-                <Label>Passing Score (%)</Label>
-                <Input type="number" value={courseForm.passing_score || ''} onChange={(e) => setCourseForm(p => ({ ...p, passing_score: parseInt(e.target.value) || 0 }))} />
+                <Label>Category</Label>
+                <Select value={courseForm.category_id || 'none'} onValueChange={(v) => setCourseForm(p => ({ ...p, category_id: v === 'none' ? '' : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Category</SelectItem>
+                    {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={courseForm.category_id || 'none'} onValueChange={(v) => setCourseForm(p => ({ ...p, category_id: v === 'none' ? '' : v }))}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Category</SelectItem>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center justify-between p-3 border rounded-lg">
-              <Label>Certificate on Completion</Label>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-gradient-to-r from-emerald-500/5 to-green-500/5 border-emerald-500/20">
+              <div className="flex items-center gap-2">
+                <Award className="h-4 w-4 text-emerald-500" />
+                <Label>CPD Certificate on Completion</Label>
+              </div>
               <Switch checked={courseForm.certificate_enabled} onCheckedChange={(v) => setCourseForm(p => ({ ...p, certificate_enabled: v }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCourseDialog(false)}>Cancel</Button>
-            <Button onClick={selectedCourse ? handleUpdateCourse : handleCreateCourse} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {selectedCourse ? 'Update' : 'Create'}
+            <Button onClick={selectedCourse ? handleUpdateCourse : handleCreateCourse} disabled={isSubmitting} className="gap-2">
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {selectedCourse ? 'Update' : 'Create'} Course
             </Button>
           </DialogFooter>
         </DialogContent>

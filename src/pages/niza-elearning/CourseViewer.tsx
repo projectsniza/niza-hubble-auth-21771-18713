@@ -4,16 +4,21 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, CheckCircle, BookOpen, Clock, Award, PlayCircle } from 'lucide-react';
+import { 
+  ChevronLeft, ChevronRight, CheckCircle, BookOpen, Clock, Award, 
+  PlayCircle, Zap, Target, Trophy, Shield, Star, Flame, TrendingUp 
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { XPBar, PointsPopup, DifficultyBadge, MilestoneTracker } from '@/components/elearning/GamificationElements';
 import ClassicTemplate from '@/components/elearning/templates/ClassicTemplate';
 import StepByStepTemplate from '@/components/elearning/templates/StepByStepTemplate';
 import VisualTemplate from '@/components/elearning/templates/VisualTemplate';
 import InteractiveTemplate from '@/components/elearning/templates/InteractiveTemplate';
 import MicrolearningTemplate from '@/components/elearning/templates/MicrolearningTemplate';
+import { cn } from '@/lib/utils';
 
 export default function CourseViewer() {
   const { courseId } = useParams();
@@ -26,12 +31,19 @@ export default function CourseViewer() {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showXPPopup, setShowXPPopup] = useState(false);
+  const [earnedXP, setEarnedXP] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const allLessons = modules.flatMap(m => (m.lessons || []).map((l: any) => ({ ...l, moduleName: m.title })));
   const currentLesson = allLessons[currentLessonIndex];
   const totalLessons = allLessons.length;
   const completedCount = Object.values(lessonProgress).filter(Boolean).length;
   const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+  const xpPerLesson = 25;
+  const totalXP = completedCount * xpPerLesson;
+  const maxXP = totalLessons * xpPerLesson;
+  const level = Math.floor(totalXP / 100) + 1;
 
   useEffect(() => {
     if (courseId && user) fetchCourseData();
@@ -40,15 +52,12 @@ export default function CourseViewer() {
   const fetchCourseData = async () => {
     setLoading(true);
     try {
-      // Get employee
       const { data: emp } = await supabase.from('employees').select('id').eq('user_id', user!.id).single();
       if (emp) setEmployeeId(emp.id);
 
-      // Get course
       const { data: courseData } = await supabase.from('courses').select('*').eq('id', courseId).single();
       setCourse(courseData);
 
-      // Get modules + lessons
       const { data: mods } = await supabase.from('course_modules').select('*').eq('course_id', courseId).order('sort_order');
       let lessons: any[] = [];
       if (mods) {
@@ -62,14 +71,11 @@ export default function CourseViewer() {
         setModules(modsWithLessons);
       }
 
-      // Get progress
       if (emp) {
         const { data: prog } = await supabase.from('course_progress').select('*').eq('course_id', courseId).eq('employee_id', emp.id).maybeSingle();
         setProgress(prog);
 
-        // Get lesson progress for all lessons in this course
         const allLessonIds = lessons.map(l => l.id);
-        
         let lpData: any[] = [];
         if (allLessonIds.length > 0) {
           const { data } = await supabase.from('lesson_progress').select('lesson_id, completed').eq('employee_id', emp.id).in('lesson_id', allLessonIds);
@@ -98,7 +104,7 @@ export default function CourseViewer() {
       }, { onConflict: 'course_id,employee_id' });
       if (error) throw error;
       setProgress({ status: 'in_progress', progress_percentage: 0 });
-      toast.success('Course started!');
+      toast.success('Course started! Good luck!');
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -117,6 +123,11 @@ export default function CourseViewer() {
       const newLessonProgress = { ...lessonProgress, [currentLesson.id]: true };
       setLessonProgress(newLessonProgress);
 
+      // Show XP popup
+      setEarnedXP(xpPerLesson);
+      setShowXPPopup(true);
+      setTimeout(() => setShowXPPopup(false), 2000);
+
       const newCompleted = Object.values(newLessonProgress).filter(Boolean).length;
       const newPercent = totalLessons > 0 ? Math.round((newCompleted / totalLessons) * 100) : 0;
 
@@ -128,9 +139,8 @@ export default function CourseViewer() {
       }).eq('course_id', courseId).eq('employee_id', employeeId);
 
       if (newPercent >= 100) {
-        toast.success('🎉 Course completed!');
+        toast.success('Course completed! Achievement unlocked!');
 
-        // Count total completed courses for this employee
         const { count: totalCoursesCompleted } = await supabase
           .from('course_progress')
           .select('id', { count: 'exact', head: true })
@@ -138,8 +148,6 @@ export default function CourseViewer() {
           .eq('status', 'completed');
 
         const coursesCount = (totalCoursesCompleted || 0);
-
-        // Determine star tier
         const tierName = coursesCount >= 101 ? 'supernova'
           : coursesCount >= 51 ? 'platinum_star'
           : coursesCount >= 31 ? 'gold_star'
@@ -147,7 +155,6 @@ export default function CourseViewer() {
           : coursesCount >= 1 ? 'rising_star'
           : 'none';
 
-        // Get employee name for certificate
         const { data: empData } = await supabase
           .from('employees')
           .select('first_name, last_name')
@@ -155,10 +162,8 @@ export default function CourseViewer() {
           .maybeSingle();
         const empName = empData ? `${empData.first_name} ${empData.last_name}` : 'Employee';
 
-        // Generate certificate if enabled
         if (course?.certificate_enabled) {
           const verificationToken = crypto.randomUUID();
-          // Get default design
           const { data: defaultDesign } = await supabase
             .from('certificate_designs')
             .select('id')
@@ -177,20 +182,17 @@ export default function CourseViewer() {
           });
         }
 
-        // Count certificates
         const { count: certsCount } = await supabase
           .from('elearning_certificates')
           .select('id', { count: 'exact', head: true })
           .eq('employee_id', employeeId);
 
-        // Calculate total learning hours from all course progress
         const { data: allProgress } = await supabase
           .from('course_progress')
           .select('total_time_minutes')
           .eq('employee_id', employeeId);
         const totalLearningHours = (allProgress || []).reduce((acc, p) => acc + (p.total_time_minutes || 0), 0) / 60;
 
-        // Update learning stats
         await supabase.from('employee_learning_stats').upsert({
           employee_id: employeeId,
           courses_completed: coursesCount,
@@ -200,12 +202,10 @@ export default function CourseViewer() {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'employee_id' });
 
-        // Navigate to certificates or my-courses after a short delay
         setTimeout(() => {
           navigate('/niza-elearning/certificates');
         }, 2000);
       } else if (currentLessonIndex < totalLessons - 1) {
-        // Brief delay so user sees the completed state before advancing
         setTimeout(() => setCurrentLessonIndex(currentLessonIndex + 1), 800);
       }
     } catch (err: any) {
@@ -223,27 +223,93 @@ export default function CourseViewer() {
         <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
           <ChevronLeft className="h-4 w-4 mr-1" /> Back
         </Button>
-        <div className="w-full h-48 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center">
-          <BookOpen className="h-16 w-16 text-orange-500/50" />
+
+        {/* Hero */}
+        <div className="w-full h-56 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/20 flex items-center justify-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,hsl(var(--primary)/0.15),transparent_70%)]" />
+          {course.thumbnail_path ? (
+            <img src={course.thumbnail_path} alt="" className="w-full h-full object-cover absolute inset-0" />
+          ) : (
+            <BookOpen className="h-16 w-16 text-primary/40" />
+          )}
+          <div className="absolute bottom-4 right-4 flex gap-2">
+            <DifficultyBadge level={course.difficulty_level || 'beginner'} />
+          </div>
         </div>
+
         <h1 className="text-3xl font-bold text-foreground">{course.title}</h1>
-        {course.description && <p className="text-muted-foreground">{course.description}</p>}
+        {course.description && <p className="text-muted-foreground text-lg">{course.description}</p>}
+
+        {/* Stats */}
         <div className="flex flex-wrap gap-3">
-          <Badge className="gap-1"><Clock className="h-3 w-3" /> {course.estimated_duration_minutes} min</Badge>
-          <Badge variant="outline">{modules.length} modules</Badge>
-          <Badge variant="outline">{totalLessons} lessons</Badge>
-          {course.certificate_enabled && <Badge className="bg-amber-500/10 text-amber-600"><Award className="h-3 w-3 mr-1" /> Certificate</Badge>}
+          <Badge className="gap-1 bg-primary/10 text-primary border border-primary/20">
+            <Clock className="h-3 w-3" /> {course.estimated_duration_minutes} min
+          </Badge>
+          <Badge variant="outline" className="gap-1"><Target className="h-3 w-3" /> {modules.length} modules</Badge>
+          <Badge variant="outline" className="gap-1"><BookOpen className="h-3 w-3" /> {totalLessons} lessons</Badge>
+          <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/20 gap-1">
+            <Zap className="h-3 w-3" /> {totalLessons * xpPerLesson} XP total
+          </Badge>
+          {course.certificate_enabled && (
+            <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 gap-1">
+              <Award className="h-3 w-3" /> Certificate
+            </Badge>
+          )}
         </div>
-        <Card className="border-primary/20">
+
+        {/* Rewards preview */}
+        <Card className="border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-orange-500/5 overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+          <CardContent className="p-5">
+            <h3 className="font-bold mb-4 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-500" /> Rewards
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="text-center p-3 rounded-lg bg-background/50 border border-border/50">
+                <Zap className="h-6 w-6 text-amber-500 mx-auto mb-1" />
+                <p className="text-lg font-bold text-foreground">{totalLessons * xpPerLesson}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total XP</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-background/50 border border-border/50">
+                <Star className="h-6 w-6 text-purple-500 mx-auto mb-1" />
+                <p className="text-lg font-bold text-foreground">{modules.length}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Milestones</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-background/50 border border-border/50">
+                <Shield className="h-6 w-6 text-emerald-500 mx-auto mb-1" />
+                <p className="text-lg font-bold text-foreground">1</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Badge</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-background/50 border border-border/50">
+                <Award className="h-6 w-6 text-blue-500 mx-auto mb-1" />
+                <p className="text-lg font-bold text-foreground">{course.certificate_enabled ? 'Yes' : 'No'}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Certificate</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Course Structure */}
+        <Card className="border-primary/20 overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-primary to-primary/50" />
           <CardContent className="p-6">
-            <h3 className="font-semibold mb-3">Course Structure</h3>
+            <h3 className="font-bold mb-4 flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" /> Course Structure
+            </h3>
             {modules.map((m, i) => (
-              <div key={m.id} className="mb-3">
-                <p className="font-medium text-sm">Module {i + 1}: {m.title}</p>
-                <ul className="ml-4 mt-1 space-y-1">
+              <div key={m.id} className="mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                    <span className="text-xs font-bold text-primary-foreground">{i + 1}</span>
+                  </div>
+                  <p className="font-semibold text-sm text-foreground">{m.title}</p>
+                  <Badge variant="outline" className="text-[10px]">{m.lessons?.length || 0} lessons</Badge>
+                </div>
+                <ul className="ml-11 space-y-1">
                   {m.lessons?.map((l: any) => (
-                    <li key={l.id} className="text-sm text-muted-foreground flex items-center gap-2">
-                      <BookOpen className="h-3 w-3" /> {l.title} <span className="text-xs">({l.estimated_duration_minutes}min)</span>
+                    <li key={l.id} className="text-sm text-muted-foreground flex items-center gap-2 py-1">
+                      <BookOpen className="h-3 w-3" /> {l.title}
+                      <span className="text-xs text-muted-foreground/60">{l.estimated_duration_minutes}min</span>
                     </li>
                   ))}
                 </ul>
@@ -251,19 +317,19 @@ export default function CourseViewer() {
             ))}
           </CardContent>
         </Card>
-        {employeeId && (
-          <Button size="lg" onClick={startCourse} className="bg-gradient-to-r from-orange-500 to-amber-600 text-white">
-            <PlayCircle className="h-5 w-5 mr-2" /> Start Course
+
+        {employeeId ? (
+          <Button size="lg" onClick={startCourse} className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all">
+            <PlayCircle className="h-5 w-5" /> Begin Course
           </Button>
-        )}
-        {!employeeId && (
+        ) : (
           <p className="text-sm text-muted-foreground italic">Link your employee profile to start this course.</p>
         )}
       </div>
     );
   }
 
-  // Course in progress - render with template
+  // Course in progress
   const TemplateComponent = {
     classic: ClassicTemplate,
     step_by_step: StepByStepTemplate,
@@ -272,23 +338,40 @@ export default function CourseViewer() {
     microlearning: MicrolearningTemplate,
   }[course.template_style] || ClassicTemplate;
 
+  const milestones = modules.map((m, i) => ({
+    at: modules.slice(0, i + 1).reduce((acc, mod) => acc + (mod.lessons?.length || 0), 0),
+    label: `M${i + 1}`,
+    icon: i === modules.length - 1 ? Trophy : Star,
+  }));
+
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="border-b p-3 flex items-center justify-between bg-card">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h2 className="font-semibold text-sm">{course.title}</h2>
-            <p className="text-xs text-muted-foreground">Lesson {currentLessonIndex + 1} of {totalLessons}</p>
+      <PointsPopup points={earnedXP} show={showXPPopup} />
+
+      {/* Gamified Top Bar */}
+      <div className="border-b p-3 bg-card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h2 className="font-semibold text-sm">{course.title}</h2>
+              <p className="text-xs text-muted-foreground">Lesson {currentLessonIndex + 1} of {totalLessons}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+              <Zap className="h-3 w-3 text-amber-500" />
+              <span className="text-xs font-bold text-amber-600">{totalXP} XP</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+              <Star className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-bold text-primary">LVL {level}</span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Progress value={progressPercent} className="w-32 h-2" />
-          <span className="text-xs text-muted-foreground">{progressPercent}%</span>
-        </div>
+        <XPBar current={totalXP} total={maxXP} level={level} />
       </div>
 
       {/* Lesson content */}
@@ -305,21 +388,33 @@ export default function CourseViewer() {
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="border-t p-3 flex items-center justify-between bg-card">
-        <Button variant="outline" disabled={currentLessonIndex === 0} onClick={() => setCurrentLessonIndex(currentLessonIndex - 1)}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-        </Button>
-        <div className="flex gap-2">
-          {!lessonProgress[currentLesson?.id] && (
-            <Button onClick={completeLesson} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
-              <CheckCircle className="h-4 w-4 mr-1" /> Complete Lesson
-            </Button>
-          )}
+      {/* Gamified Navigation */}
+      <div className="border-t p-3 bg-card">
+        {/* Milestones */}
+        <div className="mb-3 hidden sm:block">
+          <MilestoneTracker current={completedCount} milestones={milestones} />
         </div>
-        <Button variant="outline" disabled={currentLessonIndex >= totalLessons - 1} onClick={() => setCurrentLessonIndex(currentLessonIndex + 1)}>
-          Next <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
+        
+        <div className="flex items-center justify-between">
+          <Button variant="outline" disabled={currentLessonIndex === 0} onClick={() => setCurrentLessonIndex(currentLessonIndex - 1)} className="gap-1">
+            <ChevronLeft className="h-4 w-4" /> Previous
+          </Button>
+          <div className="flex gap-2">
+            {!lessonProgress[currentLesson?.id] && (
+              <Button onClick={completeLesson} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white gap-2 shadow-lg shadow-emerald-500/20 hover:shadow-xl transition-all">
+                <CheckCircle className="h-4 w-4" /> Complete +{xpPerLesson} XP
+              </Button>
+            )}
+            {lessonProgress[currentLesson?.id] && (
+              <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 gap-1 py-2 px-3">
+                <Shield className="h-4 w-4" /> Completed
+              </Badge>
+            )}
+          </div>
+          <Button variant="outline" disabled={currentLessonIndex >= totalLessons - 1} onClick={() => setCurrentLessonIndex(currentLessonIndex + 1)} className="gap-1">
+            Next <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
