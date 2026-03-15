@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Edit, Trash2, GraduationCap, BookOpen, ChevronDown, ChevronUp, Loader2, Eye, Archive, Send, Zap, Trophy, Target, Shield, Star } from 'lucide-react';
+import { Plus, Edit, Trash2, GraduationCap, BookOpen, ChevronDown, ChevronUp, Loader2, Eye, Archive, Send, Zap, Trophy, Target, Shield, Star, Award } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
