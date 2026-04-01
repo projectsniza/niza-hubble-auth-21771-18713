@@ -121,6 +121,9 @@ export function useCustomRoleAccess() {
     // Super admins have all permissions
     if (user?.role === 'super_admin') return true;
 
+    // HR without custom role has all permissions
+    if (user?.role === 'hr' && !customRole) return true;
+
     // Check custom role permissions
     if (customRole?.permissions) {
       return customRole.permissions[permission] === true;
