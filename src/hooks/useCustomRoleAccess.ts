@@ -105,9 +105,10 @@ export function useCustomRoleAccess() {
 
   // Helper functions to check access
   const hasAppAccess = (app: keyof AppAccess): boolean => {
-    // Super admins and all HR always have access
+    // Super admins always have access
     if (user?.role === 'super_admin') return true;
-    if (user?.role === 'hr') return true;
+    // HR without custom role has full access
+    if (user?.role === 'hr' && !customRole) return true;
 
     // Check custom role app access
     if (customRole?.app_access) {
@@ -120,6 +121,9 @@ export function useCustomRoleAccess() {
   const hasPermission = (permission: string): boolean => {
     // Super admins have all permissions
     if (user?.role === 'super_admin') return true;
+
+    // HR without custom role has all permissions
+    if (user?.role === 'hr' && !customRole) return true;
 
     // Check custom role permissions
     if (customRole?.permissions) {
