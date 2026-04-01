@@ -158,8 +158,8 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
   const allMenuItems = getMenuItems(user.role);
 
   // Filter menu items based on custom role permissions
-  // Super admins and HR always see everything; custom roles filter by permissions
-  const menuItems = (user.role === 'super_admin' || user.role === 'hr')
+  // Super admins always see everything; HR with custom role gets filtered
+  const menuItems = (user.role === 'super_admin' || (user.role === 'hr' && !customRole))
     ? allMenuItems
     : allMenuItems.filter(item => {
         const permKey = pathToPermissionKey[item.path];

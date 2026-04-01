@@ -84,7 +84,8 @@ export default function DashboardGrid() {
     : gridItems;
 
   // Filter based on custom role permissions
-  const displayItems = (user?.role === 'super_admin' || user?.role === 'hr')
+  // Super admins always see everything; HR with custom role gets filtered
+  const displayItems = (user?.role === 'super_admin' || (user?.role === 'hr' && !customRole))
     ? allItems
     : allItems.filter(item => {
         const permKey = pathToPermissionKey[item.path];

@@ -146,10 +146,14 @@ export default function Lottery() {
         .from('lottery_games')
         .select('*')
         .in('branch_id', filteredBranchIds)
-        .eq('is_active', true)
-        .order('game_name');
+        .eq('is_active', true);
       if (error) throw error;
-      return data as LotteryGame[];
+      // Natural numeric sort: "game 1", "game 2", ..., "game 10"
+      return (data as LotteryGame[]).sort((a, b) => {
+        const an = Number(a.game_name.match(/\d+/)?.[0] ?? 0);
+        const bn = Number(b.game_name.match(/\d+/)?.[0] ?? 0);
+        return an - bn || a.game_name.localeCompare(b.game_name);
+      });
     },
     enabled: filteredBranchIds.length > 0,
   });
