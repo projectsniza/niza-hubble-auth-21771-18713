@@ -35,8 +35,10 @@ export default function AppRouteGuard({ children, appKey }: AppRouteGuardProps) 
     // Super admins always have access
     if (user.role === 'super_admin') return;
 
-    // All HR users have access to all apps
-    if (user.role === 'hr') return;
+    // HR without custom role has access to all apps
+    if (user.role === 'hr' && !hasAppAccess(appKey)) {
+      // hasAppAccess already checks if HR has no custom role → returns true
+    }
 
     // Store/Manager: permanently block Niza Templates and Niza Finance
     if (user.role === 'manager' && (appKey === 'niza_templates' || appKey === 'niza_finance')) {
