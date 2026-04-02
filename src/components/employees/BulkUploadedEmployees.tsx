@@ -77,6 +77,8 @@ export default function BulkUploadedEmployees() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isActivatingAll, setIsActivatingAll] = useState(false);
 
+  const [docsEnabled, setDocsEnabled] = useState<boolean | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -84,6 +86,23 @@ export default function BulkUploadedEmployees() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      // Fetch document requirements from bulk upload settings FIRST
+      // so we know the mode before rendering
+      const { data: allSettings } = await supabase
+        .from('bulk_upload_document_settings')
+        .select('*')
+        .order('doc_order');
+
+      const enabledSettings = (allSettings || []).filter(d => d.enabled === true);
+      setDocsEnabled(enabledSettings.length > 0);
+      setDocumentRequirements(enabledSettings.map(d => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        is_mandatory: d.is_mandatory,
+        enabled: d.enabled
+      })));
+
       // Fetch bulk uploaded employees with pending status
       const { data: empData, error: empError } = await supabase
         .from('employees')
@@ -99,22 +118,6 @@ export default function BulkUploadedEmployees() {
 
       if (empError) throw empError;
       setEmployees(empData || []);
-
-      // Fetch document requirements from bulk upload settings
-      const { data: docReqs, error: docError } = await supabase
-        .from('bulk_upload_document_settings')
-        .select('*')
-        .eq('enabled', true)
-        .order('doc_order');
-
-      if (docError) throw docError;
-      setDocumentRequirements(docReqs?.map(d => ({
-        id: d.id,
-        name: d.name,
-        description: d.description,
-        is_mandatory: d.is_mandatory,
-        enabled: d.enabled
-      })) || []);
     } catch (error: any) {
       toast.error('Failed to load data: ' + error.message);
     } finally {
