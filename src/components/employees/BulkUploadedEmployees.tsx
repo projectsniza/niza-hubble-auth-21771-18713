@@ -75,6 +75,7 @@ export default function BulkUploadedEmployees() {
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isActivatingAll, setIsActivatingAll] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -121,10 +122,42 @@ export default function BulkUploadedEmployees() {
     }
   };
 
+  const handleActivateAll = async () => {
+    if (employees.length === 0) return;
+    setIsActivatingAll(true);
+    try {
+      const ids = employees.map(e => e.id);
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active' })
+        .in('id', ids);
+      if (error) throw error;
+      toast.success(`${ids.length} employees activated and moved to Pending Accounts`);
+      fetchData();
+    } catch (error: any) {
+      toast.error('Failed to activate: ' + error.message);
+    } finally {
+      setIsActivatingAll(false);
+    }
+  };
+
+  const handleActivateSingle = async (employeeId: string) => {
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active' })
+        .eq('id', employeeId);
+      if (error) throw error;
+      toast.success('Employee activated and moved to Pending Accounts');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Failed to activate: ' + error.message);
+    }
+  };
+
   const handleDeleteEmployee = async () => {
     if (!deleteId) return;
     try {
-      // Delete documents first
       const { data: docs } = await supabase.from('documents').select('id').eq('employee_id', deleteId);
       if (docs && docs.length > 0) {
         await supabase.from('documents').delete().eq('employee_id', deleteId);
@@ -282,13 +315,25 @@ export default function BulkUploadedEmployees() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Bulk Uploaded Employees
-          </CardTitle>
-          <CardDescription>
-            Employees added via bulk upload who need their documents uploaded before activation
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Bulk Uploaded Employees
+              </CardTitle>
+              <CardDescription>
+                {documentRequirements.length > 0
+                  ? 'Employees added via bulk upload who need their documents uploaded before activation'
+                  : 'Employees added via bulk upload — no document requirements configured, activate to move to Pending Accounts'}
+              </CardDescription>
+            </div>
+            {employees.length > 0 && documentRequirements.length === 0 && (
+              <Button onClick={handleActivateAll} disabled={isActivatingAll} className="gap-2">
+                {isActivatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Activate All ({employees.length})
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {employees.length === 0 ? (
@@ -348,15 +393,22 @@ export default function BulkUploadedEmployees() {
                     <TableCell>
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        Pending Documents
+                        {documentRequirements.length > 0 ? 'Pending Documents' : 'Pending Activation'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button size="sm" onClick={() => openUploadDialog(employee)}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Docs
-                        </Button>
+                        {documentRequirements.length > 0 ? (
+                          <Button size="sm" onClick={() => openUploadDialog(employee)}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload Docs
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => handleActivateSingle(employee.id)}>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Activate
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(employee.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>

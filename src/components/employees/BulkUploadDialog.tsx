@@ -132,6 +132,16 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
 
       if (bulkError) throw bulkError;
 
+      // Check if any bulk upload document settings are enabled
+      const { data: enabledDocSettings } = await supabase
+        .from('bulk_upload_document_settings')
+        .select('id')
+        .eq('enabled', true)
+        .limit(1);
+      
+      const docsRequired = (enabledDocSettings && enabledDocSettings.length > 0);
+      const employeeStatus = docsRequired ? 'pending' : 'active';
+
       // Process each employee
       for (const emp of employees) {
         try {
@@ -149,7 +159,7 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
             organization_id: organizationId,
             branch_id: branchId,
             bulk_upload_id: bulkUpload.id,
-            status: 'pending',
+            status: employeeStatus,
             created_by: user?.id
           });
 
