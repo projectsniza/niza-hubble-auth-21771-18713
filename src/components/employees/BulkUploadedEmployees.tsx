@@ -393,15 +393,22 @@ export default function BulkUploadedEmployees() {
                     <TableCell>
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        Pending Documents
+                        {documentRequirements.length > 0 ? 'Pending Documents' : 'Pending Activation'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button size="sm" onClick={() => openUploadDialog(employee)}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Docs
-                        </Button>
+                        {documentRequirements.length > 0 ? (
+                          <Button size="sm" onClick={() => openUploadDialog(employee)}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload Docs
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => handleActivateSingle(employee.id)}>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Activate
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(employee.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
