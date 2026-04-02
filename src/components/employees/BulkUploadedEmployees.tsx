@@ -75,6 +75,7 @@ export default function BulkUploadedEmployees() {
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isActivatingAll, setIsActivatingAll] = useState(false);
 
   useEffect(() => {
     fetchData();
