@@ -77,6 +77,8 @@ export default function BulkUploadedEmployees() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isActivatingAll, setIsActivatingAll] = useState(false);
 
+  const [docsEnabled, setDocsEnabled] = useState<boolean | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -84,6 +86,23 @@ export default function BulkUploadedEmployees() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      // Fetch document requirements from bulk upload settings FIRST
+      // so we know the mode before rendering
+      const { data: allSettings } = await supabase
+        .from('bulk_upload_document_settings')
+        .select('*')
+        .order('doc_order');
+
+      const enabledSettings = (allSettings || []).filter(d => d.enabled === true);
+      setDocsEnabled(enabledSettings.length > 0);
+      setDocumentRequirements(enabledSettings.map(d => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        is_mandatory: d.is_mandatory,
+        enabled: d.enabled
+      })));
+
       // Fetch bulk uploaded employees with pending status
       const { data: empData, error: empError } = await supabase
         .from('employees')
@@ -99,22 +118,6 @@ export default function BulkUploadedEmployees() {
 
       if (empError) throw empError;
       setEmployees(empData || []);
-
-      // Fetch document requirements from bulk upload settings
-      const { data: docReqs, error: docError } = await supabase
-        .from('bulk_upload_document_settings')
-        .select('*')
-        .eq('enabled', true)
-        .order('doc_order');
-
-      if (docError) throw docError;
-      setDocumentRequirements(docReqs?.map(d => ({
-        id: d.id,
-        name: d.name,
-        description: d.description,
-        is_mandatory: d.is_mandatory,
-        enabled: d.enabled
-      })) || []);
     } catch (error: any) {
       toast.error('Failed to load data: ' + error.message);
     } finally {
@@ -322,12 +325,12 @@ export default function BulkUploadedEmployees() {
                 Bulk Uploaded Employees
               </CardTitle>
               <CardDescription>
-                {documentRequirements.length > 0
+                {docsEnabled
                   ? 'Employees added via bulk upload who need their documents uploaded before activation'
                   : 'Employees added via bulk upload — no document requirements configured, activate to move to Pending Accounts'}
               </CardDescription>
             </div>
-            {employees.length > 0 && documentRequirements.length === 0 && (
+            {employees.length > 0 && !docsEnabled && (
               <Button onClick={handleActivateAll} disabled={isActivatingAll} className="gap-2">
                 {isActivatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Activate All ({employees.length})
@@ -393,12 +396,12 @@ export default function BulkUploadedEmployees() {
                     <TableCell>
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        {documentRequirements.length > 0 ? 'Pending Documents' : 'Pending Activation'}
+                        {docsEnabled ? 'Pending Documents' : 'Pending Activation'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        {documentRequirements.length > 0 ? (
+                        {docsEnabled ? (
                           <Button size="sm" onClick={() => openUploadDialog(employee)}>
                             <Upload className="h-4 w-4 mr-2" />
                             Upload Docs
