@@ -315,13 +315,25 @@ export default function BulkUploadedEmployees() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Bulk Uploaded Employees
-          </CardTitle>
-          <CardDescription>
-            Employees added via bulk upload who need their documents uploaded before activation
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Bulk Uploaded Employees
+              </CardTitle>
+              <CardDescription>
+                {documentRequirements.length > 0
+                  ? 'Employees added via bulk upload who need their documents uploaded before activation'
+                  : 'Employees added via bulk upload — no document requirements configured, activate to move to Pending Accounts'}
+              </CardDescription>
+            </div>
+            {employees.length > 0 && documentRequirements.length === 0 && (
+              <Button onClick={handleActivateAll} disabled={isActivatingAll} className="gap-2">
+                {isActivatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Activate All ({employees.length})
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {employees.length === 0 ? (
