@@ -396,7 +396,7 @@ export default function BulkUploadedEmployees() {
                     <TableCell>
                       <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        {documentRequirements.length > 0 ? 'Pending Documents' : 'Pending Activation'}
+                        {docsEnabled ? 'Pending Documents' : 'Pending Activation'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
