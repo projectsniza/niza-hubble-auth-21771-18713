@@ -325,12 +325,12 @@ export default function BulkUploadedEmployees() {
                 Bulk Uploaded Employees
               </CardTitle>
               <CardDescription>
-                {documentRequirements.length > 0
+                {docsEnabled
                   ? 'Employees added via bulk upload who need their documents uploaded before activation'
                   : 'Employees added via bulk upload — no document requirements configured, activate to move to Pending Accounts'}
               </CardDescription>
             </div>
-            {employees.length > 0 && documentRequirements.length === 0 && (
+            {employees.length > 0 && !docsEnabled && (
               <Button onClick={handleActivateAll} disabled={isActivatingAll} className="gap-2">
                 {isActivatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Activate All ({employees.length})
