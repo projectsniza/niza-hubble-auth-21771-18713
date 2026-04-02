@@ -401,7 +401,7 @@ export default function BulkUploadedEmployees() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        {documentRequirements.length > 0 ? (
+                        {docsEnabled ? (
                           <Button size="sm" onClick={() => openUploadDialog(employee)}>
                             <Upload className="h-4 w-4 mr-2" />
                             Upload Docs
