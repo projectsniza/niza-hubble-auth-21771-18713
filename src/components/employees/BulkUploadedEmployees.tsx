@@ -122,10 +122,42 @@ export default function BulkUploadedEmployees() {
     }
   };
 
+  const handleActivateAll = async () => {
+    if (employees.length === 0) return;
+    setIsActivatingAll(true);
+    try {
+      const ids = employees.map(e => e.id);
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active' })
+        .in('id', ids);
+      if (error) throw error;
+      toast.success(`${ids.length} employees activated and moved to Pending Accounts`);
+      fetchData();
+    } catch (error: any) {
+      toast.error('Failed to activate: ' + error.message);
+    } finally {
+      setIsActivatingAll(false);
+    }
+  };
+
+  const handleActivateSingle = async (employeeId: string) => {
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({ status: 'active' })
+        .eq('id', employeeId);
+      if (error) throw error;
+      toast.success('Employee activated and moved to Pending Accounts');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Failed to activate: ' + error.message);
+    }
+  };
+
   const handleDeleteEmployee = async () => {
     if (!deleteId) return;
     try {
-      // Delete documents first
       const { data: docs } = await supabase.from('documents').select('id').eq('employee_id', deleteId);
       if (docs && docs.length > 0) {
         await supabase.from('documents').delete().eq('employee_id', deleteId);
