@@ -46,20 +46,20 @@ export default function CustomerAccounts() {
   const { organizations, branches } = useOrgBranch();
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
-
-  // Auto-scope managers to their branch
-  const effectiveOrg = isManager ? (user?.organizationId || '') : selectedOrg;
-  const effectiveBranch = isManager ? (user?.branchId || '') : selectedBranch;
   const [searchQuery, setSearchQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editCustomer, setEditCustomer] = useState<CustomerAccount | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAccount | null>(null);
 
-  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries } = useCustomerAccounts(effectiveOrg, effectiveBranch);
-
   const canEdit = isAdminOrHR(user);
   const isManager = user?.role === 'manager';
+
+  // Auto-scope managers to their branch
+  const effectiveOrg = isManager ? (user?.organizationId || '') : selectedOrg;
+  const effectiveBranch = isManager ? (user?.branchId || '') : selectedBranch;
+
+  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries } = useCustomerAccounts(effectiveOrg, effectiveBranch);
 
   const filteredBranchOptions = selectedOrg
     ? branches.filter(b => b.organization_id === selectedOrg)
