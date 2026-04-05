@@ -140,18 +140,19 @@ export function useConversations() {
     if (!user?.id) return null;
 
     try {
-      // Check for existing org-wide conversation
-      const { data: existingConvo } = await supabase
+      // Check for existing org-wide conversation - use limit(1) to handle duplicates
+      const { data: existingConvos } = await supabase
         .from('conversations')
         .select('id')
         .eq('name', ORG_CHAT_NAME)
         .eq('is_group', true)
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1);
 
       let conversationId: string;
 
-      if (existingConvo) {
-        conversationId = existingConvo.id;
+      if (existingConvos && existingConvos.length > 0) {
+        conversationId = existingConvos[0].id;
       } else {
         // Create new org-wide conversation
         const { data: newConvo, error } = await supabase
@@ -168,15 +169,28 @@ export function useConversations() {
         conversationId = newConvo.id;
       }
 
-      // Sync all users with credentials to the org chat
-      // Get all users with valid profiles (only those with credentials/accounts)
+      // Ensure current user is a participant (most important)
+      const { data: myParticipation } = await supabase
+        .from('conversation_participants')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!myParticipation) {
+        await supabase.from('conversation_participants').insert({
+          conversation_id: conversationId,
+          user_id: user.id,
+        });
+      }
+
+      // Sync all users with credentials to the org chat (background)
       const { data: allProfiles } = await supabase
         .from('profiles')
         .select('id')
         .not('name', 'is', null);
 
       if (allProfiles && allProfiles.length > 0) {
-        // Get existing participants
         const { data: existingParticipants } = await supabase
           .from('conversation_participants')
           .select('user_id')
@@ -184,7 +198,6 @@ export function useConversations() {
 
         const existingUserIds = new Set(existingParticipants?.map(p => p.user_id) || []);
 
-        // Add missing users to the conversation
         const newParticipants = allProfiles
           .filter(p => !existingUserIds.has(p.id))
           .map(p => ({

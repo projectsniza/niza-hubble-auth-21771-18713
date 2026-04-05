@@ -52,10 +52,14 @@ export default function CustomerAccounts() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAccount | null>(null);
 
-  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries } = useCustomerAccounts(selectedOrg, selectedBranch);
-
   const canEdit = isAdminOrHR(user);
   const isManager = user?.role === 'manager';
+
+  // Auto-scope managers to their branch
+  const effectiveOrg = isManager ? (user?.organizationId || '') : selectedOrg;
+  const effectiveBranch = isManager ? (user?.branchId || '') : selectedBranch;
+
+  const { customers, isLoading, createCustomer, updateCustomer, deleteCustomer, pendingSummaries } = useCustomerAccounts(effectiveOrg, effectiveBranch);
 
   const filteredBranchOptions = selectedOrg
     ? branches.filter(b => b.organization_id === selectedOrg)

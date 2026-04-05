@@ -18,7 +18,9 @@ import {
   UserPlus, 
   Mail,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +58,7 @@ export default function PendingAccountsDialog({
     employeeId: string;
     password: string;
   } | null>(null);
+  const [showActivationPassword, setShowActivationPassword] = useState(false);
   
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
@@ -231,17 +234,26 @@ export default function PendingAccountsDialog({
                           <Label htmlFor={`password-${employee.id}`} className="text-xs">
                             Set Password
                           </Label>
-                          <Input
-                            id={`password-${employee.id}`}
-                            type="password"
-                            placeholder="Min 6 characters"
-                            value={activationData.password}
-                            onChange={(e) => setActivationData({
-                              ...activationData,
-                              password: e.target.value
-                            })}
-                            className="h-8 text-sm"
-                          />
+                          <div className="relative">
+                            <Input
+                              id={`password-${employee.id}`}
+                              type={showActivationPassword ? 'text' : 'password'}
+                              placeholder="Min 6 characters"
+                              value={activationData.password}
+                              onChange={(e) => setActivationData({
+                                ...activationData,
+                                password: e.target.value
+                              })}
+                              className="h-8 text-sm pr-8"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowActivationPassword(!showActivationPassword)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              {showActivationPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button

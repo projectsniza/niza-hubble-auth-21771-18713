@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Settings2, ShieldCheck } from "lucide-react";
+import { Building2, Settings2, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { useState as useFormState } from "react";
 
 export type BaseRole = "manager" | "hr" | "employee";
 
@@ -56,6 +57,32 @@ interface Props {
   features: FeatureGroups;
   toggleAllInGroup: (features: { key: string }[], enable: boolean) => void;
   togglePermission: (key: string) => void;
+}
+
+function PasswordFieldWithToggle({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [show, setShow] = useFormState(false);
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="relative">
+        <Input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          className="pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function CustomRoleFormImpl({
@@ -138,16 +165,12 @@ function CustomRoleFormImpl({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Password *</Label>
-              <Input
-                type="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-                autoComplete="new-password"
-              />
-            </div>
+            <PasswordFieldWithToggle
+              label="Password *"
+              value={userPassword}
+              onChange={setUserPassword}
+              placeholder="Minimum 6 characters"
+            />
 
             <div className="space-y-2">
               <Label>Full Name *</Label>
