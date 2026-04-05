@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Settings2, ShieldCheck } from "lucide-react";
+import { Building2, Settings2, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { useState as useFormState } from "react";
 
 export type BaseRole = "manager" | "hr" | "employee";
 
@@ -138,16 +139,12 @@ function CustomRoleFormImpl({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Password *</Label>
-              <Input
-                type="password"
-                value={userPassword}
-                onChange={(e) => setUserPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-                autoComplete="new-password"
-              />
-            </div>
+            <PasswordFieldWithToggle
+              label="Password *"
+              value={userPassword}
+              onChange={setUserPassword}
+              placeholder="Minimum 6 characters"
+            />
 
             <div className="space-y-2">
               <Label>Full Name *</Label>
