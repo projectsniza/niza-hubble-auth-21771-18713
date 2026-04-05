@@ -85,6 +85,7 @@ function PasswordFieldWithToggle({ label, value, onChange, placeholder }: { labe
   );
 }
 
+function CustomRoleFormImpl({
   isEditMode,
   formData,
   setFormData,
