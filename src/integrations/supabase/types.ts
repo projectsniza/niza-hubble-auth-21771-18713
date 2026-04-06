@@ -6308,6 +6308,14 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: undefined
       }
+      get_messaging_profiles: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          email: string
+          id: string
+          name: string
+        }[]
+      }
       get_my_profile_data: {
         Args: never
         Returns: {
