@@ -45,9 +45,7 @@ export function useConversations() {
       const participantUserIds = [...new Set(allParticipants?.map(p => p.user_id) || [])];
 
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name, email')
-        .in('id', participantUserIds);
+        .rpc('get_messaging_profiles', { p_user_ids: participantUserIds });
 
       const { data: roles } = await supabase
         .from('user_roles')
