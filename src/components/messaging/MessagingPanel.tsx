@@ -92,9 +92,7 @@ export default function MessagingPanel() {
         const userIds = participantData?.map(p => p.user_id) || [];
 
         const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .in('id', userIds);
+          .rpc('get_messaging_profiles', { p_user_ids: userIds });
 
         const { data: roles } = await supabase
           .from('user_roles')
