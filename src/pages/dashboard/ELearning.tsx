@@ -953,9 +953,9 @@ export default function ELearning() {
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateTraining} disabled={!formData.title || (isAdminOrHR && !formData.assignedTo)}>
-              <Send className="h-4 w-4 mr-2" />
-              Create Training
+            <Button onClick={handleCreateTraining} disabled={isCreatingTraining || !formData.title || (isAdminOrHR && formData.assignedTo.length === 0)}>
+              {isCreatingTraining ? <Clock className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+              {isCreatingTraining ? 'Creating...' : 'Create Training'}
             </Button>
           </DialogFooter>
         </DialogContent>
