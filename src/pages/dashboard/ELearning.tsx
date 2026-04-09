@@ -232,7 +232,10 @@ export default function ELearning() {
     }
   };
 
+  const [isCreatingTraining, setIsCreatingTraining] = useState(false);
+
   const handleCreateTraining = async () => {
+    if (isCreatingTraining) return; // Prevent double submission
     if (!formData.title) {
       toast({
         title: 'Validation Error',
