@@ -761,6 +761,13 @@ export function TimesheetView() {
               <Button variant="outline" size="sm" onClick={exportToCSV} className="shadow-sm">
                 <Download className="h-4 w-4 mr-2" />Export
               </Button>
+              
+              {/* Monthly Lock/Submit */}
+              <TimesheetMonthLock
+                branchId={user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null)}
+                organizationId={user?.role === 'manager' ? user?.organizationId : selectedOrg || null}
+                monthStart={getPayrollPeriod(currentMonth).start}
+              />
             </div>
           </div>
         </CardContent>
