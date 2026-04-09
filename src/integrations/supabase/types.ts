@@ -1507,6 +1507,7 @@ export type Database = {
       }
       customer_monthly_accounts: {
         Row: {
+          amount_paid: number
           branch_id: string
           created_at: string
           created_by: string | null
@@ -1522,6 +1523,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          amount_paid?: number
           branch_id: string
           created_at?: string
           created_by?: string | null
@@ -1537,6 +1539,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          amount_paid?: number
           branch_id?: string
           created_at?: string
           created_by?: string | null
@@ -1571,6 +1574,47 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_payments: {
+        Row: {
+          amount_paid: number
+          created_at: string
+          id: string
+          monthly_account_id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          recorded_by: string | null
+        }
+        Insert: {
+          amount_paid?: number
+          created_at?: string
+          id?: string
+          monthly_account_id: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          recorded_by?: string | null
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string
+          id?: string
+          monthly_account_id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          recorded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_payments_monthly_account_id_fkey"
+            columns: ["monthly_account_id"]
+            isOneToOne: false
+            referencedRelation: "customer_monthly_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -2185,6 +2229,47 @@ export type Database = {
           },
           {
             foreignKeyName: "elearning_certificates_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_certifications: {
+        Row: {
+          awarded_by: string | null
+          certification_name: string
+          created_at: string
+          employee_id: string
+          gold_coins: number
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          awarded_by?: string | null
+          certification_name: string
+          created_at?: string
+          employee_id: string
+          gold_coins?: number
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          awarded_by?: string | null
+          certification_name?: string
+          created_at?: string
+          employee_id?: string
+          gold_coins?: number
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_certifications_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
@@ -5675,6 +5760,57 @@ export type Database = {
             columns: ["timesheet_id"]
             isOneToOne: false
             referencedRelation: "timesheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheet_month_locks: {
+        Row: {
+          branch_id: string
+          created_at: string
+          id: string
+          lock_message: string | null
+          locked_at: string
+          locked_by: string
+          month_start: string
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          id?: string
+          lock_message?: string | null
+          locked_at?: string
+          locked_by: string
+          month_start: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          id?: string
+          lock_message?: string | null
+          locked_at?: string
+          locked_by?: string
+          month_start?: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_month_locks_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_month_locks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
