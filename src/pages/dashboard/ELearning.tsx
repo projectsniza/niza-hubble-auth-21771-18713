@@ -265,6 +265,7 @@ export default function ELearning() {
       return;
     }
 
+    setIsCreatingTraining(true);
     try {
       let trainingData: any = {
         title: formData.title,
