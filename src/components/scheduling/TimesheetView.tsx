@@ -22,6 +22,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { TimesheetMonthLock } from './TimesheetMonthLock';
 
 interface Employee {
   id: string;
