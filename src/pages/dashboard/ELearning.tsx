@@ -363,6 +363,8 @@ export default function ELearning() {
         description: error.message || 'Failed to create training',
         variant: 'destructive'
       });
+    } finally {
+      setIsCreatingTraining(false);
     }
   };
 
