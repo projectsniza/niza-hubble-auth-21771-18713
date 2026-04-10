@@ -86,7 +86,7 @@ export function EmployeeCertifications({ employeeId, canManage = false, autoOpen
       <GoldCoinBadge totalCoins={totalCoins} certifications={certifications} canManage={canManage} onAdd={() => setShowDialog(true)} onDelete={handleDelete} />
 
       {/* Add Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open && onClose) onClose(); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
