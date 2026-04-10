@@ -311,7 +311,16 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className={`font-medium ${isDeactivated ? 'text-destructive' : ''}`}>{employee.first_name} {employee.last_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-medium ${isDeactivated ? 'text-destructive' : ''}`}>{employee.first_name} {employee.last_name}</p>
+                            {certMap[employee.id] && certMap[employee.id].total > 0 && (
+                              <GoldCoinBadge 
+                                totalCoins={certMap[employee.id].total} 
+                                certifications={certMap[employee.id].certs}
+                                canManage={user?.role === 'super_admin' || user?.role === 'hr'}
+                              />
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">{employee.email}</p>
                           {reasonConfig && (
                             <Badge className={`text-xs mt-1 ${reasonConfig.color}`}>
@@ -355,6 +364,9 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setCertEmployeeId(employee.id)}>
+                            <Award className="h-4 w-4 mr-2" />
+                            Add Certification
                           {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
@@ -472,6 +484,15 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           setEditingEmployee(null);
         }}
       />
+
+      {certEmployeeId && (
+        <EmployeeCertifications 
+          employeeId={certEmployeeId} 
+          canManage={true} 
+          autoOpen={true}
+          onClose={() => setCertEmployeeId(null)}
+        />
+      )}
     </div>
   );
 }
