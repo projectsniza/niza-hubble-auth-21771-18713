@@ -117,6 +117,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     });
   }, [rawEmployees]);
 
+  // Fetch certifications for all employees
+  const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
+  const certMap = useEmployeeCertifications(employeeIds);
+
   const filteredBranches = organizationFilter !== 'all' 
     ? branches.filter(b => b.organization_id === organizationFilter)
     : branches;
