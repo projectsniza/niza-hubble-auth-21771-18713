@@ -491,7 +491,7 @@ export default function Lottery() {
     field: keyof GameDailyData, 
     value: string
   ) => {
-    const numValue = value === '' ? null : parseInt(value) || 0;
+    const numValue = value === '' ? null : Math.max(0, parseInt(value) || 0);
     
     setEditingData(prev => {
       const record = recordsByGameAndDate[gameId]?.[date];
@@ -974,11 +974,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
@@ -1000,11 +1001,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
@@ -1045,11 +1047,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
