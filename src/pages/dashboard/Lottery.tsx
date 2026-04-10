@@ -1286,7 +1286,7 @@ export default function Lottery() {
                     <CardDescription>Quick daily entry for single-day tracking (Sheet 2)</CardDescription>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Date Navigation */}
+                    {/* Date Navigation with Date Picker */}
                     <div className="flex items-center gap-1 bg-card rounded-xl p-1 shadow-sm border border-primary/10">
                       <Button 
                         variant="ghost" 
@@ -1296,11 +1296,24 @@ export default function Lottery() {
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <div className="px-4 py-2 min-w-[160px] text-center">
-                        <span className={`font-semibold ${isToday(selectedDate) ? 'text-primary' : ''}`}>
-                          {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEE, dd MMM yyyy')}
-                        </span>
-                      </div>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" className="px-4 py-2 min-w-[160px] text-center">
+                            <span className={`font-semibold ${isToday(selectedDate) ? 'text-primary' : ''}`}>
+                              {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEE, dd MMM yyyy')}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="center">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={(d) => d && setSelectedDate(d)}
+                            className="p-3 pointer-events-auto"
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                       <Button 
                         variant="ghost" 
                         size="icon"
