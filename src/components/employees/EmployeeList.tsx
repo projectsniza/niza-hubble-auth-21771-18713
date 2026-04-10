@@ -367,6 +367,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                           <DropdownMenuItem onClick={() => setCertEmployeeId(employee.id)}>
                             <Award className="h-4 w-4 mr-2" />
                             Add Certification
+                          </DropdownMenuItem>
                           {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
