@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Plus, Trash2, Save, Download, Ticket, Calculator, Calendar, TrendingUp, 
+  Plus, Trash2, Save, Download, Ticket, Calculator, Calendar as CalendarIcon2, TrendingUp, 
   Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
   LayoutGrid, CalendarDays, FileSpreadsheet
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
