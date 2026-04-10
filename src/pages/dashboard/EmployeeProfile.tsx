@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { EmployeeCertifications } from '@/components/employees/EmployeeCertifications';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -199,6 +200,7 @@ export default function EmployeeProfile() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">{employee.first_name} {employee.last_name}</h1>
               {getStatusBadge(employee.status)}
+              <EmployeeCertifications employeeId={employee.id} canManage={user?.role === 'super_admin' || user?.role === 'hr'} />
             </div>
             <p className="text-muted-foreground">{employee.job_title || 'No job title'}</p>
             
