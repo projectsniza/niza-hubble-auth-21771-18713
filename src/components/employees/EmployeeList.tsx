@@ -73,6 +73,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [deactivationReason, setDeactivationReason] = useState('');
   const [deactivationNotes, setDeactivationNotes] = useState('');
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [certEmployeeId, setCertEmployeeId] = useState<string | null>(null);
 
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
