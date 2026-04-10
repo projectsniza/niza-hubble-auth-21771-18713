@@ -1444,6 +1444,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Stock Begin</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'stockBegin') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
@@ -1455,6 +1456,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Activated</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'activatedTickets') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
@@ -1466,6 +1468,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Stock End</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'stockEnd') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
