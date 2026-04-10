@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +12,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import EmployeeStatusBadge, { EMPLOYEE_STATUSES } from './EmployeeStatusBadge';
+import { EmployeeCertifications, GoldCoinBadge, useEmployeeCertifications } from './EmployeeCertifications';
 import EditEmployeeDialog from './EditEmployeeDialog';
 import {
   DropdownMenu,
