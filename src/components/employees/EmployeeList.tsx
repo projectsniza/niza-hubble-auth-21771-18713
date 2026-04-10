@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +12,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import EmployeeStatusBadge, { EMPLOYEE_STATUSES } from './EmployeeStatusBadge';
+import { EmployeeCertifications, GoldCoinBadge, useEmployeeCertifications } from './EmployeeCertifications';
 import EditEmployeeDialog from './EditEmployeeDialog';
 import {
   DropdownMenu,
@@ -72,6 +73,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [deactivationReason, setDeactivationReason] = useState('');
   const [deactivationNotes, setDeactivationNotes] = useState('');
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [certEmployeeId, setCertEmployeeId] = useState<string | null>(null);
 
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
@@ -114,6 +116,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       return 0;
     });
   }, [rawEmployees]);
+
+  // Fetch certifications for all employees
+  const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
+  const certMap = useEmployeeCertifications(employeeIds);
 
   const filteredBranches = organizationFilter !== 'all' 
     ? branches.filter(b => b.organization_id === organizationFilter)
@@ -305,7 +311,16 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className={`font-medium ${isDeactivated ? 'text-destructive' : ''}`}>{employee.first_name} {employee.last_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-medium ${isDeactivated ? 'text-destructive' : ''}`}>{employee.first_name} {employee.last_name}</p>
+                            {certMap[employee.id] && certMap[employee.id].total > 0 && (
+                              <GoldCoinBadge 
+                                totalCoins={certMap[employee.id].total} 
+                                certifications={certMap[employee.id].certs}
+                                canManage={user?.role === 'super_admin' || user?.role === 'hr'}
+                              />
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">{employee.email}</p>
                           {reasonConfig && (
                             <Badge className={`text-xs mt-1 ${reasonConfig.color}`}>
@@ -348,6 +363,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                           <DropdownMenuItem onClick={() => setEditingEmployee(employee)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setCertEmployeeId(employee.id)}>
+                            <Award className="h-4 w-4 mr-2" />
+                            Add Certification
                           </DropdownMenuItem>
                           {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
@@ -466,6 +485,15 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           setEditingEmployee(null);
         }}
       />
+
+      {certEmployeeId && (
+        <EmployeeCertifications 
+          employeeId={certEmployeeId} 
+          canManage={true} 
+          autoOpen={true}
+          onClose={() => setCertEmployeeId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Plus, Trash2, Save, Download, Ticket, Calculator, Calendar, TrendingUp, 
+  Plus, Trash2, Save, Download, Ticket, Calculator, Calendar as CalendarIcon2, TrendingUp, 
   Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
   LayoutGrid, CalendarDays, FileSpreadsheet
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
@@ -489,7 +491,7 @@ export default function Lottery() {
     field: keyof GameDailyData, 
     value: string
   ) => {
-    const numValue = value === '' ? null : parseInt(value) || 0;
+    const numValue = value === '' ? null : Math.max(0, parseInt(value) || 0);
     
     setEditingData(prev => {
       const record = recordsByGameAndDate[gameId]?.[date];
@@ -972,11 +974,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
@@ -998,11 +1001,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
@@ -1043,11 +1047,12 @@ export default function Lottery() {
                                         <td key={dateStr} className="px-0.5 py-0.5 border-r">
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center text-sm border-0 bg-transparent hover:bg-muted/50 focus:bg-card"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
                                             value={value ?? ''}
-                                            onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}
+                                            readOnly
                                             placeholder="-"
-                                            disabled={!isSingleBranchSelected}
+                                            tabIndex={-1}
                                           />
                                         </td>
                                       );
@@ -1284,7 +1289,7 @@ export default function Lottery() {
                     <CardDescription>Quick daily entry for single-day tracking (Sheet 2)</CardDescription>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Date Navigation */}
+                    {/* Date Navigation with Date Picker */}
                     <div className="flex items-center gap-1 bg-card rounded-xl p-1 shadow-sm border border-primary/10">
                       <Button 
                         variant="ghost" 
@@ -1294,11 +1299,24 @@ export default function Lottery() {
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <div className="px-4 py-2 min-w-[160px] text-center">
-                        <span className={`font-semibold ${isToday(selectedDate) ? 'text-primary' : ''}`}>
-                          {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEE, dd MMM yyyy')}
-                        </span>
-                      </div>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" className="px-4 py-2 min-w-[160px] text-center">
+                            <span className={`font-semibold ${isToday(selectedDate) ? 'text-primary' : ''}`}>
+                              {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEE, dd MMM yyyy')}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="center">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={(d) => d && setSelectedDate(d)}
+                            className="p-3 pointer-events-auto"
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                       <Button 
                         variant="ghost" 
                         size="icon"
@@ -1426,6 +1444,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Stock Begin</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'stockBegin') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockBegin', e.target.value)}
@@ -1437,6 +1456,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Activated</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'activatedTickets') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'activatedTickets', e.target.value)}
@@ -1448,6 +1468,7 @@ export default function Lottery() {
                                   <Label className="text-xs text-muted-foreground">Stock End</Label>
                                   <Input
                                     type="number"
+                                    min="0"
                                     className="h-10 text-center font-semibold"
                                     value={getCellValue(game.id, dateStr, 'stockEnd') ?? ''}
                                     onChange={(e) => handleCellEdit(game.id, dateStr, 'stockEnd', e.target.value)}

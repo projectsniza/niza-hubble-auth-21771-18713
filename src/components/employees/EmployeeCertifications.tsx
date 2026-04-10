@@ -22,12 +22,14 @@ interface Certification {
 interface Props {
   employeeId: string;
   canManage?: boolean;
+  autoOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function EmployeeCertifications({ employeeId, canManage = false }: Props) {
+export function EmployeeCertifications({ employeeId, canManage = false, autoOpen = false, onClose }: Props) {
   const { user } = useAuth();
   const [certifications, setCertifications] = useState<Certification[]>([]);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showDialog, setShowDialog] = useState(autoOpen);
   const [certName, setCertName] = useState('');
   const [coins, setCoins] = useState('1');
   const [notes, setNotes] = useState('');
@@ -84,7 +86,7 @@ export function EmployeeCertifications({ employeeId, canManage = false }: Props)
       <GoldCoinBadge totalCoins={totalCoins} certifications={certifications} canManage={canManage} onAdd={() => setShowDialog(true)} onDelete={handleDelete} />
 
       {/* Add Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open && onClose) onClose(); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
