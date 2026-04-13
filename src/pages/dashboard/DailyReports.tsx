@@ -343,6 +343,59 @@ export default function DailyReports() {
 
   const canCreateReport = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'hr';
 
+  // Folder view state
+  const [folderBranch, setFolderBranch] = useState<string | null>(null);
+  const [folderType, setFolderType] = useState<string | null>(null);
+  const [folderMonth, setFolderMonth] = useState<string | null>(null);
+
+  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'other'] as const;
+  const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
+
+  // Group reports by branch
+  const reportsByBranch = useMemo(() => {
+    const map: Record<string, { name: string; reports: DailyReport[] }> = {};
+    reports.forEach(r => {
+      if (!map[r.branch_id]) {
+        map[r.branch_id] = { name: r.branch?.name || 'Unknown Branch', reports: [] };
+      }
+      map[r.branch_id].reports.push(r);
+    });
+    return map;
+  }, [reports]);
+
+  // Get unique months for a branch/type
+  const getMonthsForType = (branchId: string, type: string) => {
+    const branchReports = reportsByBranch[branchId]?.reports || [];
+    const typeReports = branchReports.filter(r => {
+      const rt = (r.report_type || 'report').toLowerCase();
+      if (type === 'other') return !['report', 'invoice', 'receipt'].includes(rt);
+      return rt === type;
+    });
+    const months = new Set<string>();
+    typeReports.forEach(r => {
+      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      if (rm) months.add(rm);
+    });
+    return [...months].sort().reverse();
+  };
+
+  // Get reports for a specific branch/type/month
+  const getReportsForFolder = (branchId: string, type: string, month: string) => {
+    const branchReports = reportsByBranch[branchId]?.reports || [];
+    return branchReports.filter(r => {
+      const rt = (r.report_type || 'report').toLowerCase();
+      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
+      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      return isTypeMatch && rm === month;
+    });
+  };
+
+  const formatMonthLabel = (m: string) => {
+    const [year, month] = m.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return format(date, 'MMMM yyyy');
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
