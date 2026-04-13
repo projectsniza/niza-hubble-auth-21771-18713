@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X, Trash2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X, Trash2, FolderOpen, ChevronRight, ArrowLeft } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -42,6 +43,7 @@ export default function DailyReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
   const [customTypeName, setCustomTypeName] = useState('');
+  const [reportMonthYear, setReportMonthYear] = useState(format(new Date(), 'yyyy-MM'));
   const [files, setFiles] = useState<File[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,12 +216,13 @@ export default function DailyReports() {
       const { error } = await supabase.from('daily_reports').insert({
         title: reportTitle,
         report_type: finalReportType,
+        report_month: reportMonthYear,
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
         organization_id: submitOrgId,
         branch_id: submitBranchId
-      });
+      } as any);
 
       if (error) throw error;
 
@@ -340,6 +343,59 @@ export default function DailyReports() {
 
   const canCreateReport = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'hr';
 
+  // Folder view state
+  const [folderBranch, setFolderBranch] = useState<string | null>(null);
+  const [folderType, setFolderType] = useState<string | null>(null);
+  const [folderMonth, setFolderMonth] = useState<string | null>(null);
+
+  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'other'] as const;
+  const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
+
+  // Group reports by branch
+  const reportsByBranch = useMemo(() => {
+    const map: Record<string, { name: string; reports: DailyReport[] }> = {};
+    reports.forEach(r => {
+      if (!map[r.branch_id]) {
+        map[r.branch_id] = { name: r.branch?.name || 'Unknown Branch', reports: [] };
+      }
+      map[r.branch_id].reports.push(r);
+    });
+    return map;
+  }, [reports]);
+
+  // Get unique months for a branch/type
+  const getMonthsForType = (branchId: string, type: string) => {
+    const branchReports = reportsByBranch[branchId]?.reports || [];
+    const typeReports = branchReports.filter(r => {
+      const rt = (r.report_type || 'report').toLowerCase();
+      if (type === 'other') return !['report', 'invoice', 'receipt'].includes(rt);
+      return rt === type;
+    });
+    const months = new Set<string>();
+    typeReports.forEach(r => {
+      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      if (rm) months.add(rm);
+    });
+    return [...months].sort().reverse();
+  };
+
+  // Get reports for a specific branch/type/month
+  const getReportsForFolder = (branchId: string, type: string, month: string) => {
+    const branchReports = reportsByBranch[branchId]?.reports || [];
+    return branchReports.filter(r => {
+      const rt = (r.report_type || 'report').toLowerCase();
+      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
+      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      return isTypeMatch && rm === month;
+    });
+  };
+
+  const formatMonthLabel = (m: string) => {
+    const [year, month] = m.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return format(date, 'MMMM yyyy');
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
@@ -426,6 +482,16 @@ export default function DailyReports() {
                   </div>
                 )}
                 <div className="space-y-2">
+                  <Label>Report Month & Year *</Label>
+                  <Input 
+                    type="month" 
+                    value={reportMonthYear} 
+                    onChange={(e) => setReportMonthYear(e.target.value)}
+                    min="2026-01"
+                  />
+                  <p className="text-xs text-muted-foreground">The report will be filed under this month in the folder view</p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
                   <div className="flex items-center gap-4">
                     <label htmlFor="files" className="cursor-pointer">
@@ -473,6 +539,16 @@ export default function DailyReports() {
         )}
       </div>
 
+      <Tabs defaultValue="list" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="list">List View</TabsTrigger>
+          <TabsTrigger value="folders">
+            <FolderOpen className="h-4 w-4 mr-1" />
+            Folder View
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4">
       {canViewFilters && (
         <OrgBranchFilter
           organizations={organizations}
@@ -595,6 +671,79 @@ export default function DailyReports() {
           ))}
         </div>
       )}
+
+        </TabsContent>
+
+        <TabsContent value="folders" className="space-y-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Button variant="ghost" size="sm" className={!folderBranch ? 'font-bold' : ''} onClick={() => { setFolderBranch(null); setFolderType(null); setFolderMonth(null); }}>All Stores</Button>
+            {folderBranch && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderType ? 'font-bold' : ''} onClick={() => { setFolderType(null); setFolderMonth(null); }}>{reportsByBranch[folderBranch]?.name || 'Branch'}</Button></>)}
+            {folderType && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderMonth ? 'font-bold' : ''} onClick={() => setFolderMonth(null)}>{categoryLabel(folderType)}</Button></>)}
+            {folderMonth && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><span className="font-medium">{formatMonthLabel(folderMonth)}</span></>)}
+          </div>
+
+          {!folderBranch && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(reportsByBranch).map(([branchId, data]) => (
+                <Card key={branchId} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderBranch(branchId)}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10"><FolderOpen className="h-6 w-6 text-primary" /></div>
+                    <div><p className="font-semibold">{data.name}</p><p className="text-xs text-muted-foreground">{data.reports.length} report(s)</p></div>
+                  </div>
+                </Card>
+              ))}
+              {Object.keys(reportsByBranch).length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports found</p>}
+            </div>
+          )}
+
+          {folderBranch && !folderType && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {REPORT_CATEGORIES.map(cat => {
+                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt'].includes(rt) : rt === cat; }).length;
+                return (
+                  <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderType(cat)}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-accent/10"><FolderOpen className="h-6 w-6 text-accent-foreground" /></div>
+                      <div><p className="font-semibold">{categoryLabel(cat)}</p><p className="text-xs text-muted-foreground">{count} file(s)</p></div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {folderBranch && folderType && !folderMonth && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {getMonthsForType(folderBranch, folderType).map(month => (
+                <Card key={month} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderMonth(month)}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-muted"><Calendar className="h-6 w-6 text-muted-foreground" /></div>
+                    <div><p className="font-semibold">{formatMonthLabel(month)}</p><p className="text-xs text-muted-foreground">{getReportsForFolder(folderBranch, folderType, month).length} file(s)</p></div>
+                  </div>
+                </Card>
+              ))}
+              {getMonthsForType(folderBranch, folderType).length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports in this category</p>}
+            </div>
+          )}
+
+          {folderBranch && folderType && folderMonth && (
+            <div className="grid gap-4">
+              {getReportsForFolder(folderBranch, folderType, folderMonth).map(report => (
+                <Card key={report.id} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start">
+                    <div className="flex gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><FileText className="h-5 w-5 text-primary" /></div>
+                      <div><h3 className="font-semibold">{report.title}</h3><p className="text-xs text-muted-foreground mt-1">{report.submitted_at ? format(new Date(report.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'} · {Array.isArray(report.files) ? report.files.length : 0} file(s)</p></div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}><Eye className="h-4 w-4 mr-1" /> View</Button>
+                  </div>
+                </Card>
+              ))}
+              {getReportsForFolder(folderBranch, folderType, folderMonth).length === 0 && <p className="text-muted-foreground text-center py-8">No reports for this period</p>}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
         <AlertDialogContent>

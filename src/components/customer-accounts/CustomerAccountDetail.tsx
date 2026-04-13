@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,8 @@ import {
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { useMonthlyAccounts, MonthlyAccount, CustomerAccount } from '@/hooks/useCustomerAccounts';
 
 const MONTHS = [
@@ -57,6 +60,14 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [totalDue, setTotalDue] = useState('');
   const [monthNotes, setMonthNotes] = useState('');
 
+  // Partial payment state
+  const [partialPayOpen, setPartialPayOpen] = useState<string | null>(null);
+  const [partialAmount, setPartialAmount] = useState('');
+  const [partialDate, setPartialDate] = useState<Date | undefined>(new Date());
+  const [partialMethod, setPartialMethod] = useState('cash');
+  const [partialNotes, setPartialNotes] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   // Item form
   const [itemDesc, setItemDesc] = useState('');
   const [itemAmount, setItemAmount] = useState('');
@@ -65,8 +76,53 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [itemDiscount, setItemDiscount] = useState('');
 
   // Stats
-  const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due, 0);
-  const totalPaid = monthlyAccounts.filter(m => m.is_paid).reduce((s, m) => s + m.total_due, 0);
+  const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due - Number((m as any).amount_paid || 0), 0);
+  const totalPaid = monthlyAccounts.reduce((s, m) => s + Number((m as any).amount_paid || 0), 0) + monthlyAccounts.filter(m => m.is_paid && !Number((m as any).amount_paid)).reduce((s, m) => s + m.total_due, 0);
+
+  const handleRecordPartialPayment = async (monthlyId: string) => {
+    if (!partialAmount || parseFloat(partialAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    setSubmittingPayment(true);
+    try {
+      const dateStr = partialDate ? format(partialDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+      const { error } = await supabase.from('customer_payments').insert({
+        monthly_account_id: monthlyId,
+        amount_paid: parseFloat(partialAmount),
+        payment_date: dateStr,
+        payment_method: partialMethod,
+        notes: partialNotes || null,
+        recorded_by: user?.id,
+      });
+      if (error) throw error;
+
+      // Get account to recalculate
+      const account = monthlyAccounts.find(a => a.id === monthlyId);
+      if (account) {
+        const newAmountPaid = Number((account as any).amount_paid || 0) + parseFloat(partialAmount);
+        const fullyPaid = newAmountPaid >= account.total_due;
+        await supabase.from('customer_monthly_accounts').update({
+          amount_paid: newAmountPaid,
+          is_paid: fullyPaid,
+          paid_date: fullyPaid ? dateStr : null,
+          marked_paid_by: fullyPaid ? user?.id : null,
+        }).eq('id', monthlyId);
+      }
+
+      toast.success('Payment recorded');
+      setPartialPayOpen(null);
+      setPartialAmount('');
+      setPartialNotes('');
+      setPartialMethod('cash');
+      // Trigger refetch by invalidating
+      window.location.reload(); // simple refresh to refetch
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to record payment');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
 
   const getStatusColor = (account: MonthlyAccount) => {
     if (account.is_paid) return { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/30', label: 'Paid' };
@@ -235,6 +291,17 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
 
                   {account.notes && <p className="text-sm text-muted-foreground mb-3">{account.notes}</p>}
 
+                  {/* Payment Progress */}
+                  {!account.is_paid && account.total_due > 0 && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">Paid: £{Number((account as any).amount_paid || 0).toFixed(2)} / £{account.total_due.toFixed(2)}</span>
+                        <span className="font-medium">Remaining: £{(account.total_due - Number((account as any).amount_paid || 0)).toFixed(2)}</span>
+                      </div>
+                      <Progress value={(Number((account as any).amount_paid || 0) / account.total_due) * 100} className="h-2" />
+                    </div>
+                  )}
+
                   {/* Items */}
                   {account.items && account.items.length > 0 && (
                     <div className="mb-3 bg-muted/50 rounded-lg p-3 space-y-2">
@@ -268,11 +335,16 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                         <Button size="sm" variant="outline" onClick={() => setAddItemOpen(account.id)}>
                           <Plus className="h-3.5 w-3.5 mr-1" />Add Item
                         </Button>
+                        {!account.is_paid && (
+                          <Button size="sm" variant="outline" onClick={() => { setPartialPayOpen(account.id); setPartialAmount(''); setPartialNotes(''); }}>
+                            <PoundSterling className="h-3.5 w-3.5 mr-1" />Record Payment
+                          </Button>
+                        )}
                         {!account.is_paid ? (
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700">
-                                <Check className="h-3.5 w-3.5 mr-1" />Mark Paid
+                                <Check className="h-3.5 w-3.5 mr-1" />Mark Fully Paid
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-4" align="end">
@@ -389,6 +461,66 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
             <Button variant="outline" onClick={() => setAddItemOpen(null)}>Cancel</Button>
             <Button onClick={() => addItemOpen && handleAddItem(addItemOpen)} disabled={addItem.isPending || !itemDesc || !itemAmount}>
               {addItem.isPending ? 'Adding...' : 'Add Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Payment Dialog */}
+      <Dialog open={!!partialPayOpen} onOpenChange={() => setPartialPayOpen(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {partialPayOpen && (() => {
+              const acc = monthlyAccounts.find(a => a.id === partialPayOpen);
+              const remaining = acc ? acc.total_due - Number((acc as any).amount_paid || 0) : 0;
+              return (
+                <div className="p-3 bg-muted rounded-lg text-sm">
+                  <div className="flex justify-between"><span>Total Due:</span><span className="font-medium">£{acc?.total_due.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Already Paid:</span><span className="font-medium">£{Number((acc as any)?.amount_paid || 0).toFixed(2)}</span></div>
+                  <div className="flex justify-between font-semibold"><span>Remaining:</span><span>£{remaining.toFixed(2)}</span></div>
+                </div>
+              );
+            })()}
+            <div>
+              <Label>Amount (£) *</Label>
+              <Input type="number" step="0.01" min="0.01" value={partialAmount} onChange={e => setPartialAmount(e.target.value)} placeholder="0.00" />
+            </div>
+            <div>
+              <Label>Payment Method</Label>
+              <Select value={partialMethod} onValueChange={setPartialMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !partialDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {partialDate ? format(partialDate, 'dd MMM yyyy') : 'Pick a date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={partialDate} onSelect={setPartialDate} className={cn("p-3 pointer-events-auto")} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={partialNotes} onChange={e => setPartialNotes(e.target.value)} rows={2} placeholder="Optional" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPartialPayOpen(null)}>Cancel</Button>
+            <Button onClick={() => partialPayOpen && handleRecordPartialPayment(partialPayOpen)} disabled={submittingPayment || !partialAmount}>
+              {submittingPayment ? 'Recording...' : 'Record Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>

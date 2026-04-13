@@ -29,7 +29,7 @@ export function useMessages(conversationId: string | null) {
       const replyIds = msgs?.filter(m => m.reply_to_id).map(m => m.reply_to_id) || [];
 
       const [profilesResult, rolesResult, replyResult] = await Promise.all([
-        supabase.from('profiles').select('id, name, email').in('id', senderIds),
+        supabase.rpc('get_messaging_profiles', { p_user_ids: senderIds }),
         supabase.from('user_roles').select('user_id, role').in('user_id', senderIds),
         replyIds.length > 0
           ? supabase.from('messages').select('*').in('id', replyIds as string[])
