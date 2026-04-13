@@ -1626,6 +1626,7 @@ export type Database = {
           files: Json | null
           id: string
           organization_id: string
+          report_month: string | null
           report_type: string | null
           submitted_at: string | null
           submitted_by: string
@@ -1638,6 +1639,7 @@ export type Database = {
           files?: Json | null
           id?: string
           organization_id: string
+          report_month?: string | null
           report_type?: string | null
           submitted_at?: string | null
           submitted_by: string
@@ -1650,6 +1652,7 @@ export type Database = {
           files?: Json | null
           id?: string
           organization_id?: string
+          report_month?: string | null
           report_type?: string | null
           submitted_at?: string | null
           submitted_by?: string
