@@ -291,6 +291,17 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
 
                   {account.notes && <p className="text-sm text-muted-foreground mb-3">{account.notes}</p>}
 
+                  {/* Payment Progress */}
+                  {!account.is_paid && account.total_due > 0 && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">Paid: £{Number((account as any).amount_paid || 0).toFixed(2)} / £{account.total_due.toFixed(2)}</span>
+                        <span className="font-medium">Remaining: £{(account.total_due - Number((account as any).amount_paid || 0)).toFixed(2)}</span>
+                      </div>
+                      <Progress value={(Number((account as any).amount_paid || 0) / account.total_due) * 100} className="h-2" />
+                    </div>
+                  )}
+
                   {/* Items */}
                   {account.items && account.items.length > 0 && (
                     <div className="mb-3 bg-muted/50 rounded-lg p-3 space-y-2">
@@ -324,11 +335,16 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                         <Button size="sm" variant="outline" onClick={() => setAddItemOpen(account.id)}>
                           <Plus className="h-3.5 w-3.5 mr-1" />Add Item
                         </Button>
+                        {!account.is_paid && (
+                          <Button size="sm" variant="outline" onClick={() => { setPartialPayOpen(account.id); setPartialAmount(''); setPartialNotes(''); }}>
+                            <PoundSterling className="h-3.5 w-3.5 mr-1" />Record Payment
+                          </Button>
+                        )}
                         {!account.is_paid ? (
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700">
-                                <Check className="h-3.5 w-3.5 mr-1" />Mark Paid
+                                <Check className="h-3.5 w-3.5 mr-1" />Mark Fully Paid
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-4" align="end">
