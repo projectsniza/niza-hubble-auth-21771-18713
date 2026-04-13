@@ -429,6 +429,16 @@ export default function DailyReports() {
                   </div>
                 )}
                 <div className="space-y-2">
+                  <Label>Report Month & Year *</Label>
+                  <Input 
+                    type="month" 
+                    value={reportMonthYear} 
+                    onChange={(e) => setReportMonthYear(e.target.value)}
+                    min="2026-01"
+                  />
+                  <p className="text-xs text-muted-foreground">The report will be filed under this month in the folder view</p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
                   <div className="flex items-center gap-4">
                     <label htmlFor="files" className="cursor-pointer">
