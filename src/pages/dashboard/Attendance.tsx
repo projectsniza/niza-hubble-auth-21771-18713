@@ -1087,16 +1087,100 @@ export default function Attendance() {
               </Button>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                month={currentMonth}
-                onMonthChange={setCurrentMonth}
-                className="w-full"
-              />
-            </div>
+            {(() => {
+              // Build leave date map for admin calendar with employee names
+              const adminLeaveDateMap = new Map<string, { employeeName: string; leaveType: string; status: string }[]>();
+              const scopedRequests = applyFilters(leaveRequests);
+              scopedRequests.forEach(req => {
+                const start = new Date(req.start_date);
+                const end = new Date(req.end_date);
+                const empName = req.employee ? `${req.employee.first_name} ${req.employee.last_name}` : 'Unknown';
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const key = format(d, 'yyyy-MM-dd');
+                  if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
+                  adminLeaveDateMap.get(key)!.push({ employeeName: empName, leaveType: req.leave_type?.name || 'Leave', status: req.status });
+                }
+              });
+              mandatoryLeave.forEach(ml => {
+                const start = new Date(ml.start_date);
+                const end = new Date(ml.end_date);
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const key = format(d, 'yyyy-MM-dd');
+                  if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
+                  adminLeaveDateMap.get(key)!.push({ employeeName: ml.title, leaveType: 'Mandatory', status: 'mandatory' });
+                }
+              });
+
+              const adminApprovedDates = [...adminLeaveDateMap.entries()].filter(([, items]) => items.some(i => i.status === 'approved')).map(([key]) => new Date(key));
+              const adminPendingDates = [...adminLeaveDateMap.entries()].filter(([, items]) => items.some(i => i.status === 'pending') && !items.some(i => i.status === 'approved')).map(([key]) => new Date(key));
+              const adminMandatoryDates = [...adminLeaveDateMap.entries()].filter(([, items]) => items.some(i => i.status === 'mandatory')).map(([key]) => new Date(key));
+
+              const adminSelectedDateKey = date ? format(date, 'yyyy-MM-dd') : null;
+              const adminSelectedDateItems = adminSelectedDateKey ? adminLeaveDateMap.get(adminSelectedDateKey) || [] : [];
+
+              return (
+                <>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      month={currentMonth}
+                      onMonthChange={setCurrentMonth}
+                      className="w-full"
+                      modifiers={{
+                        approved: adminApprovedDates,
+                        pending: adminPendingDates,
+                        mandatory: adminMandatoryDates,
+                      }}
+                      modifiersStyles={{
+                        approved: { backgroundColor: 'rgb(59 130 246 / 0.2)', borderRadius: '6px', color: 'rgb(37 99 235)' },
+                        pending: { backgroundColor: 'rgb(245 158 11 / 0.2)', borderRadius: '6px', color: 'rgb(217 119 6)' },
+                        mandatory: { backgroundColor: 'rgb(16 185 129 / 0.2)', borderRadius: '6px', color: 'rgb(5 150 105)' },
+                      }}
+                    />
+                  </div>
+
+                  {/* Selected date detail with employee names */}
+                  {date && (
+                    <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                      <h4 className="font-semibold mb-2">{format(date, 'EEEE, dd MMMM yyyy')}</h4>
+                      {adminSelectedDateItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No leave or holidays on this date</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {adminSelectedDateItems.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded-md">
+                              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                                item.status === 'mandatory' ? 'bg-emerald-500' :
+                                item.status === 'approved' ? 'bg-blue-500' :
+                                item.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'
+                              }`} />
+                              <span className="font-medium text-sm">{item.employeeName}</span>
+                              <span className="text-xs text-muted-foreground">— {item.leaveType}</span>
+                              <Badge variant={
+                                item.status === 'mandatory' ? 'default' :
+                                item.status === 'approved' ? 'default' :
+                                item.status === 'pending' ? 'secondary' : 'destructive'
+                              } className="text-xs ml-auto">
+                                {item.status === 'mandatory' ? 'Holiday' : item.status}
+                              </Badge>
+                            </div>
+                          ))}
+                          {adminSelectedDateItems.filter(i => i.status === 'pending').length > 1 && (
+                            <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
+                              <p className="text-xs text-amber-700 font-medium">
+                                ⚠ {adminSelectedDateItems.filter(i => i.status === 'pending').length} overlapping pending requests on this date
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Leave Requests List */}
             <div className="mt-6">
