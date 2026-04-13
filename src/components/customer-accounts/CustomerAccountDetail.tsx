@@ -60,6 +60,14 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [totalDue, setTotalDue] = useState('');
   const [monthNotes, setMonthNotes] = useState('');
 
+  // Partial payment state
+  const [partialPayOpen, setPartialPayOpen] = useState<string | null>(null);
+  const [partialAmount, setPartialAmount] = useState('');
+  const [partialDate, setPartialDate] = useState<Date | undefined>(new Date());
+  const [partialMethod, setPartialMethod] = useState('cash');
+  const [partialNotes, setPartialNotes] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   // Item form
   const [itemDesc, setItemDesc] = useState('');
   const [itemAmount, setItemAmount] = useState('');
