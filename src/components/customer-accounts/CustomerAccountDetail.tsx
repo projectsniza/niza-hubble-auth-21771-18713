@@ -76,8 +76,53 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [itemDiscount, setItemDiscount] = useState('');
 
   // Stats
-  const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due, 0);
-  const totalPaid = monthlyAccounts.filter(m => m.is_paid).reduce((s, m) => s + m.total_due, 0);
+  const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due - Number((m as any).amount_paid || 0), 0);
+  const totalPaid = monthlyAccounts.reduce((s, m) => s + Number((m as any).amount_paid || 0), 0) + monthlyAccounts.filter(m => m.is_paid && !Number((m as any).amount_paid)).reduce((s, m) => s + m.total_due, 0);
+
+  const handleRecordPartialPayment = async (monthlyId: string) => {
+    if (!partialAmount || parseFloat(partialAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    setSubmittingPayment(true);
+    try {
+      const dateStr = partialDate ? format(partialDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+      const { error } = await supabase.from('customer_payments').insert({
+        monthly_account_id: monthlyId,
+        amount_paid: parseFloat(partialAmount),
+        payment_date: dateStr,
+        payment_method: partialMethod,
+        notes: partialNotes || null,
+        recorded_by: user?.id,
+      });
+      if (error) throw error;
+
+      // Get account to recalculate
+      const account = monthlyAccounts.find(a => a.id === monthlyId);
+      if (account) {
+        const newAmountPaid = Number((account as any).amount_paid || 0) + parseFloat(partialAmount);
+        const fullyPaid = newAmountPaid >= account.total_due;
+        await supabase.from('customer_monthly_accounts').update({
+          amount_paid: newAmountPaid,
+          is_paid: fullyPaid,
+          paid_date: fullyPaid ? dateStr : null,
+          marked_paid_by: fullyPaid ? user?.id : null,
+        }).eq('id', monthlyId);
+      }
+
+      toast.success('Payment recorded');
+      setPartialPayOpen(null);
+      setPartialAmount('');
+      setPartialNotes('');
+      setPartialMethod('cash');
+      // Trigger refetch by invalidating
+      window.location.reload(); // simple refresh to refetch
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to record payment');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
 
   const getStatusColor = (account: MonthlyAccount) => {
     if (account.is_paid) return { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/30', label: 'Paid' };
