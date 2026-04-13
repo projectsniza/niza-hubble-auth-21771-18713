@@ -539,6 +539,16 @@ export default function DailyReports() {
         )}
       </div>
 
+      <Tabs defaultValue="list" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="list">List View</TabsTrigger>
+          <TabsTrigger value="folders">
+            <FolderOpen className="h-4 w-4 mr-1" />
+            Folder View
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4">
       {canViewFilters && (
         <OrgBranchFilter
           organizations={organizations}
