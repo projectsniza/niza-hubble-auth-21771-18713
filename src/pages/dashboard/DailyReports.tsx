@@ -43,6 +43,7 @@ export default function DailyReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
   const [customTypeName, setCustomTypeName] = useState('');
+  const [reportMonthYear, setReportMonthYear] = useState(format(new Date(), 'yyyy-MM'));
   const [files, setFiles] = useState<File[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
