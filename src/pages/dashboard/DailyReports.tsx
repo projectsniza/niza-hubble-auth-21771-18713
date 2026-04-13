@@ -216,12 +216,13 @@ export default function DailyReports() {
       const { error } = await supabase.from('daily_reports').insert({
         title: reportTitle,
         report_type: finalReportType,
+        report_month: reportMonthYear,
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
         organization_id: submitOrgId,
         branch_id: submitBranchId
-      });
+      } as any);
 
       if (error) throw error;
 
