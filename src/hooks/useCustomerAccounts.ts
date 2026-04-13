@@ -23,6 +23,7 @@ export interface MonthlyAccount {
   customer_id: string;
   month_date: string;
   total_due: number;
+  amount_paid: number;
   is_paid: boolean;
   paid_date: string | null;
   marked_paid_by: string | null;
