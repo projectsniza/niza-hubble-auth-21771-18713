@@ -196,6 +196,7 @@ export function useMonthlyAccounts(customerId: string | null) {
       return (data || []).map(m => ({
         ...m,
         total_due: Number(m.total_due),
+        amount_paid: Number(m.amount_paid || 0),
         items: items.filter(i => i.monthly_account_id === m.id),
       })) as MonthlyAccount[];
     },
