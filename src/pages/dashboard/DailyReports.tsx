@@ -672,6 +672,79 @@ export default function DailyReports() {
         </div>
       )}
 
+        </TabsContent>
+
+        <TabsContent value="folders" className="space-y-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Button variant="ghost" size="sm" className={!folderBranch ? 'font-bold' : ''} onClick={() => { setFolderBranch(null); setFolderType(null); setFolderMonth(null); }}>All Stores</Button>
+            {folderBranch && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderType ? 'font-bold' : ''} onClick={() => { setFolderType(null); setFolderMonth(null); }}>{reportsByBranch[folderBranch]?.name || 'Branch'}</Button></>)}
+            {folderType && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderMonth ? 'font-bold' : ''} onClick={() => setFolderMonth(null)}>{categoryLabel(folderType)}</Button></>)}
+            {folderMonth && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><span className="font-medium">{formatMonthLabel(folderMonth)}</span></>)}
+          </div>
+
+          {!folderBranch && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(reportsByBranch).map(([branchId, data]) => (
+                <Card key={branchId} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderBranch(branchId)}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10"><FolderOpen className="h-6 w-6 text-primary" /></div>
+                    <div><p className="font-semibold">{data.name}</p><p className="text-xs text-muted-foreground">{data.reports.length} report(s)</p></div>
+                  </div>
+                </Card>
+              ))}
+              {Object.keys(reportsByBranch).length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports found</p>}
+            </div>
+          )}
+
+          {folderBranch && !folderType && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {REPORT_CATEGORIES.map(cat => {
+                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt'].includes(rt) : rt === cat; }).length;
+                return (
+                  <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderType(cat)}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-accent/10"><FolderOpen className="h-6 w-6 text-accent-foreground" /></div>
+                      <div><p className="font-semibold">{categoryLabel(cat)}</p><p className="text-xs text-muted-foreground">{count} file(s)</p></div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {folderBranch && folderType && !folderMonth && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {getMonthsForType(folderBranch, folderType).map(month => (
+                <Card key={month} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderMonth(month)}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-muted"><Calendar className="h-6 w-6 text-muted-foreground" /></div>
+                    <div><p className="font-semibold">{formatMonthLabel(month)}</p><p className="text-xs text-muted-foreground">{getReportsForFolder(folderBranch, folderType, month).length} file(s)</p></div>
+                  </div>
+                </Card>
+              ))}
+              {getMonthsForType(folderBranch, folderType).length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports in this category</p>}
+            </div>
+          )}
+
+          {folderBranch && folderType && folderMonth && (
+            <div className="grid gap-4">
+              {getReportsForFolder(folderBranch, folderType, folderMonth).map(report => (
+                <Card key={report.id} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start">
+                    <div className="flex gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><FileText className="h-5 w-5 text-primary" /></div>
+                      <div><h3 className="font-semibold">{report.title}</h3><p className="text-xs text-muted-foreground mt-1">{report.submitted_at ? format(new Date(report.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'} · {Array.isArray(report.files) ? report.files.length : 0} file(s)</p></div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}><Eye className="h-4 w-4 mr-1" /> View</Button>
+                  </div>
+                </Card>
+              ))}
+              {getReportsForFolder(folderBranch, folderType, folderMonth).length === 0 && <p className="text-muted-foreground text-center py-8">No reports for this period</p>}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
       <AlertDialog open={!!reportToDelete} onOpenChange={(open) => !open && setReportToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
