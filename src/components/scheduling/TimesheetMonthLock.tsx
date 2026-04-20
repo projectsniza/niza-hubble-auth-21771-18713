@@ -3,8 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Lock, Unlock, Shield, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Lock, Unlock, Shield, AlertTriangle, Eye, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -33,11 +33,17 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
   const [lockMessage, setLockMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [step, setStep] = useState<'form' | 'preview'>('form');
+
   const isSuperAdmin = user?.role === 'super_admin';
   const canLock = user?.role === 'manager' || isSuperAdmin || user?.role === 'hr';
   const canUnlock = isSuperAdmin;
 
   const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+  const monthEndDate = new Date(monthStart);
+  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
+  monthEndDate.setDate(monthEndDate.getDate() - 1);
+  const periodLabel = `${format(monthStart, 'dd MMM yyyy')} – ${format(monthEndDate, 'dd MMM yyyy')}`;
 
   useEffect(() => {
     if (!branchId) return;
@@ -68,6 +74,10 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
 
   const handleLock = async () => {
     if (!branchId || !user?.id) return;
+    if (!lockMessage.trim()) {
+      toast.error('Please enter a confirmation message before locking');
+      return;
+    }
     setSubmitting(true);
     try {
       const { error } = await supabase.from('timesheet_month_locks').insert({
@@ -75,18 +85,33 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
         organization_id: organizationId || null,
         month_start: monthStartStr,
         locked_by: user.id,
-        lock_message: lockMessage.trim() || null,
+        lock_message: lockMessage.trim(),
       });
       if (error) throw error;
       toast.success('Monthly schedule locked and submitted');
       setShowLockDialog(false);
       setLockMessage('');
+      setStep('form');
       fetchLock();
     } catch (err: any) {
       toast.error(err.message || 'Failed to lock');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openLockDialog = () => {
+    setStep('form');
+    setLockMessage('');
+    setShowLockDialog(true);
+  };
+
+  const goToPreview = () => {
+    if (!lockMessage.trim()) {
+      toast.error('Please enter a message before previewing');
+      return;
+    }
+    setStep('preview');
   };
 
   const handleUnlock = async () => {
@@ -136,43 +161,89 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
           </CardContent>
         </Card>
       ) : canLock ? (
-        <Button size="sm" variant="outline" onClick={() => setShowLockDialog(true)} className="gap-2">
+        <Button size="sm" variant="outline" onClick={openLockDialog} className="gap-2">
           <Shield className="h-4 w-4" />
           Lock & Submit Month
         </Button>
       ) : null}
 
-      <Dialog open={showLockDialog} onOpenChange={setShowLockDialog}>
+      <Dialog open={showLockDialog} onOpenChange={(open) => { setShowLockDialog(open); if (!open) setStep('form'); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
-              Lock Monthly Schedule
+              {step === 'form' ? <Lock className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {step === 'form' ? 'Lock Monthly Schedule' : 'Preview & Confirm'}
             </DialogTitle>
+            <DialogDescription>
+              Period: <strong>{periodLabel}</strong>
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-              <div className="text-sm text-amber-800 dark:text-amber-300">
-                Once locked, only a Super Admin can modify or unlock this period. Store accounts will not be able to edit.
+
+          {step === 'form' ? (
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-300">
+                  Once locked, only a Super Admin can modify or unlock this period. Store accounts will not be able to edit.
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Message <span className="text-destructive">*</span> <span className="text-xs text-muted-foreground font-normal">(required, visible to all)</span></label>
+                <Textarea
+                  value={lockMessage}
+                  onChange={(e) => setLockMessage(e.target.value)}
+                  placeholder="e.g., April schedule verified and submitted for payroll"
+                  rows={4}
+                  className="mt-1"
+                />
               </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Message (visible to all)</label>
-              <Textarea
-                value={lockMessage}
-                onChange={(e) => setLockMessage(e.target.value)}
-                placeholder="e.g., April schedule verified and submitted for payroll"
-                rows={3}
-              />
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Payroll Period</p>
+                  <p className="text-sm font-medium mt-1">{periodLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Locked By</p>
+                  <p className="text-sm font-medium mt-1">{user?.name} ({user?.role})</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Message</p>
+                  <p className="text-sm mt-1 italic">"{lockMessage}"</p>
+                </div>
+              </div>
+              <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
+                <div className="text-xs text-destructive">
+                  After locking, you will not be able to edit this period. Only a Super Admin can unlock it.
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLockDialog(false)}>Cancel</Button>
-            <Button onClick={handleLock} disabled={submitting} className="gap-2 bg-amber-600 hover:bg-amber-700 text-white">
-              <Lock className="h-4 w-4" />
-              {submitting ? 'Locking...' : 'Lock & Submit'}
-            </Button>
+            {step === 'form' ? (
+              <>
+                <Button variant="outline" onClick={() => setShowLockDialog(false)}>Cancel</Button>
+                <Button onClick={goToPreview} className="gap-2">
+                  <Eye className="h-4 w-4" />
+                  Preview
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setStep('form')} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button onClick={handleLock} disabled={submitting} className="gap-2 bg-amber-600 hover:bg-amber-700 text-white">
+                  <Lock className="h-4 w-4" />
+                  {submitting ? 'Locking...' : 'Confirm Lock & Submit'}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
