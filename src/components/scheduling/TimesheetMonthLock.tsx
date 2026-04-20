@@ -3,8 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Lock, Unlock, Shield, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Lock, Unlock, Shield, AlertTriangle, Eye, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -33,11 +33,17 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
   const [lockMessage, setLockMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [step, setStep] = useState<'form' | 'preview'>('form');
+
   const isSuperAdmin = user?.role === 'super_admin';
   const canLock = user?.role === 'manager' || isSuperAdmin || user?.role === 'hr';
   const canUnlock = isSuperAdmin;
 
   const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+  const monthEndDate = new Date(monthStart);
+  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
+  monthEndDate.setDate(monthEndDate.getDate() - 1);
+  const periodLabel = `${format(monthStart, 'dd MMM yyyy')} – ${format(monthEndDate, 'dd MMM yyyy')}`;
 
   useEffect(() => {
     if (!branchId) return;
@@ -68,6 +74,10 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
 
   const handleLock = async () => {
     if (!branchId || !user?.id) return;
+    if (!lockMessage.trim()) {
+      toast.error('Please enter a confirmation message before locking');
+      return;
+    }
     setSubmitting(true);
     try {
       const { error } = await supabase.from('timesheet_month_locks').insert({
@@ -75,18 +85,33 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
         organization_id: organizationId || null,
         month_start: monthStartStr,
         locked_by: user.id,
-        lock_message: lockMessage.trim() || null,
+        lock_message: lockMessage.trim(),
       });
       if (error) throw error;
       toast.success('Monthly schedule locked and submitted');
       setShowLockDialog(false);
       setLockMessage('');
+      setStep('form');
       fetchLock();
     } catch (err: any) {
       toast.error(err.message || 'Failed to lock');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openLockDialog = () => {
+    setStep('form');
+    setLockMessage('');
+    setShowLockDialog(true);
+  };
+
+  const goToPreview = () => {
+    if (!lockMessage.trim()) {
+      toast.error('Please enter a message before previewing');
+      return;
+    }
+    setStep('preview');
   };
 
   const handleUnlock = async () => {
