@@ -836,7 +836,12 @@ export default function IncidentManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
+              <Button variant="outline" size="sm" onClick={() => printIncident(selectedIncident)} className="mr-6">
+                <Printer className="h-4 w-4 mr-1" /> Print
+              </Button>
+            </div>
           </DialogHeader>
           {selectedIncident && (
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
