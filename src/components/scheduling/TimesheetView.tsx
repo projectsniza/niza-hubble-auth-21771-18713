@@ -428,6 +428,7 @@ export function TimesheetView() {
 
   const saveTimesheet = async () => {
     if (!selectedTimesheet) return;
+    if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     setSaving(true);
     try {
       const totalWorked = entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
@@ -470,6 +471,7 @@ export function TimesheetView() {
   };
 
   const approveTimesheet = async (timesheetId: string) => {
+    if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     try {
       await supabase.from('timesheets').update({
         status: 'approved',
@@ -510,6 +512,10 @@ export function TimesheetView() {
   }, [editingDisabled]);
 
   const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
+    if (editingDisabled) {
+      toast.error('This payroll period is locked.');
+      return;
+    }
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
