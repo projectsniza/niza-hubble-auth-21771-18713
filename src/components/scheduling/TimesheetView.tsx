@@ -493,6 +493,10 @@ export function TimesheetView() {
 
   // Inline time update
   const handleInlineTimeChange = useCallback((timesheetId: string, dayOfWeek: string, field: 'start' | 'end', value: string) => {
+    if (editingDisabled) {
+      toast.error('This payroll period is locked. Contact a Super Admin to unlock.');
+      return;
+    }
     setInlineEditing(prev => ({
       ...prev,
       [timesheetId]: {
@@ -503,7 +507,7 @@ export function TimesheetView() {
         }
       }
     }));
-  }, []);
+  }, [editingDisabled]);
 
   const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
