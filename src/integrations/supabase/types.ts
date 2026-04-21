@@ -6478,6 +6478,10 @@ export type Database = {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean
       }
+      is_timesheet_month_locked: {
+        Args: { _branch_id: string; _week_start: string }
+        Returns: boolean
+      }
       link_my_employee_record: { Args: never; Returns: string }
     }
     Enums: {

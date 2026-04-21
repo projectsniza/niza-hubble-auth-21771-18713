@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
+import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
@@ -212,6 +213,9 @@ export default function Scheduling() {
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">
           <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
           <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
+          {user?.role === 'super_admin' && (
+            <TabsTrigger value="lockstatus" className="flex-1 min-w-[100px] text-xs md:text-sm">Lock Status</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="timesheets" className="mt-0">
@@ -221,6 +225,12 @@ export default function Scheduling() {
         <TabsContent value="holiday" className="mt-0">
           <HolidayBalance />
         </TabsContent>
+
+        {user?.role === 'super_admin' && (
+          <TabsContent value="lockstatus" className="mt-0">
+            <MonthlyLockStatus />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

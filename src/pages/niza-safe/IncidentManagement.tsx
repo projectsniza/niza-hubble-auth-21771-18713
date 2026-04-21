@@ -58,18 +58,48 @@ export default function IncidentManagement() {
     incident_type: 'accident',
     incident_date: new Date(),
     incident_time: '',
+    reported_datetime: '',
     location_details: '',
+    // Person injured
+    person_type: 'employee', // employee | visitor | other
+    person_type_other: '',
     victim_name: '',
+    victim_address: '',
+    victim_phone: '',
+    victim_email: '',
     victim_job_title: '',
+    // Injury
     injury_type: '',
     body_part_injured: '',
     severity: 'minor',
+    nature_of_injuries: '',
+    // Action taken
+    action_first_aid: false,
+    action_ambulance: false,
+    action_hospital: false,
+    action_police: false,
+    action_other: false,
+    action_other_text: '',
+    // Witnesses (up to 2)
+    witness1_name: '',
+    witness1_contact: '',
+    witness2_name: '',
+    witness2_contact: '',
+    // Prevention & approval
+    prevention_actions: '',
     immediate_action: '',
-    witness_names: '',
+    completed_by: '',
+    completed_signature: '',
+    completed_date: '',
+    approved_by_name: '',
+    approved_by_position: '',
+    approved_date: '',
+    // Legacy fields
     first_aid_given: false,
     first_aider_name: '',
     hospital_attended: false,
     reported_to_riddor: false,
+    witness_names: '',
   });
 
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
@@ -212,10 +242,34 @@ export default function IncidentManagement() {
         images: attachedFiles as unknown as null,
         medical_documents: {
           incident_time: formData.incident_time,
+          reported_datetime: formData.reported_datetime,
+          person_type: formData.person_type,
+          person_type_other: formData.person_type_other,
+          victim_address: formData.victim_address,
+          victim_phone: formData.victim_phone,
+          victim_email: formData.victim_email,
           victim_job_title: formData.victim_job_title,
           body_part_injured: formData.body_part_injured,
           severity: formData.severity,
+          nature_of_injuries: formData.nature_of_injuries,
           immediate_action: formData.immediate_action,
+          action_first_aid: formData.action_first_aid,
+          action_ambulance: formData.action_ambulance,
+          action_hospital: formData.action_hospital,
+          action_police: formData.action_police,
+          action_other: formData.action_other,
+          action_other_text: formData.action_other_text,
+          witness1_name: formData.witness1_name,
+          witness1_contact: formData.witness1_contact,
+          witness2_name: formData.witness2_name,
+          witness2_contact: formData.witness2_contact,
+          prevention_actions: formData.prevention_actions,
+          completed_by: formData.completed_by,
+          completed_signature: formData.completed_signature,
+          completed_date: formData.completed_date,
+          approved_by_name: formData.approved_by_name,
+          approved_by_position: formData.approved_by_position,
+          approved_date: formData.approved_date,
           witness_names: formData.witness_names,
           first_aid_given: formData.first_aid_given,
           first_aider_name: formData.first_aider_name,
@@ -250,29 +304,56 @@ export default function IncidentManagement() {
     }
   };
 
+  const buildEmptyForm = (defaultType: string) => ({
+    title: '',
+    description: '',
+    incident_type: defaultType,
+    incident_date: new Date(),
+    incident_time: '',
+    reported_datetime: '',
+    location_details: '',
+    person_type: 'employee',
+    person_type_other: '',
+    victim_name: '',
+    victim_address: '',
+    victim_phone: '',
+    victim_email: '',
+    victim_job_title: '',
+    injury_type: '',
+    body_part_injured: '',
+    severity: 'minor',
+    nature_of_injuries: '',
+    action_first_aid: false,
+    action_ambulance: false,
+    action_hospital: false,
+    action_police: false,
+    action_other: false,
+    action_other_text: '',
+    witness1_name: '',
+    witness1_contact: '',
+    witness2_name: '',
+    witness2_contact: '',
+    prevention_actions: '',
+    immediate_action: '',
+    completed_by: '',
+    completed_signature: '',
+    completed_date: '',
+    approved_by_name: '',
+    approved_by_position: '',
+    approved_date: '',
+    first_aid_given: false,
+    first_aider_name: '',
+    hospital_attended: false,
+    reported_to_riddor: false,
+    witness_names: '',
+  });
+
   const openCreateDialog = () => {
-    setFormData({
-      title: '',
-      description: '',
-      incident_type: activeTab === 'accidents' ? 'accident' : 'near_miss',
-      incident_date: new Date(),
-      incident_time: '',
-      location_details: '',
-      victim_name: '',
-      victim_job_title: '',
-      injury_type: '',
-      body_part_injured: '',
-      severity: 'minor',
-      immediate_action: '',
-      witness_names: '',
-      first_aid_given: false,
-      first_aider_name: '',
-      hospital_attended: false,
-      reported_to_riddor: false,
-    });
+    setFormData(buildEmptyForm(activeTab === 'accidents' ? 'accident' : 'near_miss'));
     setAttachedFiles([]);
     setSelectedOrg('');
     setSelectedBranch('');
+    setSelectedIncident(null);
     setShowCreateDialog(true);
   };
 
@@ -290,30 +371,73 @@ export default function IncidentManagement() {
       return;
     }
     const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd">${value}</td></tr>` : '';
+    const sectionTitle = (t: string) => `<tr><td colspan="2" style="padding:8px 10px;background:#222;color:#fff;font-weight:600;letter-spacing:0.5px;font-size:12px;text-transform:uppercase">${t}</td></tr>`;
+    const personType = md.person_type === 'other' ? `Other${md.person_type_other ? ' — ' + md.person_type_other : ''}` : (md.person_type ? md.person_type.charAt(0).toUpperCase() + md.person_type.slice(1) : '');
+    const actionsTaken = [
+      md.action_first_aid && 'First Aid',
+      md.action_ambulance && 'Ambulance Called',
+      md.action_hospital && 'Hospital',
+      md.action_police && 'Police',
+      md.action_other && `Other${md.action_other_text ? ' — ' + md.action_other_text : ''}`,
+    ].filter(Boolean).join(', ');
     win.document.write(`<!doctype html><html><head><title>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report - ${incident.title || ''}</title>
-      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}</style>
+      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
       </head><body>
       <h1>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report</h1>
       <h2>Reference: ${incident.id?.slice(0, 8) || '-'} • Generated: ${format(new Date(), 'PPP p')}</h2>
       <table>
+        ${sectionTitle('General Information')}
         ${row('Title', incident.title)}
         ${row('Type', incident.incident_type)}
         ${row('Status', incident.status)}
-        ${row('Date', incident.incident_date ? format(new Date(incident.incident_date), 'PPP') : '-')}
-        ${row('Time', md.incident_time)}
+        ${row('Incident Date', incident.incident_date ? format(new Date(incident.incident_date), 'PPP') : '-')}
+        ${row('Incident Time', md.incident_time)}
         ${row('Location', incident.location_details)}
+        ${row('Date &amp; Time Reported', md.reported_datetime ? format(new Date(md.reported_datetime), 'PPP p') : '')}
         ${row('Description', incident.description)}
-        ${row('Victim Name', incident.victim_name)}
+
+        ${sectionTitle('Person Injured')}
+        ${row('Type', personType)}
+        ${row('Full Name', incident.victim_name)}
+        ${row('Address', md.victim_address)}
+        ${row('Phone', md.victim_phone)}
+        ${row('Email', md.victim_email)}
         ${row('Job Title', md.victim_job_title)}
+
+        ${sectionTitle('Incident Details')}
+        ${row('Details of Accident / Incident', incident.description)}
+        ${row('Nature &amp; Extent of Injuries', md.nature_of_injuries)}
         ${row('Injury Type', incident.injury_type)}
         ${row('Body Part Injured', md.body_part_injured)}
         ${row('Severity', md.severity)}
-        ${row('Witnesses', md.witness_names)}
+
+        ${sectionTitle('Action Taken')}
+        ${row('Actions', actionsTaken || '-')}
         ${row('Immediate Action', md.immediate_action)}
         ${row('First Aid Given', md.first_aid_given ? `Yes${md.first_aider_name ? ' — by ' + md.first_aider_name : ''}` : '')}
         ${row('Hospital Attended', md.hospital_attended ? 'Yes' : '')}
         ${row('RIDDOR Reportable', md.reported_to_riddor ? '<span class="badge">RIDDOR</span>' : '')}
+
+        ${sectionTitle('Witnesses')}
+        ${row('Witness 1 — Name', md.witness1_name)}
+        ${row('Witness 1 — Contact', md.witness1_contact)}
+        ${row('Witness 2 — Name', md.witness2_name)}
+        ${row('Witness 2 — Contact', md.witness2_contact)}
+        ${row('Other Witnesses', md.witness_names)}
+
+        ${sectionTitle('Prevention &amp; Approval')}
+        ${row('Actions Could Have Prevented the Incident', md.prevention_actions)}
+        ${row('Form Completed By', md.completed_by)}
+        ${row('Signature', md.completed_signature)}
+        ${row('Date', md.completed_date)}
+        ${row('Approved By', md.approved_by_name)}
+        ${row('Position', md.approved_by_position)}
+        ${row('Date', md.approved_date)}
       </table>
+      <div style="display:flex;gap:60px;margin-top:30px">
+        <div class="sig">Form Completed By — Signature</div>
+        <div class="sig">Approved By — Signature</div>
+      </div>
       <p style="font-size:11px;color:#888;margin-top:24px">This report was generated from Niza Safe Incident Management.</p>
       <script>window.onload=function(){setTimeout(function(){window.print();},250);}</script>
       </body></html>`);
@@ -321,24 +445,50 @@ export default function IncidentManagement() {
   };
 
   const openEditDialog = (incident: any) => {
+    const md: any = incident.medical_documents || {};
     setFormData({
+      ...buildEmptyForm(incident.incident_type || 'accident'),
       title: incident.title || '',
       description: incident.description || '',
       incident_type: incident.incident_type || 'accident',
       incident_date: new Date(incident.incident_date),
-      incident_time: incident.medical_documents?.incident_time || '',
+      incident_time: md.incident_time || '',
+      reported_datetime: md.reported_datetime || '',
       location_details: incident.location_details || '',
+      person_type: md.person_type || 'employee',
+      person_type_other: md.person_type_other || '',
       victim_name: incident.victim_name || '',
-      victim_job_title: incident.medical_documents?.victim_job_title || '',
+      victim_address: md.victim_address || '',
+      victim_phone: md.victim_phone || '',
+      victim_email: md.victim_email || '',
+      victim_job_title: md.victim_job_title || '',
       injury_type: incident.injury_type || '',
-      body_part_injured: incident.medical_documents?.body_part_injured || '',
-      severity: incident.medical_documents?.severity || 'minor',
-      immediate_action: incident.medical_documents?.immediate_action || '',
-      witness_names: incident.medical_documents?.witness_names || '',
-      first_aid_given: incident.medical_documents?.first_aid_given || false,
-      first_aider_name: incident.medical_documents?.first_aider_name || '',
-      hospital_attended: incident.medical_documents?.hospital_attended || false,
-      reported_to_riddor: incident.medical_documents?.reported_to_riddor || false,
+      body_part_injured: md.body_part_injured || '',
+      severity: md.severity || 'minor',
+      nature_of_injuries: md.nature_of_injuries || '',
+      action_first_aid: !!md.action_first_aid,
+      action_ambulance: !!md.action_ambulance,
+      action_hospital: !!md.action_hospital,
+      action_police: !!md.action_police,
+      action_other: !!md.action_other,
+      action_other_text: md.action_other_text || '',
+      witness1_name: md.witness1_name || '',
+      witness1_contact: md.witness1_contact || '',
+      witness2_name: md.witness2_name || '',
+      witness2_contact: md.witness2_contact || '',
+      prevention_actions: md.prevention_actions || '',
+      immediate_action: md.immediate_action || '',
+      completed_by: md.completed_by || '',
+      completed_signature: md.completed_signature || '',
+      completed_date: md.completed_date || '',
+      approved_by_name: md.approved_by_name || '',
+      approved_by_position: md.approved_by_position || '',
+      approved_date: md.approved_date || '',
+      first_aid_given: !!md.first_aid_given,
+      first_aider_name: md.first_aider_name || '',
+      hospital_attended: !!md.hospital_attended,
+      reported_to_riddor: !!md.reported_to_riddor,
+      witness_names: md.witness_names || '',
     });
     setAttachedFiles(getFilesFromIncident(incident));
     setSelectedIncident(incident);
@@ -648,38 +798,59 @@ export default function IncidentManagement() {
                 placeholder="Where did it happen?"
               />
             </div>
-            {/* Time of Incident */}
-            <div className="space-y-2">
-              <Label>Time of Incident</Label>
-              <Input
-                type="time"
-                value={formData.incident_time}
-                onChange={(e) => setFormData({ ...formData, incident_time: e.target.value })}
-              />
+            {/* Time of Incident & Reported At */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Time of Incident</Label>
+                <Input type="time" value={formData.incident_time} onChange={(e) => setFormData({ ...formData, incident_time: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Date &amp; Time Reported</Label>
+                <Input type="datetime-local" value={formData.reported_datetime} onChange={(e) => setFormData({ ...formData, reported_datetime: e.target.value })} />
+              </div>
             </div>
 
             {formData.incident_type === 'accident' && (
               <>
-                {/* Injured Person Details */}
+                {/* Person Injured (detailed) */}
                 <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
-                  <h4 className="font-medium text-sm">Injured Person Details</h4>
-                  
+                  <h4 className="font-medium text-sm">Person Injured</h4>
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <div className="flex flex-wrap gap-4">
+                      {['employee', 'visitor', 'other'].map(t => (
+                        <label key={t} className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input type="radio" name="person_type" checked={formData.person_type === t} onChange={() => setFormData({ ...formData, person_type: t })} />
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </label>
+                      ))}
+                    </div>
+                    {formData.person_type === 'other' && (
+                      <Input placeholder="Specify..." value={formData.person_type_other} onChange={(e) => setFormData({ ...formData, person_type_other: e.target.value })} />
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Full Name *</Label>
-                      <Input
-                        value={formData.victim_name}
-                        onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })}
-                        placeholder="Enter injured person's name"
-                      />
+                      <Input value={formData.victim_name} onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })} placeholder="Enter full name" />
                     </div>
                     <div className="space-y-2">
                       <Label>Job Title</Label>
-                      <Input
-                        value={formData.victim_job_title}
-                        onChange={(e) => setFormData({ ...formData, victim_job_title: e.target.value })}
-                        placeholder="e.g., Sales Assistant"
-                      />
+                      <Input value={formData.victim_job_title} onChange={(e) => setFormData({ ...formData, victim_job_title: e.target.value })} placeholder="e.g., Sales Assistant" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <Textarea value={formData.victim_address} onChange={(e) => setFormData({ ...formData, victim_address: e.target.value })} rows={2} placeholder="Home address" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={formData.victim_phone} onChange={(e) => setFormData({ ...formData, victim_phone: e.target.value })} placeholder="Phone number" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input type="email" value={formData.victim_email} onChange={(e) => setFormData({ ...formData, victim_email: e.target.value })} placeholder="email@example.com" />
                     </div>
                   </div>
                 </div>
@@ -791,22 +962,73 @@ export default function IncidentManagement() {
                   />
                 </div>
 
+                {/* Nature of injuries */}
                 <div className="space-y-2">
-                  <Label>Witness Names</Label>
-                  <Input
-                    value={formData.witness_names}
-                    onChange={(e) => setFormData({ ...formData, witness_names: e.target.value })}
-                    placeholder="Separate multiple names with commas"
-                  />
+                  <Label>Nature &amp; Extent of Injuries</Label>
+                  <Textarea value={formData.nature_of_injuries} onChange={(e) => setFormData({ ...formData, nature_of_injuries: e.target.value })} rows={2} placeholder="Describe the nature and extent of injuries..." />
+                </div>
+
+                {/* Action Taken */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Action Taken</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'action_first_aid', label: 'First Aid' },
+                      { key: 'action_ambulance', label: 'Ambulance Called' },
+                      { key: 'action_hospital', label: 'Hospital' },
+                      { key: 'action_police', label: 'Police' },
+                      { key: 'action_other', label: 'Other' },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={(formData as any)[key]} onCheckedChange={(c) => setFormData({ ...formData, [key]: !!c } as any)} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  {formData.action_other && (
+                    <Input placeholder="Specify other action..." value={formData.action_other_text} onChange={(e) => setFormData({ ...formData, action_other_text: e.target.value })} />
+                  )}
+                </div>
+
+                {/* Witnesses */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Witness(es)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Witness 1 — Name" value={formData.witness1_name} onChange={(e) => setFormData({ ...formData, witness1_name: e.target.value })} />
+                    <Input placeholder="Witness 1 — Contact" value={formData.witness1_contact} onChange={(e) => setFormData({ ...formData, witness1_contact: e.target.value })} />
+                    <Input placeholder="Witness 2 — Name" value={formData.witness2_name} onChange={(e) => setFormData({ ...formData, witness2_name: e.target.value })} />
+                    <Input placeholder="Witness 2 — Contact" value={formData.witness2_contact} onChange={(e) => setFormData({ ...formData, witness2_contact: e.target.value })} />
+                  </div>
+                  <Input placeholder="Other witness names (comma separated)" value={formData.witness_names} onChange={(e) => setFormData({ ...formData, witness_names: e.target.value })} />
+                </div>
+
+                {/* Immediate Action */}
+                <div className="space-y-2">
+                  <Label>Immediate Action Taken</Label>
+                  <Textarea value={formData.immediate_action} onChange={(e) => setFormData({ ...formData, immediate_action: e.target.value })} rows={2} placeholder="Describe what immediate actions were taken..." />
+                </div>
+
+                {/* Prevention & Approval */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Prevention &amp; Approval</h4>
+                  <div className="space-y-2">
+                    <Label>Actions Could Have Prevented the Incident</Label>
+                    <Textarea value={formData.prevention_actions} onChange={(e) => setFormData({ ...formData, prevention_actions: e.target.value })} rows={2} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Form Completed By" value={formData.completed_by} onChange={(e) => setFormData({ ...formData, completed_by: e.target.value })} />
+                    <Input placeholder="Signature" value={formData.completed_signature} onChange={(e) => setFormData({ ...formData, completed_signature: e.target.value })} />
+                    <Input type="date" value={formData.completed_date} onChange={(e) => setFormData({ ...formData, completed_date: e.target.value })} />
+                    <div />
+                    <Input placeholder="Approved By" value={formData.approved_by_name} onChange={(e) => setFormData({ ...formData, approved_by_name: e.target.value })} />
+                    <Input placeholder="Position" value={formData.approved_by_position} onChange={(e) => setFormData({ ...formData, approved_by_position: e.target.value })} />
+                    <Input type="date" value={formData.approved_date} onChange={(e) => setFormData({ ...formData, approved_date: e.target.value })} />
+                  </div>
                 </div>
 
                 {/* RIDDOR */}
                 <div className="flex items-center space-x-2 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
-                  <Checkbox
-                    id="reported_to_riddor"
-                    checked={formData.reported_to_riddor}
-                    onCheckedChange={(checked) => setFormData({ ...formData, reported_to_riddor: !!checked })}
-                  />
+                  <Checkbox id="reported_to_riddor" checked={formData.reported_to_riddor} onCheckedChange={(checked) => setFormData({ ...formData, reported_to_riddor: !!checked })} />
                   <Label htmlFor="reported_to_riddor" className="cursor-pointer text-amber-800 dark:text-amber-200">
                     Reportable under RIDDOR (Reporting of Injuries, Diseases and Dangerous Occurrences Regulations)
                   </Label>

@@ -23,6 +23,7 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMon
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
+import { MonthCloseReminder } from './MonthCloseReminder';
 
 interface Employee {
   id: string;
@@ -123,6 +124,7 @@ export function TimesheetView() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
   const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
+  const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
@@ -135,6 +137,27 @@ export function TimesheetView() {
     fetchData();
     if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
+
+  // Determine the branch in scope for the lock check
+  const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
+  const canBypassLock = user?.role === 'super_admin';
+  const editingDisabled = isMonthLocked && !canBypassLock;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!lockBranchId) { setIsMonthLocked(false); return; }
+      const monthStartStr = format(getPayrollPeriod(currentMonth).start, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('timesheet_month_locks')
+        .select('id')
+        .eq('branch_id', lockBranchId)
+        .eq('month_start', monthStartStr)
+        .maybeSingle();
+      if (!cancelled) setIsMonthLocked(!!data);
+    })();
+    return () => { cancelled = true; };
+  }, [lockBranchId, currentMonth]);
 
   const fetchOrganizationsAndBranches = async () => {
     const [orgsRes, branchesRes] = await Promise.all([
@@ -405,6 +428,7 @@ export function TimesheetView() {
 
   const saveTimesheet = async () => {
     if (!selectedTimesheet) return;
+    if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     setSaving(true);
     try {
       const totalWorked = entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
@@ -447,6 +471,7 @@ export function TimesheetView() {
   };
 
   const approveTimesheet = async (timesheetId: string) => {
+    if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     try {
       await supabase.from('timesheets').update({
         status: 'approved',
@@ -470,6 +495,10 @@ export function TimesheetView() {
 
   // Inline time update
   const handleInlineTimeChange = useCallback((timesheetId: string, dayOfWeek: string, field: 'start' | 'end', value: string) => {
+    if (editingDisabled) {
+      toast.error('This payroll period is locked. Contact a Super Admin to unlock.');
+      return;
+    }
     setInlineEditing(prev => ({
       ...prev,
       [timesheetId]: {
@@ -480,9 +509,13 @@ export function TimesheetView() {
         }
       }
     }));
-  }, []);
+  }, [editingDisabled]);
 
   const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
+    if (editingDisabled) {
+      toast.error('This payroll period is locked.');
+      return;
+    }
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
@@ -555,7 +588,7 @@ export function TimesheetView() {
     }
 
     if (opts?.clear) toast.success('Shift cleared');
-  }, [inlineEditing]);
+  }, [inlineEditing, editingDisabled]);
 
   const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
     // Clear local edit state first
@@ -818,6 +851,8 @@ export function TimesheetView() {
           </div>
         </CardContent>
       </Card>
+
+      <MonthCloseReminder branchId={lockBranchId} />
 
       {canViewFilters && (
         <OrgBranchFilter 
