@@ -280,29 +280,56 @@ export default function IncidentManagement() {
     }
   };
 
+  const buildEmptyForm = (defaultType: string) => ({
+    title: '',
+    description: '',
+    incident_type: defaultType,
+    incident_date: new Date(),
+    incident_time: '',
+    reported_datetime: '',
+    location_details: '',
+    person_type: 'employee',
+    person_type_other: '',
+    victim_name: '',
+    victim_address: '',
+    victim_phone: '',
+    victim_email: '',
+    victim_job_title: '',
+    injury_type: '',
+    body_part_injured: '',
+    severity: 'minor',
+    nature_of_injuries: '',
+    action_first_aid: false,
+    action_ambulance: false,
+    action_hospital: false,
+    action_police: false,
+    action_other: false,
+    action_other_text: '',
+    witness1_name: '',
+    witness1_contact: '',
+    witness2_name: '',
+    witness2_contact: '',
+    prevention_actions: '',
+    immediate_action: '',
+    completed_by: '',
+    completed_signature: '',
+    completed_date: '',
+    approved_by_name: '',
+    approved_by_position: '',
+    approved_date: '',
+    first_aid_given: false,
+    first_aider_name: '',
+    hospital_attended: false,
+    reported_to_riddor: false,
+    witness_names: '',
+  });
+
   const openCreateDialog = () => {
-    setFormData({
-      title: '',
-      description: '',
-      incident_type: activeTab === 'accidents' ? 'accident' : 'near_miss',
-      incident_date: new Date(),
-      incident_time: '',
-      location_details: '',
-      victim_name: '',
-      victim_job_title: '',
-      injury_type: '',
-      body_part_injured: '',
-      severity: 'minor',
-      immediate_action: '',
-      witness_names: '',
-      first_aid_given: false,
-      first_aider_name: '',
-      hospital_attended: false,
-      reported_to_riddor: false,
-    });
+    setFormData(buildEmptyForm(activeTab === 'accidents' ? 'accident' : 'near_miss'));
     setAttachedFiles([]);
     setSelectedOrg('');
     setSelectedBranch('');
+    setSelectedIncident(null);
     setShowCreateDialog(true);
   };
 
