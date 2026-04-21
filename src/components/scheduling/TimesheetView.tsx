@@ -138,6 +138,27 @@ export function TimesheetView() {
     if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
 
+  // Determine the branch in scope for the lock check
+  const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
+  const canBypassLock = user?.role === 'super_admin';
+  const editingDisabled = isMonthLocked && !canBypassLock;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!lockBranchId) { setIsMonthLocked(false); return; }
+      const monthStartStr = format(getPayrollPeriod(currentMonth).start, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('timesheet_month_locks')
+        .select('id')
+        .eq('branch_id', lockBranchId)
+        .eq('month_start', monthStartStr)
+        .maybeSingle();
+      if (!cancelled) setIsMonthLocked(!!data);
+    })();
+    return () => { cancelled = true; };
+  }, [lockBranchId, currentMonth]);
+
   const fetchOrganizationsAndBranches = async () => {
     const [orgsRes, branchesRes] = await Promise.all([
       supabase.from('organizations').select('id, name').order('name'),
