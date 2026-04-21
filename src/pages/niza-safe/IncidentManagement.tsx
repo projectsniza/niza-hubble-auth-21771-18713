@@ -58,18 +58,48 @@ export default function IncidentManagement() {
     incident_type: 'accident',
     incident_date: new Date(),
     incident_time: '',
+    reported_datetime: '',
     location_details: '',
+    // Person injured
+    person_type: 'employee', // employee | visitor | other
+    person_type_other: '',
     victim_name: '',
+    victim_address: '',
+    victim_phone: '',
+    victim_email: '',
     victim_job_title: '',
+    // Injury
     injury_type: '',
     body_part_injured: '',
     severity: 'minor',
+    nature_of_injuries: '',
+    // Action taken
+    action_first_aid: false,
+    action_ambulance: false,
+    action_hospital: false,
+    action_police: false,
+    action_other: false,
+    action_other_text: '',
+    // Witnesses (up to 2)
+    witness1_name: '',
+    witness1_contact: '',
+    witness2_name: '',
+    witness2_contact: '',
+    // Prevention & approval
+    prevention_actions: '',
     immediate_action: '',
-    witness_names: '',
+    completed_by: '',
+    completed_signature: '',
+    completed_date: '',
+    approved_by_name: '',
+    approved_by_position: '',
+    approved_date: '',
+    // Legacy fields
     first_aid_given: false,
     first_aider_name: '',
     hospital_attended: false,
     reported_to_riddor: false,
+    witness_names: '',
   });
 
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
