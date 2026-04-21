@@ -588,7 +588,7 @@ export function TimesheetView() {
     }
 
     if (opts?.clear) toast.success('Shift cleared');
-  }, [inlineEditing]);
+  }, [inlineEditing, editingDisabled]);
 
   const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
     // Clear local edit state first
@@ -851,6 +851,8 @@ export function TimesheetView() {
           </div>
         </CardContent>
       </Card>
+
+      <MonthCloseReminder branchId={lockBranchId} />
 
       {canViewFilters && (
         <OrgBranchFilter 
