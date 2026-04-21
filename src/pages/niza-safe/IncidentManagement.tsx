@@ -798,38 +798,59 @@ export default function IncidentManagement() {
                 placeholder="Where did it happen?"
               />
             </div>
-            {/* Time of Incident */}
-            <div className="space-y-2">
-              <Label>Time of Incident</Label>
-              <Input
-                type="time"
-                value={formData.incident_time}
-                onChange={(e) => setFormData({ ...formData, incident_time: e.target.value })}
-              />
+            {/* Time of Incident & Reported At */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Time of Incident</Label>
+                <Input type="time" value={formData.incident_time} onChange={(e) => setFormData({ ...formData, incident_time: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Date &amp; Time Reported</Label>
+                <Input type="datetime-local" value={formData.reported_datetime} onChange={(e) => setFormData({ ...formData, reported_datetime: e.target.value })} />
+              </div>
             </div>
 
             {formData.incident_type === 'accident' && (
               <>
-                {/* Injured Person Details */}
+                {/* Person Injured (detailed) */}
                 <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
-                  <h4 className="font-medium text-sm">Injured Person Details</h4>
-                  
+                  <h4 className="font-medium text-sm">Person Injured</h4>
+                  <div className="space-y-2">
+                    <Label>Type</Label>
+                    <div className="flex flex-wrap gap-4">
+                      {['employee', 'visitor', 'other'].map(t => (
+                        <label key={t} className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input type="radio" name="person_type" checked={formData.person_type === t} onChange={() => setFormData({ ...formData, person_type: t })} />
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </label>
+                      ))}
+                    </div>
+                    {formData.person_type === 'other' && (
+                      <Input placeholder="Specify..." value={formData.person_type_other} onChange={(e) => setFormData({ ...formData, person_type_other: e.target.value })} />
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Full Name *</Label>
-                      <Input
-                        value={formData.victim_name}
-                        onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })}
-                        placeholder="Enter injured person's name"
-                      />
+                      <Input value={formData.victim_name} onChange={(e) => setFormData({ ...formData, victim_name: e.target.value })} placeholder="Enter full name" />
                     </div>
                     <div className="space-y-2">
                       <Label>Job Title</Label>
-                      <Input
-                        value={formData.victim_job_title}
-                        onChange={(e) => setFormData({ ...formData, victim_job_title: e.target.value })}
-                        placeholder="e.g., Sales Assistant"
-                      />
+                      <Input value={formData.victim_job_title} onChange={(e) => setFormData({ ...formData, victim_job_title: e.target.value })} placeholder="e.g., Sales Assistant" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <Textarea value={formData.victim_address} onChange={(e) => setFormData({ ...formData, victim_address: e.target.value })} rows={2} placeholder="Home address" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={formData.victim_phone} onChange={(e) => setFormData({ ...formData, victim_phone: e.target.value })} placeholder="Phone number" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input type="email" value={formData.victim_email} onChange={(e) => setFormData({ ...formData, victim_email: e.target.value })} placeholder="email@example.com" />
                     </div>
                   </div>
                 </div>
