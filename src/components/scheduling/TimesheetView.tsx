@@ -482,15 +482,27 @@ export function TimesheetView() {
     }));
   }, []);
 
-  const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
+  const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
-    if (!edit) return;
-
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
 
-    const startTime = edit.start || entry.shift_start_time || null;
-    const endTime = edit.end || entry.shift_end_time || null;
+    let startTime: string | null;
+    let endTime: string | null;
+
+    if (opts?.clear) {
+      startTime = null;
+      endTime = null;
+    } else {
+      if (!edit) return;
+      // Use edit values when present (including empty string => null), otherwise fall back to existing
+      startTime = edit.start !== undefined && edit.start !== ''
+        ? edit.start
+        : (edit.start === '' ? null : entry.shift_start_time || null);
+      endTime = edit.end !== undefined && edit.end !== ''
+        ? edit.end
+        : (edit.end === '' ? null : entry.shift_end_time || null);
+    }
 
     let actualHours = 0;
     if (startTime && endTime) {
@@ -507,7 +519,7 @@ export function TimesheetView() {
       actual_hours: actualHours
     }).eq('id', entry.id);
 
-    // Recalculate totals
+    // Recalculate totals locally
     const allEntries = timesheet.entries || [];
     const totalWorked = allEntries.reduce((sum, e) => {
       if (e.day_of_week === dayOfWeek) return sum + actualHours;
@@ -518,17 +530,42 @@ export function TimesheetView() {
       total_worked_hours: totalWorked
     }).eq('id', timesheet.id);
 
+    // Optimistically update local timesheets state — no full refetch (prevents refresh that interrupts editing)
+    setTimesheets(prev => prev.map(ts => {
+      if (ts.id !== timesheet.id) return ts;
+      return {
+        ...ts,
+        total_worked_hours: totalWorked,
+        entries: ts.entries?.map(e =>
+          e.day_of_week === dayOfWeek
+            ? { ...e, shift_start_time: startTime, shift_end_time: endTime, actual_hours: actualHours }
+            : e
+        ),
+      };
+    }));
+
+    if (!opts?.keepEditing) {
+      setInlineEditing(prev => {
+        const newState = { ...prev };
+        if (newState[timesheet.id]) {
+          delete newState[timesheet.id][dayOfWeek];
+        }
+        return newState;
+      });
+    }
+
+    if (opts?.clear) toast.success('Shift cleared');
+  }, [inlineEditing]);
+
+  const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
+    // Clear local edit state first
     setInlineEditing(prev => {
       const newState = { ...prev };
-      if (newState[timesheet.id]) {
-        delete newState[timesheet.id][dayOfWeek];
-      }
+      if (newState[timesheet.id]) delete newState[timesheet.id][dayOfWeek];
       return newState;
     });
-
-    toast.success('Time saved');
-    fetchData();
-  }, [inlineEditing]);
+    await saveInlineTime(timesheet, dayOfWeek, { clear: true });
+  }, [saveInlineTime]);
 
   const filteredEmployees = useMemo(() => employees.filter(emp => {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
