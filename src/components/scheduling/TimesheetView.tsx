@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
   Download, Loader2, Users, Plus, Search, Calendar, Clock,
-  FileSpreadsheet, Edit3, CheckCircle2, XCircle
+  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
