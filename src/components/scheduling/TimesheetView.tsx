@@ -552,16 +552,21 @@ export function TimesheetView() {
       actual_hours: actualHours
     }).eq('id', entry.id);
 
-    // Recalculate totals locally
-    const allEntries = timesheet.entries || [];
-    const totalWorked = allEntries.reduce((sum, e) => {
-      if (e.day_of_week === dayOfWeek) return sum + actualHours;
-      return sum + (Number(e.actual_hours) || 0);
-    }, 0);
+    // Do NOT manually update total_worked_hours here — the database trigger
+    // (update_timesheet_totals_trigger) recalculates totals from all entries
+    // automatically. Manually overwriting from a possibly-stale local
+    // `timesheet.entries` snapshot caused race conditions where 0.5h / 1h
+    // appeared "deducted" when multiple cells were edited in quick succession.
 
-    await supabase.from('timesheets').update({
-      total_worked_hours: totalWorked
-    }).eq('id', timesheet.id);
+    // Read the freshly recalculated totals from the DB so the UI reflects
+    // the authoritative trigger-computed values.
+    const { data: refreshed } = await supabase
+      .from('timesheets')
+      .select('total_worked_hours, total_holiday_hours, total_sick_hours, total_adjustment_hours')
+      .eq('id', timesheet.id)
+      .maybeSingle();
+
+    const totalWorked = Number(refreshed?.total_worked_hours) || 0;
 
     // Optimistically update local timesheets state — no full refetch (prevents refresh that interrupts editing)
     setTimesheets(prev => prev.map(ts => {
@@ -569,6 +574,9 @@ export function TimesheetView() {
       return {
         ...ts,
         total_worked_hours: totalWorked,
+        total_holiday_hours: Number(refreshed?.total_holiday_hours ?? ts.total_holiday_hours) || 0,
+        total_sick_hours: Number(refreshed?.total_sick_hours ?? ts.total_sick_hours) || 0,
+        total_adjustment_hours: Number(refreshed?.total_adjustment_hours ?? ts.total_adjustment_hours) || 0,
         entries: ts.entries?.map(e =>
           e.day_of_week === dayOfWeek
             ? { ...e, shift_start_time: startTime, shift_end_time: endTime, actual_hours: actualHours }
