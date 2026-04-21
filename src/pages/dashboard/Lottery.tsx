@@ -496,13 +496,15 @@ export default function Lottery() {
     setEditingData(prev => {
       const record = recordsByGameAndDate[gameId]?.[date];
       const existing = prev[gameId]?.[date];
+      // Fall back to previous day's closing stock so editing other fields doesn't wipe begin stock
+      const fallbackBegin = record?.stock_begin ?? getPreviousDayClosingStock(gameId, date) ?? 0;
       
       return {
         ...prev,
         [gameId]: {
           ...prev[gameId],
           [date]: {
-            stockBegin: existing?.stockBegin ?? record?.stock_begin ?? 0,
+            stockBegin: existing?.stockBegin ?? fallbackBegin,
             activatedTickets: existing?.activatedTickets ?? record?.activated_tickets ?? 0,
             stockEnd: existing?.stockEnd ?? record?.stock_end ?? null,
             [field]: numValue,
@@ -510,7 +512,7 @@ export default function Lottery() {
         }
       };
     });
-  }, [recordsByGameAndDate]);
+  }, [recordsByGameAndDate, getPreviousDayClosingStock]);
 
   // Save all edited data for a game
   const saveGameData = async (gameId: string) => {
@@ -519,13 +521,30 @@ export default function Lottery() {
 
     try {
       for (const [date, data] of Object.entries(gameData)) {
+        // Ensure begin stock falls back to previous day's end stock if missing
+        const finalBegin = data.stockBegin ?? getPreviousDayClosingStock(gameId, date) ?? 0;
         await saveRecordMutation.mutateAsync({
           gameId,
           date,
-          stockBegin: data.stockBegin ?? 0,
+          stockBegin: finalBegin,
           activatedTickets: data.activatedTickets ?? 0,
           stockEnd: data.stockEnd,
         });
+
+        // If end stock was set, overwrite tomorrow's begin stock so it always carries forward
+        if (data.stockEnd !== null && data.stockEnd !== undefined && effectiveBranchId) {
+          const tomorrow = format(addDays(new Date(date), 1), 'yyyy-MM-dd');
+          const tomorrowRecord = recordsByGameAndDate[gameId]?.[tomorrow];
+          await supabase.from('lottery_daily_records').upsert({
+            game_id: gameId,
+            branch_id: effectiveBranchId,
+            record_date: tomorrow,
+            stock_begin: data.stockEnd,
+            activated_tickets: tomorrowRecord?.activated_tickets ?? 0,
+            stock_end: tomorrowRecord?.stock_end ?? null,
+            created_by: user?.id,
+          }, { onConflict: 'game_id,record_date' });
+        }
       }
 
       setEditingData(prev => {
@@ -534,6 +553,7 @@ export default function Lottery() {
         return newData;
       });
       
+      queryClient.invalidateQueries({ queryKey: ['lottery-daily-records'] });
       toast.success('Data saved successfully');
     } catch {
       // Error already handled in mutation
