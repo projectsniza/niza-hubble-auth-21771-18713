@@ -139,6 +139,11 @@ export default function Attendance() {
   };
 
   const handleApproveReject = async (requestId: string, status: 'approved' | 'rejected') => {
+    // Only HR and Super Admin can approve/reject leave requests
+    if (user?.role !== 'super_admin' && user?.role !== 'hr') {
+      toast.error('Only HR and Super Admin can approve or reject leave requests');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('leave_requests')
