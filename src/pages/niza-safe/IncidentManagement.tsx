@@ -371,30 +371,73 @@ export default function IncidentManagement() {
       return;
     }
     const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd">${value}</td></tr>` : '';
+    const sectionTitle = (t: string) => `<tr><td colspan="2" style="padding:8px 10px;background:#222;color:#fff;font-weight:600;letter-spacing:0.5px;font-size:12px;text-transform:uppercase">${t}</td></tr>`;
+    const personType = md.person_type === 'other' ? `Other${md.person_type_other ? ' — ' + md.person_type_other : ''}` : (md.person_type ? md.person_type.charAt(0).toUpperCase() + md.person_type.slice(1) : '');
+    const actionsTaken = [
+      md.action_first_aid && 'First Aid',
+      md.action_ambulance && 'Ambulance Called',
+      md.action_hospital && 'Hospital',
+      md.action_police && 'Police',
+      md.action_other && `Other${md.action_other_text ? ' — ' + md.action_other_text : ''}`,
+    ].filter(Boolean).join(', ');
     win.document.write(`<!doctype html><html><head><title>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report - ${incident.title || ''}</title>
-      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}</style>
+      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
       </head><body>
       <h1>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report</h1>
       <h2>Reference: ${incident.id?.slice(0, 8) || '-'} • Generated: ${format(new Date(), 'PPP p')}</h2>
       <table>
+        ${sectionTitle('General Information')}
         ${row('Title', incident.title)}
         ${row('Type', incident.incident_type)}
         ${row('Status', incident.status)}
-        ${row('Date', incident.incident_date ? format(new Date(incident.incident_date), 'PPP') : '-')}
-        ${row('Time', md.incident_time)}
+        ${row('Incident Date', incident.incident_date ? format(new Date(incident.incident_date), 'PPP') : '-')}
+        ${row('Incident Time', md.incident_time)}
         ${row('Location', incident.location_details)}
+        ${row('Date &amp; Time Reported', md.reported_datetime ? format(new Date(md.reported_datetime), 'PPP p') : '')}
         ${row('Description', incident.description)}
-        ${row('Victim Name', incident.victim_name)}
+
+        ${sectionTitle('Person Injured')}
+        ${row('Type', personType)}
+        ${row('Full Name', incident.victim_name)}
+        ${row('Address', md.victim_address)}
+        ${row('Phone', md.victim_phone)}
+        ${row('Email', md.victim_email)}
         ${row('Job Title', md.victim_job_title)}
+
+        ${sectionTitle('Incident Details')}
+        ${row('Details of Accident / Incident', incident.description)}
+        ${row('Nature &amp; Extent of Injuries', md.nature_of_injuries)}
         ${row('Injury Type', incident.injury_type)}
         ${row('Body Part Injured', md.body_part_injured)}
         ${row('Severity', md.severity)}
-        ${row('Witnesses', md.witness_names)}
+
+        ${sectionTitle('Action Taken')}
+        ${row('Actions', actionsTaken || '-')}
         ${row('Immediate Action', md.immediate_action)}
         ${row('First Aid Given', md.first_aid_given ? `Yes${md.first_aider_name ? ' — by ' + md.first_aider_name : ''}` : '')}
         ${row('Hospital Attended', md.hospital_attended ? 'Yes' : '')}
         ${row('RIDDOR Reportable', md.reported_to_riddor ? '<span class="badge">RIDDOR</span>' : '')}
+
+        ${sectionTitle('Witnesses')}
+        ${row('Witness 1 — Name', md.witness1_name)}
+        ${row('Witness 1 — Contact', md.witness1_contact)}
+        ${row('Witness 2 — Name', md.witness2_name)}
+        ${row('Witness 2 — Contact', md.witness2_contact)}
+        ${row('Other Witnesses', md.witness_names)}
+
+        ${sectionTitle('Prevention &amp; Approval')}
+        ${row('Actions Could Have Prevented the Incident', md.prevention_actions)}
+        ${row('Form Completed By', md.completed_by)}
+        ${row('Signature', md.completed_signature)}
+        ${row('Date', md.completed_date)}
+        ${row('Approved By', md.approved_by_name)}
+        ${row('Position', md.approved_by_position)}
+        ${row('Date', md.approved_date)}
       </table>
+      <div style="display:flex;gap:60px;margin-top:30px">
+        <div class="sig">Form Completed By — Signature</div>
+        <div class="sig">Approved By — Signature</div>
+      </div>
       <p style="font-size:11px;color:#888;margin-top:24px">This report was generated from Niza Safe Incident Management.</p>
       <script>window.onload=function(){setTimeout(function(){window.print();},250);}</script>
       </body></html>`);
