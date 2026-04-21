@@ -982,10 +982,16 @@ export function TimesheetView() {
                                     ) : hasEdit ? (
                                       <Input
                                         type="time"
-                                        value={editingDay?.start || entry?.shift_start_time || ''}
+                                        value={editingDay?.start ?? entry?.shift_start_time ?? ''}
+                                        data-shift-cell={`${ts.id}-${day}`}
                                         onChange={(e) => handleInlineTimeChange(ts.id, day, 'start', e.target.value)}
                                         className="h-6 text-[10px] p-1 w-full"
-                                        onBlur={() => saveInlineTime(ts, day)}
+                                        onBlur={(e) => {
+                                          const next = e.relatedTarget as HTMLElement | null;
+                                          if (next?.getAttribute?.('data-shift-cell') === `${ts.id}-${day}`) return;
+                                          if (next?.getAttribute?.('data-reset-cell') === `${ts.id}-${day}`) return;
+                                          saveInlineTime(ts, day);
+                                        }}
                                       />
                                     ) : (
                                       <span 
@@ -1000,13 +1006,31 @@ export function TimesheetView() {
                                     {!inPayroll ? (
                                       <span className="text-muted-foreground">—</span>
                                     ) : hasEdit ? (
-                                      <Input
-                                        type="time"
-                                        value={editingDay?.end || entry?.shift_end_time || ''}
-                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
-                                        className="h-6 text-[10px] p-1 w-full"
-                                        onBlur={() => saveInlineTime(ts, day)}
-                                      />
+                                      <div className="flex items-center gap-0.5">
+                                        <Input
+                                          type="time"
+                                          value={editingDay?.end ?? entry?.shift_end_time ?? ''}
+                                          data-shift-cell={`${ts.id}-${day}`}
+                                          onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
+                                          className="h-6 text-[10px] p-1 w-full"
+                                          onBlur={(e) => {
+                                            const next = e.relatedTarget as HTMLElement | null;
+                                            if (next?.getAttribute?.('data-shift-cell') === `${ts.id}-${day}`) return;
+                                            if (next?.getAttribute?.('data-reset-cell') === `${ts.id}-${day}`) return;
+                                            saveInlineTime(ts, day);
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          data-reset-cell={`${ts.id}-${day}`}
+                                          title="Clear shift"
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => resetInlineTime(ts, day)}
+                                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive shrink-0"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
                                     ) : (
                                       <span 
                                         className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
