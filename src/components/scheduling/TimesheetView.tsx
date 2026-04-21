@@ -78,7 +78,11 @@ const getPayrollPeriod = (month: Date) => {
 
 const getPayrollWeeks = (month: Date) => {
   const { start, end } = getPayrollPeriod(month);
-  const weeks = eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
+  // Include the week that contains the payroll start date (Monday-based),
+  // even if that Monday falls before the 21st. This ensures entries on the
+  // 21st/22nd (Sat/Sun) appear in Week 1 of the monthly consolidation.
+  const firstWeekMonday = startOfWeek(start, { weekStartsOn: 1 });
+  const weeks = eachWeekOfInterval({ start: firstWeekMonday, end }, { weekStartsOn: 1 });
   return weeks.slice(0, 6);
 };
 
@@ -173,10 +177,15 @@ export function TimesheetView() {
       );
       setTimesheets(timesheetsWithEntries);
 
+      // Use Monday of the week containing the payroll start so partial first
+      // week (e.g. Sat 21 / Sun 22 with Mon-start 16) is included.
+      const monthRangeStart = startOfWeek(payroll.start, { weekStartsOn: 1 });
+      const prevMonthRangeStart = startOfWeek(prevPayroll.start, { weekStartsOn: 1 });
+
       const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .gte('week_start_date', format(payroll.start, 'yyyy-MM-dd'))
+        .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'));
       
       setAllMonthTimesheets(monthTimesheetsData || []);
@@ -184,7 +193,7 @@ export function TimesheetView() {
       const { data: prevMonthData } = await supabase
         .from('timesheets')
         .select('employee_id, total_adjustment_hours')
-        .gte('week_start_date', format(prevPayroll.start, 'yyyy-MM-dd'))
+        .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'));
       
       const adjustments: Record<string, number> = {};
