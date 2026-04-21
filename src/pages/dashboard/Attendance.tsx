@@ -1310,16 +1310,22 @@ export default function Attendance() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleApproveReject(req.id, 'approved')}>
-                          <Check className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleApproveReject(req.id, 'rejected')}>
-                          <X className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
-                      </div>
+                      {(user?.role === 'super_admin' || user?.role === 'hr') ? (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleApproveReject(req.id, 'approved')}>
+                            <Check className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleApproveReject(req.id, 'rejected')}>
+                            <X className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground italic px-3 py-1 bg-muted rounded">
+                          Awaiting HR / Super Admin approval
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))}
