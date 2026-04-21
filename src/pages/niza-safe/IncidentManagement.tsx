@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar, Paperclip, Download } from "lucide-react";
+import { AlertTriangle, Info, Plus, Search, Eye, Edit, Calendar, Paperclip, Download, Printer } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -279,6 +279,45 @@ export default function IncidentManagement() {
   const openViewDialog = (incident: any) => {
     setSelectedIncident(incident);
     setShowViewDialog(true);
+  };
+
+  const printIncident = (incident: any) => {
+    if (!incident) return;
+    const md = (incident.medical_documents || {}) as any;
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) {
+      toast({ title: 'Pop-up blocked', description: 'Please allow pop-ups to print.', variant: 'destructive' });
+      return;
+    }
+    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd">${value}</td></tr>` : '';
+    win.document.write(`<!doctype html><html><head><title>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report - ${incident.title || ''}</title>
+      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}</style>
+      </head><body>
+      <h1>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report</h1>
+      <h2>Reference: ${incident.id?.slice(0, 8) || '-'} • Generated: ${format(new Date(), 'PPP p')}</h2>
+      <table>
+        ${row('Title', incident.title)}
+        ${row('Type', incident.incident_type)}
+        ${row('Status', incident.status)}
+        ${row('Date', incident.incident_date ? format(new Date(incident.incident_date), 'PPP') : '-')}
+        ${row('Time', md.incident_time)}
+        ${row('Location', incident.location_details)}
+        ${row('Description', incident.description)}
+        ${row('Victim Name', incident.victim_name)}
+        ${row('Job Title', md.victim_job_title)}
+        ${row('Injury Type', incident.injury_type)}
+        ${row('Body Part Injured', md.body_part_injured)}
+        ${row('Severity', md.severity)}
+        ${row('Witnesses', md.witness_names)}
+        ${row('Immediate Action', md.immediate_action)}
+        ${row('First Aid Given', md.first_aid_given ? `Yes${md.first_aider_name ? ' — by ' + md.first_aider_name : ''}` : '')}
+        ${row('Hospital Attended', md.hospital_attended ? 'Yes' : '')}
+        ${row('RIDDOR Reportable', md.reported_to_riddor ? '<span class="badge">RIDDOR</span>' : '')}
+      </table>
+      <p style="font-size:11px;color:#888;margin-top:24px">This report was generated from Niza Safe Incident Management.</p>
+      <script>window.onload=function(){setTimeout(function(){window.print();},250);}</script>
+      </body></html>`);
+    win.document.close();
   };
 
   const openEditDialog = (incident: any) => {
@@ -797,7 +836,12 @@ export default function IncidentManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
+              <Button variant="outline" size="sm" onClick={() => printIncident(selectedIncident)} className="mr-6">
+                <Printer className="h-4 w-4 mr-1" /> Print
+              </Button>
+            </div>
           </DialogHeader>
           {selectedIncident && (
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">

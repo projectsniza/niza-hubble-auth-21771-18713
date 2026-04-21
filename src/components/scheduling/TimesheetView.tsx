@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
   Download, Loader2, Users, Plus, Search, Calendar, Clock,
-  FileSpreadsheet, Edit3, CheckCircle2, XCircle
+  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
@@ -482,15 +482,27 @@ export function TimesheetView() {
     }));
   }, []);
 
-  const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
+  const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
-    if (!edit) return;
-
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
 
-    const startTime = edit.start || entry.shift_start_time || null;
-    const endTime = edit.end || entry.shift_end_time || null;
+    let startTime: string | null;
+    let endTime: string | null;
+
+    if (opts?.clear) {
+      startTime = null;
+      endTime = null;
+    } else {
+      if (!edit) return;
+      // Use edit values when present (including empty string => null), otherwise fall back to existing
+      startTime = edit.start !== undefined && edit.start !== ''
+        ? edit.start
+        : (edit.start === '' ? null : entry.shift_start_time || null);
+      endTime = edit.end !== undefined && edit.end !== ''
+        ? edit.end
+        : (edit.end === '' ? null : entry.shift_end_time || null);
+    }
 
     let actualHours = 0;
     if (startTime && endTime) {
@@ -507,7 +519,7 @@ export function TimesheetView() {
       actual_hours: actualHours
     }).eq('id', entry.id);
 
-    // Recalculate totals
+    // Recalculate totals locally
     const allEntries = timesheet.entries || [];
     const totalWorked = allEntries.reduce((sum, e) => {
       if (e.day_of_week === dayOfWeek) return sum + actualHours;
@@ -518,17 +530,42 @@ export function TimesheetView() {
       total_worked_hours: totalWorked
     }).eq('id', timesheet.id);
 
+    // Optimistically update local timesheets state — no full refetch (prevents refresh that interrupts editing)
+    setTimesheets(prev => prev.map(ts => {
+      if (ts.id !== timesheet.id) return ts;
+      return {
+        ...ts,
+        total_worked_hours: totalWorked,
+        entries: ts.entries?.map(e =>
+          e.day_of_week === dayOfWeek
+            ? { ...e, shift_start_time: startTime, shift_end_time: endTime, actual_hours: actualHours }
+            : e
+        ),
+      };
+    }));
+
+    if (!opts?.keepEditing) {
+      setInlineEditing(prev => {
+        const newState = { ...prev };
+        if (newState[timesheet.id]) {
+          delete newState[timesheet.id][dayOfWeek];
+        }
+        return newState;
+      });
+    }
+
+    if (opts?.clear) toast.success('Shift cleared');
+  }, [inlineEditing]);
+
+  const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
+    // Clear local edit state first
     setInlineEditing(prev => {
       const newState = { ...prev };
-      if (newState[timesheet.id]) {
-        delete newState[timesheet.id][dayOfWeek];
-      }
+      if (newState[timesheet.id]) delete newState[timesheet.id][dayOfWeek];
       return newState;
     });
-
-    toast.success('Time saved');
-    fetchData();
-  }, [inlineEditing]);
+    await saveInlineTime(timesheet, dayOfWeek, { clear: true });
+  }, [saveInlineTime]);
 
   const filteredEmployees = useMemo(() => employees.filter(emp => {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
@@ -945,10 +982,16 @@ export function TimesheetView() {
                                     ) : hasEdit ? (
                                       <Input
                                         type="time"
-                                        value={editingDay?.start || entry?.shift_start_time || ''}
+                                        value={editingDay?.start ?? entry?.shift_start_time ?? ''}
+                                        data-shift-cell={`${ts.id}-${day}`}
                                         onChange={(e) => handleInlineTimeChange(ts.id, day, 'start', e.target.value)}
                                         className="h-6 text-[10px] p-1 w-full"
-                                        onBlur={() => saveInlineTime(ts, day)}
+                                        onBlur={(e) => {
+                                          const next = e.relatedTarget as HTMLElement | null;
+                                          if (next?.getAttribute?.('data-shift-cell') === `${ts.id}-${day}`) return;
+                                          if (next?.getAttribute?.('data-reset-cell') === `${ts.id}-${day}`) return;
+                                          saveInlineTime(ts, day);
+                                        }}
                                       />
                                     ) : (
                                       <span 
@@ -963,13 +1006,31 @@ export function TimesheetView() {
                                     {!inPayroll ? (
                                       <span className="text-muted-foreground">—</span>
                                     ) : hasEdit ? (
-                                      <Input
-                                        type="time"
-                                        value={editingDay?.end || entry?.shift_end_time || ''}
-                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
-                                        className="h-6 text-[10px] p-1 w-full"
-                                        onBlur={() => saveInlineTime(ts, day)}
-                                      />
+                                      <div className="flex items-center gap-0.5">
+                                        <Input
+                                          type="time"
+                                          value={editingDay?.end ?? entry?.shift_end_time ?? ''}
+                                          data-shift-cell={`${ts.id}-${day}`}
+                                          onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
+                                          className="h-6 text-[10px] p-1 w-full"
+                                          onBlur={(e) => {
+                                            const next = e.relatedTarget as HTMLElement | null;
+                                            if (next?.getAttribute?.('data-shift-cell') === `${ts.id}-${day}`) return;
+                                            if (next?.getAttribute?.('data-reset-cell') === `${ts.id}-${day}`) return;
+                                            saveInlineTime(ts, day);
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          data-reset-cell={`${ts.id}-${day}`}
+                                          title="Clear shift"
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => resetInlineTime(ts, day)}
+                                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-destructive shrink-0"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
                                     ) : (
                                       <span 
                                         className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
