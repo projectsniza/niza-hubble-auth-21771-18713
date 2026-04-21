@@ -962,22 +962,73 @@ export default function IncidentManagement() {
                   />
                 </div>
 
+                {/* Nature of injuries */}
                 <div className="space-y-2">
-                  <Label>Witness Names</Label>
-                  <Input
-                    value={formData.witness_names}
-                    onChange={(e) => setFormData({ ...formData, witness_names: e.target.value })}
-                    placeholder="Separate multiple names with commas"
-                  />
+                  <Label>Nature &amp; Extent of Injuries</Label>
+                  <Textarea value={formData.nature_of_injuries} onChange={(e) => setFormData({ ...formData, nature_of_injuries: e.target.value })} rows={2} placeholder="Describe the nature and extent of injuries..." />
+                </div>
+
+                {/* Action Taken */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Action Taken</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'action_first_aid', label: 'First Aid' },
+                      { key: 'action_ambulance', label: 'Ambulance Called' },
+                      { key: 'action_hospital', label: 'Hospital' },
+                      { key: 'action_police', label: 'Police' },
+                      { key: 'action_other', label: 'Other' },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={(formData as any)[key]} onCheckedChange={(c) => setFormData({ ...formData, [key]: !!c } as any)} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  {formData.action_other && (
+                    <Input placeholder="Specify other action..." value={formData.action_other_text} onChange={(e) => setFormData({ ...formData, action_other_text: e.target.value })} />
+                  )}
+                </div>
+
+                {/* Witnesses */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Witness(es)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Witness 1 — Name" value={formData.witness1_name} onChange={(e) => setFormData({ ...formData, witness1_name: e.target.value })} />
+                    <Input placeholder="Witness 1 — Contact" value={formData.witness1_contact} onChange={(e) => setFormData({ ...formData, witness1_contact: e.target.value })} />
+                    <Input placeholder="Witness 2 — Name" value={formData.witness2_name} onChange={(e) => setFormData({ ...formData, witness2_name: e.target.value })} />
+                    <Input placeholder="Witness 2 — Contact" value={formData.witness2_contact} onChange={(e) => setFormData({ ...formData, witness2_contact: e.target.value })} />
+                  </div>
+                  <Input placeholder="Other witness names (comma separated)" value={formData.witness_names} onChange={(e) => setFormData({ ...formData, witness_names: e.target.value })} />
+                </div>
+
+                {/* Immediate Action */}
+                <div className="space-y-2">
+                  <Label>Immediate Action Taken</Label>
+                  <Textarea value={formData.immediate_action} onChange={(e) => setFormData({ ...formData, immediate_action: e.target.value })} rows={2} placeholder="Describe what immediate actions were taken..." />
+                </div>
+
+                {/* Prevention & Approval */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <h4 className="font-medium text-sm">Prevention &amp; Approval</h4>
+                  <div className="space-y-2">
+                    <Label>Actions Could Have Prevented the Incident</Label>
+                    <Textarea value={formData.prevention_actions} onChange={(e) => setFormData({ ...formData, prevention_actions: e.target.value })} rows={2} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Form Completed By" value={formData.completed_by} onChange={(e) => setFormData({ ...formData, completed_by: e.target.value })} />
+                    <Input placeholder="Signature" value={formData.completed_signature} onChange={(e) => setFormData({ ...formData, completed_signature: e.target.value })} />
+                    <Input type="date" value={formData.completed_date} onChange={(e) => setFormData({ ...formData, completed_date: e.target.value })} />
+                    <div />
+                    <Input placeholder="Approved By" value={formData.approved_by_name} onChange={(e) => setFormData({ ...formData, approved_by_name: e.target.value })} />
+                    <Input placeholder="Position" value={formData.approved_by_position} onChange={(e) => setFormData({ ...formData, approved_by_position: e.target.value })} />
+                    <Input type="date" value={formData.approved_date} onChange={(e) => setFormData({ ...formData, approved_date: e.target.value })} />
+                  </div>
                 </div>
 
                 {/* RIDDOR */}
                 <div className="flex items-center space-x-2 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
-                  <Checkbox
-                    id="reported_to_riddor"
-                    checked={formData.reported_to_riddor}
-                    onCheckedChange={(checked) => setFormData({ ...formData, reported_to_riddor: !!checked })}
-                  />
+                  <Checkbox id="reported_to_riddor" checked={formData.reported_to_riddor} onCheckedChange={(checked) => setFormData({ ...formData, reported_to_riddor: !!checked })} />
                   <Label htmlFor="reported_to_riddor" className="cursor-pointer text-amber-800 dark:text-amber-200">
                     Reportable under RIDDOR (Reporting of Injuries, Diseases and Dangerous Occurrences Regulations)
                   </Label>
