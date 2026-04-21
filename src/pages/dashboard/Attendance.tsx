@@ -1125,23 +1125,72 @@ export default function Attendance() {
 
               return (
                 <>
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-lg overflow-hidden bg-card p-2">
                     <Calendar
                       mode="single"
                       selected={date}
                       onSelect={setDate}
                       month={currentMonth}
                       onMonthChange={setCurrentMonth}
-                      className="w-full"
+                      className="w-full mx-auto [&_table]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-head_cell]:w-[14.28%] [&_.rdp-head_cell]:h-10 [&_.rdp-head_cell]:text-sm [&_.rdp-cell]:w-[14.28%] [&_.rdp-cell]:h-20 [&_.rdp-cell]:p-0 [&_.rdp-day]:h-20 [&_.rdp-day]:w-full [&_.rdp-day]:text-base [&_.rdp-day]:relative [&_.rdp-day]:rounded-md [&_.rdp-row]:w-full [&_.rdp-caption_label]:text-base"
                       modifiers={{
                         approved: adminApprovedDates,
                         pending: adminPendingDates,
                         mandatory: adminMandatoryDates,
                       }}
                       modifiersStyles={{
-                        approved: { backgroundColor: 'rgb(59 130 246 / 0.2)', borderRadius: '6px', color: 'rgb(37 99 235)' },
-                        pending: { backgroundColor: 'rgb(245 158 11 / 0.2)', borderRadius: '6px', color: 'rgb(217 119 6)' },
-                        mandatory: { backgroundColor: 'rgb(16 185 129 / 0.2)', borderRadius: '6px', color: 'rgb(5 150 105)' },
+                        approved: { backgroundColor: 'rgb(59 130 246 / 0.18)', color: 'rgb(37 99 235)', fontWeight: 600 },
+                        pending: { backgroundColor: 'rgb(245 158 11 / 0.18)', color: 'rgb(217 119 6)', fontWeight: 600 },
+                        mandatory: { backgroundColor: 'rgb(16 185 129 / 0.18)', color: 'rgb(5 150 105)', fontWeight: 600 },
+                      }}
+                      components={{
+                        DayContent: ({ date: dayDate }) => {
+                          const key = format(dayDate, 'yyyy-MM-dd');
+                          const items = adminLeaveDateMap.get(key) || [];
+                          const approvedCount = items.filter(i => i.status === 'approved').length;
+                          const pendingCount = items.filter(i => i.status === 'pending').length;
+                          const dayNum = dayDate.getDate();
+                          if (items.length === 0) {
+                            return <div className="flex items-center justify-center h-full">{dayNum}</div>;
+                          }
+                          return (
+                            <HoverCard openDelay={100} closeDelay={50}>
+                              <HoverCardTrigger asChild>
+                                <div className="flex flex-col items-center justify-start h-full w-full pt-1 cursor-pointer">
+                                  <span className="text-sm font-semibold">{dayNum}</span>
+                                  <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                    {approvedCount > 0 && (
+                                      <span className="text-[9px] px-1 rounded bg-blue-500/30 text-blue-700 dark:text-blue-300 leading-tight">
+                                        {approvedCount} approved
+                                      </span>
+                                    )}
+                                    {pendingCount > 0 && (
+                                      <span className="text-[9px] px-1 rounded bg-amber-500/30 text-amber-700 dark:text-amber-300 leading-tight">
+                                        {pendingCount} pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </HoverCardTrigger>
+                              <HoverCardContent className="w-64 p-3" side="top" align="center">
+                                <p className="text-xs font-semibold mb-2">{format(dayDate, 'EEE, dd MMM yyyy')}</p>
+                                <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                                  {items.map((item, i) => (
+                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                        item.status === 'mandatory' ? 'bg-emerald-500' :
+                                        item.status === 'approved' ? 'bg-blue-500' :
+                                        item.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'
+                                      }`} />
+                                      <span className="font-medium truncate">{item.employeeName}</span>
+                                      <span className="text-muted-foreground ml-auto truncate">{item.leaveType}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </HoverCardContent>
+                            </HoverCard>
+                          );
+                        },
                       }}
                     />
                   </div>
