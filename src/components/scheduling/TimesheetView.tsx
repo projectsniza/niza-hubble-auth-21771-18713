@@ -23,6 +23,7 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMon
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
+import { MonthCloseReminder } from './MonthCloseReminder';
 
 interface Employee {
   id: string;
@@ -123,6 +124,7 @@ export function TimesheetView() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
   const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
+  const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
