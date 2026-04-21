@@ -1223,7 +1223,7 @@ export default function Attendance() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {req.status === 'pending' && (
+                          {req.status === 'pending' && (user?.role === 'super_admin' || user?.role === 'hr') ? (
                             <div className="flex gap-1">
                               <Button size="sm" variant="ghost" onClick={() => handleApproveReject(req.id, 'approved')}>
                                 <Check className="h-4 w-4 text-green-600" />
@@ -1232,7 +1232,9 @@ export default function Attendance() {
                                 <X className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
-                          )}
+                          ) : req.status === 'pending' ? (
+                            <span className="text-xs text-muted-foreground italic">HR / Admin only</span>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     ))
