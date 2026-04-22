@@ -1676,6 +1676,84 @@ export type Database = {
           },
         ]
       }
+      daily_summaries: {
+        Row: {
+          atm_loaded: number
+          branch_id: string
+          cash_deposit: number
+          cash_sale: number
+          created_at: string
+          created_by: string | null
+          customer_count: number
+          fuel_sale: number
+          fuel_volume: number
+          id: string
+          net_sale: number
+          notes: string | null
+          organization_id: string
+          shop_sale: number
+          store_paid_outs: number
+          summary_date: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          atm_loaded?: number
+          branch_id: string
+          cash_deposit?: number
+          cash_sale?: number
+          created_at?: string
+          created_by?: string | null
+          customer_count?: number
+          fuel_sale?: number
+          fuel_volume?: number
+          id?: string
+          net_sale?: number
+          notes?: string | null
+          organization_id: string
+          shop_sale?: number
+          store_paid_outs?: number
+          summary_date: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          atm_loaded?: number
+          branch_id?: string
+          cash_deposit?: number
+          cash_sale?: number
+          created_at?: string
+          created_by?: string | null
+          customer_count?: number
+          fuel_sale?: number
+          fuel_volume?: number
+          id?: string
+          net_sale?: number
+          notes?: string | null
+          organization_id?: string
+          shop_sale?: number
+          store_paid_outs?: number
+          summary_date?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_summaries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_summaries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           branch_id: string | null

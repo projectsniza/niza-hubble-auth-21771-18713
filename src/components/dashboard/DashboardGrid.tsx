@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, LucideIcon, ArrowRight, Settings, ClipboardList, Wrench, MessageSquare,
-  CheckSquare, Car, Ticket, Wallet
+  CheckSquare, Car, Ticket, Wallet, BarChart3
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/reminders': 'reminders',
   '/dashboard/settings': 'settings',
   '/dashboard/customer-accounts': 'customer_accounts',
+  '/dashboard/daily-summary': 'daily_summary',
 };
 
 // Map grid paths to notification count keys
@@ -63,6 +64,7 @@ const gridItems: GridItem[] = [
   { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery', gradient: 'from-primary to-accent' },
   { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning', gradient: 'from-accent to-primary' },
   { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports', gradient: 'from-primary to-accent' },
+  { title: 'Daily Summary', icon: BarChart3, path: '/dashboard/daily-summary', gradient: 'from-accent to-primary' },
   { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance', gradient: 'from-accent to-primary' },
   { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-primary to-accent' },
   { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-accent to-primary' },

@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu, BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/safety-tasks': 'safety',
   '/dashboard/store-templates': 'templates',
   '/dashboard/customer-accounts': 'customer_accounts',
+  '/dashboard/daily-summary': 'daily_summary',
 };
 
 const getMenuItems = (role: string) => {
@@ -70,6 +71,7 @@ const getMenuItems = (role: string) => {
       { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+      { title: 'Daily Summary', icon: BarChart3, path: '/dashboard/daily-summary' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Safety', icon: Shield, path: '/dashboard/safety-tasks' },
       { title: 'Templates', icon: FileText, path: '/dashboard/store-templates' },
@@ -97,6 +99,7 @@ const getMenuItems = (role: string) => {
       { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+      { title: 'Daily Summary', icon: BarChart3, path: '/dashboard/daily-summary' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
       { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
@@ -122,6 +125,7 @@ const getMenuItems = (role: string) => {
     { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
     { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
     { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+    { title: 'Daily Summary', icon: BarChart3, path: '/dashboard/daily-summary' },
     { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
     { title: 'Training', icon: GraduationCap, path: '/dashboard/elearning' },
     { title: 'Attendance', icon: Clock, path: '/dashboard/attendance' },
