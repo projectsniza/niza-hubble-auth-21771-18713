@@ -72,6 +72,7 @@ const Reminders = lazy(() => import("./pages/dashboard/Reminders"));
 const Notifications = lazy(() => import("./pages/dashboard/Notifications"));
 const DriveOffs = lazy(() => import("./pages/dashboard/DriveOffs"));
 const CustomerAccounts = lazy(() => import("./pages/dashboard/CustomerAccounts"));
+const DailySummary = lazy(() => import("./pages/dashboard/DailySummary"));
 const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -130,6 +131,7 @@ const App = () => (
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="drive-offs" element={<DriveOffs />} />
                 <Route path="customer-accounts" element={<CustomerAccounts />} />
+                <Route path="daily-summary" element={<DailySummary />} />
               </Route>
               <Route path="/niza-safe" element={<NizaSafe />}>
                 <Route index element={<NizaSafeHome />} />

@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu, BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ const pathToPermissionKey: Record<string, string> = {
   '/dashboard/safety-tasks': 'safety',
   '/dashboard/store-templates': 'templates',
   '/dashboard/customer-accounts': 'customer_accounts',
+  '/dashboard/daily-summary': 'daily_summary',
 };
 
 const getMenuItems = (role: string) => {
