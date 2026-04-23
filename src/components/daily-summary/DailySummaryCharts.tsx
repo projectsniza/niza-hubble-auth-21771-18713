@@ -27,7 +27,19 @@ const fmtGBP = (v: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(v);
 const fmtNum = (v: number) => new Intl.NumberFormat('en-GB').format(Math.round(v));
 
-const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--chart-3, 200 80% 55%))', 'hsl(var(--chart-4, 30 80% 55%))', 'hsl(var(--chart-5, 280 60% 60%))'];
+// High-contrast, accessible data-viz palette (color-blind friendly, distinct hues)
+export const VIZ_COLORS = {
+  shop:      '#2563eb', // blue-600
+  fuel:      '#f97316', // orange-500
+  net:       '#10b981', // emerald-500
+  customers: '#8b5cf6', // violet-500
+  cash:      '#14b8a6', // teal-500
+  atm:       '#f59e0b', // amber-500
+  paidOut:   '#ef4444', // red-500
+  deposit:   '#0ea5e9', // sky-500
+  volume:    '#84cc16', // lime-500
+};
+const COLORS = [VIZ_COLORS.shop, VIZ_COLORS.fuel, VIZ_COLORS.net, VIZ_COLORS.customers, VIZ_COLORS.cash, VIZ_COLORS.atm, VIZ_COLORS.paidOut, VIZ_COLORS.deposit];
 
 interface KPIProps { label: string; value: string; icon: React.ElementType; tone: string; sub?: string; }
 function KPI({ label, value, icon: Icon, tone, sub }: KPIProps) {
@@ -121,12 +133,12 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
               <AreaChart data={data}>
                 <defs>
                   <linearGradient id="shop" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="5%" stopColor={VIZ_COLORS.shop} stopOpacity={0.7} />
+                    <stop offset="95%" stopColor={VIZ_COLORS.shop} stopOpacity={0.05} />
                   </linearGradient>
                   <linearGradient id="fuel" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                    <stop offset="5%" stopColor={VIZ_COLORS.fuel} stopOpacity={0.7} />
+                    <stop offset="95%" stopColor={VIZ_COLORS.fuel} stopOpacity={0.05} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -134,8 +146,8 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `£${v}`} />
                 <Tooltip formatter={(v: number) => fmtGBP(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                 <Legend />
-                <Area type="monotone" dataKey="shop_sale" name="Shop Sale" stroke="hsl(var(--primary))" fill="url(#shop)" />
-                <Area type="monotone" dataKey="fuel_sale" name="Fuel Sale" stroke="hsl(var(--accent))" fill="url(#fuel)" />
+                <Area type="monotone" dataKey="shop_sale" name="Shop Sale" stroke={VIZ_COLORS.shop} strokeWidth={2} fill="url(#shop)" />
+                <Area type="monotone" dataKey="fuel_sale" name="Fuel Sale" stroke={VIZ_COLORS.fuel} strokeWidth={2} fill="url(#fuel)" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -152,8 +164,8 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
                 <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `£${v}`} />
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                 <Legend />
-                <Bar yAxisId="left" dataKey="customer_count" name="Customers" fill="hsl(var(--primary))" />
-                <Line yAxisId="right" type="monotone" dataKey="net_sale" name="Net Sale" stroke="hsl(var(--accent))" strokeWidth={2} />
+                <Bar yAxisId="left" dataKey="customer_count" name="Customers" fill={VIZ_COLORS.customers} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="net_sale" name="Net Sale" stroke={VIZ_COLORS.net} strokeWidth={3} dot={{ r: 3, fill: VIZ_COLORS.net }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
@@ -185,7 +197,7 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip formatter={(v: number) => `${fmtNum(v)} L`} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="fuel_volume" name="Fuel Volume" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="fuel_volume" name="Fuel Volume" fill={VIZ_COLORS.volume} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -200,7 +212,12 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
                 <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `£${v}`} />
                 <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} width={100} />
                 <Tooltip formatter={(v: number) => fmtGBP(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {cashFlow.map((_, i) => {
+                    const palette = [VIZ_COLORS.cash, VIZ_COLORS.atm, VIZ_COLORS.paidOut, VIZ_COLORS.deposit];
+                    return <Cell key={i} fill={palette[i]} />;
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

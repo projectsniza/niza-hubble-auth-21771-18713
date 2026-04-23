@@ -39,6 +39,7 @@ export default function DailyReports() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
@@ -318,28 +319,34 @@ export default function DailyReports() {
   // Memoized filtering for better performance
   const filteredReports = useMemo(() => reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Apply date filter
-    const matchesDate = !dateFilter || (report.submitted_at && format(new Date(report.submitted_at), 'yyyy-MM-dd') === dateFilter);
-    
+
+    // Filter by report_month (e.g. "2026-04")
+    const reportMonth = (report as any).report_month
+      || (report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM') : null);
+    const matchesMonth = !monthFilter || reportMonth === monthFilter;
+
+    // Filter by exact report date (uses report_month's first-day if no per-day field, otherwise uploaded date)
+    const uploadedDate = report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM-dd') : null;
+    const matchesDate = !dateFilter || uploadedDate === dateFilter;
+
     // Apply org/branch filters for super admin / full HR
     if (canViewFilters && viewMode !== 'all') {
       if (viewMode === 'organization' && selectedOrg) {
-        return matchesSearch && matchesDate && report.organization_id === selectedOrg;
+        return matchesSearch && matchesMonth && matchesDate && report.organization_id === selectedOrg;
       }
       if (viewMode === 'branch' && selectedBranch) {
-        return matchesSearch && matchesDate && report.branch_id === selectedBranch;
+        return matchesSearch && matchesMonth && matchesDate && report.branch_id === selectedBranch;
       }
       if (viewMode === 'organization' && !selectedOrg) {
-        return matchesSearch && matchesDate;
+        return matchesSearch && matchesMonth && matchesDate;
       }
       if (viewMode === 'branch' && selectedOrg && !selectedBranch) {
-        return matchesSearch && matchesDate && report.organization_id === selectedOrg;
+        return matchesSearch && matchesMonth && matchesDate && report.organization_id === selectedOrg;
       }
     }
-    
-    return matchesSearch && matchesDate;
-  }), [reports, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
+
+    return matchesSearch && matchesMonth && matchesDate;
+  }), [reports, searchQuery, dateFilter, monthFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateReport = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'hr';
 
@@ -347,6 +354,7 @@ export default function DailyReports() {
   const [folderBranch, setFolderBranch] = useState<string | null>(null);
   const [folderType, setFolderType] = useState<string | null>(null);
   const [folderMonth, setFolderMonth] = useState<string | null>(null);
+  const [folderDateFilter, setFolderDateFilter] = useState<string>('');
 
   const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'other'] as const;
   const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
@@ -573,7 +581,21 @@ export default function DailyReports() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by date:</Label>
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Report month:</Label>
+          <Input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="w-auto"
+          />
+          {monthFilter && (
+            <Button variant="ghost" size="sm" onClick={() => setMonthFilter('')}>
+              Clear
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Upload date:</Label>
           <Input
             type="date"
             value={dateFilter}
@@ -727,19 +749,79 @@ export default function DailyReports() {
           )}
 
           {folderBranch && folderType && folderMonth && (
-            <div className="grid gap-4">
-              {getReportsForFolder(folderBranch, folderType, folderMonth).map(report => (
-                <Card key={report.id} className="p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-3 flex-1">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><FileText className="h-5 w-5 text-primary" /></div>
-                      <div><h3 className="font-semibold">{report.title}</h3><p className="text-xs text-muted-foreground mt-1">{report.submitted_at ? format(new Date(report.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'} · {Array.isArray(report.files) ? report.files.length : 0} file(s)</p></div>
+            <div className="space-y-4">
+              {(() => {
+                const monthReports = getReportsForFolder(folderBranch, folderType, folderMonth);
+                // Build available dates within this month from upload dates
+                const availableDates = Array.from(new Set(
+                  monthReports
+                    .map(r => r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null)
+                    .filter((d): d is string => Boolean(d))
+                )).sort().reverse();
+
+                const filtered = folderDateFilter
+                  ? monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === folderDateFilter)
+                  : monthReports;
+
+                const [year, month] = folderMonth.split('-').map(Number);
+                const monthStart = `${folderMonth}-01`;
+                const monthEnd = format(new Date(year, month, 0), 'yyyy-MM-dd');
+
+                return (
+                  <>
+                    <Card className="p-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by upload date:</Label>
+                        <Input
+                          type="date"
+                          value={folderDateFilter}
+                          min={monthStart}
+                          max={monthEnd}
+                          onChange={(e) => setFolderDateFilter(e.target.value)}
+                          className="w-auto"
+                        />
+                        {availableDates.length > 0 && (
+                          <Select value={folderDateFilter || 'all'} onValueChange={(v) => setFolderDateFilter(v === 'all' ? '' : v)}>
+                            <SelectTrigger className="w-[180px]">
+                              <SelectValue placeholder="All dates" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All dates ({monthReports.length})</SelectItem>
+                              {availableDates.map(d => {
+                                const cnt = monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === d).length;
+                                return <SelectItem key={d} value={d}>{format(new Date(d), 'dd MMM yyyy')} ({cnt})</SelectItem>;
+                              })}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {folderDateFilter && (
+                          <Button variant="ghost" size="sm" onClick={() => setFolderDateFilter('')}>
+                            Clear
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          Showing {filtered.length} of {monthReports.length}
+                        </span>
+                      </div>
+                    </Card>
+
+                    <div className="grid gap-4">
+                      {filtered.map(report => (
+                        <Card key={report.id} className="p-4 hover:shadow-md transition-shadow">
+                          <div className="flex justify-between items-start">
+                            <div className="flex gap-3 flex-1">
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><FileText className="h-5 w-5 text-primary" /></div>
+                              <div><h3 className="font-semibold">{report.title}</h3><p className="text-xs text-muted-foreground mt-1">{report.submitted_at ? format(new Date(report.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'} · {Array.isArray(report.files) ? report.files.length : 0} file(s)</p></div>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}><Eye className="h-4 w-4 mr-1" /> View</Button>
+                          </div>
+                        </Card>
+                      ))}
+                      {filtered.length === 0 && <p className="text-muted-foreground text-center py-8">No reports for this period</p>}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setViewingReport(report)}><Eye className="h-4 w-4 mr-1" /> View</Button>
-                  </div>
-                </Card>
-              ))}
-              {getReportsForFolder(folderBranch, folderType, folderMonth).length === 0 && <p className="text-muted-foreground text-center py-8">No reports for this period</p>}
+                  </>
+                );
+              })()}
             </div>
           )}
         </TabsContent>
