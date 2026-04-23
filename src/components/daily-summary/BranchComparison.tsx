@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, RadarChart, Radar,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, RadarChart, Radar, Cell,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
@@ -18,10 +18,18 @@ const fmtGBP = (v: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(v);
 const fmtNum = (v: number) => new Intl.NumberFormat('en-GB').format(Math.round(v));
 
+// Distinct, high-contrast palette for multi-branch comparison (color-blind friendly)
 const PALETTE = [
-  'hsl(var(--primary))', 'hsl(var(--accent))',
-  'hsl(200 80% 55%)', 'hsl(30 80% 55%)', 'hsl(280 60% 60%)',
-  'hsl(150 60% 50%)', 'hsl(0 70% 60%)', 'hsl(50 90% 55%)',
+  '#2563eb', // blue
+  '#f97316', // orange
+  '#10b981', // emerald
+  '#8b5cf6', // violet
+  '#ef4444', // red
+  '#14b8a6', // teal
+  '#f59e0b', // amber
+  '#ec4899', // pink
+  '#0ea5e9', // sky
+  '#84cc16', // lime
 ];
 
 export default function BranchComparison({ rows, branches }: Props) {
@@ -166,8 +174,8 @@ export default function BranchComparison({ rows, branches }: Props) {
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `£${v}`} />
               <Tooltip formatter={(v: number) => fmtGBP(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
               <Legend />
-              <Bar dataKey="shop_sale" name="Shop Sale" stackId="a" fill="hsl(var(--primary))" />
-              <Bar dataKey="fuel_sale" name="Fuel Sale" stackId="a" fill="hsl(var(--accent))" />
+              <Bar dataKey="shop_sale" name="Shop Sale" stackId="a" fill="#2563eb" />
+              <Bar dataKey="fuel_sale" name="Fuel Sale" stackId="a" fill="#f97316" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -224,7 +232,9 @@ export default function BranchComparison({ rows, branches }: Props) {
                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="customer_count" name="Customers" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="customer_count" name="Customers" radius={[4, 4, 0, 0]}>
+                  {perBranch.map((b, i) => <Cell key={b.branch_id} fill={PALETTE[i % PALETTE.length]} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -239,7 +249,9 @@ export default function BranchComparison({ rows, branches }: Props) {
                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `£${v}`} />
                 <Tooltip formatter={(v: number) => fmtGBP(v)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="avg_basket" name="Avg Basket" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avg_basket" name="Avg Basket" radius={[4, 4, 0, 0]}>
+                  {perBranch.map((b, i) => <Cell key={b.branch_id} fill={PALETTE[i % PALETTE.length]} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
