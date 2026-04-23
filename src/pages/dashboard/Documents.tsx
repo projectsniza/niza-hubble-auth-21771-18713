@@ -589,7 +589,31 @@ export default function Documents() {
       </div>
 
       {/* Tabs and Content */}
-      <div className="flex-1 p-6 overflow-auto">
+      <div
+        className="flex-1 p-6 overflow-auto relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <div className="absolute inset-4 z-50 pointer-events-none rounded-xl border-2 border-dashed border-primary bg-primary/10 backdrop-blur-sm flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-primary">
+              <Upload className="h-12 w-12 animate-bounce" />
+              <p className="text-lg font-semibold">
+                {currentFolderId ? 'Drop files or folders to upload' : 'Open a folder first'}
+              </p>
+              <p className="text-sm text-primary/80">
+                Files will be uploaded to the current folder
+              </p>
+            </div>
+          </div>
+        )}
+        {isDropUploading && (
+          <div className="absolute top-6 right-6 z-50 bg-background border border-border rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
+            <NizaLoaderInline />
+            <span className="text-sm text-foreground">Uploading...</span>
+          </div>
+        )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
