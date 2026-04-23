@@ -76,7 +76,25 @@ export function useNotificationCounts() {
 
       if (isAdmin) {
         promises.push((async () => { try { const r = await supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'); pendingLeave = r.count || 0; } catch {} })());
-        promises.push((async () => { try { const r = await supabase.from('employees').select('*', { count: 'exact', head: true }).eq('status', 'onboarding'); onboardingCount = r.count || 0; } catch {} })());
+        promises.push((async () => {
+          try {
+            // Match the Pending Onboardings list filter exactly: include all in-flight statuses,
+            // then exclude any whose contract has been submitted/approved.
+            const { data } = await supabase
+              .from('employees')
+              .select('id, onboarding:employee_onboarding(contract_approved, contract_submitted_for_approval), contract_approval:contract_approvals(status)')
+              .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval']);
+            const filtered = (data || []).filter((emp: any) => {
+              const onb = emp.onboarding?.[0];
+              const ca = emp.contract_approval?.[0];
+              if (onb?.contract_approved) return false;
+              if (onb?.contract_submitted_for_approval) return false;
+              if (ca?.status === 'pending' || ca?.status === 'approved') return false;
+              return true;
+            });
+            onboardingCount = filtered.length;
+          } catch {}
+        })());
         promises.push((async () => { try { const r = await supabase.from('contract_approvals').select('*', { count: 'exact', head: true }).eq('status', 'pending'); contractApprovalsCount = r.count || 0; } catch {} })());
       }
 
