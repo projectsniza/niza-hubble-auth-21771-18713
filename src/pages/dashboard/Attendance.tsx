@@ -1133,7 +1133,7 @@ export default function Attendance() {
                       onSelect={setDate}
                       month={currentMonth}
                       onMonthChange={setCurrentMonth}
-                      className="w-full mx-auto [&_table]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-head_cell]:w-[14.28%] [&_.rdp-head_cell]:h-10 [&_.rdp-head_cell]:text-sm [&_.rdp-cell]:w-[14.28%] [&_.rdp-cell]:h-20 [&_.rdp-cell]:p-0 [&_.rdp-day]:h-20 [&_.rdp-day]:w-full [&_.rdp-day]:text-base [&_.rdp-day]:relative [&_.rdp-day]:rounded-md [&_.rdp-row]:w-full [&_.rdp-caption_label]:text-base"
+                      className="w-full mx-auto [&_table]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-head_cell]:w-[14.28%] [&_.rdp-head_cell]:h-12 [&_.rdp-head_cell]:text-base [&_.rdp-head_cell]:font-semibold [&_.rdp-cell]:w-[14.28%] [&_.rdp-cell]:h-28 [&_.rdp-cell]:p-0 [&_.rdp-cell]:align-top [&_.rdp-day]:h-28 [&_.rdp-day]:w-full [&_.rdp-day]:text-base [&_.rdp-day]:relative [&_.rdp-day]:rounded-md [&_.rdp-row]:w-full [&_.rdp-caption_label]:text-lg [&_.rdp-caption]:hidden"
                       modifiers={{
                         approved: adminApprovedDates,
                         pending: adminPendingDates,
