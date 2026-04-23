@@ -92,6 +92,8 @@ export default function Documents() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentItem | null>(null);
   const [showDocumentDetails, setShowDocumentDetails] = useState(false);
   const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDropUploading, setIsDropUploading] = useState(false);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
@@ -357,6 +359,110 @@ export default function Documents() {
     } finally {
       setDeleteFolderId(null);
     }
+  };
+
+  // Drag-and-drop file upload directly into the current folder
+  const uploadDroppedFiles = async (files: File[]) => {
+    if (!files.length) return;
+    if (!currentFolderId) {
+      toast.error('Open a folder first to drop files into it');
+      return;
+    }
+    setIsDropUploading(true);
+    let success = 0;
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop() || 'bin';
+        const filePath = `${crypto.randomUUID()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+        if (uploadError) throw uploadError;
+
+        const { error: dbError } = await supabase.from('documents').insert({
+          title: file.name.split('.').slice(0, -1).join('.') || file.name,
+          file_name: file.name,
+          file_path: filePath,
+          file_size: file.size,
+          file_type: file.type,
+          folder_id: currentFolderId,
+        });
+        if (dbError) throw dbError;
+        success++;
+      } catch (err: any) {
+        console.error('Drop upload failed:', err);
+        failed++;
+      }
+    }
+    setIsDropUploading(false);
+    if (success > 0) toast.success(`Uploaded ${success} file(s)`);
+    if (failed > 0) toast.error(`${failed} file(s) failed to upload`);
+    fetchFoldersAndDocuments();
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (currentFolderId) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === e.target) setIsDragging(false);
+  };
+
+  // Recursively walk a dropped folder via webkitGetAsEntry
+  const collectFiles = async (entry: any, path = ''): Promise<File[]> => {
+    return new Promise((resolve) => {
+      if (entry.isFile) {
+        entry.file((file: File) => {
+          // Preserve relative path in name if inside a folder
+          const named = path ? new File([file], `${path}${file.name}`, { type: file.type }) : file;
+          resolve([named]);
+        });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        reader.readEntries(async (entries: any[]) => {
+          const all: File[] = [];
+          for (const ent of entries) {
+            const sub = await collectFiles(ent, `${path}${entry.name}/`);
+            all.push(...sub);
+          }
+          resolve(all);
+        });
+      } else {
+        resolve([]);
+      }
+    });
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (!currentFolderId) {
+      toast.error('Open a folder first to drop files into it');
+      return;
+    }
+
+    const items = e.dataTransfer.items;
+    let files: File[] = [];
+    if (items && items.length && (items[0] as any).webkitGetAsEntry) {
+      const entries = Array.from(items)
+        .map((it: any) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+        .filter(Boolean);
+      for (const entry of entries) {
+        const sub = await collectFiles(entry);
+        files.push(...sub);
+      }
+    } else {
+      files = Array.from(e.dataTransfer.files || []);
+    }
+
+    if (files.length === 0) return;
+    await uploadDroppedFiles(files);
   };
 
   if (!hasAccess) {
