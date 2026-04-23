@@ -27,7 +27,19 @@ const fmtGBP = (v: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(v);
 const fmtNum = (v: number) => new Intl.NumberFormat('en-GB').format(Math.round(v));
 
-const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--chart-3, 200 80% 55%))', 'hsl(var(--chart-4, 30 80% 55%))', 'hsl(var(--chart-5, 280 60% 60%))'];
+// High-contrast, accessible data-viz palette (color-blind friendly, distinct hues)
+export const VIZ_COLORS = {
+  shop:      '#2563eb', // blue-600
+  fuel:      '#f97316', // orange-500
+  net:       '#10b981', // emerald-500
+  customers: '#8b5cf6', // violet-500
+  cash:      '#14b8a6', // teal-500
+  atm:       '#f59e0b', // amber-500
+  paidOut:   '#ef4444', // red-500
+  deposit:   '#0ea5e9', // sky-500
+  volume:    '#84cc16', // lime-500
+};
+const COLORS = [VIZ_COLORS.shop, VIZ_COLORS.fuel, VIZ_COLORS.net, VIZ_COLORS.customers, VIZ_COLORS.cash, VIZ_COLORS.atm, VIZ_COLORS.paidOut, VIZ_COLORS.deposit];
 
 interface KPIProps { label: string; value: string; icon: React.ElementType; tone: string; sub?: string; }
 function KPI({ label, value, icon: Icon, tone, sub }: KPIProps) {
