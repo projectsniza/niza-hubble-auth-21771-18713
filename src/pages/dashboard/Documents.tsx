@@ -419,8 +419,11 @@ export default function Documents() {
       if (entry.isFile) {
         entry.file((file: File) => {
           // Preserve relative path in name if inside a folder
-          const named = path ? new File([file], `${path}${file.name}`, { type: file.type }) : file;
-          resolve([named]);
+          const finalName = path ? `${path}${file.name}` : file.name;
+          const named = path
+            ? Object.assign(file.slice(0, file.size, file.type), { name: finalName }) as File
+            : file;
+          resolve([named as File]);
         });
       } else if (entry.isDirectory) {
         const reader = entry.createReader();
