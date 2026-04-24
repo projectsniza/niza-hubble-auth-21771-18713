@@ -761,15 +761,15 @@ export default function DailyReports() {
             <div className="space-y-4">
               {(() => {
                 const monthReports = getReportsForFolder(folderBranch, folderType, folderMonth);
-                // Build available dates within this month from upload dates
+                const getRD = (r: any) => (r.report_date as string | null)
+                  || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null);
+
                 const availableDates = Array.from(new Set(
-                  monthReports
-                    .map(r => r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null)
-                    .filter((d): d is string => Boolean(d))
+                  monthReports.map(r => getRD(r)).filter((d): d is string => Boolean(d))
                 )).sort().reverse();
 
                 const filtered = folderDateFilter
-                  ? monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === folderDateFilter)
+                  ? monthReports.filter(r => getRD(r) === folderDateFilter)
                   : monthReports;
 
                 const [year, month] = folderMonth.split('-').map(Number);
@@ -780,7 +780,7 @@ export default function DailyReports() {
                   <>
                     <Card className="p-3">
                       <div className="flex flex-wrap items-center gap-3">
-                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by upload date:</Label>
+                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by report date:</Label>
                         <Input
                           type="date"
                           value={folderDateFilter}
@@ -797,7 +797,7 @@ export default function DailyReports() {
                             <SelectContent>
                               <SelectItem value="all">All dates ({monthReports.length})</SelectItem>
                               {availableDates.map(d => {
-                                const cnt = monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === d).length;
+                                const cnt = monthReports.filter(r => getRD(r) === d).length;
                                 return <SelectItem key={d} value={d}>{format(new Date(d), 'dd MMM yyyy')} ({cnt})</SelectItem>;
                               })}
                             </SelectContent>
