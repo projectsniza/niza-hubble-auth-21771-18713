@@ -44,7 +44,8 @@ export default function DailyReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
   const [customTypeName, setCustomTypeName] = useState('');
-  const [reportMonthYear, setReportMonthYear] = useState(format(new Date(), 'yyyy-MM'));
+  const [reportDate, setReportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const reportMonthYear = reportDate.slice(0, 7);
   const [files, setFiles] = useState<File[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,6 +219,7 @@ export default function DailyReports() {
         title: reportTitle,
         report_type: finalReportType,
         report_month: reportMonthYear,
+        report_date: reportDate,
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
@@ -248,6 +250,7 @@ export default function DailyReports() {
       setReportTitle('');
       setReportType('report');
       setCustomTypeName('');
+      setReportDate(format(new Date(), 'yyyy-MM-dd'));
       setFiles([]);
       setShowUploadDialog(false);
       fetchReports();
