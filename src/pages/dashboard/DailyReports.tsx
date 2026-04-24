@@ -604,7 +604,7 @@ export default function DailyReports() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">Upload date:</Label>
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Report date:</Label>
           <Input
             type="date"
             value={dateFilter}
