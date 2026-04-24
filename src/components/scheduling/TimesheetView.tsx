@@ -24,6 +24,8 @@ import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
 import { MonthCloseReminder } from './MonthCloseReminder';
+import { TempStaffSection } from './TempStaffSection';
+import { Lock } from 'lucide-react';
 
 interface Employee {
   id: string;
@@ -949,12 +951,18 @@ export function TimesheetView() {
           <NizaLoaderInline />
         </div>
       ) : viewTab === 'weekly' ? (
-        /* Weekly View */
+        <>
+        {/* Weekly View */}
         <Card className="overflow-hidden shadow-sm">
           <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 flex-wrap">
               <Calendar className="h-4 w-4 text-primary" />
               WEEK {selectedWeekIndex + 1} • {currentWeekStart && format(currentWeekStart, 'dd MMM')} - {weekEnd && format(weekEnd, 'dd MMM yyyy')}
+              {editingDisabled && (
+                <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-800 text-[10px] gap-1">
+                  <Lock className="h-3 w-3" /> Locked — Read-Only
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <ScrollArea className="w-full">
@@ -1145,6 +1153,15 @@ export function TimesheetView() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </Card>
+        <TempStaffSection
+          branchId={lockBranchId}
+          organizationId={user?.role === 'manager' ? user?.organizationId || null : (selectedOrg || null)}
+          weekStart={currentWeekStart}
+          weekDays={weekDays}
+          isLocked={editingDisabled}
+          isDateInPayroll={(d) => isDateInPayrollPeriod(d, currentMonth)}
+        />
+        </>
       ) : (
         /* Monthly Consolidation View */
         <Card className="overflow-hidden shadow-sm">

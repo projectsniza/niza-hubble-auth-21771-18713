@@ -44,7 +44,8 @@ export default function DailyReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('report');
   const [customTypeName, setCustomTypeName] = useState('');
-  const [reportMonthYear, setReportMonthYear] = useState(format(new Date(), 'yyyy-MM'));
+  const [reportDate, setReportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const reportMonthYear = reportDate.slice(0, 7);
   const [files, setFiles] = useState<File[]>([]);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,6 +219,7 @@ export default function DailyReports() {
         title: reportTitle,
         report_type: finalReportType,
         report_month: reportMonthYear,
+        report_date: reportDate,
         files: uploadedFiles,
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
@@ -248,6 +250,7 @@ export default function DailyReports() {
       setReportTitle('');
       setReportType('report');
       setCustomTypeName('');
+      setReportDate(format(new Date(), 'yyyy-MM-dd'));
       setFiles([]);
       setShowUploadDialog(false);
       fetchReports();
@@ -320,14 +323,14 @@ export default function DailyReports() {
   const filteredReports = useMemo(() => reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Filter by report_month (e.g. "2026-04")
-    const reportMonth = (report as any).report_month
-      || (report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM') : null);
-    const matchesMonth = !monthFilter || reportMonth === monthFilter;
+    // Use report_date (the day work happened); fallback to report_month or submitted_at
+    const reportDateStr = (report as any).report_date
+      || ((report as any).report_month ? `${(report as any).report_month}-01` : null)
+      || (report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM-dd') : null);
+    const reportMonth = reportDateStr ? reportDateStr.slice(0, 7) : null;
 
-    // Filter by exact report date (uses report_month's first-day if no per-day field, otherwise uploaded date)
-    const uploadedDate = report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM-dd') : null;
-    const matchesDate = !dateFilter || uploadedDate === dateFilter;
+    const matchesMonth = !monthFilter || reportMonth === monthFilter;
+    const matchesDate = !dateFilter || reportDateStr === dateFilter;
 
     // Apply org/branch filters for super admin / full HR
     if (canViewFilters && viewMode !== 'all') {
@@ -371,7 +374,7 @@ export default function DailyReports() {
     return map;
   }, [reports]);
 
-  // Get unique months for a branch/type
+  // Get unique months for a branch/type — based on report_date
   const getMonthsForType = (branchId: string, type: string) => {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     const typeReports = branchReports.filter(r => {
@@ -381,19 +384,23 @@ export default function DailyReports() {
     });
     const months = new Set<string>();
     typeReports.forEach(r => {
-      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      const rd = (r as any).report_date as string | null;
+      const rm = rd ? rd.slice(0, 7)
+        : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
       if (rm) months.add(rm);
     });
     return [...months].sort().reverse();
   };
 
-  // Get reports for a specific branch/type/month
+  // Get reports for a specific branch/type/month — match on report_date
   const getReportsForFolder = (branchId: string, type: string, month: string) => {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     return branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
       const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
-      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      const rd = (r as any).report_date as string | null;
+      const rm = rd ? rd.slice(0, 7)
+        : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
       return isTypeMatch && rm === month;
     });
   };
@@ -490,14 +497,16 @@ export default function DailyReports() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label>Report Month & Year *</Label>
+                  <Label>Report Date *</Label>
                   <Input 
-                    type="month" 
-                    value={reportMonthYear} 
-                    onChange={(e) => setReportMonthYear(e.target.value)}
-                    min="2026-01"
+                    type="date" 
+                    value={reportDate} 
+                    onChange={(e) => setReportDate(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">The report will be filed under this month in the folder view</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pick the date the work happened. The report will be filed under{' '}
+                    <span className="font-medium">{format(new Date(reportDate), 'MMMM yyyy')}</span> in the folder view.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
@@ -595,7 +604,7 @@ export default function DailyReports() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">Upload date:</Label>
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Report date:</Label>
           <Input
             type="date"
             value={dateFilter}
@@ -752,15 +761,15 @@ export default function DailyReports() {
             <div className="space-y-4">
               {(() => {
                 const monthReports = getReportsForFolder(folderBranch, folderType, folderMonth);
-                // Build available dates within this month from upload dates
+                const getRD = (r: any) => (r.report_date as string | null)
+                  || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null);
+
                 const availableDates = Array.from(new Set(
-                  monthReports
-                    .map(r => r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null)
-                    .filter((d): d is string => Boolean(d))
+                  monthReports.map(r => getRD(r)).filter((d): d is string => Boolean(d))
                 )).sort().reverse();
 
                 const filtered = folderDateFilter
-                  ? monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === folderDateFilter)
+                  ? monthReports.filter(r => getRD(r) === folderDateFilter)
                   : monthReports;
 
                 const [year, month] = folderMonth.split('-').map(Number);
@@ -771,7 +780,7 @@ export default function DailyReports() {
                   <>
                     <Card className="p-3">
                       <div className="flex flex-wrap items-center gap-3">
-                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by upload date:</Label>
+                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Filter by report date:</Label>
                         <Input
                           type="date"
                           value={folderDateFilter}
@@ -788,7 +797,7 @@ export default function DailyReports() {
                             <SelectContent>
                               <SelectItem value="all">All dates ({monthReports.length})</SelectItem>
                               {availableDates.map(d => {
-                                const cnt = monthReports.filter(r => r.submitted_at && format(new Date(r.submitted_at), 'yyyy-MM-dd') === d).length;
+                                const cnt = monthReports.filter(r => getRD(r) === d).length;
                                 return <SelectItem key={d} value={d}>{format(new Date(d), 'dd MMM yyyy')} ({cnt})</SelectItem>;
                               })}
                             </SelectContent>

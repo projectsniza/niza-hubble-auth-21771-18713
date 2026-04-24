@@ -810,7 +810,7 @@ export default function IncidentManagement() {
               </div>
             </div>
 
-            {formData.incident_type === 'accident' && (
+            {(formData.incident_type === 'accident' || formData.incident_type === 'near_miss') && (
               <>
                 {/* Person Injured (detailed) */}
                 <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
@@ -1089,7 +1089,7 @@ export default function IncidentManagement() {
                 <Label className="text-muted-foreground">Location</Label>
                 <p>{selectedIncident.location_details || '-'}</p>
               </div>
-              {selectedIncident.incident_type === 'accident' && (
+              {(selectedIncident.incident_type === 'accident' || selectedIncident.incident_type === 'near_miss') && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
