@@ -1626,6 +1626,7 @@ export type Database = {
           files: Json | null
           id: string
           organization_id: string
+          report_date: string | null
           report_month: string | null
           report_type: string | null
           submitted_at: string | null
@@ -1639,6 +1640,7 @@ export type Database = {
           files?: Json | null
           id?: string
           organization_id: string
+          report_date?: string | null
           report_month?: string | null
           report_type?: string | null
           submitted_at?: string | null
@@ -1652,6 +1654,7 @@ export type Database = {
           files?: Json | null
           id?: string
           organization_id?: string
+          report_date?: string | null
           report_month?: string | null
           report_type?: string | null
           submitted_at?: string | null
@@ -5769,6 +5772,132 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temporary_employees: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          first_name: string
+          hourly_rate: number | null
+          id: string
+          is_active: boolean
+          last_name: string | null
+          notes: string | null
+          organization_id: string
+          role: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          first_name: string
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          last_name?: string | null
+          notes?: string | null
+          organization_id: string
+          role?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          first_name?: string
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          last_name?: string | null
+          notes?: string | null
+          organization_id?: string
+          role?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temporary_employees_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temporary_employees_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      temporary_timesheet_entries: {
+        Row: {
+          actual_hours: number
+          branch_id: string
+          created_at: string
+          day_of_week: string
+          entry_date: string
+          id: string
+          notes: string | null
+          shift_end_time: string | null
+          shift_start_time: string | null
+          temporary_employee_id: string
+          updated_at: string
+          week_start_date: string
+        }
+        Insert: {
+          actual_hours?: number
+          branch_id: string
+          created_at?: string
+          day_of_week: string
+          entry_date: string
+          id?: string
+          notes?: string | null
+          shift_end_time?: string | null
+          shift_start_time?: string | null
+          temporary_employee_id: string
+          updated_at?: string
+          week_start_date: string
+        }
+        Update: {
+          actual_hours?: number
+          branch_id?: string
+          created_at?: string
+          day_of_week?: string
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          shift_end_time?: string | null
+          shift_start_time?: string | null
+          temporary_employee_id?: string
+          updated_at?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temporary_timesheet_entries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temporary_timesheet_entries_temporary_employee_id_fkey"
+            columns: ["temporary_employee_id"]
+            isOneToOne: false
+            referencedRelation: "temporary_employees"
             referencedColumns: ["id"]
           },
         ]
