@@ -951,7 +951,8 @@ export function TimesheetView() {
           <NizaLoaderInline />
         </div>
       ) : viewTab === 'weekly' ? (
-        /* Weekly View */
+        <>
+        {/* Weekly View */}
         <Card className="overflow-hidden shadow-sm">
           <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 flex-wrap">
