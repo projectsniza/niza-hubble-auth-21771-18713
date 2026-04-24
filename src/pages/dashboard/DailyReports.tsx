@@ -493,14 +493,16 @@ export default function DailyReports() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label>Report Month & Year *</Label>
+                  <Label>Report Date *</Label>
                   <Input 
-                    type="month" 
-                    value={reportMonthYear} 
-                    onChange={(e) => setReportMonthYear(e.target.value)}
-                    min="2026-01"
+                    type="date" 
+                    value={reportDate} 
+                    onChange={(e) => setReportDate(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">The report will be filed under this month in the folder view</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pick the date the work happened. The report will be filed under{' '}
+                    <span className="font-medium">{format(new Date(reportDate), 'MMMM yyyy')}</span> in the folder view.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="files">Attach Files * (Multiple allowed)</Label>
