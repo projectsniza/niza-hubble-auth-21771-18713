@@ -1152,6 +1152,15 @@ export function TimesheetView() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </Card>
+        <TempStaffSection
+          branchId={lockBranchId}
+          organizationId={user?.role === 'manager' ? user?.organizationId || null : (selectedOrg || null)}
+          weekStart={currentWeekStart}
+          weekDays={weekDays}
+          isLocked={editingDisabled}
+          isDateInPayroll={(d) => isDateInPayrollPeriod(d, currentMonth)}
+        />
+        </>
       ) : (
         /* Monthly Consolidation View */
         <Card className="overflow-hidden shadow-sm">
