@@ -323,14 +323,14 @@ export default function DailyReports() {
   const filteredReports = useMemo(() => reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Filter by report_month (e.g. "2026-04")
-    const reportMonth = (report as any).report_month
-      || (report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM') : null);
-    const matchesMonth = !monthFilter || reportMonth === monthFilter;
+    // Use report_date (the day work happened); fallback to report_month or submitted_at
+    const reportDateStr = (report as any).report_date
+      || ((report as any).report_month ? `${(report as any).report_month}-01` : null)
+      || (report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM-dd') : null);
+    const reportMonth = reportDateStr ? reportDateStr.slice(0, 7) : null;
 
-    // Filter by exact report date (uses report_month's first-day if no per-day field, otherwise uploaded date)
-    const uploadedDate = report.submitted_at ? format(new Date(report.submitted_at), 'yyyy-MM-dd') : null;
-    const matchesDate = !dateFilter || uploadedDate === dateFilter;
+    const matchesMonth = !monthFilter || reportMonth === monthFilter;
+    const matchesDate = !dateFilter || reportDateStr === dateFilter;
 
     // Apply org/branch filters for super admin / full HR
     if (canViewFilters && viewMode !== 'all') {
@@ -374,7 +374,7 @@ export default function DailyReports() {
     return map;
   }, [reports]);
 
-  // Get unique months for a branch/type
+  // Get unique months for a branch/type — based on report_date
   const getMonthsForType = (branchId: string, type: string) => {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     const typeReports = branchReports.filter(r => {
@@ -384,19 +384,23 @@ export default function DailyReports() {
     });
     const months = new Set<string>();
     typeReports.forEach(r => {
-      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      const rd = (r as any).report_date as string | null;
+      const rm = rd ? rd.slice(0, 7)
+        : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
       if (rm) months.add(rm);
     });
     return [...months].sort().reverse();
   };
 
-  // Get reports for a specific branch/type/month
+  // Get reports for a specific branch/type/month — match on report_date
   const getReportsForFolder = (branchId: string, type: string, month: string) => {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     return branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
       const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
-      const rm = (r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null);
+      const rd = (r as any).report_date as string | null;
+      const rm = rd ? rd.slice(0, 7)
+        : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
       return isTypeMatch && rm === month;
     });
   };
