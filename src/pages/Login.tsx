@@ -98,7 +98,7 @@ export default function Login() {
       {/* Loading overlay during login */}
       {isLoading && <NizaLoaderOverlay />}
       
-      <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
+      <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
       {/* Left Panel - Desktop Only */}
       <div className="relative hidden lg:flex lg:flex-1 flex-col border-r border-border" 
            style={{ 
