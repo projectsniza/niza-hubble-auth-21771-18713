@@ -1126,14 +1126,30 @@ export default function Attendance() {
 
               return (
                 <>
-                  <div className="border rounded-lg overflow-hidden bg-card p-2">
+                  <div className="border rounded-lg overflow-hidden bg-card p-4">
                     <Calendar
                       mode="single"
                       selected={date}
                       onSelect={setDate}
                       month={currentMonth}
                       onMonthChange={setCurrentMonth}
-                      className="w-full mx-auto [&_table]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-head_cell]:w-[14.28%] [&_.rdp-head_cell]:h-12 [&_.rdp-head_cell]:text-base [&_.rdp-head_cell]:font-semibold [&_.rdp-cell]:w-[14.28%] [&_.rdp-cell]:h-28 [&_.rdp-cell]:p-0 [&_.rdp-cell]:align-top [&_.rdp-day]:h-28 [&_.rdp-day]:w-full [&_.rdp-day]:text-base [&_.rdp-day]:relative [&_.rdp-day]:rounded-md [&_.rdp-row]:w-full [&_.rdp-caption_label]:text-lg [&_.rdp-caption]:hidden"
+                      className="w-full"
+                      classNames={{
+                        months: "flex flex-col w-full",
+                        month: "space-y-4 w-full",
+                        caption: "hidden",
+                        table: "w-full border-collapse",
+                        head_row: "flex w-full",
+                        head_cell: "text-muted-foreground rounded-md font-semibold text-sm flex-1 h-10 flex items-center justify-center",
+                        row: "flex w-full mt-1",
+                        cell: "flex-1 h-24 md:h-28 text-center text-sm p-0 relative align-top [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                        day: "h-24 md:h-28 w-full p-0 font-normal aria-selected:opacity-100 hover:bg-accent rounded-md text-base",
+                        day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                        day_today: "bg-accent text-accent-foreground",
+                        day_outside: "text-muted-foreground opacity-50",
+                        day_disabled: "text-muted-foreground opacity-50",
+                        day_hidden: "invisible",
+                      }}
                       modifiers={{
                         approved: adminApprovedDates,
                         pending: adminPendingDates,
