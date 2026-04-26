@@ -185,14 +185,6 @@ export default function Login() {
         {/* Form Container */}
         <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0 relative z-10">
           <div 
-            className="w-full max-w-[420px] lg:max-w-[480px] rounded-3xl p-8 lg:p-10 bg-white"
-            style={{
-              boxShadow: '0 0 0 1px hsl(0 0% 0% / 0.03), 0 1px 2px hsl(0 0% 0% / 0.02), 0 8px 16px hsl(0 0% 0% / 0.03), 0 24px 48px hsl(0 0% 0% / 0.04)'
-            }}
-          >
-        {/* Form Container */}
-        <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0 relative z-10">
-          <div 
             className="w-full max-w-[420px] lg:max-w-[460px] rounded-3xl p-8 lg:p-10 bg-white border border-gray-100"
             style={{
               boxShadow: '0 1px 2px hsl(0 0% 0% / 0.04), 0 8px 24px hsl(0 0% 0% / 0.04), 0 24px 56px hsl(0 0% 0% / 0.06)'
