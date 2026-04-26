@@ -1071,6 +1071,21 @@ export default function Attendance() {
               </div>
             </div>
 
+            {canViewFilters && (
+              <div className="mb-6">
+                <OrgBranchFilter
+                  organizations={organizations}
+                  branches={branches}
+                  viewMode={viewMode}
+                  selectedOrg={selectedOrg}
+                  selectedBranch={selectedBranch}
+                  onViewModeChange={setViewMode}
+                  onOrgChange={setSelectedOrg}
+                  onBranchChange={setSelectedBranch}
+                />
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-4 mb-6">
               {absenceTypes.map((type) => (
                 <div key={type.name} className="flex items-center gap-2">
