@@ -115,28 +115,41 @@ export default function Login() {
           </defs>
         </svg>
         
-        <div className="relative z-[2] p-8 pl-4 flex flex-col h-full">
+        <div className="relative z-[2] p-10 xl:p-12 flex flex-col h-full">
           <img src={nizaCloudLogo} alt="Niza Cloud" className="w-56 xl:w-64" />
-          
+
+          <div className="mt-12 max-w-sm">
+            <h1 className="text-3xl xl:text-4xl font-bold text-gray-900 leading-tight tracking-tight">
+              Empower your workforce.
+            </h1>
+            <p className="mt-3 text-base text-gray-600 leading-relaxed">
+              The all-in-one HR platform built for modern teams.
+            </p>
+          </div>
+
           <div className="flex-1"></div>
 
           {/* Floating Images */}
           <div className="relative h-72 mb-8">
             {/* Top pair */}
-            <div className="absolute top-0 left-1 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '3px solid white' }}>
+            <div className="absolute top-0 left-1 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '0s', border: '3px solid white' }}>
               <img src={hrEmployee1} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute top-12 left-[272px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '3px solid white' }}>
+            <div className="absolute top-12 left-[272px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '1s', border: '3px solid white' }}>
               <img src={hrEmployee2} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            {/* Bottom pair - with ~1cm (10px) gap */}
-            <div className="absolute bottom-12 left-1 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '3px solid white' }}>
+            {/* Bottom pair */}
+            <div className="absolute bottom-12 left-1 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '2s', border: '3px solid white' }}>
               <img src={hrEmployee3} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-0 left-[288px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
+            <div className="absolute bottom-0 left-[288px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
               <img src={hrEmployee4} alt="Team member" className="w-full h-full object-cover" />
             </div>
           </div>
+
+          <p className="text-xs text-gray-500 tracking-wide">
+            © {new Date().getFullYear()} Niza Group · All rights reserved
+          </p>
         </div>
       </div>
 
