@@ -115,28 +115,41 @@ export default function Login() {
           </defs>
         </svg>
         
-        <div className="relative z-[2] p-8 pl-4 flex flex-col h-full">
+        <div className="relative z-[2] p-10 xl:p-12 flex flex-col h-full">
           <img src={nizaCloudLogo} alt="Niza Cloud" className="w-56 xl:w-64" />
-          
+
+          <div className="mt-12 max-w-sm">
+            <h1 className="text-3xl xl:text-4xl font-bold text-gray-900 leading-tight tracking-tight">
+              Empower your workforce.
+            </h1>
+            <p className="mt-3 text-base text-gray-600 leading-relaxed">
+              The all-in-one HR platform built for modern teams.
+            </p>
+          </div>
+
           <div className="flex-1"></div>
 
           {/* Floating Images */}
           <div className="relative h-72 mb-8">
             {/* Top pair */}
-            <div className="absolute top-0 left-1 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0s', border: '3px solid white' }}>
+            <div className="absolute top-0 left-1 w-[71px] h-[71px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '0s', border: '3px solid white' }}>
               <img src={hrEmployee1} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute top-12 left-[272px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s', border: '3px solid white' }}>
+            <div className="absolute top-12 left-[272px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '1s', border: '3px solid white' }}>
               <img src={hrEmployee2} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            {/* Bottom pair - with ~1cm (10px) gap */}
-            <div className="absolute bottom-12 left-1 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '2s', border: '3px solid white' }}>
+            {/* Bottom pair */}
+            <div className="absolute bottom-12 left-1 w-[90px] h-[90px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '2s', border: '3px solid white' }}>
               <img src={hrEmployee3} alt="Team member" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-0 left-[288px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
+            <div className="absolute bottom-0 left-[288px] w-[80px] h-[80px] rounded-full overflow-hidden shadow-lg animate-float ring-1 ring-black/5" style={{ animationDelay: '1.5s', border: '3px solid white' }}>
               <img src={hrEmployee4} alt="Team member" className="w-full h-full object-cover" />
             </div>
           </div>
+
+          <p className="text-xs text-gray-500 tracking-wide">
+            © {new Date().getFullYear()} Niza Group · All rights reserved
+          </p>
         </div>
       </div>
 
@@ -172,89 +185,96 @@ export default function Login() {
         {/* Form Container */}
         <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 lg:p-8 xl:p-12 -mt-6 lg:mt-0 relative z-10">
           <div 
-            className="w-full max-w-[420px] lg:max-w-[480px] rounded-3xl p-8 lg:p-10 bg-white"
+            className="w-full max-w-[420px] lg:max-w-[460px] rounded-3xl p-8 lg:p-10 bg-white border border-gray-100"
             style={{
-              boxShadow: '0 0 0 1px hsl(0 0% 0% / 0.03), 0 1px 2px hsl(0 0% 0% / 0.02), 0 8px 16px hsl(0 0% 0% / 0.03), 0 24px 48px hsl(0 0% 0% / 0.04)'
+              boxShadow: '0 1px 2px hsl(0 0% 0% / 0.04), 0 8px 24px hsl(0 0% 0% / 0.04), 0 24px 56px hsl(0 0% 0% / 0.06)'
             }}
           >
             {/* Premium Badge */}
-            <div className="flex items-center gap-2 mb-8">
+            <div className="flex items-center gap-3 mb-7">
               <div 
-                className="h-1 w-12 rounded-full"
+                className="h-1 w-10 rounded-full"
                 style={{ background: 'linear-gradient(90deg, hsl(162 57% 43%), hsl(48 90% 62%))' }}
               />
-              <span className="text-xs font-semibold tracking-[0.15em] uppercase text-primary">
+              <span className="text-[11px] font-semibold tracking-[0.18em] uppercase text-primary">
                 Secure Access
               </span>
             </div>
 
-            <div className="mb-8 lg:mb-10">
-              <h2 className="text-3xl lg:text-4xl font-bold mb-3 tracking-tight text-gray-900">
-                Welcome Back
+            <div className="mb-8">
+              <h2 className="text-3xl lg:text-[2rem] font-bold mb-2 tracking-tight text-gray-900 leading-tight">
+                Welcome back
               </h2>
-              <p className="text-base lg:text-lg text-gray-500">
+              <p className="text-sm lg:text-base text-gray-500 leading-relaxed">
                 Sign in to access your HR dashboard
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-semibold mb-2.5 text-gray-700">
+                <label className="block text-sm font-semibold mb-2 text-gray-700" htmlFor="email-input">
                   Email
                 </label>
                 <Input 
+                  id="email-input"
                   type="email" 
-                  placeholder="Enter your email"
+                  placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-13 lg:h-14 text-base px-5 rounded-xl border-gray-200 bg-gray-50/50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200 placeholder:text-gray-400"
+                  className="h-12 lg:h-13 text-[15px] px-4 rounded-xl border-gray-200 bg-gray-50/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200 placeholder:text-gray-400"
                   disabled={isLoading}
+                  autoComplete="email"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2.5 text-gray-700">
+                <label className="block text-sm font-semibold mb-2 text-gray-700" htmlFor="password-input">
                   Password
                 </label>
                 <div className="relative">
                   <Input 
+                    id="password-input"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-13 lg:h-14 text-base px-5 pr-12 rounded-xl border-gray-200 bg-gray-50/50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200 placeholder:text-gray-400"
+                    className="h-12 lg:h-13 text-[15px] px-4 pr-12 rounded-xl border-gray-200 bg-gray-50/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200 placeholder:text-gray-400"
                     disabled={isLoading}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-md hover:bg-gray-100"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
-                <Checkbox 
-                  id="remember-me" 
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked === true)}
-                  className="border-gray-300 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                />
-                <label 
-                  htmlFor="remember-me" 
-                  className="text-sm font-medium text-gray-600 cursor-pointer select-none"
-                >
-                  Remember me
-                </label>
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center space-x-2.5">
+                  <Checkbox 
+                    id="remember-me" 
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                    className="border-gray-300 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                  />
+                  <label 
+                    htmlFor="remember-me" 
+                    className="text-sm font-medium text-gray-600 cursor-pointer select-none"
+                  >
+                    Remember me
+                  </label>
+                </div>
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full h-13 lg:h-14 text-base lg:text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-[1.02] mt-4 bg-primary hover:bg-primary/90 text-white"
+                className="w-full h-12 lg:h-13 text-base font-semibold rounded-xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] mt-2 bg-primary hover:bg-primary/90 text-white"
                 style={{
-                  boxShadow: '0 4px 14px hsl(162 57% 43% / 0.35)'
+                  boxShadow: '0 6px 18px hsl(162 57% 43% / 0.32)'
                 }}
                 disabled={isLoading}
               >
@@ -262,7 +282,7 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-gray-100">
+            <div className="mt-7 pt-5 border-t border-gray-100">
               <p className="text-xs text-center text-gray-400">
                 Contact your administrator if you need access
               </p>
