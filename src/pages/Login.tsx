@@ -98,7 +98,7 @@ export default function Login() {
       {/* Loading overlay during login */}
       {isLoading && <NizaLoaderOverlay />}
       
-      <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
+      <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
       {/* Left Panel - Desktop Only */}
       <div className="relative hidden lg:flex lg:flex-1 flex-col border-r border-border" 
            style={{ 
@@ -117,15 +117,6 @@ export default function Login() {
         
         <div className="relative z-[2] p-10 xl:p-12 flex flex-col h-full">
           <img src={nizaCloudLogo} alt="Niza Cloud" className="w-56 xl:w-64" />
-
-          <div className="mt-12 max-w-sm">
-            <h1 className="text-3xl xl:text-4xl font-bold text-gray-900 leading-tight tracking-tight">
-              Empower your workforce.
-            </h1>
-            <p className="mt-3 text-base text-gray-600 leading-relaxed">
-              The all-in-one HR platform built for modern teams.
-            </p>
-          </div>
 
           <div className="flex-1"></div>
 
@@ -154,7 +145,7 @@ export default function Login() {
       </div>
 
       {/* Right Panel - Premium White Design */}
-      <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 relative overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col h-full lg:h-auto relative overflow-y-auto bg-white">
         {/* Subtle Background Pattern */}
         <div 
           className="absolute inset-0 opacity-[0.4]"
