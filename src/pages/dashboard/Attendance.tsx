@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
 import { getErrorMessage } from "@/lib/errorUtils";
+import { OrgBranchFilter } from "@/components/filters/OrgBranchFilter";
 
 interface LeaveRequest {
   id: string;
@@ -1069,6 +1070,21 @@ export default function Attendance() {
                 </Button>
               </div>
             </div>
+
+            {canViewFilters && (
+              <div className="mb-6">
+                <OrgBranchFilter
+                  organizations={organizations}
+                  branches={branches}
+                  viewMode={viewMode}
+                  selectedOrg={selectedOrg}
+                  selectedBranch={selectedBranch}
+                  onViewModeChange={setViewMode}
+                  onOrgChange={setSelectedOrg}
+                  onBranchChange={setSelectedBranch}
+                />
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-4 mb-6">
               {absenceTypes.map((type) => (
