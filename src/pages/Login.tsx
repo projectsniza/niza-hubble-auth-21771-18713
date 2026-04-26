@@ -118,15 +118,6 @@ export default function Login() {
         <div className="relative z-[2] p-10 xl:p-12 flex flex-col h-full">
           <img src={nizaCloudLogo} alt="Niza Cloud" className="w-56 xl:w-64" />
 
-          <div className="mt-12 max-w-sm">
-            <h1 className="text-3xl xl:text-4xl font-bold text-gray-900 leading-tight tracking-tight">
-              Empower your workforce.
-            </h1>
-            <p className="mt-3 text-base text-gray-600 leading-relaxed">
-              The all-in-one HR platform built for modern teams.
-            </p>
-          </div>
-
           <div className="flex-1"></div>
 
           {/* Floating Images */}
