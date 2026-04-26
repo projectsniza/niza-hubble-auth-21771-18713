@@ -145,7 +145,7 @@ export default function Login() {
       </div>
 
       {/* Right Panel - Premium White Design */}
-      <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 relative overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col h-full lg:h-auto relative overflow-y-auto bg-white">
         {/* Subtle Background Pattern */}
         <div 
           className="absolute inset-0 opacity-[0.4]"
