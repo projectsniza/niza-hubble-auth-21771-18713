@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, UserPlus, Trash2, X, Lock, Calendar } from 'lucide-react';
-import { format, eachDayOfInterval, parseISO } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, UserPlus, Trash2, X, Lock, Calendar, Building2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -21,6 +22,8 @@ interface TempEmployee {
   is_active: boolean;
   branch_id: string;
   organization_id: string;
+  source_branch_id: string | null;
+  source_name: string | null;
 }
 
 interface TempEntry {
@@ -33,6 +36,11 @@ interface TempEntry {
   shift_start_time: string | null;
   shift_end_time: string | null;
   actual_hours: number;
+}
+
+interface BranchOption {
+  id: string;
+  name: string;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -51,8 +59,17 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
   const { user } = useAuth();
   const [temps, setTemps] = useState<TempEmployee[]>([]);
   const [entries, setEntries] = useState<TempEntry[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [showAdd, setShowAdd] = useState(false);
-  const [newTemp, setNewTemp] = useState({ first_name: '', last_name: '', role: '', start_date: format(weekStart, 'yyyy-MM-dd'), end_date: '' });
+  const [newTemp, setNewTemp] = useState({
+    first_name: '',
+    last_name: '',
+    role: '',
+    start_date: format(weekStart, 'yyyy-MM-dd'),
+    end_date: '',
+    source_branch_id: '' as string, // '' | branchId | '__OTHER__'
+    source_name: '',
+  });
   const [editingCell, setEditingCell] = useState<Record<string, { start: string; end: string }>>({});
 
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -61,7 +78,6 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
   const fetchData = useCallback(async () => {
     if (!branchId) { setTemps([]); setEntries([]); return; }
 
-    // Active temps overlapping this week
     const { data: tempsData } = await supabase
       .from('temporary_employees')
       .select('*')
@@ -84,13 +100,37 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     }
   }, [branchId, weekStartStr, weekEndStr]);
 
+  // Fetch branches for the source-branch dropdown
+  const fetchBranches = useCallback(async () => {
+    let q = supabase.from('branches').select('id, name').order('name');
+    if (organizationId) q = q.eq('organization_id', organizationId);
+    const { data } = await q;
+    setBranches((data || []) as BranchOption[]);
+  }, [organizationId]);
+
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { if (showAdd) fetchBranches(); }, [showAdd, fetchBranches]);
+
+  const branchNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    branches.forEach(b => { m[b.id] = b.name; });
+    return m;
+  }, [branches]);
 
   const handleAddTemp = async () => {
     if (!newTemp.first_name.trim() || !branchId || !organizationId) {
       toast.error('First name, branch and organization are required');
       return;
     }
+    const isOther = newTemp.source_branch_id === '__OTHER__';
+    const sourceBranchId = isOther || !newTemp.source_branch_id ? null : newTemp.source_branch_id;
+    const sourceName = isOther ? newTemp.source_name.trim() || null : null;
+
+    if (isOther && !sourceName) {
+      toast.error('Please enter the source name for "Other"');
+      return;
+    }
+
     const { error } = await supabase.from('temporary_employees').insert({
       first_name: newTemp.first_name.trim(),
       last_name: newTemp.last_name.trim(),
@@ -99,12 +139,18 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
       end_date: newTemp.end_date || null,
       branch_id: branchId,
       organization_id: organizationId,
+      source_branch_id: sourceBranchId,
+      source_name: sourceName,
       created_by: user?.id,
     });
     if (error) { toast.error(error.message); return; }
     toast.success('Temporary employee added');
     setShowAdd(false);
-    setNewTemp({ first_name: '', last_name: '', role: '', start_date: format(weekStart, 'yyyy-MM-dd'), end_date: '' });
+    setNewTemp({
+      first_name: '', last_name: '', role: '',
+      start_date: format(weekStart, 'yyyy-MM-dd'), end_date: '',
+      source_branch_id: '', source_name: '',
+    });
     fetchData();
   };
 
@@ -166,13 +212,19 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`;
   };
 
+  const sourceLabel = (t: TempEmployee) => {
+    if (t.source_branch_id && branchNameById[t.source_branch_id]) return `from ${branchNameById[t.source_branch_id]}`;
+    if (t.source_name) return `from ${t.source_name}`;
+    return null;
+  };
+
   if (!branchId) return null;
 
   const totalHours = entries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
 
   return (
-    <Card className="border-dashed border-2 border-amber-300/50 bg-amber-50/30 dark:bg-amber-950/10 mt-4">
-      <CardHeader className="py-3 px-4 border-b border-amber-200/50">
+    <Card className="border-amber-300/60 mt-4 overflow-hidden shadow-sm">
+      <CardHeader className="py-3 px-4 bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-950/20 border-b border-amber-200/50">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-800 dark:text-amber-300">
             <UserPlus className="h-4 w-4" />
@@ -188,42 +240,55 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
           </CardTitle>
           <Button size="sm" variant="outline" onClick={() => setShowAdd(true)} disabled={isLocked} className="h-7 text-xs">
             {isLocked ? <Lock className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
-            Add Temp Employee
+            Add Temporary Employee
           </Button>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         {temps.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">
-            No temporary employees this week. Use “Add Temp Employee” to add ad-hoc staff.
+            No temporary employees this week. Use “Add Temporary Employee” to add ad-hoc staff.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[1100px]">
+            <table className="w-full text-xs min-w-[1200px]">
               <thead>
-                <tr className="bg-amber-100/40 dark:bg-amber-900/20">
-                  <th className="text-left px-3 py-2 w-44 font-semibold">NAME</th>
+                <tr className="bg-muted/50 border-b">
+                  <th className="text-left px-3 py-2 w-56 font-semibold sticky left-0 bg-muted/50 z-10">NAME</th>
                   {weekDays.map((d, i) => (
-                    <th key={i} className="text-center px-2 py-2 border-x border-amber-200/40 min-w-[110px]">
+                    <th key={i} className="text-center px-2 py-2 border-x border-border/40 min-w-[100px]">
                       <div className="font-bold">{DAYS_SHORT[i]}</div>
                       <div className="text-[10px] text-muted-foreground">{format(d, 'dd/MM')}</div>
                     </th>
                   ))}
-                  <th className="text-center px-2 py-2 font-bold bg-emerald-100/50 min-w-[60px]">TOTAL</th>
-                  <th className="text-center px-2 py-2 min-w-[60px]">Action</th>
+                  <th className="text-center px-2 py-2 font-bold bg-blue-50 dark:bg-blue-950/50 min-w-[60px]">HOURS</th>
+                  <th className="text-center px-2 py-2 font-bold bg-amber-50 dark:bg-amber-950/50 min-w-[60px]">HOLIDAY</th>
+                  <th className="text-center px-2 py-2 font-bold bg-rose-50 dark:bg-rose-950/50 min-w-[60px]">SICK</th>
+                  <th className="text-center px-2 py-2 font-bold bg-purple-50 dark:bg-purple-950/50 min-w-[60px]">ADJ+/-</th>
+                  <th className="text-center px-2 py-2 font-bold bg-emerald-50 dark:bg-emerald-950/50 min-w-[60px]">TOTAL</th>
+                  <th className="text-center px-2 py-2 min-w-[60px]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {temps.map((temp, idx) => {
                   const empEntries = entries.filter(e => e.temporary_employee_id === temp.id);
-                  const empTotal = empEntries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
+                  const empHours = empEntries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
+                  // Temps don't currently track holiday/sick/adj — values are 0 to mirror the same row layout.
+                  const holiday = 0, sick = 0, adj = 0;
+                  const empTotal = empHours + holiday + sick + adj;
+                  const src = sourceLabel(temp);
                   return (
-                    <tr key={temp.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-amber-50/30'}>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[9px] px-1.5 py-0">TEMP</Badge>
-                          <div>
-                            <div className="font-medium">{temp.first_name} {temp.last_name}</div>
+                    <tr key={temp.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      <td className="px-3 py-2 sticky left-0 bg-inherit z-10">
+                        <div className="flex items-start gap-2">
+                          <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[9px] px-1.5 py-0 mt-0.5">TEMP</Badge>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{temp.first_name} {temp.last_name}</div>
+                            {src && (
+                              <div className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                <Building2 className="h-2.5 w-2.5" />{src}
+                              </div>
+                            )}
                             {temp.role && <div className="text-[10px] text-muted-foreground">{temp.role}</div>}
                             {temp.end_date && <div className="text-[10px] text-muted-foreground">Until {format(parseISO(temp.end_date), 'dd MMM')}</div>}
                           </div>
@@ -243,7 +308,7 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                         }
 
                         return (
-                          <td key={dayIdx} className="text-center px-1 border-x border-amber-200/30 text-[10px]">
+                          <td key={dayIdx} className="text-center px-1 border-x border-border/30 text-[10px]">
                             {editing ? (
                               <div className="flex flex-col gap-0.5">
                                 <Input
@@ -278,7 +343,7 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                                 type="button"
                                 disabled={disabled}
                                 onClick={() => setEditingCell(p => ({ ...p, [cellKey]: { start: entry?.shift_start_time || '', end: entry?.shift_end_time || '' } }))}
-                                className="block w-full px-1 py-0.5 rounded hover:bg-amber-100/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="block w-full px-1 py-0.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={disabled && isLocked ? 'Period is locked' : ''}
                               >
                                 {entry?.shift_start_time && entry?.shift_end_time ? (
@@ -295,7 +360,11 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                           </td>
                         );
                       })}
-                      <td className="text-center font-bold bg-emerald-50/50 text-emerald-700">{empTotal.toFixed(1)}</td>
+                      <td className="text-center font-semibold bg-blue-50/40 dark:bg-blue-950/20">{empHours.toFixed(1)}</td>
+                      <td className="text-center text-muted-foreground bg-amber-50/40 dark:bg-amber-950/20">-</td>
+                      <td className="text-center text-muted-foreground bg-rose-50/40 dark:bg-rose-950/20">-</td>
+                      <td className="text-center text-muted-foreground bg-purple-50/40 dark:bg-purple-950/20">-</td>
+                      <td className="text-center font-bold bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700">{empTotal.toFixed(1)}</td>
                       <td className="text-center">
                         {!temp.end_date && (
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => endTemp(temp)} title="End engagement">
@@ -332,6 +401,36 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
               <Label>Role / Position</Label>
               <Input placeholder="e.g. Cashier, Stock cover" value={newTemp.role} onChange={(e) => setNewTemp({ ...newTemp, role: e.target.value })} />
             </div>
+
+            <div>
+              <Label className="flex items-center gap-1"><Building2 className="h-3 w-3" /> Borrowed From *</Label>
+              <Select
+                value={newTemp.source_branch_id}
+                onValueChange={(v) => setNewTemp({ ...newTemp, source_branch_id: v, source_name: v === '__OTHER__' ? newTemp.source_name : '' })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select source branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                  <SelectItem value="__OTHER__">Other (external / agency)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newTemp.source_branch_id === '__OTHER__' && (
+              <div>
+                <Label>Source Name *</Label>
+                <Input
+                  placeholder="e.g. ABC Agency, Friend, External"
+                  value={newTemp.source_name}
+                  onChange={(e) => setNewTemp({ ...newTemp, source_name: e.target.value })}
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Start Date *</Label>
