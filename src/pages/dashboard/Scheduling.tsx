@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
 import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
+import { BranchHourTargets } from '@/components/scheduling/BranchHourTargets';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
