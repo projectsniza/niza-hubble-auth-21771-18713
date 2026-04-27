@@ -62,13 +62,13 @@ export function MonthCloseReminder({ branchId }: Props) {
       <CalendarClock className={`h-4 w-4 ${isOverdue ? 'text-destructive' : isClosingToday ? 'text-amber-600' : 'text-primary'}`} />
       <AlertTitle>
         {isOverdue
-          ? 'Monthly close overdue — lock & submit now'
+          ? `${format(periodEnd, 'MMMM yyyy')} payroll close is overdue — lock & submit now`
           : isClosingToday
-            ? 'Today is the last day to close this payroll period'
-            : `Reminder: close monthly schedule in ${daysToClose} day${daysToClose === 1 ? '' : 's'}`}
+            ? `Today is the last day to close ${format(periodEnd, 'MMMM yyyy')} payroll`
+            : `Reminder: close ${format(periodEnd, 'MMMM yyyy')} schedule in ${daysToClose} day${daysToClose === 1 ? '' : 's'}`}
       </AlertTitle>
       <AlertDescription className="text-sm">
-        Please review and lock the schedule for <strong>{format(periodStart, 'dd MMM')} – {format(periodEnd, 'dd MMM yyyy')}</strong> using the
+        Please review and lock the <strong>{format(periodEnd, 'MMMM yyyy')}</strong> schedule (<strong>{format(periodStart, 'dd MMM')} – {format(periodEnd, 'dd MMM yyyy')}</strong>) using the
         “Lock &amp; Submit Month” button. Once locked, store accounts can no longer edit this period.
       </AlertDescription>
     </Alert>

@@ -44,6 +44,8 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
   monthEndDate.setMonth(monthEndDate.getMonth() + 1);
   monthEndDate.setDate(monthEndDate.getDate() - 1);
   const periodLabel = `${format(monthStart, 'dd MMM yyyy')} – ${format(monthEndDate, 'dd MMM yyyy')}`;
+  // Payroll month name = END month of the cycle (e.g. 21 Apr – 20 May = MAY)
+  const payrollMonthLabel = format(monthEndDate, 'MMMM yyyy').toUpperCase();
 
   useEffect(() => {
     if (!branchId) return;
@@ -168,13 +170,17 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
       ) : null}
 
       <Dialog open={showLockDialog} onOpenChange={(open) => { setShowLockDialog(open); if (!open) setStep('form'); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {step === 'form' ? <Lock className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              {step === 'form' ? 'Lock Monthly Schedule' : 'Preview & Confirm'}
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
+              {step === 'form' ? <Lock className="h-6 w-6" /> : <Eye className="h-6 w-6" />}
+              {step === 'form' ? (
+                <span>Lock Monthly Schedule for <span className="text-primary">{payrollMonthLabel}</span></span>
+              ) : (
+                <span>Preview & Confirm — {payrollMonthLabel}</span>
+              )}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-base">
               Period: <strong>{periodLabel}</strong>
             </DialogDescription>
           </DialogHeader>
