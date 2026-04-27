@@ -127,6 +127,10 @@ export function TimesheetView() {
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
   const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
   const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
+  // Per-branch weekly hour targets (Super Admin configures via the "Hour Targets" tab)
+  const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
+  // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
+  const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
