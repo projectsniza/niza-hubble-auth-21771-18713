@@ -144,6 +144,41 @@ export function TimesheetView() {
     if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
 
+  // Fetch weekly hour targets (one row per branch) — accessible to all roles via RLS
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('branch_weekly_hour_targets')
+        .select('branch_id, target_hours, low_threshold_hours, high_threshold_hours');
+      const map: Record<string, { target: number; low: number; high: number }> = {};
+      (data || []).forEach((t: any) => {
+        map[t.branch_id] = {
+          target: Number(t.target_hours) || 0,
+          low: Number(t.low_threshold_hours) || 0,
+          high: Number(t.high_threshold_hours) || 0,
+        };
+      });
+      setBranchTargets(map);
+    })();
+  }, []);
+
+  // Fetch temp-staff actual hours per branch for the currently-viewed week
+  useEffect(() => {
+    if (!currentWeekStart) return;
+    (async () => {
+      const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('temporary_timesheet_entries')
+        .select('branch_id, actual_hours')
+        .eq('week_start_date', weekStartStr);
+      const map: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        map[row.branch_id] = (map[row.branch_id] || 0) + (Number(row.actual_hours) || 0);
+      });
+      setTempHoursByBranch(map);
+    })();
+  }, [currentWeekStart && format(currentWeekStart, 'yyyy-MM-dd')]);
+
   // Determine the branch in scope for the lock check
   const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
   const canBypassLock = user?.role === 'super_admin';
