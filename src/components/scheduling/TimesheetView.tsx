@@ -1114,7 +1114,49 @@ export function TimesheetView() {
                       {/* Branch Header */}
                       <TableRow className="bg-primary/5 hover:bg-primary/10">
                         <TableCell colSpan={21} className="py-2 font-semibold text-primary text-xs sticky left-0">
-                          📍 {branchName} <Badge variant="secondary" className="ml-2 text-[10px]">{data.timesheets.length} staff</Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>📍 {branchName}</span>
+                            <Badge variant="secondary" className="text-[10px]">{data.timesheets.length} staff</Badge>
+                            {(() => {
+                              const branchId = data.timesheets[0]?.employee?.branch_id;
+                              const target = branchId ? branchTargets[branchId] : undefined;
+                              const tempHrs = branchId ? (tempHoursByBranch[branchId] || 0) : 0;
+                              const scheduled = data.totals.worked + tempHrs;
+                              if (!target || target.target <= 0) {
+                                return tempHrs > 0 ? (
+                                  <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                                    +{tempHrs.toFixed(1)}h temp
+                                  </Badge>
+                                ) : null;
+                              }
+                              const isLow = target.low > 0 && scheduled < target.low;
+                              const isHigh = target.high > 0 && scheduled > target.high;
+                              const status = isHigh ? 'high' : isLow ? 'low' : 'ok';
+                              const colorCls = status === 'high'
+                                ? 'bg-rose-100 text-rose-700 border-rose-300'
+                                : status === 'low'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-700 border-emerald-300';
+                              const label = status === 'high' ? 'HIGH' : status === 'low' ? 'LOW' : 'ON TARGET';
+                              const tooltip = `Scheduled: ${scheduled.toFixed(1)}h (perm ${data.totals.worked.toFixed(1)}h${tempHrs > 0 ? ` + temp ${tempHrs.toFixed(1)}h` : ''}) • Target ${target.target}h • Low ≤ ${target.low}h • High ≥ ${target.high}h`;
+                              return (
+                                <>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] font-bold border ${colorCls}`}
+                                    title={tooltip}
+                                  >
+                                    {scheduled.toFixed(1)}h / {target.target}h • {label}
+                                  </Badge>
+                                  {tempHrs > 0 && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200" title="Temporary staff hours included in scheduled total">
+                                      incl. {tempHrs.toFixed(1)}h temp
+                                    </Badge>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                       </TableRow>
                       {/* Employee Rows */}
