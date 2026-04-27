@@ -721,22 +721,76 @@ export function TimesheetView() {
     };
   }, [monthlyConsolidation, monthWeeks]);
 
-  const exportToCSV = () => {
+  const exportToCSV = async () => {
     const headers = viewTab === 'weekly' 
-      ? ['', 'NAME', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL']
+      ? ['', 'NAME', 'FROM (BRANCH)', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL']
       : ['', 'NAME', ...monthWeeks.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'];
     
     const rows: string[][] = [headers];
     
     if (viewTab === 'weekly') {
+      // Pre-fetch temporary staff for all branches in scope, for the current week
+      const branchIds = Object.values(groupedTimesheets)
+        .map(d => d.timesheets[0]?.employee?.branch_id || (d as any).branchId)
+        .filter(Boolean);
+      const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+      const weekEndDate = new Date(currentWeekStart);
+      weekEndDate.setDate(weekEndDate.getDate() + 6);
+      const weekEndStr = format(weekEndDate, 'yyyy-MM-dd');
+
+      let tempsByBranch: Record<string, any[]> = {};
+      let tempEntriesByTemp: Record<string, any[]> = {};
+      let sourceBranchNames: Record<string, string> = {};
+
+      try {
+        // Get temps for all branches we currently view (filter by branch name match later)
+        const { data: allTemps } = await supabase
+          .from('temporary_employees')
+          .select('*')
+          .lte('start_date', weekEndStr)
+          .or(`end_date.is.null,end_date.gte.${weekStartStr}`);
+        const temps = (allTemps || []) as any[];
+
+        if (temps.length > 0) {
+          const tempIds = temps.map(t => t.id);
+          const { data: tEntries } = await supabase
+            .from('temporary_timesheet_entries')
+            .select('*')
+            .in('temporary_employee_id', tempIds)
+            .eq('week_start_date', weekStartStr);
+          (tEntries || []).forEach((e: any) => {
+            (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
+          });
+
+          // Resolve source branch names
+          const srcIds = Array.from(new Set(temps.map(t => t.source_branch_id).filter(Boolean)));
+          if (srcIds.length) {
+            const { data: srcBranches } = await supabase
+              .from('branches').select('id, name').in('id', srcIds);
+            (srcBranches || []).forEach((b: any) => { sourceBranchNames[b.id] = b.name; });
+          }
+
+          // Group by host branch_id
+          temps.forEach(t => { (tempsByBranch[t.branch_id] ||= []).push(t); });
+        }
+      } catch (err) {
+        console.error('Failed to load temp staff for export', err);
+      }
+
+      const dayCols = DAYS_OF_WEEK.length * 2; // start/end per day
+
       Object.entries(groupedTimesheets).forEach(([branchName, data]) => {
+        const branchId = data.timesheets[0]?.employee?.branch_id;
         rows.push([branchName, ...Array(headers.length - 1).fill('')]);
+
+        // Regular employees
         data.timesheets.forEach(t => {
           const dayEntries = t.entries || [];
           const total = Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours) + Number(t.total_adjustment_hours || 0);
           rows.push([
             '', 
             `${t.employee?.first_name} ${t.employee?.last_name}`.toUpperCase(),
+            '', // FROM (BRANCH) — empty for permanent staff
             ...DAYS_OF_WEEK.flatMap((day) => {
               const entry = dayEntries.find(e => e.day_of_week === day);
               return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
@@ -748,12 +802,39 @@ export function TimesheetView() {
             String(total.toFixed(1))
           ]);
         });
-        rows.push(['', 'SUBTOTAL', ...Array(14).fill(''), 
-          String(data.totals.worked.toFixed(1)),
+
+        // Temporary staff for this branch — same row format
+        const branchTemps = branchId ? (tempsByBranch[branchId] || []) : [];
+        let tempWorked = 0;
+        branchTemps.forEach((temp: any) => {
+          const tEntries = tempEntriesByTemp[temp.id] || [];
+          const fromLabel = temp.source_branch_id
+            ? (sourceBranchNames[temp.source_branch_id] || 'Other branch')
+            : (temp.source_name || '');
+          const worked = tEntries.reduce((s: number, e: any) => s + (Number(e.actual_hours) || 0), 0);
+          tempWorked += worked;
+          rows.push([
+            '',
+            `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.toUpperCase().trim(),
+            fromLabel,
+            ...DAYS_OF_WEEK.flatMap((day) => {
+              const entry = tEntries.find((e: any) => e.day_of_week === day);
+              return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
+            }),
+            worked ? worked.toFixed(1) : '',
+            '', '', '',
+            worked ? worked.toFixed(1) : '0.0',
+          ]);
+        });
+
+        const totalWorked = data.totals.worked + tempWorked;
+        const grandTotal = data.totals.total + tempWorked;
+        rows.push(['', 'SUBTOTAL', '', ...Array(dayCols).fill(''), 
+          String(totalWorked.toFixed(1)),
           String(data.totals.holiday.toFixed(1)),
           String(data.totals.sick.toFixed(1)),
           String(data.totals.adj.toFixed(1)),
-          String(data.totals.total.toFixed(1))
+          String(grandTotal.toFixed(1))
         ]);
       });
     } else {
