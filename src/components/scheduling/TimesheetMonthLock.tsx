@@ -44,6 +44,8 @@ export function TimesheetMonthLock({ branchId, organizationId, monthStart }: Tim
   monthEndDate.setMonth(monthEndDate.getMonth() + 1);
   monthEndDate.setDate(monthEndDate.getDate() - 1);
   const periodLabel = `${format(monthStart, 'dd MMM yyyy')} – ${format(monthEndDate, 'dd MMM yyyy')}`;
+  // Payroll month name = END month of the cycle (e.g. 21 Apr – 20 May = MAY)
+  const payrollMonthLabel = format(monthEndDate, 'MMMM yyyy').toUpperCase();
 
   useEffect(() => {
     if (!branchId) return;
