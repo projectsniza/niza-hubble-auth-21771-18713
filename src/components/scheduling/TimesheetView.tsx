@@ -1249,7 +1249,7 @@ export function TimesheetView() {
           <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <FileSpreadsheet className="h-4 w-4 text-primary" />
-              Monthly Consolidation - {format(currentMonth, 'MMMM yyyy')}
+              Monthly Consolidation - {format(getPayrollPeriod(currentMonth).end, 'MMMM yyyy')}
             </CardTitle>
           </CardHeader>
           <ScrollArea className="w-full">
