@@ -106,7 +106,7 @@ export function MonthlyLockStatus() {
           <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium px-2 min-w-[120px] text-center">{format(currentMonth, 'MMM yyyy')}</span>
+          <span className="text-sm font-medium px-2 min-w-[120px] text-center">{format(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 20), 'MMM yyyy')}</span>
           <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
