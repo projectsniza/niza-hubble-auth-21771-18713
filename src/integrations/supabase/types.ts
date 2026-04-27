@@ -297,6 +297,60 @@ export type Database = {
           },
         ]
       }
+      branch_weekly_hour_targets: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          high_threshold_hours: number
+          id: string
+          low_threshold_hours: number
+          notes: string | null
+          organization_id: string
+          target_hours: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          high_threshold_hours?: number
+          id?: string
+          low_threshold_hours?: number
+          notes?: string | null
+          organization_id: string
+          target_hours?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          high_threshold_hours?: number
+          id?: string
+          low_threshold_hours?: number
+          notes?: string | null
+          organization_id?: string
+          target_hours?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_weekly_hour_targets_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branch_weekly_hour_targets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null

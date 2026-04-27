@@ -127,6 +127,10 @@ export function TimesheetView() {
   const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
   const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
   const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
+  // Per-branch weekly hour targets (Super Admin configures via the "Hour Targets" tab)
+  const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
+  // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
+  const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
@@ -139,6 +143,41 @@ export function TimesheetView() {
     fetchData();
     if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
+
+  // Fetch weekly hour targets (one row per branch) — accessible to all roles via RLS
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('branch_weekly_hour_targets')
+        .select('branch_id, target_hours, low_threshold_hours, high_threshold_hours');
+      const map: Record<string, { target: number; low: number; high: number }> = {};
+      (data || []).forEach((t: any) => {
+        map[t.branch_id] = {
+          target: Number(t.target_hours) || 0,
+          low: Number(t.low_threshold_hours) || 0,
+          high: Number(t.high_threshold_hours) || 0,
+        };
+      });
+      setBranchTargets(map);
+    })();
+  }, []);
+
+  // Fetch temp-staff actual hours per branch for the currently-viewed week
+  useEffect(() => {
+    if (!currentWeekStart) return;
+    (async () => {
+      const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('temporary_timesheet_entries')
+        .select('branch_id, actual_hours')
+        .eq('week_start_date', weekStartStr);
+      const map: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        map[row.branch_id] = (map[row.branch_id] || 0) + (Number(row.actual_hours) || 0);
+      });
+      setTempHoursByBranch(map);
+    })();
+  }, [currentWeekStart && format(currentWeekStart, 'yyyy-MM-dd')]);
 
   // Determine the branch in scope for the lock check
   const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
@@ -1075,7 +1114,49 @@ export function TimesheetView() {
                       {/* Branch Header */}
                       <TableRow className="bg-primary/5 hover:bg-primary/10">
                         <TableCell colSpan={21} className="py-2 font-semibold text-primary text-xs sticky left-0">
-                          📍 {branchName} <Badge variant="secondary" className="ml-2 text-[10px]">{data.timesheets.length} staff</Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>📍 {branchName}</span>
+                            <Badge variant="secondary" className="text-[10px]">{data.timesheets.length} staff</Badge>
+                            {(() => {
+                              const branchId = data.timesheets[0]?.employee?.branch_id;
+                              const target = branchId ? branchTargets[branchId] : undefined;
+                              const tempHrs = branchId ? (tempHoursByBranch[branchId] || 0) : 0;
+                              const scheduled = data.totals.worked + tempHrs;
+                              if (!target || target.target <= 0) {
+                                return tempHrs > 0 ? (
+                                  <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                                    +{tempHrs.toFixed(1)}h temp
+                                  </Badge>
+                                ) : null;
+                              }
+                              const isLow = target.low > 0 && scheduled < target.low;
+                              const isHigh = target.high > 0 && scheduled > target.high;
+                              const status = isHigh ? 'high' : isLow ? 'low' : 'ok';
+                              const colorCls = status === 'high'
+                                ? 'bg-rose-100 text-rose-700 border-rose-300'
+                                : status === 'low'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-700 border-emerald-300';
+                              const label = status === 'high' ? 'HIGH' : status === 'low' ? 'LOW' : 'ON TARGET';
+                              const tooltip = `Scheduled: ${scheduled.toFixed(1)}h (perm ${data.totals.worked.toFixed(1)}h${tempHrs > 0 ? ` + temp ${tempHrs.toFixed(1)}h` : ''}) • Target ${target.target}h • Low ≤ ${target.low}h • High ≥ ${target.high}h`;
+                              return (
+                                <>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] font-bold border ${colorCls}`}
+                                    title={tooltip}
+                                  >
+                                    {scheduled.toFixed(1)}h / {target.target}h • {label}
+                                  </Badge>
+                                  {tempHrs > 0 && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200" title="Temporary staff hours included in scheduled total">
+                                      incl. {tempHrs.toFixed(1)}h temp
+                                    </Badge>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                       </TableRow>
                       {/* Employee Rows */}
