@@ -5790,6 +5790,8 @@ export type Database = {
           notes: string | null
           organization_id: string
           role: string | null
+          source_branch_id: string | null
+          source_name: string | null
           start_date: string
           updated_at: string
         }
@@ -5806,6 +5808,8 @@ export type Database = {
           notes?: string | null
           organization_id: string
           role?: string | null
+          source_branch_id?: string | null
+          source_name?: string | null
           start_date?: string
           updated_at?: string
         }
@@ -5822,6 +5826,8 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           role?: string | null
+          source_branch_id?: string | null
+          source_name?: string | null
           start_date?: string
           updated_at?: string
         }
@@ -5838,6 +5844,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temporary_employees_source_branch_id_fkey"
+            columns: ["source_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
