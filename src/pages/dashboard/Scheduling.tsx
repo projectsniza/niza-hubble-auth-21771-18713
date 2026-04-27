@@ -215,7 +215,10 @@ export default function Scheduling() {
           <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
           <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
           {user?.role === 'super_admin' && (
-            <TabsTrigger value="lockstatus" className="flex-1 min-w-[100px] text-xs md:text-sm">Lock Status</TabsTrigger>
+            <>
+              <TabsTrigger value="targets" className="flex-1 min-w-[100px] text-xs md:text-sm">Hour Targets</TabsTrigger>
+              <TabsTrigger value="lockstatus" className="flex-1 min-w-[100px] text-xs md:text-sm">Lock Status</TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -228,9 +231,14 @@ export default function Scheduling() {
         </TabsContent>
 
         {user?.role === 'super_admin' && (
-          <TabsContent value="lockstatus" className="mt-0">
-            <MonthlyLockStatus />
-          </TabsContent>
+          <>
+            <TabsContent value="targets" className="mt-0">
+              <BranchHourTargets />
+            </TabsContent>
+            <TabsContent value="lockstatus" className="mt-0">
+              <MonthlyLockStatus />
+            </TabsContent>
+          </>
         )}
       </Tabs>
     </div>
