@@ -909,7 +909,7 @@ export function TimesheetView() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCurrentMonth(subMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="px-3 text-sm font-medium min-w-[100px] text-center">{format(currentMonth, 'MMM yyyy')}</span>
+                <span className="px-3 text-sm font-medium min-w-[100px] text-center">{format(getPayrollPeriod(currentMonth).end, 'MMM yyyy')}</span>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); setSelectedWeekIndex(0); }}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
