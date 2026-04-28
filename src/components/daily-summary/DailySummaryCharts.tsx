@@ -231,6 +231,7 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
             <thead>
               <tr className="border-b text-left text-muted-foreground">
                 <th className="py-2 pr-4">Date</th>
+                <th className="py-2 pr-4">Notes</th>
                 <th className="py-2 pr-4 text-right">Shop</th>
                 <th className="py-2 pr-4 text-right">Fuel</th>
                 <th className="py-2 pr-4 text-right">Net</th>
@@ -244,7 +245,10 @@ export default function DailySummaryCharts({ rows }: { rows: DailySummaryRow[] }
             <tbody>
               {data.slice().reverse().map(r => (
                 <tr key={r.id} className="border-b last:border-0">
-                  <td className="py-2 pr-4 font-medium">{format(parseISO(r.summary_date), 'PP')}</td>
+                  <td className="py-2 pr-4 font-medium whitespace-nowrap">{format(parseISO(r.summary_date), 'PP')}</td>
+                  <td className="py-2 pr-4 max-w-[260px] text-muted-foreground" title={r.notes || ''}>
+                    {r.notes ? <span className="line-clamp-2 text-xs">{r.notes}</span> : <span className="text-xs opacity-50">—</span>}
+                  </td>
                   <td className="py-2 pr-4 text-right">{fmtGBP(r.shop_sale)}</td>
                   <td className="py-2 pr-4 text-right">{fmtGBP(r.fuel_sale)}</td>
                   <td className="py-2 pr-4 text-right">{fmtGBP(r.net_sale)}</td>
