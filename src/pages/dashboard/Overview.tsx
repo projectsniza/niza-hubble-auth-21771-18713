@@ -343,51 +343,39 @@ export default function Overview() {
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
-        {/* Document Follow-ups */}
+        {/* Daily Reports */}
         <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
           <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">Document Follow-ups</h3>
+                <Bell className="h-5 w-5 text-primary" />
+                <h3 className="text-lg md:text-xl font-bold text-foreground">Recent Reports</h3>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/documents')} className="text-xs md:text-sm">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/daily-reports')} className="text-xs md:text-sm">
                 View All
               </Button>
             </div>
 
-            {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 ? (
+            {dailyReports.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No document follow-ups</p>
+                <Bell className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent reports</p>
               </div>
             ) : (
               <ScrollArea className="h-[200px]">
                 <div className="space-y-3">
-                  {overdueFollowUps.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  {dailyReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div>
-                        <p className="font-medium text-sm">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
-                        </p>
+                        <p className="font-medium text-sm">{report.title}</p>
+                        <p className="text-xs text-muted-foreground">{report.branch?.name || 'All Branches'}</p>
                       </div>
-                      <Badge variant="destructive" className="text-xs">
-                        Overdue {formatDistanceToNow(new Date(doc.follow_up_date), { addSuffix: false })}
-                      </Badge>
-                    </div>
-                  ))}
-                  {upcomingFollowUps.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
-                        </p>
+                      <div className="text-right">
+                        <Badge variant="outline" className="text-xs capitalize">{report.report_type || 'General'}</Badge>
+                        {report.submitted_at && (
+                          <p className="text-xs text-muted-foreground mt-1">{format(new Date(report.submitted_at), 'MMM dd, HH:mm')}</p>
+                        )}
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {format(new Date(doc.follow_up_date), 'MMM dd')}
-                      </Badge>
                     </div>
                   ))}
                 </div>
@@ -436,39 +424,51 @@ export default function Overview() {
           </div>
         </Card>
 
-        {/* Daily Reports */}
+        {/* Document Follow-ups */}
         <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
           <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">Recent Reports</h3>
+                <FileText className="h-5 w-5 text-primary" />
+                <h3 className="text-lg md:text-xl font-bold text-foreground">Document Follow-ups</h3>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/daily-reports')} className="text-xs md:text-sm">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/documents')} className="text-xs md:text-sm">
                 View All
               </Button>
             </div>
 
-            {dailyReports.length === 0 ? (
+            {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Bell className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No recent reports</p>
+                <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No document follow-ups</p>
               </div>
             ) : (
               <ScrollArea className="h-[200px]">
                 <div className="space-y-3">
-                  {dailyReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  {overdueFollowUps.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                       <div>
-                        <p className="font-medium text-sm">{report.title}</p>
-                        <p className="text-xs text-muted-foreground">{report.branch?.name || 'All Branches'}</p>
+                        <p className="font-medium text-sm">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                        </p>
                       </div>
-                      <div className="text-right">
-                        <Badge variant="outline" className="text-xs capitalize">{report.report_type || 'General'}</Badge>
-                        {report.submitted_at && (
-                          <p className="text-xs text-muted-foreground mt-1">{format(new Date(report.submitted_at), 'MMM dd, HH:mm')}</p>
-                        )}
+                      <Badge variant="destructive" className="text-xs">
+                        Overdue {formatDistanceToNow(new Date(doc.follow_up_date), { addSuffix: false })}
+                      </Badge>
+                    </div>
+                  ))}
+                  {upcomingFollowUps.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                        </p>
                       </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {format(new Date(doc.follow_up_date), 'MMM dd')}
+                      </Badge>
                     </div>
                   ))}
                 </div>
