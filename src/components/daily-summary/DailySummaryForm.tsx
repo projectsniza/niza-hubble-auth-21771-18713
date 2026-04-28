@@ -37,10 +37,10 @@ interface Props {
 }
 
 const FIELDS: Array<{ key: keyof DailySummary; label: string; prefix?: string; suffix?: string; integer?: boolean }> = [
-  { key: 'shop_sale', label: 'Shop Sale', prefix: '£' },
-  { key: 'net_sale', label: 'Net Sale', prefix: '£' },
+  { key: 'shop_sale', label: 'Shop sale (Gross)', prefix: '£' },
+  { key: 'net_sale', label: 'Shop sale (Net)', prefix: '£' },
   { key: 'customer_count', label: 'Customer Count', integer: true },
-  { key: 'fuel_volume', label: 'Fuel Volume', suffix: 'L' },
+  { key: 'fuel_volume', label: 'Fuel volume (Liter)', suffix: 'L' },
   { key: 'fuel_sale', label: 'Fuel Sale', prefix: '£' },
   { key: 'cash_sale', label: 'Cash Sale', prefix: '£' },
   { key: 'atm_loaded', label: 'ATM (Loaded)', prefix: '£' },
@@ -154,7 +154,7 @@ export default function DailySummaryForm({ branchId, organizationId, onSaved }: 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
         <div>
-          <CardTitle>Enter Daily Summary</CardTitle>
+          <CardTitle>Enter Sales Analysis</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             One record per day. Editing the same date overwrites the existing values.
           </p>
