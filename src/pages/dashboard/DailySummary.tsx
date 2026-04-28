@@ -95,7 +95,7 @@ export default function DailySummary() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Daily Summary
+            Sales Analysis
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isManager
@@ -156,11 +156,11 @@ export default function DailySummary() {
                 [
                   { key: 'date', label: 'Date' },
                   { key: 'branch', label: 'Branch' },
-                  { key: 'shop_sale', label: 'Shop Sale (£)' },
+                  { key: 'shop_sale', label: 'Shop sale (Gross) (£)' },
                   { key: 'fuel_sale', label: 'Fuel Sale (£)' },
-                  { key: 'net_sale', label: 'Net Sale (£)' },
+                  { key: 'net_sale', label: 'Shop sale (Net) (£)' },
                   { key: 'customer_count', label: 'Customers' },
-                  { key: 'fuel_volume', label: 'Fuel Volume (L)' },
+                  { key: 'fuel_volume', label: 'Fuel volume (Liter)' },
                   { key: 'cash_sale', label: 'Cash Sale (£)' },
                   { key: 'atm_loaded', label: 'ATM Loaded (£)' },
                   { key: 'store_paid_outs', label: 'Store Paid Outs (£)' },
@@ -255,7 +255,7 @@ export default function DailySummary() {
 
       {!isAdmin && !isManager && (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
-          You do not have access to Daily Summary.
+          You do not have access to Sales Analysis.
         </CardContent></Card>
       )}
     </div>
