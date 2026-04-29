@@ -1687,6 +1687,7 @@ export type Database = {
           submitted_by: string
           title: string
           updated_at: string | null
+          vendor_ids: Json
         }
         Insert: {
           branch_id: string
@@ -1701,6 +1702,7 @@ export type Database = {
           submitted_by: string
           title: string
           updated_at?: string | null
+          vendor_ids?: Json
         }
         Update: {
           branch_id?: string
@@ -1715,6 +1717,7 @@ export type Database = {
           submitted_by?: string
           title?: string
           updated_at?: string | null
+          vendor_ids?: Json
         }
         Relationships: [
           {
@@ -3426,8 +3429,11 @@ export type Database = {
           employee_id: string
           end_date: string
           id: string
+          last_modified_by: string | null
           leave_type_id: string
+          modification_reason: string | null
           reason: string | null
+          requires_reapproval: boolean
           start_date: string
           status: string | null
           supporting_document_name: string | null
@@ -3441,8 +3447,11 @@ export type Database = {
           employee_id: string
           end_date: string
           id?: string
+          last_modified_by?: string | null
           leave_type_id: string
+          modification_reason?: string | null
           reason?: string | null
+          requires_reapproval?: boolean
           start_date: string
           status?: string | null
           supporting_document_name?: string | null
@@ -3456,8 +3465,11 @@ export type Database = {
           employee_id?: string
           end_date?: string
           id?: string
+          last_modified_by?: string | null
           leave_type_id?: string
+          modification_reason?: string | null
           reason?: string | null
+          requires_reapproval?: boolean
           start_date?: string
           status?: string | null
           supporting_document_name?: string | null
@@ -3838,6 +3850,9 @@ export type Database = {
         Row: {
           assigned_to: string | null
           branch_id: string
+          closed_by: string | null
+          closure_attachments: Json
+          closure_notes: string | null
           created_at: string | null
           description: string | null
           id: string
@@ -3853,6 +3868,9 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           branch_id: string
+          closed_by?: string | null
+          closure_attachments?: Json
+          closure_notes?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -3868,6 +3886,9 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           branch_id?: string
+          closed_by?: string | null
+          closure_attachments?: Json
+          closure_notes?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -4412,6 +4433,72 @@ export type Database = {
           registration_number?: string | null
           updated_at?: string | null
           vat_number?: string | null
+        }
+        Relationships: []
+      }
+      payment_approval_requests: {
+        Row: {
+          approved_amount: number | null
+          branch_id: string
+          created_at: string
+          customer_id: string | null
+          evidence_files: Json
+          id: string
+          monthly_account_id: string
+          notes: string | null
+          organization_id: string | null
+          payment_date: string | null
+          payment_method: string | null
+          rejection_reason: string | null
+          request_type: string
+          requested_amount: number
+          requested_by: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_amount?: number | null
+          branch_id: string
+          created_at?: string
+          customer_id?: string | null
+          evidence_files?: Json
+          id?: string
+          monthly_account_id: string
+          notes?: string | null
+          organization_id?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          rejection_reason?: string | null
+          request_type: string
+          requested_amount?: number
+          requested_by: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_amount?: number | null
+          branch_id?: string
+          created_at?: string
+          customer_id?: string | null
+          evidence_files?: Json
+          id?: string
+          monthly_account_id?: string
+          notes?: string | null
+          organization_id?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          rejection_reason?: string | null
+          request_type?: string
+          requested_amount?: number
+          requested_by?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6697,6 +6784,48 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendors: {
+        Row: {
+          branch_id: string
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          organization_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
