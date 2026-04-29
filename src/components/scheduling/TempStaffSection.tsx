@@ -251,39 +251,46 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[1200px]">
+            {/* Layout matches regular employees: each day is two cells (start | end). Amber accents distinguish temp staff. */}
+            <table className="w-full text-xs min-w-[1400px] border-collapse">
               <thead>
-                <tr className="bg-muted/50 border-b">
-                  <th className="text-left px-3 py-2 w-56 font-semibold sticky left-0 bg-muted/50 z-10">NAME</th>
-                  {weekDays.map((d, i) => (
-                    <th key={i} className="text-center px-2 py-2 border-x border-border/40 min-w-[100px]">
-                      <div className="font-bold">{DAYS_SHORT[i]}</div>
-                      <div className="text-[10px] text-muted-foreground">{format(d, 'dd/MM')}</div>
-                    </th>
-                  ))}
+                <tr className="bg-amber-50/60 dark:bg-amber-950/30 border-b border-amber-200/60">
+                  <th className="text-left px-3 py-2 w-40 font-bold sticky left-0 bg-amber-50/60 dark:bg-amber-950/30 z-10">NAME</th>
+                  {weekDays.map((d, i) => {
+                    const inPayroll = isDateInPayroll(d);
+                    return (
+                      <th
+                        key={i}
+                        colSpan={2}
+                        className={`text-center border-x border-amber-200/40 min-w-[100px] py-1 ${inPayroll ? '' : 'bg-muted/40 opacity-60'}`}
+                      >
+                        <div className="font-bold">{DAYS_SHORT[i]}</div>
+                        <div className="text-[10px] text-muted-foreground font-normal">{format(d, 'dd/MM')}</div>
+                      </th>
+                    );
+                  })}
                   <th className="text-center px-2 py-2 font-bold bg-blue-50 dark:bg-blue-950/50 min-w-[60px]">HOURS</th>
                   <th className="text-center px-2 py-2 font-bold bg-amber-50 dark:bg-amber-950/50 min-w-[60px]">HOLIDAY</th>
                   <th className="text-center px-2 py-2 font-bold bg-rose-50 dark:bg-rose-950/50 min-w-[60px]">SICK</th>
                   <th className="text-center px-2 py-2 font-bold bg-purple-50 dark:bg-purple-950/50 min-w-[60px]">ADJ+/-</th>
                   <th className="text-center px-2 py-2 font-bold bg-emerald-50 dark:bg-emerald-950/50 min-w-[60px]">TOTAL</th>
-                  <th className="text-center px-2 py-2 min-w-[60px]">Actions</th>
+                  <th className="text-center px-2 py-2 min-w-[80px]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {temps.map((temp, idx) => {
                   const empEntries = entries.filter(e => e.temporary_employee_id === temp.id);
                   const empHours = empEntries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
-                  // Temps don't currently track holiday/sick/adj — values are 0 to mirror the same row layout.
                   const holiday = 0, sick = 0, adj = 0;
                   const empTotal = empHours + holiday + sick + adj;
                   const src = sourceLabel(temp);
                   return (
-                    <tr key={temp.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                      <td className="px-3 py-2 sticky left-0 bg-inherit z-10">
+                    <tr key={temp.id} className={`border-b border-amber-200/30 ${idx % 2 === 0 ? 'bg-background' : 'bg-amber-50/20 dark:bg-amber-950/10'}`}>
+                      <td className="px-3 py-2 sticky left-0 bg-inherit z-10 font-medium">
                         <div className="flex items-start gap-2">
                           <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[9px] px-1.5 py-0 mt-0.5">TEMP</Badge>
                           <div className="min-w-0">
-                            <div className="font-medium truncate">{temp.first_name} {temp.last_name}</div>
+                            <div className="font-medium truncate">{temp.first_name?.toUpperCase()} {temp.last_name?.toUpperCase()}</div>
                             {src && (
                               <div className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
                                 <Building2 className="h-2.5 w-2.5" />{src}
@@ -304,63 +311,92 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                         const disabled = isLocked || !inPayroll || !inRange;
 
                         if (!inPayroll || !inRange) {
-                          return <td key={dayIdx} className="text-center text-muted-foreground bg-muted/40 opacity-50 px-1">—</td>;
+                          return (
+                            <React.Fragment key={dayIdx}>
+                              <td className="text-center text-muted-foreground bg-muted/50 opacity-50 px-1 border-l border-amber-200/30">—</td>
+                              <td className="text-center text-muted-foreground bg-muted/50 opacity-50 px-1 border-r border-amber-200/30">—</td>
+                            </React.Fragment>
+                          );
                         }
 
+                        const startVal = editing?.start ?? entry?.shift_start_time ?? '';
+                        const endVal = editing?.end ?? entry?.shift_end_time ?? '';
+                        const isEditing = !!editing;
+
                         return (
-                          <td key={dayIdx} className="text-center px-1 border-x border-border/30 text-[10px]">
-                            {editing ? (
-                              <div className="flex flex-col gap-0.5">
+                          <React.Fragment key={dayIdx}>
+                            <td className="text-center px-1 border-l border-amber-200/30 text-[10px]">
+                              {isEditing ? (
                                 <Input
                                   type="time"
-                                  value={editing.start}
-                                  onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { ...p[cellKey], start: e.target.value } }))}
-                                  className="h-6 text-[10px] p-1"
+                                  value={startVal}
+                                  disabled={disabled}
+                                  onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { start: e.target.value, end: p[cellKey]?.end ?? endVal } }))}
+                                  className="h-6 text-[10px] p-1 w-full"
+                                  data-temp-cell={cellKey}
+                                  onBlur={(e) => {
+                                    const next = e.relatedTarget as HTMLElement | null;
+                                    if (next?.getAttribute?.('data-temp-cell') === cellKey) return;
+                                    if (next?.getAttribute?.('data-temp-reset') === cellKey) return;
+                                    saveCell(temp, day, DAYS_OF_WEEK[dayIdx], cellKey);
+                                  }}
                                 />
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => setEditingCell(p => ({ ...p, [cellKey]: { start: entry?.shift_start_time || '', end: entry?.shift_end_time || '' } }))}
+                                  className="cursor-pointer hover:bg-amber-100/40 dark:hover:bg-amber-900/30 px-1 py-0.5 rounded w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={disabled && isLocked ? 'Period is locked' : ''}
+                                >
+                                  {entry?.shift_start_time ? formatTime(entry.shift_start_time) : <span className="text-muted-foreground">-</span>}
+                                </button>
+                              )}
+                            </td>
+                            <td className="text-center px-1 border-r border-amber-200/30 text-[10px]">
+                              {isEditing ? (
                                 <div className="flex items-center gap-0.5">
                                   <Input
                                     type="time"
-                                    value={editing.end}
-                                    onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { ...p[cellKey], end: e.target.value } }))}
-                                    className="h-6 text-[10px] p-1"
+                                    value={endVal}
+                                    disabled={disabled}
+                                    onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { start: p[cellKey]?.start ?? startVal, end: e.target.value } }))}
+                                    className="h-6 text-[10px] p-1 w-full"
+                                    data-temp-cell={cellKey}
+                                    onBlur={(e) => {
+                                      const next = e.relatedTarget as HTMLElement | null;
+                                      if (next?.getAttribute?.('data-temp-cell') === cellKey) return;
+                                      if (next?.getAttribute?.('data-temp-reset') === cellKey) return;
+                                      saveCell(temp, day, DAYS_OF_WEEK[dayIdx], cellKey);
+                                    }}
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() => saveCell(temp, day, DAYS_OF_WEEK[dayIdx], cellKey)}
-                                    className="h-5 w-5 flex items-center justify-center rounded bg-primary text-primary-foreground text-[10px]"
-                                  >✓</button>
                                   {entry && (
                                     <button
                                       type="button"
+                                      data-temp-reset={cellKey}
+                                      onMouseDown={(e) => e.preventDefault()}
                                       onClick={() => saveCell(temp, day, DAYS_OF_WEEK[dayIdx], cellKey, { clear: true })}
-                                      className="h-5 w-5 flex items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                                      className="h-5 w-5 flex items-center justify-center rounded text-destructive hover:bg-destructive/10 shrink-0"
+                                      title="Clear shift"
                                     ><X className="h-3 w-3" /></button>
                                   )}
                                 </div>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => setEditingCell(p => ({ ...p, [cellKey]: { start: entry?.shift_start_time || '', end: entry?.shift_end_time || '' } }))}
-                                className="block w-full px-1 py-0.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={disabled && isLocked ? 'Period is locked' : ''}
-                              >
-                                {entry?.shift_start_time && entry?.shift_end_time ? (
-                                  <div>
-                                    <div>{formatTime(entry.shift_start_time)}</div>
-                                    <div className="text-muted-foreground">{formatTime(entry.shift_end_time)}</div>
-                                    <div className="text-[9px] font-bold text-emerald-600">{entry.actual_hours}h</div>
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </button>
-                            )}
-                          </td>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => setEditingCell(p => ({ ...p, [cellKey]: { start: entry?.shift_start_time || '', end: entry?.shift_end_time || '' } }))}
+                                  className="cursor-pointer hover:bg-amber-100/40 dark:hover:bg-amber-900/30 px-1 py-0.5 rounded w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={disabled && isLocked ? 'Period is locked' : ''}
+                                >
+                                  {entry?.shift_end_time ? formatTime(entry.shift_end_time) : <span className="text-muted-foreground">-</span>}
+                                </button>
+                              )}
+                            </td>
+                          </React.Fragment>
                         );
                       })}
-                      <td className="text-center font-semibold bg-blue-50/40 dark:bg-blue-950/20">{empHours.toFixed(1)}</td>
+                      <td className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">{empHours > 0 ? empHours.toFixed(1) : 0}</td>
                       <td className="text-center text-muted-foreground bg-amber-50/40 dark:bg-amber-950/20">-</td>
                       <td className="text-center text-muted-foreground bg-rose-50/40 dark:bg-rose-950/20">-</td>
                       <td className="text-center text-muted-foreground bg-purple-50/40 dark:bg-purple-950/20">-</td>
