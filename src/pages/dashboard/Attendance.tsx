@@ -1810,6 +1810,50 @@ export default function Attendance() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel & Re-apply Leave Dialog */}
+      <Dialog open={!!reapplyLeave} onOpenChange={(open) => !open && setReapplyLeave(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel & Re-apply Leave</DialogTitle>
+          </DialogHeader>
+          {reapplyLeave && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+                <p><span className="font-medium text-foreground">Employee:</span> {reapplyLeave.employee?.first_name} {reapplyLeave.employee?.last_name}</p>
+                <p><span className="font-medium text-foreground">Type:</span> {reapplyLeave.leave_type?.name}</p>
+                <p><span className="font-medium text-foreground">Original dates:</span> {format(new Date(reapplyLeave.start_date), 'dd MMM yyyy')} → {format(new Date(reapplyLeave.end_date), 'dd MMM yyyy')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>New Start Date *</Label>
+                  <Input type="date" value={reapplyForm.startDate} onChange={(e) => setReapplyForm({ ...reapplyForm, startDate: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>New End Date *</Label>
+                  <Input type="date" value={reapplyForm.endDate} onChange={(e) => setReapplyForm({ ...reapplyForm, endDate: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason for Change *</Label>
+                <Textarea
+                  placeholder="Explain why this approved leave is being cancelled and rescheduled..."
+                  rows={3}
+                  value={reapplyForm.reason}
+                  onChange={(e) => setReapplyForm({ ...reapplyForm, reason: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Submitting will move this leave back to <span className="font-medium">pending</span> and notify HR / Super Admin for re-approval.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReapplyLeave(null)}>Cancel</Button>
+            <Button onClick={handleSubmitReapply}>Submit for Re-approval</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
