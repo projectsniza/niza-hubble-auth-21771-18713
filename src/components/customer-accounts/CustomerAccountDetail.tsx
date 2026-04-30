@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -44,9 +44,10 @@ interface Props {
   onBack: () => void;
   canEdit: boolean;
   isSuperAdmin?: boolean;
+  isManager?: boolean;
 }
 
-export default function CustomerAccountDetail({ customer, onBack, canEdit, isSuperAdmin }: Props) {
+export default function CustomerAccountDetail({ customer, onBack, canEdit, isSuperAdmin, isManager }: Props) {
   const { user } = useAuth();
   const { monthlyAccounts, isLoading, createMonthly, updateMonthly, addItem, deleteItem, markPaid } = useMonthlyAccounts(customer.id);
   const [editAmountId, setEditAmountId] = useState<string | null>(null);
@@ -68,12 +69,45 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [partialNotes, setPartialNotes] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
+  // Manager request flow
+  const [requestOpen, setRequestOpen] = useState<{ id: string; type: 'record_payment' | 'mark_fully_paid' } | null>(null);
+  const [reqAmount, setReqAmount] = useState('');
+  const [reqMethod, setReqMethod] = useState('cash');
+  const [reqDate, setReqDate] = useState<Date | undefined>(new Date());
+  const [reqNotes, setReqNotes] = useState('');
+  const [reqFiles, setReqFiles] = useState<File[]>([]);
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [reviewRequest, setReviewRequest] = useState<any | null>(null);
+  const [reviewAmount, setReviewAmount] = useState('');
+  const [reviewReason, setReviewReason] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // Item form
   const [itemDesc, setItemDesc] = useState('');
   const [itemAmount, setItemAmount] = useState('');
   const [itemDate, setItemDate] = useState('');
   const [itemTax, setItemTax] = useState('');
   const [itemDiscount, setItemDiscount] = useState('');
+
+  // Load pending payment approval requests for this customer
+  const fetchRequests = async () => {
+    const monthlyIds = monthlyAccounts.map(m => m.id);
+    if (monthlyIds.length === 0) { setPendingRequests([]); return; }
+    const { data } = await supabase
+      .from('payment_approval_requests' as any)
+      .select('*')
+      .in('monthly_account_id', monthlyIds)
+      .order('created_at', { ascending: false });
+    setPendingRequests((data as any) || []);
+  };
+
+  // Refetch requests when monthly accounts list changes
+  useEffect(() => {
+    fetchRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlyAccounts.length]);
+
 
   // Stats
   const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due - Number((m as any).amount_paid || 0), 0);
@@ -123,6 +157,119 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
       setSubmittingPayment(false);
     }
   };
+
+
+  const handleSubmitRequest = async () => {
+    if (!requestOpen || !user) return;
+    const acc = monthlyAccounts.find(a => a.id === requestOpen.id);
+    if (!acc) return;
+    const amountNum = parseFloat(reqAmount);
+    if (!amountNum || amountNum <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (reqFiles.length === 0) {
+      toast.error('Please upload at least one evidence file (cheque, receipt, etc.)');
+      return;
+    }
+    setSubmittingRequest(true);
+    try {
+      const uploaded: any[] = [];
+      for (const file of reqFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `payment-evidence/${user.id}/${fileName}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(filePath, file);
+        if (upErr) throw upErr;
+        uploaded.push({ name: file.name, path: filePath, size: file.size, type: file.type });
+      }
+
+      const { error } = await supabase.from('payment_approval_requests' as any).insert({
+        monthly_account_id: requestOpen.id,
+        customer_id: customer.id,
+        branch_id: customer.branch_id,
+        organization_id: customer.organization_id,
+        requested_by: user.id,
+        request_type: requestOpen.type,
+        requested_amount: amountNum,
+        payment_method: reqMethod,
+        payment_date: reqDate ? format(reqDate, 'yyyy-MM-dd') : null,
+        evidence_files: uploaded,
+        notes: reqNotes || null,
+        status: 'pending',
+      } as any);
+      if (error) throw error;
+
+      toast.success('Payment request submitted for super admin approval');
+      setRequestOpen(null);
+      setReqAmount(''); setReqNotes(''); setReqFiles([]); setReqMethod('cash');
+      fetchRequests();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit request');
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
+  const handleReviewRequest = async (action: 'approved' | 'rejected') => {
+    if (!reviewRequest || !user) return;
+    setSubmittingReview(true);
+    try {
+      const finalAmount = parseFloat(reviewAmount) || Number(reviewRequest.requested_amount);
+
+      const { error: updErr } = await supabase
+        .from('payment_approval_requests' as any)
+        .update({
+          status: action,
+          approved_amount: action === 'approved' ? finalAmount : null,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          rejection_reason: action === 'rejected' ? (reviewReason || null) : null,
+        } as any)
+        .eq('id', reviewRequest.id);
+      if (updErr) throw updErr;
+
+      if (action === 'approved') {
+        // Apply payment to the monthly account
+        const acc = monthlyAccounts.find(a => a.id === reviewRequest.monthly_account_id);
+        const dateStr = reviewRequest.payment_date || format(new Date(), 'yyyy-MM-dd');
+
+        // Insert payment record
+        await supabase.from('customer_payments').insert({
+          monthly_account_id: reviewRequest.monthly_account_id,
+          amount_paid: finalAmount,
+          payment_date: dateStr,
+          payment_method: reviewRequest.payment_method || 'other',
+          notes: `Approved from request: ${reviewRequest.notes || ''}`.trim(),
+          recorded_by: user.id,
+        });
+
+        if (acc) {
+          const newAmountPaid = Number((acc as any).amount_paid || 0) + finalAmount;
+          const fullyPaid = reviewRequest.request_type === 'mark_fully_paid' || newAmountPaid >= acc.total_due;
+          await supabase.from('customer_monthly_accounts').update({
+            amount_paid: fullyPaid ? acc.total_due : newAmountPaid,
+            is_paid: fullyPaid,
+            paid_date: fullyPaid ? dateStr : null,
+            marked_paid_by: fullyPaid ? user.id : null,
+          }).eq('id', reviewRequest.monthly_account_id);
+        }
+      }
+
+      toast.success(action === 'approved' ? 'Payment approved & applied' : 'Request rejected');
+      setReviewRequest(null);
+      setReviewAmount('');
+      setReviewReason('');
+      fetchRequests();
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to process request');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const getRequestForAccount = (accId: string) =>
+    pendingRequests.find(r => r.monthly_account_id === accId && r.status === 'pending');
 
   const getStatusColor = (account: MonthlyAccount) => {
     if (account.is_paid) return { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/30', label: 'Paid' };
@@ -328,6 +475,32 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                     </div>
                   )}
 
+                  {/* Pending payment request banner */}
+                  {(() => {
+                    const pendingReq = getRequestForAccount(account.id);
+                    if (!pendingReq) return null;
+                    return (
+                      <div className="mb-3 p-3 rounded-lg border border-amber-500/40 bg-amber-500/5">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="text-sm">
+                            <p className="font-medium text-amber-700">
+                              Payment request pending: {pendingReq.request_type === 'mark_fully_paid' ? 'Mark Fully Paid' : 'Record Payment'} — £{Number(pendingReq.requested_amount).toFixed(2)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Method: {pendingReq.payment_method || 'n/a'} · {pendingReq.payment_date || 'no date'} · {Array.isArray(pendingReq.evidence_files) ? pendingReq.evidence_files.length : 0} file(s)
+                            </p>
+                            {pendingReq.notes && <p className="text-xs mt-1">{pendingReq.notes}</p>}
+                          </div>
+                          {isSuperAdmin && (
+                            <Button size="sm" onClick={() => { setReviewRequest(pendingReq); setReviewAmount(String(pendingReq.requested_amount)); setReviewReason(''); }}>
+                              Review
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {canEdit && (
@@ -376,6 +549,28 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                             <X className="h-3.5 w-3.5 mr-1" />Unmark Paid
                           </Button>
                         )}
+                      </>
+                    )}
+
+                    {/* Manager request flow — only when not super admin/HR and no pending request */}
+                    {isManager && !account.is_paid && !getRequestForAccount(account.id) && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => {
+                          const remaining = account.total_due - Number((account as any).amount_paid || 0);
+                          setRequestOpen({ id: account.id, type: 'record_payment' });
+                          setReqAmount(String(remaining > 0 ? remaining : ''));
+                          setReqNotes(''); setReqFiles([]); setReqMethod('cash'); setReqDate(new Date());
+                        }}>
+                          <PoundSterling className="h-3.5 w-3.5 mr-1" />Request Record Payment
+                        </Button>
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                          const remaining = account.total_due - Number((account as any).amount_paid || 0);
+                          setRequestOpen({ id: account.id, type: 'mark_fully_paid' });
+                          setReqAmount(String(remaining > 0 ? remaining : account.total_due));
+                          setReqNotes(''); setReqFiles([]); setReqMethod('cash'); setReqDate(new Date());
+                        }}>
+                          <Check className="h-3.5 w-3.5 mr-1" />Request Mark Fully Paid
+                        </Button>
                       </>
                     )}
                   </div>
@@ -521,6 +716,153 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
             <Button variant="outline" onClick={() => setPartialPayOpen(null)}>Cancel</Button>
             <Button onClick={() => partialPayOpen && handleRecordPartialPayment(partialPayOpen)} disabled={submittingPayment || !partialAmount}>
               {submittingPayment ? 'Recording...' : 'Record Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manager Payment Request Dialog */}
+      <Dialog open={!!requestOpen} onOpenChange={() => setRequestOpen(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {requestOpen?.type === 'mark_fully_paid' ? 'Request — Mark Fully Paid' : 'Request — Record Payment'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Upload payment evidence (cheque image, bank receipt, etc.). Super admin must approve before this is recorded.
+            </p>
+            <div>
+              <Label>Amount (£) *</Label>
+              <Input type="number" step="0.01" min="0.01" value={reqAmount} onChange={e => setReqAmount(e.target.value)} placeholder="0.00" />
+            </div>
+            <div>
+              <Label>Payment Method</Label>
+              <Select value={reqMethod} onValueChange={setReqMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reqDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {reqDate ? format(reqDate, 'dd MMM yyyy') : 'Pick a date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={reqDate} onSelect={setReqDate} className={cn("p-3 pointer-events-auto")} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div>
+              <Label>Evidence Files *</Label>
+              <label htmlFor="req-files" className="cursor-pointer block">
+                <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors w-fit">
+                  <Plus className="h-4 w-4" />
+                  <span className="text-sm">Upload Files</span>
+                </div>
+                <input
+                  id="req-files"
+                  type="file"
+                  multiple
+                  accept="*/*"
+                  onChange={(e) => setReqFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                  className="hidden"
+                />
+              </label>
+              {reqFiles.length > 0 && (
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {reqFiles.map((f, idx) => (
+                    <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs">
+                      <span className="max-w-[140px] truncate">{f.name}</span>
+                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setReqFiles(prev => prev.filter((_, i) => i !== idx))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={reqNotes} onChange={e => setReqNotes(e.target.value)} rows={2} placeholder="Optional context for the super admin" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRequestOpen(null)}>Cancel</Button>
+            <Button onClick={handleSubmitRequest} disabled={submittingRequest || !reqAmount || reqFiles.length === 0}>
+              {submittingRequest ? 'Submitting...' : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Super Admin Review Dialog */}
+      <Dialog open={!!reviewRequest} onOpenChange={() => setReviewRequest(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review Payment Request</DialogTitle>
+          </DialogHeader>
+          {reviewRequest && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <div className="flex justify-between"><span>Type:</span><span className="font-medium">{reviewRequest.request_type === 'mark_fully_paid' ? 'Mark Fully Paid' : 'Record Payment'}</span></div>
+                <div className="flex justify-between"><span>Requested Amount:</span><span className="font-medium">£{Number(reviewRequest.requested_amount).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span>Method:</span><span>{reviewRequest.payment_method || 'n/a'}</span></div>
+                <div className="flex justify-between"><span>Date:</span><span>{reviewRequest.payment_date || 'n/a'}</span></div>
+                {reviewRequest.notes && <div className="pt-1 border-t mt-1"><span className="text-muted-foreground">Notes: </span>{reviewRequest.notes}</div>}
+              </div>
+
+              {Array.isArray(reviewRequest.evidence_files) && reviewRequest.evidence_files.length > 0 && (
+                <div>
+                  <Label>Evidence</Label>
+                  <div className="space-y-1 mt-1">
+                    {reviewRequest.evidence_files.map((f: any, idx: number) => (
+                      <Button
+                        key={idx}
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={async () => {
+                          const { data } = await supabase.storage.from('documents').createSignedUrl(f.path, 3600);
+                          if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                        }}
+                      >
+                        <Package className="h-3.5 w-3.5 mr-2" />{f.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label>Approved Amount (£) — editable</Label>
+                <Input type="number" step="0.01" value={reviewAmount} onChange={e => setReviewAmount(e.target.value)} />
+              </div>
+
+              <div>
+                <Label>Rejection Reason (only if rejecting)</Label>
+                <Textarea value={reviewReason} onChange={e => setReviewReason(e.target.value)} rows={2} placeholder="Optional" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewRequest(null)} disabled={submittingReview}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleReviewRequest('rejected')} disabled={submittingReview}>
+              Reject
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleReviewRequest('approved')} disabled={submittingReview}>
+              {submittingReview ? 'Processing...' : 'Approve & Apply'}
             </Button>
           </DialogFooter>
         </DialogContent>

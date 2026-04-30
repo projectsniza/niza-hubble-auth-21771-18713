@@ -108,6 +108,7 @@ export default function CustomerAccounts() {
         onBack={() => setSelectedCustomer(null)}
         canEdit={canEdit}
         isSuperAdmin={isSuperAdmin(user)}
+        isManager={isManager}
       />
     );
   }

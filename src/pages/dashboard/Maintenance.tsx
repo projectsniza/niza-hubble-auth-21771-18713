@@ -50,6 +50,10 @@ export default function Maintenance() {
   const [submitting, setSubmitting] = useState(false);
   const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<MaintenanceTicket | null>(null);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [closureNotes, setClosureNotes] = useState('');
+  const [closureFiles, setClosureFiles] = useState<File[]>([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   
   // Use centralized org/branch data
   const { organizations, branches } = useOrgBranch();
@@ -105,7 +109,12 @@ export default function Maintenance() {
 
       // Filter based on role and access level
       if (user.role === 'manager') {
-        query = query.eq('reported_by', user.id);
+        // Managers see all tickets in their branch (so they can act on them)
+        if (user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        } else {
+          query = query.eq('reported_by', user.id);
+        }
       } else if (user.role === 'hr') {
         // HR scoped by org/branch if assigned, otherwise full access
         if (user.organizationId && user.branchId) {
@@ -268,6 +277,54 @@ export default function Maintenance() {
     }
   };
 
+  const handleResolveTicket = async () => {
+    if (!viewingTicket || !user) return;
+    if (closureFiles.length === 0) {
+      toast({
+        title: "Attachment Required",
+        description: "Please upload at least one file as proof of resolution.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUpdatingStatus(true);
+    try {
+      const uploaded: any[] = [];
+      for (const file of closureFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `maintenance/${user.id}/closure/${fileName}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(filePath, file);
+        if (upErr) throw upErr;
+        uploaded.push({ name: file.name, path: filePath, size: file.size, type: file.type });
+      }
+
+      const { error } = await supabase
+        .from('maintenance_tickets')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          closure_attachments: uploaded as any,
+          closure_notes: closureNotes || null,
+          closed_by: user.id,
+        } as any)
+        .eq('id', viewingTicket.id);
+      if (error) throw error;
+
+      toast({ title: "Resolved", description: "Ticket marked as resolved." });
+      setResolveOpen(false);
+      setClosureFiles([]);
+      setClosureNotes('');
+      setViewingTicket(null);
+      fetchTickets();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to resolve ticket';
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handleDownloadImage = async (filePath: string, fileName: string) => {
     try {
       const { data, error } = await supabase.storage
@@ -378,7 +435,7 @@ export default function Maintenance() {
   }), [tickets, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateTicket = user?.role === 'manager' || user?.role === 'hr' || user?.role === 'super_admin';
-  const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr';
+  const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
@@ -726,9 +783,32 @@ export default function Maintenance() {
                       Mark In Progress
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => handleUpdateStatus(viewingTicket.id, 'resolved')}>
+                  <Button size="sm" variant="outline" onClick={() => { setClosureFiles([]); setClosureNotes(''); setResolveOpen(true); }}>
                     Mark Resolved
                   </Button>
+                </div>
+              )}
+
+              {/* Show closure attachments if resolved */}
+              {viewingTicket.status === 'resolved' && Array.isArray((viewingTicket as any).closure_attachments) && (viewingTicket as any).closure_attachments.length > 0 && (
+                <div className="pt-4 border-t">
+                  <Label className="text-muted-foreground">Resolution Evidence</Label>
+                  {(viewingTicket as any).closure_notes && (
+                    <p className="text-sm mt-1 mb-2">{(viewingTicket as any).closure_notes}</p>
+                  )}
+                  <div className="space-y-2 mt-2">
+                    {(viewingTicket as any).closure_attachments.map((file: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="text-sm">{file.name}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDownloadImage(file.path, file.name)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -746,6 +826,65 @@ export default function Maintenance() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Resolve with attachments dialog */}
+      <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mark Ticket as Resolved</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Please attach proof of resolution (photos, invoices, reports) before closing this ticket.
+            </p>
+            <div className="space-y-2">
+              <Label>Closure Notes</Label>
+              <Textarea
+                value={closureNotes}
+                onChange={(e) => setClosureNotes(e.target.value)}
+                placeholder="Describe how the issue was resolved..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Evidence Files <span className="text-destructive">*</span></Label>
+              <label htmlFor="closure-files" className="cursor-pointer">
+                <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors w-fit">
+                  <Upload className="h-4 w-4" />
+                  <span className="text-sm">Upload Files</span>
+                </div>
+                <input
+                  id="closure-files"
+                  type="file"
+                  multiple
+                  accept="*/*"
+                  onChange={(e) => setClosureFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                  className="hidden"
+                />
+              </label>
+              {closureFiles.length > 0 && (
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {closureFiles.map((f, idx) => (
+                    <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">
+                      <ImageIcon className="h-3 w-3" />
+                      <span className="max-w-[140px] truncate">{f.name}</span>
+                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setClosureFiles(prev => prev.filter((_, i) => i !== idx))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setResolveOpen(false)}>Cancel</Button>
+              <Button onClick={handleResolveTicket} disabled={updatingStatus || closureFiles.length === 0}>
+                {updatingStatus ? 'Resolving...' : 'Confirm Resolution'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
