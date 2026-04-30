@@ -107,7 +107,9 @@ export default function Attendance() {
     requiresDocument: false
   });
 
-  const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
+  // Re-apply (cancel + reschedule) approved leave
+  const [reapplyLeave, setReapplyLeave] = useState<LeaveRequest | null>(null);
+  const [reapplyForm, setReapplyForm] = useState({ startDate: '', endDate: '', reason: '' });
   const [editLeaveTypeForm, setEditLeaveTypeForm] = useState({
     name: '',
     daysAllowed: '',
