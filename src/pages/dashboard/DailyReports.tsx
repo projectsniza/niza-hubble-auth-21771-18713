@@ -542,6 +542,57 @@ export default function DailyReports() {
                     />
                   </div>
                 )}
+                {reportType === 'invoice' && (
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2">
+                        <Store className="h-4 w-4" /> Tag Vendors (optional)
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!submitBranchId}
+                        onClick={() => setShowVendorManager(true)}
+                      >
+                        <SettingsIcon className="h-3.5 w-3.5 mr-1" />
+                        Manage Vendors
+                      </Button>
+                    </div>
+                    {!submitBranchId ? (
+                      <p className="text-xs text-muted-foreground">Select a branch first to load vendors.</p>
+                    ) : vendorList.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No vendors yet for this branch. Click "Manage Vendors" to add one.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {vendorList.map((v) => {
+                            const checked = selectedVendorIds.includes(v.id);
+                            return (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => toggleVendor(v.id)}
+                                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                                  checked
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background hover:bg-muted border-border'
+                                }`}
+                              >
+                                {v.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedVendorIds.length} vendor(s) selected. Tap to toggle.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Report Date *</Label>
                   <Input 
