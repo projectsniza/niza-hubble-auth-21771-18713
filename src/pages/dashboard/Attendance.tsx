@@ -32,7 +32,11 @@ interface LeaveRequest {
   created_at: string;
   supporting_document_path: string | null;
   supporting_document_name: string | null;
-  employee?: { first_name: string; last_name: string };
+  requires_reapproval?: boolean | null;
+  modification_reason?: string | null;
+  last_modified_by?: string | null;
+  branch_id?: string | null;
+  employee?: { first_name: string; last_name: string; branch_id?: string | null };
   leave_type?: { name: string; requires_supporting_document?: boolean | null };
 }
 
@@ -103,6 +107,10 @@ export default function Attendance() {
     requiresDocument: false
   });
 
+  // Re-apply (cancel + reschedule) approved leave
+  const [reapplyLeave, setReapplyLeave] = useState<LeaveRequest | null>(null);
+  const [reapplyForm, setReapplyForm] = useState({ startDate: '', endDate: '', reason: '' });
+
   const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
   const [editLeaveTypeForm, setEditLeaveTypeForm] = useState({
     name: '',
@@ -152,12 +160,57 @@ export default function Attendance() {
         .update({ 
           status, 
           approved_by: user?.id,
-          approved_at: new Date().toISOString()
+          approved_at: new Date().toISOString(),
+          requires_reapproval: false,
         })
         .eq('id', requestId);
 
       if (error) throw error;
       toast.success(`Leave request ${status}`);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const openReapply = (req: LeaveRequest) => {
+    setReapplyLeave(req);
+    setReapplyForm({ startDate: req.start_date, endDate: req.end_date, reason: '' });
+  };
+
+  const handleSubmitReapply = async () => {
+    if (!reapplyLeave) return;
+    if (!reapplyForm.startDate || !reapplyForm.endDate) {
+      toast.error('Please select new start and end dates');
+      return;
+    }
+    if (!reapplyForm.reason.trim()) {
+      toast.error('Please provide a reason for re-applying');
+      return;
+    }
+    if (new Date(reapplyForm.endDate) < new Date(reapplyForm.startDate)) {
+      toast.error('End date must be on or after start date');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({
+          start_date: reapplyForm.startDate,
+          end_date: reapplyForm.endDate,
+          status: 'pending',
+          requires_reapproval: true,
+          modification_reason: reapplyForm.reason.trim(),
+          last_modified_by: user?.id,
+          approved_by: null,
+          approved_at: null,
+        } as any)
+        .eq('id', reapplyLeave.id);
+
+      if (error) throw error;
+      toast.success('Leave re-submitted for approval');
+      setReapplyLeave(null);
       fetchData();
     } catch (error: any) {
       toast.error(error.message);
@@ -1300,9 +1353,16 @@ export default function Attendance() {
                         <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
                         <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
                         <TableCell>
-                          <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
-                            {req.status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
+                              {req.status}
+                            </Badge>
+                            {req.requires_reapproval && (
+                              <Badge variant="outline" className="border-amber-500 text-amber-600 text-xs">
+                                Re-applied
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {req.status === 'pending' && (user?.role === 'super_admin' || user?.role === 'hr') ? (
@@ -1314,6 +1374,10 @@ export default function Attendance() {
                                 <X className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
+                          ) : req.status === 'approved' && user?.role === 'manager' ? (
+                            <Button size="sm" variant="outline" onClick={() => openReapply(req)}>
+                              Cancel & Re-apply
+                            </Button>
                           ) : req.status === 'pending' ? (
                             <span className="text-xs text-muted-foreground italic">HR / Admin only</span>
                           ) : null}
@@ -1357,11 +1421,23 @@ export default function Attendance() {
                   <Card key={req.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <p className="font-semibold">{req.employee?.first_name} {req.employee?.last_name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold">{req.employee?.first_name} {req.employee?.last_name}</p>
+                          {req.requires_reapproval && (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600 text-xs">
+                              Re-applied (needs re-approval)
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {req.leave_type?.name} • {format(new Date(req.start_date), 'dd MMM')} - {format(new Date(req.end_date), 'dd MMM yyyy')}
                         </p>
                         {req.reason && <p className="text-sm mt-1">{req.reason}</p>}
+                        {req.requires_reapproval && req.modification_reason && (
+                          <p className="text-sm mt-1 text-amber-700 dark:text-amber-400">
+                            <span className="font-medium">Reason for change:</span> {req.modification_reason}
+                          </p>
+                        )}
                         {/* Show supporting document if uploaded */}
                         {req.supporting_document_path && (
                           <div className="flex items-center gap-2 mt-2">
@@ -1732,6 +1808,50 @@ export default function Attendance() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel & Re-apply Leave Dialog */}
+      <Dialog open={!!reapplyLeave} onOpenChange={(open) => !open && setReapplyLeave(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel & Re-apply Leave</DialogTitle>
+          </DialogHeader>
+          {reapplyLeave && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+                <p><span className="font-medium text-foreground">Employee:</span> {reapplyLeave.employee?.first_name} {reapplyLeave.employee?.last_name}</p>
+                <p><span className="font-medium text-foreground">Type:</span> {reapplyLeave.leave_type?.name}</p>
+                <p><span className="font-medium text-foreground">Original dates:</span> {format(new Date(reapplyLeave.start_date), 'dd MMM yyyy')} → {format(new Date(reapplyLeave.end_date), 'dd MMM yyyy')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>New Start Date *</Label>
+                  <Input type="date" value={reapplyForm.startDate} onChange={(e) => setReapplyForm({ ...reapplyForm, startDate: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>New End Date *</Label>
+                  <Input type="date" value={reapplyForm.endDate} onChange={(e) => setReapplyForm({ ...reapplyForm, endDate: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reason for Change *</Label>
+                <Textarea
+                  placeholder="Explain why this approved leave is being cancelled and rescheduled..."
+                  rows={3}
+                  value={reapplyForm.reason}
+                  onChange={(e) => setReapplyForm({ ...reapplyForm, reason: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Submitting will move this leave back to <span className="font-medium">pending</span> and notify HR / Super Admin for re-approval.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReapplyLeave(null)}>Cancel</Button>
+            <Button onClick={handleSubmitReapply}>Submit for Re-approval</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
