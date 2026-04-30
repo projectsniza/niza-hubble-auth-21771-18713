@@ -1353,9 +1353,16 @@ export default function Attendance() {
                         <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
                         <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
                         <TableCell>
-                          <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
-                            {req.status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
+                              {req.status}
+                            </Badge>
+                            {req.requires_reapproval && (
+                              <Badge variant="outline" className="border-amber-500 text-amber-600 text-xs">
+                                Re-applied
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {req.status === 'pending' && (user?.role === 'super_admin' || user?.role === 'hr') ? (
@@ -1367,6 +1374,10 @@ export default function Attendance() {
                                 <X className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
+                          ) : req.status === 'approved' && user?.role === 'manager' ? (
+                            <Button size="sm" variant="outline" onClick={() => openReapply(req)}>
+                              Cancel & Re-apply
+                            </Button>
                           ) : req.status === 'pending' ? (
                             <span className="text-xs text-muted-foreground italic">HR / Admin only</span>
                           ) : null}
