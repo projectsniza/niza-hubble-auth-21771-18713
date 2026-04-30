@@ -109,7 +109,12 @@ export default function Maintenance() {
 
       // Filter based on role and access level
       if (user.role === 'manager') {
-        query = query.eq('reported_by', user.id);
+        // Managers see all tickets in their branch (so they can act on them)
+        if (user.branchId) {
+          query = query.eq('branch_id', user.branchId);
+        } else {
+          query = query.eq('reported_by', user.id);
+        }
       } else if (user.role === 'hr') {
         // HR scoped by org/branch if assigned, otherwise full access
         if (user.organizationId && user.branchId) {
