@@ -475,6 +475,32 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                     </div>
                   )}
 
+                  {/* Pending payment request banner */}
+                  {(() => {
+                    const pendingReq = getRequestForAccount(account.id);
+                    if (!pendingReq) return null;
+                    return (
+                      <div className="mb-3 p-3 rounded-lg border border-amber-500/40 bg-amber-500/5">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="text-sm">
+                            <p className="font-medium text-amber-700">
+                              Payment request pending: {pendingReq.request_type === 'mark_fully_paid' ? 'Mark Fully Paid' : 'Record Payment'} — £{Number(pendingReq.requested_amount).toFixed(2)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Method: {pendingReq.payment_method || 'n/a'} · {pendingReq.payment_date || 'no date'} · {Array.isArray(pendingReq.evidence_files) ? pendingReq.evidence_files.length : 0} file(s)
+                            </p>
+                            {pendingReq.notes && <p className="text-xs mt-1">{pendingReq.notes}</p>}
+                          </div>
+                          {isSuperAdmin && (
+                            <Button size="sm" onClick={() => { setReviewRequest(pendingReq); setReviewAmount(String(pendingReq.requested_amount)); setReviewReason(''); }}>
+                              Review
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {canEdit && (
@@ -523,6 +549,28 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                             <X className="h-3.5 w-3.5 mr-1" />Unmark Paid
                           </Button>
                         )}
+                      </>
+                    )}
+
+                    {/* Manager request flow — only when not super admin/HR and no pending request */}
+                    {isManager && !account.is_paid && !getRequestForAccount(account.id) && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => {
+                          const remaining = account.total_due - Number((account as any).amount_paid || 0);
+                          setRequestOpen({ id: account.id, type: 'record_payment' });
+                          setReqAmount(String(remaining > 0 ? remaining : ''));
+                          setReqNotes(''); setReqFiles([]); setReqMethod('cash'); setReqDate(new Date());
+                        }}>
+                          <PoundSterling className="h-3.5 w-3.5 mr-1" />Request Record Payment
+                        </Button>
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => {
+                          const remaining = account.total_due - Number((account as any).amount_paid || 0);
+                          setRequestOpen({ id: account.id, type: 'mark_fully_paid' });
+                          setReqAmount(String(remaining > 0 ? remaining : account.total_due));
+                          setReqNotes(''); setReqFiles([]); setReqMethod('cash'); setReqDate(new Date());
+                        }}>
+                          <Check className="h-3.5 w-3.5 mr-1" />Request Mark Fully Paid
+                        </Button>
                       </>
                     )}
                   </div>
