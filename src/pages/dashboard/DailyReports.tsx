@@ -265,6 +265,7 @@ export default function DailyReports() {
         report_month: reportMonthYear,
         report_date: reportDate,
         files: uploadedFiles,
+        vendor_ids: finalReportType === 'invoice' ? selectedVendorIds : [],
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
         organization_id: submitOrgId,
