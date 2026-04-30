@@ -44,9 +44,10 @@ interface Props {
   onBack: () => void;
   canEdit: boolean;
   isSuperAdmin?: boolean;
+  isManager?: boolean;
 }
 
-export default function CustomerAccountDetail({ customer, onBack, canEdit, isSuperAdmin }: Props) {
+export default function CustomerAccountDetail({ customer, onBack, canEdit, isSuperAdmin, isManager }: Props) {
   const { user } = useAuth();
   const { monthlyAccounts, isLoading, createMonthly, updateMonthly, addItem, deleteItem, markPaid } = useMonthlyAccounts(customer.id);
   const [editAmountId, setEditAmountId] = useState<string | null>(null);
