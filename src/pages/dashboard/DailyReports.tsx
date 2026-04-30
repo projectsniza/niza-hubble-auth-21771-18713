@@ -994,7 +994,21 @@ export default function DailyReports() {
                   <p>{viewingReport.submitted_at ? format(new Date(viewingReport.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
                 </div>
               </div>
-              
+
+              {Array.isArray(viewingReport.vendor_ids) && viewingReport.vendor_ids.length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground">Tagged Vendors</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {viewingReport.vendor_ids.map((vid: string) => (
+                      <Badge key={vid} variant="outline" className="gap-1">
+                        <Store className="h-3 w-3" />
+                        {vendorMap[vid] || 'Vendor'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label className="text-muted-foreground">Attached Files</Label>
                 <div className="mt-2 space-y-2">
@@ -1019,6 +1033,15 @@ export default function DailyReports() {
           )}
         </DialogContent>
       </Dialog>
+
+      <VendorManagementDialog
+        open={showVendorManager}
+        onOpenChange={setShowVendorManager}
+        branchId={submitBranchId || ''}
+        organizationId={submitOrgId || null}
+        branchName={branches.find(b => b.id === submitBranchId)?.name}
+        onChanged={() => fetchVendorsForBranch(submitBranchId)}
+      />
     </div>
   );
 }
