@@ -160,7 +160,8 @@ export default function Attendance() {
         .update({ 
           status, 
           approved_by: user?.id,
-          approved_at: new Date().toISOString()
+          approved_at: new Date().toISOString(),
+          requires_reapproval: false,
         })
         .eq('id', requestId);
 
