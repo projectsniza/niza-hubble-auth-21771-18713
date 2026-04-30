@@ -783,9 +783,32 @@ export default function Maintenance() {
                       Mark In Progress
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => handleUpdateStatus(viewingTicket.id, 'resolved')}>
+                  <Button size="sm" variant="outline" onClick={() => { setClosureFiles([]); setClosureNotes(''); setResolveOpen(true); }}>
                     Mark Resolved
                   </Button>
+                </div>
+              )}
+
+              {/* Show closure attachments if resolved */}
+              {viewingTicket.status === 'resolved' && Array.isArray((viewingTicket as any).closure_attachments) && (viewingTicket as any).closure_attachments.length > 0 && (
+                <div className="pt-4 border-t">
+                  <Label className="text-muted-foreground">Resolution Evidence</Label>
+                  {(viewingTicket as any).closure_notes && (
+                    <p className="text-sm mt-1 mb-2">{(viewingTicket as any).closure_notes}</p>
+                  )}
+                  <div className="space-y-2 mt-2">
+                    {(viewingTicket as any).closure_attachments.map((file: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="text-sm">{file.name}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDownloadImage(file.path, file.name)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
