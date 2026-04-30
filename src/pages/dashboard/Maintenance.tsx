@@ -277,6 +277,54 @@ export default function Maintenance() {
     }
   };
 
+  const handleResolveTicket = async () => {
+    if (!viewingTicket || !user) return;
+    if (closureFiles.length === 0) {
+      toast({
+        title: "Attachment Required",
+        description: "Please upload at least one file as proof of resolution.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUpdatingStatus(true);
+    try {
+      const uploaded: any[] = [];
+      for (const file of closureFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `maintenance/${user.id}/closure/${fileName}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(filePath, file);
+        if (upErr) throw upErr;
+        uploaded.push({ name: file.name, path: filePath, size: file.size, type: file.type });
+      }
+
+      const { error } = await supabase
+        .from('maintenance_tickets')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          closure_attachments: uploaded as any,
+          closure_notes: closureNotes || null,
+          closed_by: user.id,
+        } as any)
+        .eq('id', viewingTicket.id);
+      if (error) throw error;
+
+      toast({ title: "Resolved", description: "Ticket marked as resolved." });
+      setResolveOpen(false);
+      setClosureFiles([]);
+      setClosureNotes('');
+      setViewingTicket(null);
+      fetchTickets();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to resolve ticket';
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handleDownloadImage = async (filePath: string, fileName: string) => {
     try {
       const { data, error } = await supabase.storage
