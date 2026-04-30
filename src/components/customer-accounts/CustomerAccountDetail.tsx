@@ -158,6 +158,119 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
     }
   };
 
+
+  const handleSubmitRequest = async () => {
+    if (!requestOpen || !user) return;
+    const acc = monthlyAccounts.find(a => a.id === requestOpen.id);
+    if (!acc) return;
+    const amountNum = parseFloat(reqAmount);
+    if (!amountNum || amountNum <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (reqFiles.length === 0) {
+      toast.error('Please upload at least one evidence file (cheque, receipt, etc.)');
+      return;
+    }
+    setSubmittingRequest(true);
+    try {
+      const uploaded: any[] = [];
+      for (const file of reqFiles) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `payment-evidence/${user.id}/${fileName}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(filePath, file);
+        if (upErr) throw upErr;
+        uploaded.push({ name: file.name, path: filePath, size: file.size, type: file.type });
+      }
+
+      const { error } = await supabase.from('payment_approval_requests' as any).insert({
+        monthly_account_id: requestOpen.id,
+        customer_id: customer.id,
+        branch_id: customer.branch_id,
+        organization_id: customer.organization_id,
+        requested_by: user.id,
+        request_type: requestOpen.type,
+        requested_amount: amountNum,
+        payment_method: reqMethod,
+        payment_date: reqDate ? format(reqDate, 'yyyy-MM-dd') : null,
+        evidence_files: uploaded,
+        notes: reqNotes || null,
+        status: 'pending',
+      } as any);
+      if (error) throw error;
+
+      toast.success('Payment request submitted for super admin approval');
+      setRequestOpen(null);
+      setReqAmount(''); setReqNotes(''); setReqFiles([]); setReqMethod('cash');
+      fetchRequests();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit request');
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
+  const handleReviewRequest = async (action: 'approved' | 'rejected') => {
+    if (!reviewRequest || !user) return;
+    setSubmittingReview(true);
+    try {
+      const finalAmount = parseFloat(reviewAmount) || Number(reviewRequest.requested_amount);
+
+      const { error: updErr } = await supabase
+        .from('payment_approval_requests' as any)
+        .update({
+          status: action,
+          approved_amount: action === 'approved' ? finalAmount : null,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+          rejection_reason: action === 'rejected' ? (reviewReason || null) : null,
+        } as any)
+        .eq('id', reviewRequest.id);
+      if (updErr) throw updErr;
+
+      if (action === 'approved') {
+        // Apply payment to the monthly account
+        const acc = monthlyAccounts.find(a => a.id === reviewRequest.monthly_account_id);
+        const dateStr = reviewRequest.payment_date || format(new Date(), 'yyyy-MM-dd');
+
+        // Insert payment record
+        await supabase.from('customer_payments').insert({
+          monthly_account_id: reviewRequest.monthly_account_id,
+          amount_paid: finalAmount,
+          payment_date: dateStr,
+          payment_method: reviewRequest.payment_method || 'other',
+          notes: `Approved from request: ${reviewRequest.notes || ''}`.trim(),
+          recorded_by: user.id,
+        });
+
+        if (acc) {
+          const newAmountPaid = Number((acc as any).amount_paid || 0) + finalAmount;
+          const fullyPaid = reviewRequest.request_type === 'mark_fully_paid' || newAmountPaid >= acc.total_due;
+          await supabase.from('customer_monthly_accounts').update({
+            amount_paid: fullyPaid ? acc.total_due : newAmountPaid,
+            is_paid: fullyPaid,
+            paid_date: fullyPaid ? dateStr : null,
+            marked_paid_by: fullyPaid ? user.id : null,
+          }).eq('id', reviewRequest.monthly_account_id);
+        }
+      }
+
+      toast.success(action === 'approved' ? 'Payment approved & applied' : 'Request rejected');
+      setReviewRequest(null);
+      setReviewAmount('');
+      setReviewReason('');
+      fetchRequests();
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to process request');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const getRequestForAccount = (accId: string) =>
+    pendingRequests.find(r => r.monthly_account_id === accId && r.status === 'pending');
+
   const getStatusColor = (account: MonthlyAccount) => {
     if (account.is_paid) return { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/30', label: 'Paid' };
     const monthDate = new Date(account.month_date);
