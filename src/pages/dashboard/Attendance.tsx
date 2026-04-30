@@ -1421,11 +1421,23 @@ export default function Attendance() {
                   <Card key={req.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <p className="font-semibold">{req.employee?.first_name} {req.employee?.last_name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold">{req.employee?.first_name} {req.employee?.last_name}</p>
+                          {req.requires_reapproval && (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600 text-xs">
+                              Re-applied (needs re-approval)
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {req.leave_type?.name} • {format(new Date(req.start_date), 'dd MMM')} - {format(new Date(req.end_date), 'dd MMM yyyy')}
                         </p>
                         {req.reason && <p className="text-sm mt-1">{req.reason}</p>}
+                        {req.requires_reapproval && req.modification_reason && (
+                          <p className="text-sm mt-1 text-amber-700 dark:text-amber-400">
+                            <span className="font-medium">Reason for change:</span> {req.modification_reason}
+                          </p>
+                        )}
                         {/* Show supporting document if uploaded */}
                         {req.supporting_document_path && (
                           <div className="flex items-center gap-2 mt-2">
