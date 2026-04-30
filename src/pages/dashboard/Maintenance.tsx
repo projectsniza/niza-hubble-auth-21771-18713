@@ -435,7 +435,7 @@ export default function Maintenance() {
   }), [tickets, searchQuery, dateFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateTicket = user?.role === 'manager' || user?.role === 'hr' || user?.role === 'super_admin';
-  const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr';
+  const canUpdateStatus = user?.role === 'super_admin' || user?.role === 'hr' || user?.role === 'manager';
 
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
