@@ -744,11 +744,22 @@ export default function DailyReports() {
                     <FileText className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <h3 className="font-semibold text-foreground">{report.title}</h3>
                       <Badge variant="secondary" className="capitalize">
                         {report.report_type || 'report'}
                       </Badge>
+                      {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
+                        report.vendor_ids.slice(0, 4).map((vid: string) => (
+                          <Badge key={vid} variant="outline" className="gap-1 text-xs">
+                            <Store className="h-3 w-3" />
+                            {vendorMap[vid] || 'Vendor'}
+                          </Badge>
+                        ))
+                      )}
+                      {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 4 && (
+                        <Badge variant="outline" className="text-xs">+{report.vendor_ids.length - 4} more</Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
