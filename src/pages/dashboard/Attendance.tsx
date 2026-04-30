@@ -217,7 +217,7 @@ export default function Attendance() {
     }
   };
 
-
+  const handleAddTimeOff = async () => {
     if (!newLeave.employeeId || !newLeave.leaveTypeId || !newLeave.startDate || !newLeave.endDate) {
       toast.error('Please fill all required fields');
       return;
