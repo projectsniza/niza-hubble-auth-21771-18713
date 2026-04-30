@@ -32,7 +32,11 @@ interface LeaveRequest {
   created_at: string;
   supporting_document_path: string | null;
   supporting_document_name: string | null;
-  employee?: { first_name: string; last_name: string };
+  requires_reapproval?: boolean | null;
+  modification_reason?: string | null;
+  last_modified_by?: string | null;
+  branch_id?: string | null;
+  employee?: { first_name: string; last_name: string; branch_id?: string | null };
   leave_type?: { name: string; requires_supporting_document?: boolean | null };
 }
 
