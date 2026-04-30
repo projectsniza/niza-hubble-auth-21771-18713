@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X, Trash2, FolderOpen, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Plus, Search, FileText, Calendar, User, Upload, Paperclip, Building2, MapPin, Eye, Download, X, Trash2, FolderOpen, ChevronRight, ArrowLeft, Store, Settings as SettingsIcon } from 'lucide-react';
+import VendorManagementDialog, { Vendor } from '@/components/vendors/VendorManagementDialog';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -24,6 +25,7 @@ interface DailyReport {
   title: string;
   report_type: string | null;
   files: any;
+  vendor_ids?: any;
   submitted_by: string;
   submitted_at: string | null;
   created_at: string | null;
@@ -162,6 +164,48 @@ export default function DailyReports() {
   const submitOrgId = user?.organizationId || selectedSubmitOrg;
   const submitBranchId = user?.branchId || selectedSubmitBranch;
 
+  // Vendor selection (only for invoice type)
+  const [vendorList, setVendorList] = useState<Vendor[]>([]);
+  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
+  const [showVendorManager, setShowVendorManager] = useState(false);
+  const [vendorMap, setVendorMap] = useState<Record<string, string>>({});
+
+  const fetchVendorsForBranch = useCallback(async (branchId: string | undefined) => {
+    if (!branchId) { setVendorList([]); return; }
+    const { data } = await supabase
+      .from('vendors')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('name');
+    setVendorList((data as any) || []);
+  }, []);
+
+  useEffect(() => {
+    if (showUploadDialog && reportType === 'invoice' && submitBranchId) {
+      fetchVendorsForBranch(submitBranchId);
+    }
+  }, [showUploadDialog, reportType, submitBranchId, fetchVendorsForBranch]);
+
+  // Build a global vendor map for displaying tags on report cards
+  useEffect(() => {
+    const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean)));
+    if (branchIds.length === 0) { setVendorMap({}); return; }
+    supabase
+      .from('vendors')
+      .select('id,name')
+      .in('branch_id', branchIds)
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data || []).forEach((v: any) => { map[v.id] = v.name; });
+        setVendorMap(map);
+      });
+  }, [reports]);
+
+  const toggleVendor = (id: string) => {
+    setSelectedVendorIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   const handleSubmitReport = async () => {
     if (!reportTitle || files.length === 0) {
       toast({
@@ -221,6 +265,7 @@ export default function DailyReports() {
         report_month: reportMonthYear,
         report_date: reportDate,
         files: uploadedFiles,
+        vendor_ids: finalReportType === 'invoice' ? selectedVendorIds : [],
         submitted_by: user.id,
         submitted_at: new Date().toISOString(),
         organization_id: submitOrgId,
@@ -252,6 +297,7 @@ export default function DailyReports() {
       setCustomTypeName('');
       setReportDate(format(new Date(), 'yyyy-MM-dd'));
       setFiles([]);
+      setSelectedVendorIds([]);
       setShowUploadDialog(false);
       fetchReports();
     } catch (error: unknown) {
@@ -496,6 +542,57 @@ export default function DailyReports() {
                     />
                   </div>
                 )}
+                {reportType === 'invoice' && (
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2">
+                        <Store className="h-4 w-4" /> Tag Vendors (optional)
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!submitBranchId}
+                        onClick={() => setShowVendorManager(true)}
+                      >
+                        <SettingsIcon className="h-3.5 w-3.5 mr-1" />
+                        Manage Vendors
+                      </Button>
+                    </div>
+                    {!submitBranchId ? (
+                      <p className="text-xs text-muted-foreground">Select a branch first to load vendors.</p>
+                    ) : vendorList.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No vendors yet for this branch. Click "Manage Vendors" to add one.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {vendorList.map((v) => {
+                            const checked = selectedVendorIds.includes(v.id);
+                            return (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => toggleVendor(v.id)}
+                                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                                  checked
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background hover:bg-muted border-border'
+                                }`}
+                              >
+                                {v.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedVendorIds.length} vendor(s) selected. Tap to toggle.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Report Date *</Label>
                   <Input 
@@ -647,11 +744,22 @@ export default function DailyReports() {
                     <FileText className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <h3 className="font-semibold text-foreground">{report.title}</h3>
                       <Badge variant="secondary" className="capitalize">
                         {report.report_type || 'report'}
                       </Badge>
+                      {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
+                        report.vendor_ids.slice(0, 4).map((vid: string) => (
+                          <Badge key={vid} variant="outline" className="gap-1 text-xs">
+                            <Store className="h-3 w-3" />
+                            {vendorMap[vid] || 'Vendor'}
+                          </Badge>
+                        ))
+                      )}
+                      {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 4 && (
+                        <Badge variant="outline" className="text-xs">+{report.vendor_ids.length - 4} more</Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
@@ -886,7 +994,21 @@ export default function DailyReports() {
                   <p>{viewingReport.submitted_at ? format(new Date(viewingReport.submitted_at), 'dd/MM/yyyy HH:mm') : 'N/A'}</p>
                 </div>
               </div>
-              
+
+              {Array.isArray(viewingReport.vendor_ids) && viewingReport.vendor_ids.length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground">Tagged Vendors</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {viewingReport.vendor_ids.map((vid: string) => (
+                      <Badge key={vid} variant="outline" className="gap-1">
+                        <Store className="h-3 w-3" />
+                        {vendorMap[vid] || 'Vendor'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label className="text-muted-foreground">Attached Files</Label>
                 <div className="mt-2 space-y-2">
@@ -911,6 +1033,15 @@ export default function DailyReports() {
           )}
         </DialogContent>
       </Dialog>
+
+      <VendorManagementDialog
+        open={showVendorManager}
+        onOpenChange={setShowVendorManager}
+        branchId={submitBranchId || ''}
+        organizationId={submitOrgId || null}
+        branchName={branches.find(b => b.id === submitBranchId)?.name}
+        onChanged={() => fetchVendorsForBranch(submitBranchId)}
+      />
     </div>
   );
 }
