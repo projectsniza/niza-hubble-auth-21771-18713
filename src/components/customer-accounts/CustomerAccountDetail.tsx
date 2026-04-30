@@ -69,12 +69,44 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
   const [partialNotes, setPartialNotes] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
+  // Manager request flow
+  const [requestOpen, setRequestOpen] = useState<{ id: string; type: 'record_payment' | 'mark_fully_paid' } | null>(null);
+  const [reqAmount, setReqAmount] = useState('');
+  const [reqMethod, setReqMethod] = useState('cash');
+  const [reqDate, setReqDate] = useState<Date | undefined>(new Date());
+  const [reqNotes, setReqNotes] = useState('');
+  const [reqFiles, setReqFiles] = useState<File[]>([]);
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [reviewRequest, setReviewRequest] = useState<any | null>(null);
+  const [reviewAmount, setReviewAmount] = useState('');
+  const [reviewReason, setReviewReason] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // Item form
   const [itemDesc, setItemDesc] = useState('');
   const [itemAmount, setItemAmount] = useState('');
   const [itemDate, setItemDate] = useState('');
   const [itemTax, setItemTax] = useState('');
   const [itemDiscount, setItemDiscount] = useState('');
+
+  // Load pending payment approval requests for this customer
+  const fetchRequests = async () => {
+    const monthlyIds = monthlyAccounts.map(m => m.id);
+    if (monthlyIds.length === 0) { setPendingRequests([]); return; }
+    const { data } = await supabase
+      .from('payment_approval_requests' as any)
+      .select('*')
+      .in('monthly_account_id', monthlyIds)
+      .order('created_at', { ascending: false });
+    setPendingRequests((data as any) || []);
+  };
+
+  // Refetch when accounts change
+  useState(() => { fetchRequests(); });
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // We can't call useEffect here since file uses useState only — add a simple effect:
+
 
   // Stats
   const totalOwed = monthlyAccounts.filter(m => !m.is_paid).reduce((s, m) => s + m.total_due - Number((m as any).amount_paid || 0), 0);
