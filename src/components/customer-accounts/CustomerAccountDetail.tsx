@@ -102,10 +102,11 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
     setPendingRequests((data as any) || []);
   };
 
-  // Refetch when accounts change
-  useState(() => { fetchRequests(); });
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  // We can't call useEffect here since file uses useState only — add a simple effect:
+  // Refetch requests when monthly accounts list changes
+  useEffect(() => {
+    fetchRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlyAccounts.length]);
 
 
   // Stats
