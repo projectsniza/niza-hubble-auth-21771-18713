@@ -720,6 +720,153 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Manager Payment Request Dialog */}
+      <Dialog open={!!requestOpen} onOpenChange={() => setRequestOpen(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {requestOpen?.type === 'mark_fully_paid' ? 'Request — Mark Fully Paid' : 'Request — Record Payment'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Upload payment evidence (cheque image, bank receipt, etc.). Super admin must approve before this is recorded.
+            </p>
+            <div>
+              <Label>Amount (£) *</Label>
+              <Input type="number" step="0.01" min="0.01" value={reqAmount} onChange={e => setReqAmount(e.target.value)} placeholder="0.00" />
+            </div>
+            <div>
+              <Label>Payment Method</Label>
+              <Select value={reqMethod} onValueChange={setReqMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Payment Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reqDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {reqDate ? format(reqDate, 'dd MMM yyyy') : 'Pick a date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={reqDate} onSelect={setReqDate} className={cn("p-3 pointer-events-auto")} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div>
+              <Label>Evidence Files *</Label>
+              <label htmlFor="req-files" className="cursor-pointer block">
+                <div className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors w-fit">
+                  <Plus className="h-4 w-4" />
+                  <span className="text-sm">Upload Files</span>
+                </div>
+                <input
+                  id="req-files"
+                  type="file"
+                  multiple
+                  accept="*/*"
+                  onChange={(e) => setReqFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                  className="hidden"
+                />
+              </label>
+              {reqFiles.length > 0 && (
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {reqFiles.map((f, idx) => (
+                    <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs">
+                      <span className="max-w-[140px] truncate">{f.name}</span>
+                      <Button variant="ghost" size="sm" className="h-4 w-4 p-0" onClick={() => setReqFiles(prev => prev.filter((_, i) => i !== idx))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={reqNotes} onChange={e => setReqNotes(e.target.value)} rows={2} placeholder="Optional context for the super admin" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRequestOpen(null)}>Cancel</Button>
+            <Button onClick={handleSubmitRequest} disabled={submittingRequest || !reqAmount || reqFiles.length === 0}>
+              {submittingRequest ? 'Submitting...' : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Super Admin Review Dialog */}
+      <Dialog open={!!reviewRequest} onOpenChange={() => setReviewRequest(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review Payment Request</DialogTitle>
+          </DialogHeader>
+          {reviewRequest && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <div className="flex justify-between"><span>Type:</span><span className="font-medium">{reviewRequest.request_type === 'mark_fully_paid' ? 'Mark Fully Paid' : 'Record Payment'}</span></div>
+                <div className="flex justify-between"><span>Requested Amount:</span><span className="font-medium">£{Number(reviewRequest.requested_amount).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span>Method:</span><span>{reviewRequest.payment_method || 'n/a'}</span></div>
+                <div className="flex justify-between"><span>Date:</span><span>{reviewRequest.payment_date || 'n/a'}</span></div>
+                {reviewRequest.notes && <div className="pt-1 border-t mt-1"><span className="text-muted-foreground">Notes: </span>{reviewRequest.notes}</div>}
+              </div>
+
+              {Array.isArray(reviewRequest.evidence_files) && reviewRequest.evidence_files.length > 0 && (
+                <div>
+                  <Label>Evidence</Label>
+                  <div className="space-y-1 mt-1">
+                    {reviewRequest.evidence_files.map((f: any, idx: number) => (
+                      <Button
+                        key={idx}
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={async () => {
+                          const { data } = await supabase.storage.from('documents').createSignedUrl(f.path, 3600);
+                          if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                        }}
+                      >
+                        <Package className="h-3.5 w-3.5 mr-2" />{f.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label>Approved Amount (£) — editable</Label>
+                <Input type="number" step="0.01" value={reviewAmount} onChange={e => setReviewAmount(e.target.value)} />
+              </div>
+
+              <div>
+                <Label>Rejection Reason (only if rejecting)</Label>
+                <Textarea value={reviewReason} onChange={e => setReviewReason(e.target.value)} rows={2} placeholder="Optional" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewRequest(null)} disabled={submittingReview}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleReviewRequest('rejected')} disabled={submittingReview}>
+              Reject
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleReviewRequest('approved')} disabled={submittingReview}>
+              {submittingReview ? 'Processing...' : 'Approve & Apply'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
