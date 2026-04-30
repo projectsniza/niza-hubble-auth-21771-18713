@@ -164,6 +164,48 @@ export default function DailyReports() {
   const submitOrgId = user?.organizationId || selectedSubmitOrg;
   const submitBranchId = user?.branchId || selectedSubmitBranch;
 
+  // Vendor selection (only for invoice type)
+  const [vendorList, setVendorList] = useState<Vendor[]>([]);
+  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
+  const [showVendorManager, setShowVendorManager] = useState(false);
+  const [vendorMap, setVendorMap] = useState<Record<string, string>>({});
+
+  const fetchVendorsForBranch = useCallback(async (branchId: string | undefined) => {
+    if (!branchId) { setVendorList([]); return; }
+    const { data } = await supabase
+      .from('vendors')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('name');
+    setVendorList((data as any) || []);
+  }, []);
+
+  useEffect(() => {
+    if (showUploadDialog && reportType === 'invoice' && submitBranchId) {
+      fetchVendorsForBranch(submitBranchId);
+    }
+  }, [showUploadDialog, reportType, submitBranchId, fetchVendorsForBranch]);
+
+  // Build a global vendor map for displaying tags on report cards
+  useEffect(() => {
+    const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean)));
+    if (branchIds.length === 0) { setVendorMap({}); return; }
+    supabase
+      .from('vendors')
+      .select('id,name')
+      .in('branch_id', branchIds)
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data || []).forEach((v: any) => { map[v.id] = v.name; });
+        setVendorMap(map);
+      });
+  }, [reports]);
+
+  const toggleVendor = (id: string) => {
+    setSelectedVendorIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   const handleSubmitReport = async () => {
     if (!reportTitle || files.length === 0) {
       toast({
