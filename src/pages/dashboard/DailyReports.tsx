@@ -25,6 +25,7 @@ interface DailyReport {
   title: string;
   report_type: string | null;
   files: any;
+  vendor_ids?: any;
   submitted_by: string;
   submitted_at: string | null;
   created_at: string | null;
