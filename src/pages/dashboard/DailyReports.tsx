@@ -297,6 +297,7 @@ export default function DailyReports() {
       setCustomTypeName('');
       setReportDate(format(new Date(), 'yyyy-MM-dd'));
       setFiles([]);
+      setSelectedVendorIds([]);
       setShowUploadDialog(false);
       fetchReports();
     } catch (error: unknown) {
