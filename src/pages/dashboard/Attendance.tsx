@@ -173,7 +173,51 @@ export default function Attendance() {
     }
   };
 
-  const handleAddTimeOff = async () => {
+  const openReapply = (req: LeaveRequest) => {
+    setReapplyLeave(req);
+    setReapplyForm({ startDate: req.start_date, endDate: req.end_date, reason: '' });
+  };
+
+  const handleSubmitReapply = async () => {
+    if (!reapplyLeave) return;
+    if (!reapplyForm.startDate || !reapplyForm.endDate) {
+      toast.error('Please select new start and end dates');
+      return;
+    }
+    if (!reapplyForm.reason.trim()) {
+      toast.error('Please provide a reason for re-applying');
+      return;
+    }
+    if (new Date(reapplyForm.endDate) < new Date(reapplyForm.startDate)) {
+      toast.error('End date must be on or after start date');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({
+          start_date: reapplyForm.startDate,
+          end_date: reapplyForm.endDate,
+          status: 'pending',
+          requires_reapproval: true,
+          modification_reason: reapplyForm.reason.trim(),
+          last_modified_by: user?.id,
+          approved_by: null,
+          approved_at: null,
+        } as any)
+        .eq('id', reapplyLeave.id);
+
+      if (error) throw error;
+      toast.success('Leave re-submitted for approval');
+      setReapplyLeave(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+
     if (!newLeave.employeeId || !newLeave.leaveTypeId || !newLeave.startDate || !newLeave.endDate) {
       toast.error('Please fill all required fields');
       return;
