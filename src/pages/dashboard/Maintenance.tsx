@@ -50,6 +50,10 @@ export default function Maintenance() {
   const [submitting, setSubmitting] = useState(false);
   const [viewingTicket, setViewingTicket] = useState<MaintenanceTicket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<MaintenanceTicket | null>(null);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [closureNotes, setClosureNotes] = useState('');
+  const [closureFiles, setClosureFiles] = useState<File[]>([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   
   // Use centralized org/branch data
   const { organizations, branches } = useOrgBranch();
