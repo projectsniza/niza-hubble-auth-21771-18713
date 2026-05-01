@@ -211,7 +211,7 @@ export default function Lottery() {
         .gte('report_date', startDate)
         .lte('report_date', endDate);
       if (error) throw error;
-      return (data || []) as Array<{ id: string; branch_id: string; report_date: string; till_report_amount: number }>;
+      return ((data || []) as unknown) as Array<{ id: string; branch_id: string; report_date: string; till_report_amount: number }>;
     },
     enabled: filteredBranchIds.length > 0,
   });
