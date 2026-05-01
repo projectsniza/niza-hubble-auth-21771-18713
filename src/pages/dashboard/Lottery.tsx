@@ -197,6 +197,81 @@ export default function Lottery() {
     enabled: !!effectiveBranchId,
   });
 
+  // Fetch till reports (Total Instant Lottery Sales as per Day Report) for the month
+  const { data: tillReports = [] } = useQuery({
+    queryKey: ['lottery-till-reports', filteredBranchIds, format(selectedMonth, 'yyyy-MM')],
+    queryFn: async () => {
+      if (filteredBranchIds.length === 0) return [];
+      const startDate = format(selectedMonth, 'yyyy-MM-01');
+      const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
+      const { data, error } = await supabase
+        .from('lottery_daily_till_reports' as any)
+        .select('*')
+        .in('branch_id', filteredBranchIds)
+        .gte('report_date', startDate)
+        .lte('report_date', endDate);
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; branch_id: string; report_date: string; till_report_amount: number }>;
+    },
+    enabled: filteredBranchIds.length > 0,
+  });
+
+  // Map till reports by date (sums across branches when viewing multiple)
+  const tillReportByDate = useMemo(() => {
+    const map: { [date: string]: number } = {};
+    tillReports.forEach(r => {
+      map[r.report_date] = (map[r.report_date] || 0) + Number(r.till_report_amount || 0);
+    });
+    return map;
+  }, [tillReports]);
+
+  // Local edits for till reports (before save)
+  const [editingTillReports, setEditingTillReports] = useState<{ [date: string]: string }>({});
+
+  const getTillValue = useCallback((dateStr: string): number | null => {
+    if (editingTillReports[dateStr] !== undefined) {
+      const v = parseFloat(editingTillReports[dateStr]);
+      return isNaN(v) ? null : v;
+    }
+    return tillReportByDate[dateStr] ?? null;
+  }, [editingTillReports, tillReportByDate]);
+
+  const saveTillReportMutation = useMutation({
+    mutationFn: async ({ date, amount }: { date: string; amount: number }) => {
+      if (!effectiveBranchId) throw new Error('Select a branch first');
+      const { error } = await supabase
+        .from('lottery_daily_till_reports' as any)
+        .upsert({
+          branch_id: effectiveBranchId,
+          report_date: date,
+          till_report_amount: amount,
+          updated_by: user?.id,
+          created_by: user?.id,
+        }, { onConflict: 'branch_id,report_date' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lottery-till-reports'] });
+    },
+    onError: (e) => toast.error('Failed to save till report: ' + (e as Error).message),
+  });
+
+  const handleTillEdit = (dateStr: string, value: string) => {
+    setEditingTillReports(prev => ({ ...prev, [dateStr]: value }));
+  };
+
+  const handleTillBlur = async (dateStr: string) => {
+    const raw = editingTillReports[dateStr];
+    if (raw === undefined) return;
+    const amount = parseFloat(raw);
+    if (isNaN(amount)) {
+      setEditingTillReports(prev => { const n = { ...prev }; delete n[dateStr]; return n; });
+      return;
+    }
+    await saveTillReportMutation.mutateAsync({ date: dateStr, amount });
+    setEditingTillReports(prev => { const n = { ...prev }; delete n[dateStr]; return n; });
+  };
+
   // Organize records by game and date
   const recordsByGameAndDate = useMemo(() => {
     const map: { [gameId: string]: { [date: string]: DailyRecord } } = {};
