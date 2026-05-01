@@ -197,6 +197,81 @@ export default function Lottery() {
     enabled: !!effectiveBranchId,
   });
 
+  // Fetch till reports (Total Instant Lottery Sales as per Day Report) for the month
+  const { data: tillReports = [] } = useQuery({
+    queryKey: ['lottery-till-reports', filteredBranchIds, format(selectedMonth, 'yyyy-MM')],
+    queryFn: async () => {
+      if (filteredBranchIds.length === 0) return [];
+      const startDate = format(selectedMonth, 'yyyy-MM-01');
+      const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
+      const { data, error } = await supabase
+        .from('lottery_daily_till_reports' as any)
+        .select('*')
+        .in('branch_id', filteredBranchIds)
+        .gte('report_date', startDate)
+        .lte('report_date', endDate);
+      if (error) throw error;
+      return ((data || []) as unknown) as Array<{ id: string; branch_id: string; report_date: string; till_report_amount: number }>;
+    },
+    enabled: filteredBranchIds.length > 0,
+  });
+
+  // Map till reports by date (sums across branches when viewing multiple)
+  const tillReportByDate = useMemo(() => {
+    const map: { [date: string]: number } = {};
+    tillReports.forEach(r => {
+      map[r.report_date] = (map[r.report_date] || 0) + Number(r.till_report_amount || 0);
+    });
+    return map;
+  }, [tillReports]);
+
+  // Local edits for till reports (before save)
+  const [editingTillReports, setEditingTillReports] = useState<{ [date: string]: string }>({});
+
+  const getTillValue = useCallback((dateStr: string): number | null => {
+    if (editingTillReports[dateStr] !== undefined) {
+      const v = parseFloat(editingTillReports[dateStr]);
+      return isNaN(v) ? null : v;
+    }
+    return tillReportByDate[dateStr] ?? null;
+  }, [editingTillReports, tillReportByDate]);
+
+  const saveTillReportMutation = useMutation({
+    mutationFn: async ({ date, amount }: { date: string; amount: number }) => {
+      if (!effectiveBranchId) throw new Error('Select a branch first');
+      const { error } = await supabase
+        .from('lottery_daily_till_reports' as any)
+        .upsert({
+          branch_id: effectiveBranchId,
+          report_date: date,
+          till_report_amount: amount,
+          updated_by: user?.id,
+          created_by: user?.id,
+        }, { onConflict: 'branch_id,report_date' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lottery-till-reports'] });
+    },
+    onError: (e) => toast.error('Failed to save till report: ' + (e as Error).message),
+  });
+
+  const handleTillEdit = (dateStr: string, value: string) => {
+    setEditingTillReports(prev => ({ ...prev, [dateStr]: value }));
+  };
+
+  const handleTillBlur = async (dateStr: string) => {
+    const raw = editingTillReports[dateStr];
+    if (raw === undefined) return;
+    const amount = parseFloat(raw);
+    if (isNaN(amount)) {
+      setEditingTillReports(prev => { const n = { ...prev }; delete n[dateStr]; return n; });
+      return;
+    }
+    await saveTillReportMutation.mutateAsync({ date: dateStr, amount });
+    setEditingTillReports(prev => { const n = { ...prev }; delete n[dateStr]; return n; });
+  };
+
   // Organize records by game and date
   const recordsByGameAndDate = useMemo(() => {
     const map: { [gameId: string]: { [date: string]: DailyRecord } } = {};
@@ -657,11 +732,35 @@ export default function Lottery() {
       lines.push('');
     });
     
-    // Summary
+    // Summary - Total Instant Lottery Sales (with daily values so they appear in Excel)
     lines.push('');
-    lines.push(['', 'Total Instant Lottery Sales', '', '', ...Array(daysInMonth.length).fill(''), `£${grandTotals.totalSalesValue.toFixed(2)}`].join(','));
+    const dailySalesValues = daysInMonth.map(day => {
+      const v = dailyTotals[format(day, 'yyyy-MM-dd')]?.salesValue || 0;
+      return v > 0 ? `£${v.toFixed(2)}` : '-';
+    });
+    lines.push(['', 'Total Instant Lottery Sales', '', '', ...dailySalesValues, `£${grandTotals.totalSalesValue.toFixed(2)}`].join(','));
+
+    // Total Instant Lottery Sales as per Day Report (manual till entry)
+    const dailyTillValues = daysInMonth.map(day => {
+      const v = getTillValue(format(day, 'yyyy-MM-dd'));
+      return v !== null ? `£${v.toFixed(2)}` : '-';
+    });
+    const totalTill = daysInMonth.reduce((s, d) => s + (getTillValue(format(d, 'yyyy-MM-dd')) ?? 0), 0);
+    lines.push(['', 'Total Instant Lottery Sales as per Day Report', '', '', ...dailyTillValues, `£${totalTill.toFixed(2)}`].join(','));
+
+    // Sales Difference (System - Till Report)
+    const dailyDiffValues = daysInMonth.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const sys = dailyTotals[dateStr]?.salesValue || 0;
+      const till = getTillValue(dateStr);
+      if (till === null) return '-';
+      const d = sys - till;
+      return Math.abs(d) < 0.01 ? '0' : `£${d.toFixed(2)}`;
+    });
+    const totalDiff = grandTotals.totalSalesValue - totalTill;
+    lines.push(['', 'Sales Difference (System - Till Report)', '', '', ...dailyDiffValues, `£${totalDiff.toFixed(2)}`].join(','));
     lines.push('');
-    
+
     // Daily closing stocks
     const dailyClosingStocks = daysInMonth.map(day => dailyTotals[format(day, 'yyyy-MM-dd')]?.closingStock || '-');
     lines.push(['', 'Closing Instant Lottery Stock -- As per the Working', '', '', ...dailyClosingStocks, grandTotals.totalClosingStock].join(','));
@@ -684,7 +783,7 @@ export default function Lottery() {
       return '-';
     });
     lines.push(['', 'Differences', '', '', ...differenceValues, ''].join(','));
-    
+
     const csvContent = lines.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1196,7 +1295,73 @@ export default function Lottery() {
                                     £{grandTotals.totalSalesValue.toFixed(2)}
                                   </td>
                                 </tr>
-                                
+
+                                {/* Total Instant Lottery Sales as per Day Report (manual till entry) */}
+                                <tr className="border-b bg-purple-50/50 dark:bg-purple-950/20">
+                                  <td className="sticky left-0 z-10 bg-purple-50/50 dark:bg-purple-950/20 px-3 py-2 font-semibold border-r">
+                                    Total Instant Lottery Sales as per Day Report
+                                  </td>
+                                  {daysInMonth.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    const editedVal = editingTillReports[dateStr];
+                                    const savedVal = tillReportByDate[dateStr];
+                                    const displayVal = editedVal !== undefined ? editedVal : (savedVal !== undefined ? savedVal.toString() : '');
+                                    return (
+                                      <td key={dateStr} className="px-1 py-1 text-center border-r">
+                                        {isSingleBranchSelected ? (
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={displayVal}
+                                            onChange={(e) => handleTillEdit(dateStr, e.target.value)}
+                                            onBlur={() => handleTillBlur(dateStr)}
+                                            placeholder="-"
+                                            className="h-8 text-center text-xs px-1 font-medium text-purple-700 dark:text-purple-400"
+                                          />
+                                        ) : (
+                                          <span className="text-purple-700 dark:text-purple-400 font-medium">
+                                            {savedVal !== undefined ? `£${savedVal.toFixed(2)}` : '-'}
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold text-purple-700 dark:text-purple-400 bg-purple-100/50">
+                                    £{daysInMonth.reduce((sum, day) => sum + (getTillValue(format(day, 'yyyy-MM-dd')) ?? 0), 0).toFixed(2)}
+                                  </td>
+                                </tr>
+
+                                {/* Sales Difference (System vs Till Report) */}
+                                <tr className="border-b bg-rose-50/50 dark:bg-rose-950/20">
+                                  <td className="sticky left-0 z-10 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2 font-semibold border-r">
+                                    Sales Difference (System − Till Report)
+                                  </td>
+                                  {daysInMonth.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    const sys = dailyTotals[dateStr]?.salesValue || 0;
+                                    const till = getTillValue(dateStr);
+                                    if (till === null) {
+                                      return <td key={dateStr} className="px-1 py-2 text-center text-muted-foreground border-r">-</td>;
+                                    }
+                                    const diff = sys - till;
+                                    const ok = Math.abs(diff) < 0.01;
+                                    return (
+                                      <td key={dateStr} className={`px-1 py-2 text-center font-medium border-r ${ok ? 'text-green-600' : 'text-destructive'}`}>
+                                        {ok ? '✓' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold bg-rose-100/50">
+                                    {(() => {
+                                      const totalTill = daysInMonth.reduce((sum, day) => sum + (getTillValue(format(day, 'yyyy-MM-dd')) ?? 0), 0);
+                                      const diff = grandTotals.totalSalesValue - totalTill;
+                                      const ok = Math.abs(diff) < 0.01;
+                                      return <span className={ok ? 'text-green-600' : 'text-destructive'}>{ok ? '✓' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}</span>;
+                                    })()}
+                                  </td>
+                                </tr>
+
                                 {/* Closing Stock - Working */}
                                 <tr className="border-b">
                                   <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium border-r">
@@ -1394,7 +1559,7 @@ export default function Lottery() {
                 ) : (
                   <div className="space-y-4">
                     {/* Daily Summary Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                       {(() => {
                         const dateStr = format(selectedDate, 'yyyy-MM-dd');
                         let totalSales = 0;
@@ -1406,10 +1571,16 @@ export default function Lottery() {
                           if (calc.ticketsSold) totalSold += calc.ticketsSold;
                           if (calc.stockEnd) totalStock += calc.stockEnd;
                         });
+                        const tillVal = getTillValue(dateStr);
+                        const editedTill = editingTillReports[dateStr];
+                        const savedTill = tillReportByDate[dateStr];
+                        const tillDisplay = editedTill !== undefined ? editedTill : (savedTill !== undefined ? savedTill.toString() : '');
+                        const diff = tillVal !== null ? totalSales - tillVal : null;
+                        const diffOk = diff !== null && Math.abs(diff) < 0.01;
                         return (
                           <>
                             <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200/50">
-                              <p className="text-sm text-green-700 dark:text-green-400 font-medium">Day's Sales</p>
+                              <p className="text-sm text-green-700 dark:text-green-400 font-medium">Day's Sales (System)</p>
                               <p className="text-3xl font-bold text-green-700 dark:text-green-400">£{totalSales.toFixed(2)}</p>
                             </div>
                             <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50">
@@ -1419,6 +1590,33 @@ export default function Lottery() {
                             <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50">
                               <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">Closing Stock</p>
                               <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{totalStock}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/50">
+                              <p className="text-sm text-purple-700 dark:text-purple-400 font-medium">Sales as per Day Report</p>
+                              {isSingleBranchSelected ? (
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={tillDisplay}
+                                  onChange={(e) => handleTillEdit(dateStr, e.target.value)}
+                                  onBlur={() => handleTillBlur(dateStr)}
+                                  placeholder="Enter from till"
+                                  className="mt-1 h-10 text-2xl font-bold text-purple-700 dark:text-purple-400 bg-white/50"
+                                />
+                              ) : (
+                                <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">
+                                  {savedTill !== undefined ? `£${savedTill.toFixed(2)}` : '—'}
+                                </p>
+                              )}
+                            </div>
+                            <div className={`p-4 rounded-xl border ${diff === null ? 'bg-muted/30 border-muted' : diffOk ? 'bg-green-50 dark:bg-green-950/30 border-green-200/50' : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50'}`}>
+                              <p className={`text-sm font-medium ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                                Difference (System − Till)
+                              </p>
+                              <p className={`text-3xl font-bold ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                                {diff === null ? '—' : diffOk ? '✓ Match' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}
+                              </p>
                             </div>
                           </>
                         );
