@@ -732,11 +732,35 @@ export default function Lottery() {
       lines.push('');
     });
     
-    // Summary
+    // Summary - Total Instant Lottery Sales (with daily values so they appear in Excel)
     lines.push('');
-    lines.push(['', 'Total Instant Lottery Sales', '', '', ...Array(daysInMonth.length).fill(''), `£${grandTotals.totalSalesValue.toFixed(2)}`].join(','));
+    const dailySalesValues = daysInMonth.map(day => {
+      const v = dailyTotals[format(day, 'yyyy-MM-dd')]?.salesValue || 0;
+      return v > 0 ? `£${v.toFixed(2)}` : '-';
+    });
+    lines.push(['', 'Total Instant Lottery Sales', '', '', ...dailySalesValues, `£${grandTotals.totalSalesValue.toFixed(2)}`].join(','));
+
+    // Total Instant Lottery Sales as per Day Report (manual till entry)
+    const dailyTillValues = daysInMonth.map(day => {
+      const v = getTillValue(format(day, 'yyyy-MM-dd'));
+      return v !== null ? `£${v.toFixed(2)}` : '-';
+    });
+    const totalTill = daysInMonth.reduce((s, d) => s + (getTillValue(format(d, 'yyyy-MM-dd')) ?? 0), 0);
+    lines.push(['', 'Total Instant Lottery Sales as per Day Report', '', '', ...dailyTillValues, `£${totalTill.toFixed(2)}`].join(','));
+
+    // Sales Difference (System - Till Report)
+    const dailyDiffValues = daysInMonth.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const sys = dailyTotals[dateStr]?.salesValue || 0;
+      const till = getTillValue(dateStr);
+      if (till === null) return '-';
+      const d = sys - till;
+      return Math.abs(d) < 0.01 ? '0' : `£${d.toFixed(2)}`;
+    });
+    const totalDiff = grandTotals.totalSalesValue - totalTill;
+    lines.push(['', 'Sales Difference (System - Till Report)', '', '', ...dailyDiffValues, `£${totalDiff.toFixed(2)}`].join(','));
     lines.push('');
-    
+
     // Daily closing stocks
     const dailyClosingStocks = daysInMonth.map(day => dailyTotals[format(day, 'yyyy-MM-dd')]?.closingStock || '-');
     lines.push(['', 'Closing Instant Lottery Stock -- As per the Working', '', '', ...dailyClosingStocks, grandTotals.totalClosingStock].join(','));
@@ -759,7 +783,7 @@ export default function Lottery() {
       return '-';
     });
     lines.push(['', 'Differences', '', '', ...differenceValues, ''].join(','));
-    
+
     const csvContent = lines.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
