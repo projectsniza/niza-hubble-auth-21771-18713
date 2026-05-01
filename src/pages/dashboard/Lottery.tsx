@@ -1271,7 +1271,73 @@ export default function Lottery() {
                                     £{grandTotals.totalSalesValue.toFixed(2)}
                                   </td>
                                 </tr>
-                                
+
+                                {/* Total Instant Lottery Sales as per Day Report (manual till entry) */}
+                                <tr className="border-b bg-purple-50/50 dark:bg-purple-950/20">
+                                  <td className="sticky left-0 z-10 bg-purple-50/50 dark:bg-purple-950/20 px-3 py-2 font-semibold border-r">
+                                    Total Instant Lottery Sales as per Day Report
+                                  </td>
+                                  {daysInMonth.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    const editedVal = editingTillReports[dateStr];
+                                    const savedVal = tillReportByDate[dateStr];
+                                    const displayVal = editedVal !== undefined ? editedVal : (savedVal !== undefined ? savedVal.toString() : '');
+                                    return (
+                                      <td key={dateStr} className="px-1 py-1 text-center border-r">
+                                        {isSingleBranchSelected ? (
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={displayVal}
+                                            onChange={(e) => handleTillEdit(dateStr, e.target.value)}
+                                            onBlur={() => handleTillBlur(dateStr)}
+                                            placeholder="-"
+                                            className="h-8 text-center text-xs px-1 font-medium text-purple-700 dark:text-purple-400"
+                                          />
+                                        ) : (
+                                          <span className="text-purple-700 dark:text-purple-400 font-medium">
+                                            {savedVal !== undefined ? `£${savedVal.toFixed(2)}` : '-'}
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold text-purple-700 dark:text-purple-400 bg-purple-100/50">
+                                    £{daysInMonth.reduce((sum, day) => sum + (getTillValue(format(day, 'yyyy-MM-dd')) ?? 0), 0).toFixed(2)}
+                                  </td>
+                                </tr>
+
+                                {/* Sales Difference (System vs Till Report) */}
+                                <tr className="border-b bg-rose-50/50 dark:bg-rose-950/20">
+                                  <td className="sticky left-0 z-10 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2 font-semibold border-r">
+                                    Sales Difference (System − Till Report)
+                                  </td>
+                                  {daysInMonth.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    const sys = dailyTotals[dateStr]?.salesValue || 0;
+                                    const till = getTillValue(dateStr);
+                                    if (till === null) {
+                                      return <td key={dateStr} className="px-1 py-2 text-center text-muted-foreground border-r">-</td>;
+                                    }
+                                    const diff = sys - till;
+                                    const ok = Math.abs(diff) < 0.01;
+                                    return (
+                                      <td key={dateStr} className={`px-1 py-2 text-center font-medium border-r ${ok ? 'text-green-600' : 'text-destructive'}`}>
+                                        {ok ? '✓' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-3 py-2 text-center font-bold bg-rose-100/50">
+                                    {(() => {
+                                      const totalTill = daysInMonth.reduce((sum, day) => sum + (getTillValue(format(day, 'yyyy-MM-dd')) ?? 0), 0);
+                                      const diff = grandTotals.totalSalesValue - totalTill;
+                                      const ok = Math.abs(diff) < 0.01;
+                                      return <span className={ok ? 'text-green-600' : 'text-destructive'}>{ok ? '✓' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}</span>;
+                                    })()}
+                                  </td>
+                                </tr>
+
                                 {/* Closing Stock - Working */}
                                 <tr className="border-b">
                                   <td className="sticky left-0 z-10 bg-card px-3 py-2 font-medium border-r">
