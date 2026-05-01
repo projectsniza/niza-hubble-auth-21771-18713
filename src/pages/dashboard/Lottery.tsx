@@ -1535,7 +1535,7 @@ export default function Lottery() {
                 ) : (
                   <div className="space-y-4">
                     {/* Daily Summary Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                       {(() => {
                         const dateStr = format(selectedDate, 'yyyy-MM-dd');
                         let totalSales = 0;
@@ -1547,10 +1547,16 @@ export default function Lottery() {
                           if (calc.ticketsSold) totalSold += calc.ticketsSold;
                           if (calc.stockEnd) totalStock += calc.stockEnd;
                         });
+                        const tillVal = getTillValue(dateStr);
+                        const editedTill = editingTillReports[dateStr];
+                        const savedTill = tillReportByDate[dateStr];
+                        const tillDisplay = editedTill !== undefined ? editedTill : (savedTill !== undefined ? savedTill.toString() : '');
+                        const diff = tillVal !== null ? totalSales - tillVal : null;
+                        const diffOk = diff !== null && Math.abs(diff) < 0.01;
                         return (
                           <>
                             <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/30 border border-green-200/50">
-                              <p className="text-sm text-green-700 dark:text-green-400 font-medium">Day's Sales</p>
+                              <p className="text-sm text-green-700 dark:text-green-400 font-medium">Day's Sales (System)</p>
                               <p className="text-3xl font-bold text-green-700 dark:text-green-400">£{totalSales.toFixed(2)}</p>
                             </div>
                             <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/50">
@@ -1560,6 +1566,33 @@ export default function Lottery() {
                             <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50">
                               <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">Closing Stock</p>
                               <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{totalStock}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/50">
+                              <p className="text-sm text-purple-700 dark:text-purple-400 font-medium">Sales as per Day Report</p>
+                              {isSingleBranchSelected ? (
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={tillDisplay}
+                                  onChange={(e) => handleTillEdit(dateStr, e.target.value)}
+                                  onBlur={() => handleTillBlur(dateStr)}
+                                  placeholder="Enter from till"
+                                  className="mt-1 h-10 text-2xl font-bold text-purple-700 dark:text-purple-400 bg-white/50"
+                                />
+                              ) : (
+                                <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">
+                                  {savedTill !== undefined ? `£${savedTill.toFixed(2)}` : '—'}
+                                </p>
+                              )}
+                            </div>
+                            <div className={`p-4 rounded-xl border ${diff === null ? 'bg-muted/30 border-muted' : diffOk ? 'bg-green-50 dark:bg-green-950/30 border-green-200/50' : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50'}`}>
+                              <p className={`text-sm font-medium ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                                Difference (System − Till)
+                              </p>
+                              <p className={`text-3xl font-bold ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                                {diff === null ? '—' : diffOk ? '✓ Match' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}
+                              </p>
                             </div>
                           </>
                         );
