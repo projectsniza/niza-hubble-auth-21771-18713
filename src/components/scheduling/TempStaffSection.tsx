@@ -168,6 +168,70 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     fetchData();
   };
 
+  // Edit
+  const [editingTemp, setEditingTemp] = useState<TempEmployee | null>(null);
+  const [editForm, setEditForm] = useState({
+    first_name: '', last_name: '', role: '',
+    start_date: '', end_date: '',
+    source_branch_id: '', source_name: '',
+  });
+
+  const openEditTemp = (t: TempEmployee) => {
+    setEditingTemp(t);
+    setEditForm({
+      first_name: t.first_name || '',
+      last_name: t.last_name || '',
+      role: t.role || '',
+      start_date: t.start_date,
+      end_date: t.end_date || '',
+      source_branch_id: t.source_branch_id || (t.source_name ? '__OTHER__' : ''),
+      source_name: t.source_name || '',
+    });
+    fetchBranches();
+  };
+
+  const saveEditTemp = async () => {
+    if (!editingTemp) return;
+    if (!editForm.first_name.trim()) { toast.error('First name is required'); return; }
+    const isOther = editForm.source_branch_id === '__OTHER__';
+    const sourceBranchId = isOther || !editForm.source_branch_id ? null : editForm.source_branch_id;
+    const sourceName = isOther ? (editForm.source_name.trim() || null) : null;
+    if (isOther && !sourceName) { toast.error('Please enter the source name for "Other"'); return; }
+
+    const { error } = await supabase
+      .from('temporary_employees')
+      .update({
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        role: editForm.role.trim() || null,
+        start_date: editForm.start_date,
+        end_date: editForm.end_date || null,
+        source_branch_id: sourceBranchId,
+        source_name: sourceName,
+      })
+      .eq('id', editingTemp.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Temporary employee updated');
+    setEditingTemp(null);
+    fetchData();
+  };
+
+  // Permanent delete (also removes timesheet entries)
+  const deleteTemp = async (temp: TempEmployee) => {
+    const { error: e1 } = await supabase
+      .from('temporary_timesheet_entries')
+      .delete()
+      .eq('temporary_employee_id', temp.id);
+    if (e1) { toast.error(e1.message); return; }
+    const { error: e2 } = await supabase
+      .from('temporary_employees')
+      .delete()
+      .eq('id', temp.id);
+    if (e2) { toast.error(e2.message); return; }
+    toast.success(`Deleted ${temp.first_name}`);
+    fetchData();
+  };
+
   const computeHours = (start: string | null, end: string | null) => {
     if (!start || !end) return 0;
     const [sh, sm] = start.split(':').map(Number);
