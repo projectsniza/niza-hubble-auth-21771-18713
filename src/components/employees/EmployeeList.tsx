@@ -386,7 +386,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                               Deactivate
                             </DropdownMenuItem>
                           )}
-                          {(user?.role === 'super_admin' || user?.role === 'hr' || (user?.role === 'manager' && employee.branch_id === user?.branchId)) && (
+                          {(user?.role === 'super_admin' || user?.role === 'hr') && (
                             <DropdownMenuItem 
                               onClick={() => setDeleteEmployeeId(employee.id)}
                               className="text-destructive focus:text-destructive"
