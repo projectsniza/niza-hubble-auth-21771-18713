@@ -768,14 +768,14 @@ export default function DailyReports() {
                       </Badge>
                       {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
                         report.vendor_ids.slice(0, 4).map((vid: string) => (
-                          <Badge key={vid} variant="outline" className="gap-1 text-xs">
+                          <Badge key={vid} className="gap-1 text-xs bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
                             <Store className="h-3 w-3" />
                             {vendorMap[vid] || 'Vendor'}
                           </Badge>
                         ))
                       )}
                       {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 4 && (
-                        <Badge variant="outline" className="text-xs">+{report.vendor_ids.length - 4} more</Badge>
+                        <Badge className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">+{report.vendor_ids.length - 4} more</Badge>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
