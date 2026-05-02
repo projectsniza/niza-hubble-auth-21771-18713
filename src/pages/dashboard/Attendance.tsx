@@ -1037,7 +1037,7 @@ export default function Attendance() {
   return (
     <div className="p-8 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Calendar & Leave Management</h1>
+        <h1 className="text-3xl font-bold">Holiday Management</h1>
         {user?.role === 'super_admin' && (
           <Button variant="outline" onClick={() => setShowLeaveTypeSettings(true)}>
             <Settings className="h-4 w-4 mr-2" />
