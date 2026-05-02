@@ -7,7 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, UserPlus, Trash2, X, Lock, Calendar, Building2 } from 'lucide-react';
+import { Plus, UserPlus, Trash2, X, Lock, Calendar, Building2, Edit2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -161,6 +165,70 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
       .eq('id', temp.id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Ended ${temp.first_name}'s temp engagement`);
+    fetchData();
+  };
+
+  // Edit
+  const [editingTemp, setEditingTemp] = useState<TempEmployee | null>(null);
+  const [editForm, setEditForm] = useState({
+    first_name: '', last_name: '', role: '',
+    start_date: '', end_date: '',
+    source_branch_id: '', source_name: '',
+  });
+
+  const openEditTemp = (t: TempEmployee) => {
+    setEditingTemp(t);
+    setEditForm({
+      first_name: t.first_name || '',
+      last_name: t.last_name || '',
+      role: t.role || '',
+      start_date: t.start_date,
+      end_date: t.end_date || '',
+      source_branch_id: t.source_branch_id || (t.source_name ? '__OTHER__' : ''),
+      source_name: t.source_name || '',
+    });
+    fetchBranches();
+  };
+
+  const saveEditTemp = async () => {
+    if (!editingTemp) return;
+    if (!editForm.first_name.trim()) { toast.error('First name is required'); return; }
+    const isOther = editForm.source_branch_id === '__OTHER__';
+    const sourceBranchId = isOther || !editForm.source_branch_id ? null : editForm.source_branch_id;
+    const sourceName = isOther ? (editForm.source_name.trim() || null) : null;
+    if (isOther && !sourceName) { toast.error('Please enter the source name for "Other"'); return; }
+
+    const { error } = await supabase
+      .from('temporary_employees')
+      .update({
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        role: editForm.role.trim() || null,
+        start_date: editForm.start_date,
+        end_date: editForm.end_date || null,
+        source_branch_id: sourceBranchId,
+        source_name: sourceName,
+      })
+      .eq('id', editingTemp.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Temporary employee updated');
+    setEditingTemp(null);
+    fetchData();
+  };
+
+  // Permanent delete (also removes timesheet entries)
+  const deleteTemp = async (temp: TempEmployee) => {
+    const { error: e1 } = await supabase
+      .from('temporary_timesheet_entries')
+      .delete()
+      .eq('temporary_employee_id', temp.id);
+    if (e1) { toast.error(e1.message); return; }
+    const { error: e2 } = await supabase
+      .from('temporary_employees')
+      .delete()
+      .eq('id', temp.id);
+    if (e2) { toast.error(e2.message); return; }
+    toast.success(`Deleted ${temp.first_name}`);
     fetchData();
   };
 
@@ -402,11 +470,35 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                       <td className="text-center text-muted-foreground bg-purple-50/40 dark:bg-purple-950/20">-</td>
                       <td className="text-center font-bold bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700">{empTotal.toFixed(1)}</td>
                       <td className="text-center">
-                        {!temp.end_date && (
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => endTemp(temp)} title="End engagement">
-                            <Trash2 className="h-3 w-3" />
+                        <div className="flex items-center justify-center gap-0.5">
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => openEditTemp(temp)} title="Edit">
+                            <Edit2 className="h-3 w-3" />
                           </Button>
-                        )}
+                          {!temp.end_date && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-amber-600" onClick={() => endTemp(temp)} title="End engagement">
+                              <Lock className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" title="Delete permanently">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete temporary employee?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This permanently removes {temp.first_name} {temp.last_name} and all their timesheet entries. This cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteTemp(temp)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -482,6 +574,64 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={handleAddTemp}>Add Temporary Employee</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Temporary Employee */}
+      <Dialog open={!!editingTemp} onOpenChange={(o) => !o && setEditingTemp(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Edit2 className="h-4 w-4" /> Edit Temporary Employee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>First Name *</Label>
+                <Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Last Name</Label>
+                <Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Role / Position</Label>
+              <Input value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><Building2 className="h-3 w-3" /> Borrowed From</Label>
+              <Select
+                value={editForm.source_branch_id}
+                onValueChange={(v) => setEditForm({ ...editForm, source_branch_id: v, source_name: v === '__OTHER__' ? editForm.source_name : '' })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select source branch" /></SelectTrigger>
+                <SelectContent>
+                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  <SelectItem value="__OTHER__">Other (external / agency)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editForm.source_branch_id === '__OTHER__' && (
+              <div>
+                <Label>Source Name *</Label>
+                <Input value={editForm.source_name} onChange={(e) => setEditForm({ ...editForm, source_name: e.target.value })} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Start Date *</Label>
+                <Input type="date" value={editForm.start_date} onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })} />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1"><Calendar className="h-3 w-3" /> End Date</Label>
+                <Input type="date" value={editForm.end_date} onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTemp(null)}>Cancel</Button>
+            <Button onClick={saveEditTemp}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

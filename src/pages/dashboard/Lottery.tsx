@@ -160,14 +160,16 @@ export default function Lottery() {
     enabled: filteredBranchIds.length > 0,
   });
 
-  // Fetch daily records for the month
+  // Fetch daily records for the month (plus the previous-month boundary day, so
+  // closing stock carries forward into day 1 of the new month).
   const { data: dailyRecords = [], isLoading: recordsLoading } = useQuery({
     queryKey: ['lottery-daily-records', filteredBranchIds, viewMode, format(selectedMonth, 'yyyy-MM')],
     queryFn: async () => {
       if (filteredBranchIds.length === 0) return [];
-      const startDate = format(selectedMonth, 'yyyy-MM-01');
+      // Start one day earlier so the last day of the previous month is included
+      const startDate = format(subDays(selectedMonth, 1), 'yyyy-MM-dd');
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-      
+
       const { data, error } = await supabase
         .from('lottery_daily_records')
         .select('*')

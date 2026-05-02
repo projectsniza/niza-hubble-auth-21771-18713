@@ -187,19 +187,36 @@ export default function DailyReports() {
     }
   }, [showUploadDialog, reportType, submitBranchId, fetchVendorsForBranch]);
 
-  // Build a global vendor map for displaying tags on report cards
+  // Build a global vendor map for displaying tags on report cards.
+  // Use union of branches across all loaded reports + ids referenced directly,
+  // so tags resolve even when scope filters change.
   useEffect(() => {
     const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean)));
-    if (branchIds.length === 0) { setVendorMap({}); return; }
-    supabase
-      .from('vendors')
-      .select('id,name')
-      .in('branch_id', branchIds)
-      .then(({ data }) => {
-        const map: Record<string, string> = {};
+    const vendorIds = Array.from(new Set(
+      reports.flatMap(r => Array.isArray(r.vendor_ids) ? r.vendor_ids : []).filter(Boolean)
+    ));
+    if (branchIds.length === 0 && vendorIds.length === 0) { setVendorMap({}); return; }
+    const run = async () => {
+      const map: Record<string, string> = {};
+      if (branchIds.length > 0) {
+        const { data } = await supabase
+          .from('vendors')
+          .select('id,name')
+          .in('branch_id', branchIds);
         (data || []).forEach((v: any) => { map[v.id] = v.name; });
-        setVendorMap(map);
-      });
+      }
+      // Resolve any referenced vendor ids that weren't in branch lookup
+      const missing = vendorIds.filter(id => !map[id]);
+      if (missing.length > 0) {
+        const { data } = await supabase
+          .from('vendors')
+          .select('id,name')
+          .in('id', missing);
+        (data || []).forEach((v: any) => { map[v.id] = v.name; });
+      }
+      setVendorMap(map);
+    };
+    run();
   }, [reports]);
 
   const toggleVendor = (id: string) => {
@@ -751,14 +768,14 @@ export default function DailyReports() {
                       </Badge>
                       {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
                         report.vendor_ids.slice(0, 4).map((vid: string) => (
-                          <Badge key={vid} variant="outline" className="gap-1 text-xs">
+                          <Badge key={vid} className="gap-1 text-xs bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
                             <Store className="h-3 w-3" />
                             {vendorMap[vid] || 'Vendor'}
                           </Badge>
                         ))
                       )}
                       {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 4 && (
-                        <Badge variant="outline" className="text-xs">+{report.vendor_ids.length - 4} more</Badge>
+                        <Badge className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">+{report.vendor_ids.length - 4} more</Badge>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -777,9 +794,22 @@ export default function DailyReports() {
                         </div>
                       )}
                       {report.branch?.name && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <MapPin className="h-4 w-4" />
-                          {report.branch.name}
+                          <span>{report.branch.name}</span>
+                          {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
+                            <>
+                              {report.vendor_ids.slice(0, 3).map((vid: string) => (
+                                <Badge key={vid} className="gap-1 text-[10px] py-0 px-1.5 bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                                  <Store className="h-2.5 w-2.5" />
+                                  {vendorMap[vid] || 'Vendor'}
+                                </Badge>
+                              ))}
+                              {report.vendor_ids.length > 3 && (
+                                <Badge className="text-[10px] py-0 px-1.5 bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">+{report.vendor_ids.length - 3}</Badge>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
                       <div className="flex items-center gap-1">
