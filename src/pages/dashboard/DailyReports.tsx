@@ -794,9 +794,22 @@ export default function DailyReports() {
                         </div>
                       )}
                       {report.branch?.name && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <MapPin className="h-4 w-4" />
-                          {report.branch.name}
+                          <span>{report.branch.name}</span>
+                          {Array.isArray(report.vendor_ids) && report.vendor_ids.length > 0 && (
+                            <>
+                              {report.vendor_ids.slice(0, 3).map((vid: string) => (
+                                <Badge key={vid} className="gap-1 text-[10px] py-0 px-1.5 bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                                  <Store className="h-2.5 w-2.5" />
+                                  {vendorMap[vid] || 'Vendor'}
+                                </Badge>
+                              ))}
+                              {report.vendor_ids.length > 3 && (
+                                <Badge className="text-[10px] py-0 px-1.5 bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700">+{report.vendor_ids.length - 3}</Badge>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
                       <div className="flex items-center gap-1">
