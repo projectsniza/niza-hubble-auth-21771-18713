@@ -187,19 +187,36 @@ export default function DailyReports() {
     }
   }, [showUploadDialog, reportType, submitBranchId, fetchVendorsForBranch]);
 
-  // Build a global vendor map for displaying tags on report cards
+  // Build a global vendor map for displaying tags on report cards.
+  // Use union of branches across all loaded reports + ids referenced directly,
+  // so tags resolve even when scope filters change.
   useEffect(() => {
     const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean)));
-    if (branchIds.length === 0) { setVendorMap({}); return; }
-    supabase
-      .from('vendors')
-      .select('id,name')
-      .in('branch_id', branchIds)
-      .then(({ data }) => {
-        const map: Record<string, string> = {};
+    const vendorIds = Array.from(new Set(
+      reports.flatMap(r => Array.isArray(r.vendor_ids) ? r.vendor_ids : []).filter(Boolean)
+    ));
+    if (branchIds.length === 0 && vendorIds.length === 0) { setVendorMap({}); return; }
+    const run = async () => {
+      const map: Record<string, string> = {};
+      if (branchIds.length > 0) {
+        const { data } = await supabase
+          .from('vendors')
+          .select('id,name')
+          .in('branch_id', branchIds);
         (data || []).forEach((v: any) => { map[v.id] = v.name; });
-        setVendorMap(map);
-      });
+      }
+      // Resolve any referenced vendor ids that weren't in branch lookup
+      const missing = vendorIds.filter(id => !map[id]);
+      if (missing.length > 0) {
+        const { data } = await supabase
+          .from('vendors')
+          .select('id,name')
+          .in('id', missing);
+        (data || []).forEach((v: any) => { map[v.id] = v.name; });
+      }
+      setVendorMap(map);
+    };
+    run();
   }, [reports]);
 
   const toggleVendor = (id: string) => {
