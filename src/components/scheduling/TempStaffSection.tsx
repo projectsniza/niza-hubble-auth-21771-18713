@@ -470,11 +470,35 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                       <td className="text-center text-muted-foreground bg-purple-50/40 dark:bg-purple-950/20">-</td>
                       <td className="text-center font-bold bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700">{empTotal.toFixed(1)}</td>
                       <td className="text-center">
-                        {!temp.end_date && (
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => endTemp(temp)} title="End engagement">
-                            <Trash2 className="h-3 w-3" />
+                        <div className="flex items-center justify-center gap-0.5">
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => openEditTemp(temp)} title="Edit">
+                            <Edit2 className="h-3 w-3" />
                           </Button>
-                        )}
+                          {!temp.end_date && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-amber-600" onClick={() => endTemp(temp)} title="End engagement">
+                              <Lock className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" title="Delete permanently">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete temporary employee?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This permanently removes {temp.first_name} {temp.last_name} and all their timesheet entries. This cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteTemp(temp)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </td>
                     </tr>
                   );
