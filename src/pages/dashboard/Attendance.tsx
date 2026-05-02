@@ -630,7 +630,7 @@ export default function Attendance() {
     return (
       <div className="p-4 md:p-8 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
-          <h1 className="text-xl md:text-3xl font-bold text-foreground">Calendar & Leave</h1>
+          <h1 className="text-xl md:text-3xl font-bold text-foreground">Holiday Management</h1>
           <Button size="sm" onClick={() => setShowEmployeeLeaveRequest(true)}>
             <Plus className="h-4 w-4 mr-1 md:mr-2" />
             Request Leave
