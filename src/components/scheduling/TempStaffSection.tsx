@@ -577,6 +577,64 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Temporary Employee */}
+      <Dialog open={!!editingTemp} onOpenChange={(o) => !o && setEditingTemp(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Edit2 className="h-4 w-4" /> Edit Temporary Employee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>First Name *</Label>
+                <Input value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Last Name</Label>
+                <Input value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Role / Position</Label>
+              <Input value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><Building2 className="h-3 w-3" /> Borrowed From</Label>
+              <Select
+                value={editForm.source_branch_id}
+                onValueChange={(v) => setEditForm({ ...editForm, source_branch_id: v, source_name: v === '__OTHER__' ? editForm.source_name : '' })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select source branch" /></SelectTrigger>
+                <SelectContent>
+                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  <SelectItem value="__OTHER__">Other (external / agency)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editForm.source_branch_id === '__OTHER__' && (
+              <div>
+                <Label>Source Name *</Label>
+                <Input value={editForm.source_name} onChange={(e) => setEditForm({ ...editForm, source_name: e.target.value })} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Start Date *</Label>
+                <Input type="date" value={editForm.start_date} onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })} />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1"><Calendar className="h-3 w-3" /> End Date</Label>
+                <Input type="date" value={editForm.end_date} onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTemp(null)}>Cancel</Button>
+            <Button onClick={saveEditTemp}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
