@@ -422,7 +422,7 @@ export default function DailyReports() {
   const [folderMonth, setFolderMonth] = useState<string | null>(null);
   const [folderDateFilter, setFolderDateFilter] = useState<string>('');
 
-  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'other'] as const;
+  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'letter', 'other'] as const;
   const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
 
   // Group reports by branch
@@ -442,7 +442,7 @@ export default function DailyReports() {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     const typeReports = branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
-      if (type === 'other') return !['report', 'invoice', 'receipt'].includes(rt);
+      if (type === 'other') return !['report', 'invoice', 'receipt', 'letter'].includes(rt);
       return rt === type;
     });
     const months = new Set<string>();
@@ -460,7 +460,7 @@ export default function DailyReports() {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     return branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
-      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
+      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt', 'letter'].includes(rt) : rt === type;
       const rd = (r as any).report_date as string | null;
       const rm = rd ? rd.slice(0, 7)
         : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
@@ -544,6 +544,7 @@ export default function DailyReports() {
                       <SelectItem value="report">Report</SelectItem>
                       <SelectItem value="invoice">Invoice</SelectItem>
                       <SelectItem value="receipt">Receipt</SelectItem>
+                      <SelectItem value="letter">Letters</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
@@ -868,7 +869,7 @@ export default function DailyReports() {
           {folderBranch && !folderType && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {REPORT_CATEGORIES.map(cat => {
-                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt'].includes(rt) : rt === cat; }).length;
+                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt','letter'].includes(rt) : rt === cat; }).length;
                 return (
                   <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderType(cat)}>
                     <div className="flex items-center gap-3">

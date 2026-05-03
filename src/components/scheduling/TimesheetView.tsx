@@ -107,9 +107,15 @@ export function TimesheetView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [currentMonth, setCurrentMonth] = useState<Date>(() => {
+    const today = new Date();
+    // Payroll cycle is 21st → 20th. Before the 21st we are still in the previous month's payroll.
+    return today.getDate() < 21 ? subMonths(today, 1) : today;
+  });
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
-    const weeks = getPayrollWeeks(new Date());
+    const today = new Date();
+    const base = today.getDate() < 21 ? subMonths(today, 1) : today;
+    const weeks = getPayrollWeeks(base);
     return getCurrentPayrollWeekIndex(weeks);
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
