@@ -40,6 +40,7 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createSharedTemplate } = useSharedTemplates();
+  const { types: templateTypes } = useTemplateTypes();
 
   useEffect(() => {
     const fetchData = async () => {
