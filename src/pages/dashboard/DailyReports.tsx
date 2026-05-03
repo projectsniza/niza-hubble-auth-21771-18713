@@ -442,7 +442,7 @@ export default function DailyReports() {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     const typeReports = branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
-      if (type === 'other') return !['report', 'invoice', 'receipt'].includes(rt);
+      if (type === 'other') return !['report', 'invoice', 'receipt', 'letter'].includes(rt);
       return rt === type;
     });
     const months = new Set<string>();
