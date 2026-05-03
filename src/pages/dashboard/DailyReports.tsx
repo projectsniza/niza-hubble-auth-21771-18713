@@ -422,7 +422,7 @@ export default function DailyReports() {
   const [folderMonth, setFolderMonth] = useState<string | null>(null);
   const [folderDateFilter, setFolderDateFilter] = useState<string>('');
 
-  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'other'] as const;
+  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'letter', 'other'] as const;
   const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
 
   // Group reports by branch
