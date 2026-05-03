@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FolderOpen, Download, Building, MapPin, Eye, FileText } from 'lucide-react';
+import { FolderOpen, Download, Building, MapPin, Eye, FileText, List, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { useTemplateTypes } from '@/hooks/useTemplateTypes';
+import TemplateTypeManager from '@/components/templates/TemplateTypeManager';
 import { format } from 'date-fns';
 
 export default function StoreHRTemplates() {
@@ -19,6 +21,9 @@ export default function StoreHRTemplates() {
   const [filterOrg, setFilterOrg] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
+  const [layout, setLayout] = useState<'list' | 'folder'>('list');
+  const [openedType, setOpenedType] = useState<string | null>(null);
+  const { labelFor } = useTemplateTypes();
 
   useEffect(() => {
     fetchOrganizations();
@@ -74,15 +79,52 @@ export default function StoreHRTemplates() {
     }
   };
 
+  const byType: Record<string, any[]> = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    templates.forEach(t => { (m[t.template_type] ||= []).push(t); });
+    return m;
+  }, [templates]);
+
+  const renderRow = (template: any) => (
+    <div key={template.id} className="flex items-center gap-3 p-3 rounded-lg border hover:border-primary/30 transition-colors">
+      <div className="p-2 rounded-lg bg-primary/10"><FolderOpen className="h-5 w-5 text-primary" /></div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2"><h4 className="font-medium truncate">{template.title}</h4></div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <span>{labelFor(template.template_type)}</span>
+          <span>•</span>
+          {template.organization && <span className="flex items-center gap-1"><Building className="h-3 w-3" />{template.organization.name}</span>}
+          {template.branch && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{template.branch.name}</span>}
+          <span>•</span>
+          <span>{format(new Date(template.created_at), 'MMM d, yyyy')}</span>
+        </div>
+        {template.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{template.description}</p>}
+      </div>
+      <div className="flex items-center gap-1">
+        {template.file_path && (
+          <>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewTemplate(template)} title="View"><Eye className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => window.open(template.file_path, '_blank')} title="Download"><Download className="h-4 w-4" /></Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Store & HR Templates
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          View and manage templates created by store and HR accounts
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Store & HR Templates</h1>
+          <p className="text-muted-foreground mt-2">View and manage templates created by store and HR accounts</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex border rounded-md">
+            <Button variant={layout === 'list' ? 'default' : 'ghost'} size="icon" onClick={() => { setLayout('list'); setOpenedType(null); }} className="rounded-r-none h-9 w-9"><List className="h-4 w-4" /></Button>
+            <Button variant={layout === 'folder' ? 'default' : 'ghost'} size="icon" onClick={() => setLayout('folder')} className="rounded-l-none h-9 w-9"><FolderOpen className="h-4 w-4" /></Button>
+          </div>
+          {user?.role === 'super_admin' && <TemplateTypeManager />}
+        </div>
       </div>
 
       <OrgBranchFilter
@@ -98,75 +140,48 @@ export default function StoreHRTemplates() {
 
       <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FolderOpen className="h-5 w-5" />
-            Templates ({templates.length})
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><FolderOpen className="h-5 w-5" />Templates ({templates.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-            </div>
+            <div className="flex items-center justify-center py-8"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>
           ) : templates.length === 0 ? (
             <div className="text-center py-8">
               <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold mb-2">No Store Templates</h3>
-              <p className="text-sm text-muted-foreground">
-                Templates created by store and HR accounts will appear here
-              </p>
+              <p className="text-sm text-muted-foreground">Templates created by store and HR accounts will appear here</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {templates.map((template) => (
-                <div key={template.id} className="flex items-center gap-3 p-3 rounded-lg border hover:border-primary/30 transition-colors">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <FolderOpen className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium truncate">{template.title}</h4>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="capitalize">{template.template_type.replace('_', ' ')}</span>
-                      <span>•</span>
-                      {template.organization && (
-                        <span className="flex items-center gap-1">
-                          <Building className="h-3 w-3" />
-                          {template.organization.name}
-                        </span>
-                      )}
-                      {template.branch && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {template.branch.name}
-                        </span>
-                      )}
-                      <span>•</span>
-                      <span>{format(new Date(template.created_at), 'MMM d, yyyy')}</span>
-                    </div>
-                    {template.description && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{template.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {template.file_path && (
-                      <>
-                        <Button variant="ghost" size="icon" onClick={() => setPreviewTemplate(template)} title="View">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => window.open(template.file_path, '_blank')} title="Download">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
+          ) : layout === 'folder' ? (
+            openedType ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Button variant="ghost" size="sm" onClick={() => setOpenedType(null)}>Folders</Button>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-semibold">{labelFor(openedType)}</span>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-3">{(byType[openedType] || []).map(renderRow)}</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(byType).map(([type, items]) => (
+                  <Card key={type} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOpenedType(type)}>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-accent/10"><FolderOpen className="h-6 w-6 text-accent-foreground" /></div>
+                      <div>
+                        <p className="font-semibold">{labelFor(type)}</p>
+                        <p className="text-xs text-muted-foreground">{items.length} file(s)</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">{templates.map(renderRow)}</div>
           )}
         </CardContent>
       </Card>
+
 
       {/* Preview Dialog */}
       <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>

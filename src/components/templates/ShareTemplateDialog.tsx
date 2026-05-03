@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload, X } from 'lucide-react';
 import { useSharedTemplates } from '@/hooks/useSharedTemplates';
+import { useTemplateTypes } from '@/hooks/useTemplateTypes';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Organization {
@@ -39,6 +40,7 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createSharedTemplate } = useSharedTemplates();
+  const { types: templateTypes } = useTemplateTypes();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,12 +132,7 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="id_card">ID Card</SelectItem>
-                <SelectItem value="business_card">Business Card</SelectItem>
-                <SelectItem value="invoice">Invoice</SelectItem>
-                <SelectItem value="letter">Letter</SelectItem>
-                <SelectItem value="form">Form</SelectItem>
+                {templateTypes.map(t => <SelectItem key={t.id} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
