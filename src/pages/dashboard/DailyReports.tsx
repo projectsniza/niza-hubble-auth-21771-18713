@@ -544,6 +544,7 @@ export default function DailyReports() {
                       <SelectItem value="report">Report</SelectItem>
                       <SelectItem value="invoice">Invoice</SelectItem>
                       <SelectItem value="receipt">Receipt</SelectItem>
+                      <SelectItem value="letter">Letters</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
