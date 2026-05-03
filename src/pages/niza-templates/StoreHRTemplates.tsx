@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FolderOpen, Download, Building, MapPin, Eye, FileText } from 'lucide-react';
+import { FolderOpen, Download, Building, MapPin, Eye, FileText, List, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { useTemplateTypes } from '@/hooks/useTemplateTypes';
+import TemplateTypeManager from '@/components/templates/TemplateTypeManager';
 import { format } from 'date-fns';
 
 export default function StoreHRTemplates() {
