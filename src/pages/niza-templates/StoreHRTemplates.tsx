@@ -21,6 +21,9 @@ export default function StoreHRTemplates() {
   const [filterOrg, setFilterOrg] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
+  const [layout, setLayout] = useState<'list' | 'folder'>('list');
+  const [openedType, setOpenedType] = useState<string | null>(null);
+  const { labelFor } = useTemplateTypes();
 
   useEffect(() => {
     fetchOrganizations();
