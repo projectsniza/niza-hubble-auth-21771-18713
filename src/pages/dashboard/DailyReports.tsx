@@ -869,7 +869,7 @@ export default function DailyReports() {
           {folderBranch && !folderType && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {REPORT_CATEGORIES.map(cat => {
-                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt'].includes(rt) : rt === cat; }).length;
+                const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt','letter'].includes(rt) : rt === cat; }).length;
                 return (
                   <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderType(cat)}>
                     <div className="flex items-center gap-3">
