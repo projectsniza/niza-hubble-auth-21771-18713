@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload, X } from 'lucide-react';
 import { useSharedTemplates } from '@/hooks/useSharedTemplates';
+import { useTemplateTypes } from '@/hooks/useTemplateTypes';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Organization {
