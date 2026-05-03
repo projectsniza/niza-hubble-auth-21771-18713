@@ -460,7 +460,7 @@ export default function DailyReports() {
     const branchReports = reportsByBranch[branchId]?.reports || [];
     return branchReports.filter(r => {
       const rt = (r.report_type || 'report').toLowerCase();
-      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt'].includes(rt) : rt === type;
+      const isTypeMatch = type === 'other' ? !['report', 'invoice', 'receipt', 'letter'].includes(rt) : rt === type;
       const rd = (r as any).report_date as string | null;
       const rm = rd ? rd.slice(0, 7)
         : ((r as any).report_month || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM') : null));
