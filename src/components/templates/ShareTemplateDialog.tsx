@@ -133,6 +133,8 @@ export default function ShareTemplateDialog({ open, onOpenChange }: ShareTemplat
               </SelectTrigger>
               <SelectContent>
                 {templateTypes.map(t => <SelectItem key={t.id} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-3">
