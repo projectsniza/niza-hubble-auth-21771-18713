@@ -6955,6 +6955,14 @@ export type Database = {
         Returns: boolean
       }
       link_my_employee_record: { Args: never; Returns: string }
+      transfer_employee: {
+        Args: {
+          p_employee_id: string
+          p_new_branch_id: string
+          p_reset_data?: boolean
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "super_admin" | "hr" | "manager" | "employee"

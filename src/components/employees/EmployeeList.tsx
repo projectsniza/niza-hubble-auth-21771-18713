@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award, ArrowRightLeft } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -74,6 +75,10 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [deactivationNotes, setDeactivationNotes] = useState('');
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [certEmployeeId, setCertEmployeeId] = useState<string | null>(null);
+  const [transferEmployee, setTransferEmployee] = useState<any>(null);
+  const [transferBranchId, setTransferBranchId] = useState<string>('');
+  const [transferResetData, setTransferResetData] = useState<boolean>(true);
+  const [isTransferring, setIsTransferring] = useState(false);
 
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
@@ -197,6 +202,35 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       fetchEmployees(true);
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  const handleTransferEmployee = async () => {
+    if (!transferEmployee || !transferBranchId) {
+      toast.error('Please select a destination branch');
+      return;
+    }
+    if (transferBranchId === transferEmployee.branch_id) {
+      toast.error('Employee is already in this branch');
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      const { error } = await supabase.rpc('transfer_employee', {
+        p_employee_id: transferEmployee.id,
+        p_new_branch_id: transferBranchId,
+        p_reset_data: transferResetData,
+      });
+      if (error) throw error;
+      toast.success(`${transferEmployee.first_name} ${transferEmployee.last_name} has been transferred`);
+      setTransferEmployee(null);
+      setTransferBranchId('');
+      setTransferResetData(true);
+      fetchEmployees(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Transfer failed');
+    } finally {
+      setIsTransferring(false);
     }
   };
 
@@ -368,6 +402,19 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <Award className="h-4 w-4 mr-2" />
                             Add Certification
                           </DropdownMenuItem>
+                          {user?.role === 'super_admin' && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setTransferEmployee(employee);
+                                setTransferBranchId('');
+                                setTransferResetData(true);
+                              }}
+                              className="text-blue-600 focus:text-blue-600"
+                            >
+                              <ArrowRightLeft className="h-4 w-4 mr-2" />
+                              Transfer
+                            </DropdownMenuItem>
+                          )}
                           {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
@@ -494,6 +541,68 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           onClose={() => setCertEmployeeId(null)}
         />
       )}
+
+      {/* Transfer Employee Dialog */}
+      <Dialog open={!!transferEmployee} onOpenChange={(open) => !open && setTransferEmployee(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-blue-600" />
+              Transfer Employee
+            </DialogTitle>
+            <DialogDescription>
+              Move {transferEmployee?.first_name} {transferEmployee?.last_name} to a different branch / store.
+              Their personal folder will be moved to the new branch automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination Branch</Label>
+              <Select value={transferBranchId} onValueChange={setTransferBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a branch..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches
+                    .filter((b) => b.id !== transferEmployee?.branch_id)
+                    .map((b) => {
+                      const org = organizations.find((o) => o.id === b.organization_id);
+                      return (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}{org ? ` — ${org.name}` : ''}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border p-3">
+              <Checkbox
+                id="reset-data"
+                checked={transferResetData}
+                onCheckedChange={(c) => setTransferResetData(c === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reset-data" className="cursor-pointer">
+                  Reset Timesheets, Holiday & Leave history
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Recommended. Clears existing timesheets, holiday balances and leave requests so the employee starts fresh in the new branch.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferEmployee(null)}>Cancel</Button>
+            <Button
+              onClick={handleTransferEmployee}
+              disabled={!transferBranchId || isTransferring}
+            >
+              {isTransferring ? 'Transferring...' : 'Transfer Employee'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
