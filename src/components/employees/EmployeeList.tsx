@@ -402,6 +402,19 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
                             <Award className="h-4 w-4 mr-2" />
                             Add Certification
                           </DropdownMenuItem>
+                          {user?.role === 'super_admin' && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setTransferEmployee(employee);
+                                setTransferBranchId('');
+                                setTransferResetData(true);
+                              }}
+                              className="text-blue-600 focus:text-blue-600"
+                            >
+                              <ArrowRightLeft className="h-4 w-4 mr-2" />
+                              Transfer
+                            </DropdownMenuItem>
+                          )}
                           {(employee.status === 'inactive' || employee.status === 'terminated') && user?.role === 'super_admin' && (
                             <DropdownMenuItem 
                               onClick={() => handleReactivateEmployee(employee)}
