@@ -541,6 +541,68 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           onClose={() => setCertEmployeeId(null)}
         />
       )}
+
+      {/* Transfer Employee Dialog */}
+      <Dialog open={!!transferEmployee} onOpenChange={(open) => !open && setTransferEmployee(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-blue-600" />
+              Transfer Employee
+            </DialogTitle>
+            <DialogDescription>
+              Move {transferEmployee?.first_name} {transferEmployee?.last_name} to a different branch / store.
+              Their personal folder will be moved to the new branch automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination Branch</Label>
+              <Select value={transferBranchId} onValueChange={setTransferBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a branch..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches
+                    .filter((b) => b.id !== transferEmployee?.branch_id)
+                    .map((b) => {
+                      const org = organizations.find((o) => o.id === b.organization_id);
+                      return (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}{org ? ` — ${org.name}` : ''}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border p-3">
+              <Checkbox
+                id="reset-data"
+                checked={transferResetData}
+                onCheckedChange={(c) => setTransferResetData(c === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="reset-data" className="cursor-pointer">
+                  Reset Timesheets, Holiday & Leave history
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Recommended. Clears existing timesheets, holiday balances and leave requests so the employee starts fresh in the new branch.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferEmployee(null)}>Cancel</Button>
+            <Button
+              onClick={handleTransferEmployee}
+              disabled={!transferBranchId || isTransferring}
+            >
+              {isTransferring ? 'Transferring...' : 'Transfer Employee'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
