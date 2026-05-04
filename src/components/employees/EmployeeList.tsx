@@ -205,7 +205,33 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
   };
 
-  const getInitials = (firstName: string, lastName: string) => {
+  const handleTransferEmployee = async () => {
+    if (!transferEmployee || !transferBranchId) {
+      toast.error('Please select a destination branch');
+      return;
+    }
+    if (transferBranchId === transferEmployee.branch_id) {
+      toast.error('Employee is already in this branch');
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      const { error } = await supabase.rpc('transfer_employee', {
+        p_employee_id: transferEmployee.id,
+        p_new_branch_id: transferBranchId,
+        p_reset_data: transferResetData,
+      });
+      if (error) throw error;
+      toast.success(`${transferEmployee.first_name} ${transferEmployee.last_name} has been transferred`);
+      setTransferEmployee(null);
+      setTransferBranchId('');
+      setTransferResetData(true);
+      fetchEmployees(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Transfer failed');
+    } finally {
+      setIsTransferring(false);
+    }
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
