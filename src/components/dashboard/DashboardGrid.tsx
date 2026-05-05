@@ -66,7 +66,7 @@ const gridItems: GridItem[] = [
   { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports', gradient: 'from-primary to-accent' },
   { title: 'Sales Analysis', icon: BarChart3, path: '/dashboard/daily-summary', gradient: 'from-accent to-primary' },
   { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance', gradient: 'from-accent to-primary' },
-  { title: 'Attendance', icon: Clock, path: '/dashboard/attendance', gradient: 'from-primary to-accent' },
+  { title: 'Holiday Diary', icon: Clock, path: '/dashboard/attendance', gradient: 'from-primary to-accent' },
   { title: 'Scheduling', icon: Calendar, path: '/dashboard/scheduling', gradient: 'from-accent to-primary' },
   { title: 'Clock-ins', icon: MapPin, path: '/dashboard/clock-ins', gradient: 'from-primary to-accent' },
   { title: 'Events & News', icon: CalendarDays, path: '/dashboard/events', gradient: 'from-accent to-primary' },
