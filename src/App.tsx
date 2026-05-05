@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { OrgBranchProvider } from "./contexts/OrgBranchContext";
 import { NizaLoaderFullPage } from "@/components/ui/niza-loader";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 
 // Lazy load all route components for better initial bundle size
 const Index = lazy(() => import("./pages/Index"));
@@ -89,13 +90,14 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <OrgBranchProvider>
-        <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Suspense fallback={<NizaLoaderFullPage />}>
+    <ErrorBoundary>
+      <AuthProvider>
+        <OrgBranchProvider>
+          <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Suspense fallback={<NizaLoaderFullPage />}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
@@ -175,6 +177,7 @@ const App = () => (
         </TooltipProvider>
       </OrgBranchProvider>
     </AuthProvider>
+    </ErrorBoundary>
   </QueryClientProvider>
 );
 
