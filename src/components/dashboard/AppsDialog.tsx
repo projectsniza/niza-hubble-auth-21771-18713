@@ -1,4 +1,4 @@
-import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users, GraduationCap } from "lucide-react";
+import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users, GraduationCap, BarChart3 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,8 @@ interface AppItem {
   icon: React.ReactNode;
   path: string;
   gradient: string;
-  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning';
+  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning' | 'niza_analysis';
+  adminOnly?: boolean;
 }
 
 const apps: AppItem[] = [
@@ -60,6 +61,14 @@ const apps: AppItem[] = [
     gradient: "from-orange-500 to-amber-600",
     accessKey: 'niza_elearning',
   },
+  {
+    name: "Niza Analysis",
+    description: "Daily Sales & Xero Export",
+    icon: <BarChart3 className="h-7 w-7" />,
+    path: "/niza-analysis",
+    gradient: "from-indigo-500 to-violet-600",
+    adminOnly: true,
+  },
 ];
 
 export default function AppsDialog() {
@@ -100,6 +109,11 @@ export default function AppsDialog() {
       if (currentPath.startsWith('/dashboard')) return false;
     } else {
       if (currentPath.startsWith(app.path)) return false;
+    }
+
+    // Niza Analysis: only super_admin and hr
+    if (app.adminOnly) {
+      return user?.role === 'super_admin' || user?.role === 'hr';
     }
 
     // HR app is always accessible for those who can see the dialog
