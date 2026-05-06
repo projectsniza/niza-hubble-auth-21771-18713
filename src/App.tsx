@@ -75,6 +75,11 @@ const DriveOffs = lazy(() => import("./pages/dashboard/DriveOffs"));
 const CustomerAccounts = lazy(() => import("./pages/dashboard/CustomerAccounts"));
 const DailySummary = lazy(() => import("./pages/dashboard/DailySummary"));
 const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
+const NizaAnalysis = lazy(() => import("./pages/NizaAnalysis"));
+const NizaAnalysisHome = lazy(() => import("./pages/niza-analysis/Home"));
+const DailySalesAdmin = lazy(() => import("./pages/niza-analysis/DailySalesAdmin"));
+const XeroExport = lazy(() => import("./pages/niza-analysis/XeroExport"));
+const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -134,6 +139,7 @@ const App = () => (
                 <Route path="drive-offs" element={<DriveOffs />} />
                 <Route path="customer-accounts" element={<CustomerAccounts />} />
                 <Route path="daily-summary" element={<DailySummary />} />
+                <Route path="daily-sales-upload" element={<DailySalesUpload />} />
               </Route>
               <Route path="/niza-safe" element={<NizaSafe />}>
                 <Route index element={<NizaSafeHome />} />
