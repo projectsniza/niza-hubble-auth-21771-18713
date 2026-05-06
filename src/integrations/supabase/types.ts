@@ -1736,6 +1736,72 @@ export type Database = {
           },
         ]
       }
+      daily_sales_uploads: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          organization_id: string | null
+          parsed_totals: Json
+          raw_text: string | null
+          sale_date: string
+          source_filename: string
+          source_format: string
+          status: string
+          storage_path: string | null
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          parsed_totals?: Json
+          raw_text?: string | null
+          sale_date: string
+          source_filename: string
+          source_format?: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          parsed_totals?: Json
+          raw_text?: string | null
+          sale_date?: string
+          source_filename?: string
+          source_format?: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_sales_uploads_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_sales_uploads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_summaries: {
         Row: {
           atm_loaded: number

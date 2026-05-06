@@ -71,6 +71,7 @@ const getMenuItems = (role: string) => {
       { title: 'Drive-Offs', icon: Car, path: '/dashboard/drive-offs' },
       { title: 'Lottery', icon: Ticket, path: '/dashboard/lottery' },
       { title: 'Daily Reports', icon: ClipboardList, path: '/dashboard/daily-reports' },
+      { title: 'Daily Sales Upload', icon: FileText, path: '/dashboard/daily-sales-upload' },
       { title: 'Sales Analysis', icon: BarChart3, path: '/dashboard/daily-summary' },
       { title: 'Maintenance', icon: Wrench, path: '/dashboard/maintenance' },
       { title: 'Safety', icon: Shield, path: '/dashboard/safety-tasks' },
