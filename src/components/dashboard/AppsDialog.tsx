@@ -125,7 +125,7 @@ export default function AppsDialog() {
     }
 
     // For other apps, check access
-    return hasAppAccess(app.accessKey);
+    return hasAppAccess(app.accessKey as any);
   });
 
   // If no apps to show, don't render the button
