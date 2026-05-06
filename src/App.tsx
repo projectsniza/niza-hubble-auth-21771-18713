@@ -174,6 +174,11 @@ const App = () => (
                 <Route path="shared" element={<SharedTemplatesPage />} />
                 <Route path="store-hr" element={<StoreHRTemplatesPage />} />
               </Route>
+              <Route path="/niza-analysis" element={<NizaAnalysis />}>
+                <Route index element={<NizaAnalysisHome />} />
+                <Route path="daily-sales" element={<DailySalesAdmin />} />
+                <Route path="xero-export" element={<XeroExport />} />
+              </Route>
               <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
