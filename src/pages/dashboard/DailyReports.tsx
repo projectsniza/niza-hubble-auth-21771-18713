@@ -97,30 +97,42 @@ export default function DailyReports() {
     
     setLoading(true);
     try {
-      let query = supabase
-        .from('daily_reports')
-        .select(`
-          *,
-          branch:branches(name),
-          organization:organizations(name)
-        `)
-        .order('submitted_at', { ascending: false })
-        .limit(100);
+      // Paginate to bypass Supabase's 1000-row default and fetch ALL reports
+      // so super admin / HR see the full history (not just the latest 100).
+      const PAGE_SIZE = 1000;
+      const all: any[] = [];
+      let from = 0;
+      // Cap at 20k rows as a safety net
+      while (from < 20000) {
+        let query = supabase
+          .from('daily_reports')
+          .select(`
+            *,
+            branch:branches(name),
+            organization:organizations(name)
+          `)
+          .order('submitted_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
 
-      // Filter based on role and access level
-      if (user.role === 'manager') {
-        query = query.eq('submitted_by', user.id);
-      } else if (user.role === 'hr') {
-        // HR scoped by org/branch if assigned, otherwise full access
-        if (user.organizationId && user.branchId) {
-          query = query.eq('branch_id', user.branchId);
-        } else if (user.organizationId) {
-          query = query.eq('organization_id', user.organizationId);
+        if (user.role === 'manager') {
+          query = query.eq('submitted_by', user.id);
+        } else if (user.role === 'hr') {
+          if (user.organizationId && user.branchId) {
+            query = query.eq('branch_id', user.branchId);
+          } else if (user.organizationId) {
+            query = query.eq('organization_id', user.organizationId);
+          }
         }
-        // HR with no org/branch sees all reports (same as super admin)
-      }
 
-      const { data, error } = await query;
+        const { data: page, error } = await query;
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+        all.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      const data = all;
+      const error = null as any;
       if (error) throw error;
       
       // Fetch submitter profiles
@@ -257,12 +269,22 @@ export default function DailyReports() {
       // Upload files to storage
       const uploadedFiles: any[] = [];
       for (const file of files) {
-        const fileName = `${Date.now()}-${file.name}`;
+        // Sanitize file name — Supabase storage keys must avoid special chars,
+        // emojis, slashes, repeated dots etc. Some store till exports include
+        // names like "01/05" or contain spaces/quotes that break uploads.
+        const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+        const base = file.name.slice(0, file.name.length - ext.length)
+          .replace(/[^a-zA-Z0-9._-]+/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^[._-]+|[._-]+$/g, '')
+          .slice(0, 80) || 'file';
+        const safeExt = ext.replace(/[^a-zA-Z0-9.]+/g, '').slice(0, 12);
+        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${base}${safeExt}`;
         const filePath = `daily-reports/${user.id}/${fileName}`;
         
         const { error: uploadError } = await supabase.storage
           .from('documents')
-          .upload(filePath, file);
+          .upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
 
         if (uploadError) throw uploadError;
 
