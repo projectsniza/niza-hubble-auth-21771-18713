@@ -748,7 +748,7 @@ export default function Lottery() {
       return v !== null ? `£${v.toFixed(2)}` : '-';
     });
     const totalTill = daysInMonth.reduce((s, d) => s + (getTillValue(format(d, 'yyyy-MM-dd')) ?? 0), 0);
-    lines.push(['', 'Total Instant Lottery Sales as per Day Report', '', '', ...dailyTillValues, `£${totalTill.toFixed(2)}`].join(','));
+    lines.push(['', 'Total Instant Lottery Sales Value as per Day Report (£)', '', '', ...dailyTillValues, `£${totalTill.toFixed(2)}`].join(','));
 
     // Sales Difference (System - Till Report)
     const dailyDiffValues = daysInMonth.map(day => {
@@ -760,7 +760,7 @@ export default function Lottery() {
       return Math.abs(d) < 0.01 ? '0' : `£${d.toFixed(2)}`;
     });
     const totalDiff = grandTotals.totalSalesValue - totalTill;
-    lines.push(['', 'Sales Difference (System - Till Report)', '', '', ...dailyDiffValues, `£${totalDiff.toFixed(2)}`].join(','));
+    lines.push(['', 'Sales Value Difference (System - Till Report)', '', '', ...dailyDiffValues, `£${totalDiff.toFixed(2)}`].join(','));
     lines.push('');
 
     // Daily closing stocks
@@ -1301,7 +1301,7 @@ export default function Lottery() {
                                 {/* Total Instant Lottery Sales as per Day Report (manual till entry) */}
                                 <tr className="border-b bg-purple-50/50 dark:bg-purple-950/20">
                                   <td className="sticky left-0 z-10 bg-purple-50/50 dark:bg-purple-950/20 px-3 py-2 font-semibold border-r">
-                                    Total Instant Lottery Sales as per Day Report
+                                    Total Instant Lottery Sales Value as per Day Report (£)
                                   </td>
                                   {daysInMonth.map(day => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
@@ -1318,7 +1318,7 @@ export default function Lottery() {
                                             value={displayVal}
                                             onChange={(e) => handleTillEdit(dateStr, e.target.value)}
                                             onBlur={() => handleTillBlur(dateStr)}
-                                            placeholder="-"
+                                            placeholder="£0.00"
                                             className="h-8 text-center text-xs px-1 font-medium text-purple-700 dark:text-purple-400"
                                           />
                                         ) : (
@@ -1337,7 +1337,7 @@ export default function Lottery() {
                                 {/* Sales Difference (System vs Till Report) */}
                                 <tr className="border-b bg-rose-50/50 dark:bg-rose-950/20">
                                   <td className="sticky left-0 z-10 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2 font-semibold border-r">
-                                    Sales Difference (System − Till Report)
+                                    Sales Value Difference (System − Till Report)
                                   </td>
                                   {daysInMonth.map(day => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
@@ -1594,7 +1594,7 @@ export default function Lottery() {
                               <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{totalStock}</p>
                             </div>
                             <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/50">
-                              <p className="text-sm text-purple-700 dark:text-purple-400 font-medium">Sales as per Day Report</p>
+                              <p className="text-sm text-purple-700 dark:text-purple-400 font-medium">Sales Value as per Day Report (£)</p>
                               {isSingleBranchSelected ? (
                                 <Input
                                   type="number"
@@ -1603,7 +1603,7 @@ export default function Lottery() {
                                   value={tillDisplay}
                                   onChange={(e) => handleTillEdit(dateStr, e.target.value)}
                                   onBlur={() => handleTillBlur(dateStr)}
-                                  placeholder="Enter from till"
+                                  placeholder="Enter sales value (£) from till"
                                   className="mt-1 h-10 text-2xl font-bold text-purple-700 dark:text-purple-400 bg-white/50"
                                 />
                               ) : (
@@ -1614,7 +1614,7 @@ export default function Lottery() {
                             </div>
                             <div className={`p-4 rounded-xl border ${diff === null ? 'bg-muted/30 border-muted' : diffOk ? 'bg-green-50 dark:bg-green-950/30 border-green-200/50' : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200/50'}`}>
                               <p className={`text-sm font-medium ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                                Difference (System − Till)
+                                Sales Value Difference (System − Till)
                               </p>
                               <p className={`text-3xl font-bold ${diff === null ? 'text-muted-foreground' : diffOk ? 'text-green-700 dark:text-green-400' : 'text-rose-700 dark:text-rose-400'}`}>
                                 {diff === null ? '—' : diffOk ? '✓ Match' : `${diff > 0 ? '+' : ''}£${diff.toFixed(2)}`}
