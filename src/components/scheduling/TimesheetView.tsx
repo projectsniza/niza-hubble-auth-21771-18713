@@ -680,7 +680,28 @@ export function TimesheetView() {
   }), [timesheets, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
   const groupedTimesheets = useMemo(() => {
-    const grouped = filteredTimesheets.reduce((acc, ts) => {
+    // Deduplicate timesheets where the same employee (by name within a branch)
+    // appears more than once for the week. Keep the row with the highest
+    // total activity (worked+holiday+sick+adj). This avoids showing duplicate
+    // names like "MOHAMMED ARSHAD" twice when there are duplicate employee
+    // records in the database.
+    const dedupMap = new Map<string, Timesheet>();
+    filteredTimesheets.forEach(ts => {
+      const branchName = ts.employee?.branch?.name || 'Unassigned';
+      const fullName = `${ts.employee?.first_name || ''} ${ts.employee?.last_name || ''}`.trim().toUpperCase();
+      const key = `${branchName}::${fullName}`;
+      const existing = dedupMap.get(key);
+      const tsTotal = (Number(ts.total_worked_hours) || 0) + (Number(ts.total_holiday_hours) || 0) + (Number(ts.total_sick_hours) || 0) + (Number(ts.total_adjustment_hours) || 0);
+      if (!existing) {
+        dedupMap.set(key, ts);
+      } else {
+        const exTotal = (Number(existing.total_worked_hours) || 0) + (Number(existing.total_holiday_hours) || 0) + (Number(existing.total_sick_hours) || 0) + (Number(existing.total_adjustment_hours) || 0);
+        if (tsTotal > exTotal) dedupMap.set(key, ts);
+      }
+    });
+    const dedupedTimesheets = Array.from(dedupMap.values());
+
+    const grouped = dedupedTimesheets.reduce((acc, ts) => {
       const branchName = ts.employee?.branch?.name || 'Unassigned';
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);

@@ -470,12 +470,10 @@ export default function ELearning() {
     }
   };
 
-  const canDeleteTraining = (training: Training) => {
+  const canDeleteTraining = (_training: Training) => {
     if (!user) return false;
-    if (user.role === 'super_admin') return true;
-    if (user.role === 'hr') return true;
-    if (user.role === 'manager' && user.branchId && training.branch_id === user.branchId) return true;
-    return false;
+    // Only Super Admin can delete trainings, regardless of who created them
+    return user.role === 'super_admin';
   };
 
   const handleDeleteTraining = async (training: Training) => {
