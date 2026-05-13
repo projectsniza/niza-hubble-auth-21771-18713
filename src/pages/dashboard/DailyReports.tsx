@@ -441,8 +441,34 @@ export default function DailyReports() {
   // Folder view state
   const [folderBranch, setFolderBranch] = useState<string | null>(null);
   const [folderType, setFolderType] = useState<string | null>(null);
+  const [folderVendor, setFolderVendor] = useState<string | null>(null); // vendor id, '__untagged__', or null
   const [folderMonth, setFolderMonth] = useState<string | null>(null);
   const [folderDateFilter, setFolderDateFilter] = useState<string>('');
+
+  // Vendors for the currently-open invoice folder (branch-scoped)
+  const [folderBranchVendors, setFolderBranchVendors] = useState<Vendor[]>([]);
+  useEffect(() => {
+    const loadVendors = async () => {
+      if (!folderBranch || folderType !== 'invoice') { setFolderBranchVendors([]); return; }
+      const { data } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('branch_id', folderBranch)
+        .order('name');
+      setFolderBranchVendors((data as any) || []);
+    };
+    loadVendors();
+  }, [folderBranch, folderType]);
+
+  // Filter invoice reports by vendor selection
+  const filterByVendor = (rs: DailyReport[]) => {
+    if (folderType !== 'invoice' || !folderVendor) return rs;
+    return rs.filter(r => {
+      const ids: string[] = Array.isArray(r.vendor_ids) ? r.vendor_ids : [];
+      if (folderVendor === '__untagged__') return ids.length === 0;
+      return ids.includes(folderVendor);
+    });
+  };
 
   const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'letter', 'other'] as const;
   const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
@@ -867,17 +893,18 @@ export default function DailyReports() {
         </TabsContent>
 
         <TabsContent value="folders" className="space-y-4">
-          <div className="flex items-center gap-2 text-sm">
-            <Button variant="ghost" size="sm" className={!folderBranch ? 'font-bold' : ''} onClick={() => { setFolderBranch(null); setFolderType(null); setFolderMonth(null); }}>All Stores</Button>
-            {folderBranch && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderType ? 'font-bold' : ''} onClick={() => { setFolderType(null); setFolderMonth(null); }}>{reportsByBranch[folderBranch]?.name || 'Branch'}</Button></>)}
-            {folderType && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderMonth ? 'font-bold' : ''} onClick={() => setFolderMonth(null)}>{categoryLabel(folderType)}</Button></>)}
+          <div className="flex items-center gap-2 text-sm flex-wrap">
+            <Button variant="ghost" size="sm" className={!folderBranch ? 'font-bold' : ''} onClick={() => { setFolderBranch(null); setFolderType(null); setFolderVendor(null); setFolderMonth(null); }}>All Stores</Button>
+            {folderBranch && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderType ? 'font-bold' : ''} onClick={() => { setFolderType(null); setFolderVendor(null); setFolderMonth(null); }}>{reportsByBranch[folderBranch]?.name || 'Branch'}</Button></>)}
+            {folderType && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderVendor && !folderMonth ? 'font-bold' : ''} onClick={() => { setFolderVendor(null); setFolderMonth(null); }}>{categoryLabel(folderType)}</Button></>)}
+            {folderType === 'invoice' && folderVendor && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><Button variant="ghost" size="sm" className={!folderMonth ? 'font-bold' : ''} onClick={() => setFolderMonth(null)}>{folderVendor === '__untagged__' ? 'Untagged' : (folderBranchVendors.find(v => v.id === folderVendor)?.name || 'Vendor')}</Button></>)}
             {folderMonth && (<><ChevronRight className="h-4 w-4 text-muted-foreground" /><span className="font-medium">{formatMonthLabel(folderMonth)}</span></>)}
           </div>
 
           {!folderBranch && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {Object.entries(reportsByBranch).map(([branchId, data]) => (
-                <Card key={branchId} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderBranch(branchId)}>
+                <Card key={branchId} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setFolderBranch(branchId); setFolderType(null); setFolderVendor(null); setFolderMonth(null); }}>
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-xl bg-primary/10"><FolderOpen className="h-6 w-6 text-primary" /></div>
                     <div><p className="font-semibold">{data.name}</p><p className="text-xs text-muted-foreground">{data.reports.length} report(s)</p></div>
@@ -893,7 +920,7 @@ export default function DailyReports() {
               {REPORT_CATEGORIES.map(cat => {
                 const count = (reportsByBranch[folderBranch]?.reports || []).filter(r => { const rt = (r.report_type || 'report').toLowerCase(); return cat === 'other' ? !['report','invoice','receipt','letter'].includes(rt) : rt === cat; }).length;
                 return (
-                  <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderType(cat)}>
+                  <Card key={cat} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setFolderType(cat); setFolderVendor(null); setFolderMonth(null); }}>
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 rounded-xl bg-accent/10"><FolderOpen className="h-6 w-6 text-accent-foreground" /></div>
                       <div><p className="font-semibold">{categoryLabel(cat)}</p><p className="text-xs text-muted-foreground">{count} file(s)</p></div>
@@ -904,24 +931,65 @@ export default function DailyReports() {
             </div>
           )}
 
-          {folderBranch && folderType && !folderMonth && (
+          {/* Vendor folders for Invoices */}
+          {folderBranch && folderType === 'invoice' && !folderVendor && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {getMonthsForType(folderBranch, folderType).map(month => (
-                <Card key={month} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderMonth(month)}>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-muted"><Calendar className="h-6 w-6 text-muted-foreground" /></div>
-                    <div><p className="font-semibold">{formatMonthLabel(month)}</p><p className="text-xs text-muted-foreground">{getReportsForFolder(folderBranch, folderType, month).length} file(s)</p></div>
-                  </div>
-                </Card>
-              ))}
-              {getMonthsForType(folderBranch, folderType).length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports in this category</p>}
+              {(() => {
+                const invoices = (reportsByBranch[folderBranch]?.reports || []).filter(r => (r.report_type || '').toLowerCase() === 'invoice');
+                const untaggedCount = invoices.filter(r => !Array.isArray(r.vendor_ids) || r.vendor_ids.length === 0).length;
+                return (
+                  <>
+                    {folderBranchVendors.map(v => {
+                      const cnt = invoices.filter(r => Array.isArray(r.vendor_ids) && r.vendor_ids.includes(v.id)).length;
+                      return (
+                        <Card key={v.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setFolderVendor(v.id); setFolderMonth(null); }}>
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-950/40"><Store className="h-6 w-6 text-purple-700 dark:text-purple-300" /></div>
+                            <div><p className="font-semibold">{v.name}</p><p className="text-xs text-muted-foreground">{cnt} file(s)</p></div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                    <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setFolderVendor('__untagged__'); setFolderMonth(null); }}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-muted"><FolderOpen className="h-6 w-6 text-muted-foreground" /></div>
+                        <div><p className="font-semibold">Untagged</p><p className="text-xs text-muted-foreground">{untaggedCount} file(s)</p></div>
+                      </div>
+                    </Card>
+                    {folderBranchVendors.length === 0 && (
+                      <p className="text-muted-foreground col-span-3 text-center py-4 text-xs">No vendors configured for this branch yet. Add vendors via the upload dialog → "Manage Vendors".</p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {folderBranch && folderType && (folderType !== 'invoice' || folderVendor) && !folderMonth && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {(() => {
+                const months = getMonthsForType(folderBranch, folderType).filter(m => filterByVendor(getReportsForFolder(folderBranch, folderType, m)).length > 0);
+                return (
+                  <>
+                    {months.map(month => (
+                      <Card key={month} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFolderMonth(month)}>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-muted"><Calendar className="h-6 w-6 text-muted-foreground" /></div>
+                          <div><p className="font-semibold">{formatMonthLabel(month)}</p><p className="text-xs text-muted-foreground">{filterByVendor(getReportsForFolder(folderBranch, folderType, month)).length} file(s)</p></div>
+                        </div>
+                      </Card>
+                    ))}
+                    {months.length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">No reports in this category</p>}
+                  </>
+                );
+              })()}
             </div>
           )}
 
           {folderBranch && folderType && folderMonth && (
             <div className="space-y-4">
               {(() => {
-                const monthReports = getReportsForFolder(folderBranch, folderType, folderMonth);
+                const monthReports = filterByVendor(getReportsForFolder(folderBranch, folderType, folderMonth));
                 const getRD = (r: any) => (r.report_date as string | null)
                   || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null);
 
