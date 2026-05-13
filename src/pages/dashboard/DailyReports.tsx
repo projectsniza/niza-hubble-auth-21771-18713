@@ -989,7 +989,7 @@ export default function DailyReports() {
           {folderBranch && folderType && folderMonth && (
             <div className="space-y-4">
               {(() => {
-                const monthReports = getReportsForFolder(folderBranch, folderType, folderMonth);
+                const monthReports = filterByVendor(getReportsForFolder(folderBranch, folderType, folderMonth));
                 const getRD = (r: any) => (r.report_date as string | null)
                   || (r.submitted_at ? format(new Date(r.submitted_at), 'yyyy-MM-dd') : null);
 
