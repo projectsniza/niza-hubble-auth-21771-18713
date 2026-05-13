@@ -441,8 +441,34 @@ export default function DailyReports() {
   // Folder view state
   const [folderBranch, setFolderBranch] = useState<string | null>(null);
   const [folderType, setFolderType] = useState<string | null>(null);
+  const [folderVendor, setFolderVendor] = useState<string | null>(null); // vendor id, '__untagged__', or null
   const [folderMonth, setFolderMonth] = useState<string | null>(null);
   const [folderDateFilter, setFolderDateFilter] = useState<string>('');
+
+  // Vendors for the currently-open invoice folder (branch-scoped)
+  const [folderBranchVendors, setFolderBranchVendors] = useState<Vendor[]>([]);
+  useEffect(() => {
+    const loadVendors = async () => {
+      if (!folderBranch || folderType !== 'invoice') { setFolderBranchVendors([]); return; }
+      const { data } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('branch_id', folderBranch)
+        .order('name');
+      setFolderBranchVendors((data as any) || []);
+    };
+    loadVendors();
+  }, [folderBranch, folderType]);
+
+  // Filter invoice reports by vendor selection
+  const filterByVendor = (rs: DailyReport[]) => {
+    if (folderType !== 'invoice' || !folderVendor) return rs;
+    return rs.filter(r => {
+      const ids: string[] = Array.isArray(r.vendor_ids) ? r.vendor_ids : [];
+      if (folderVendor === '__untagged__') return ids.length === 0;
+      return ids.includes(folderVendor);
+    });
+  };
 
   const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'letter', 'other'] as const;
   const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
