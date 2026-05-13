@@ -108,8 +108,6 @@ export default function DailySummary() {
           </p>
         </div>
 
-        {/* Date range + export */}
-        <div className="flex flex-wrap items-center gap-2">
         {/* Date range + export — hidden on Manager Entry tab */}
         {!hideRangeFilters && (
           <div className="flex flex-wrap items-center gap-2">
