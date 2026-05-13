@@ -185,7 +185,7 @@ export default function DailySummary() {
 
       {/* Manager view */}
       {isManager && (
-        <Tabs defaultValue="entry" className="space-y-4">
+        <Tabs value={managerTab} onValueChange={(v) => setManagerTab(v as 'entry' | 'analytics')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="entry"><FilePlus className="h-4 w-4 mr-2" /> Entry</TabsTrigger>
             <TabsTrigger value="analytics"><BarChart3 className="h-4 w-4 mr-2" /> My Analytics</TabsTrigger>
