@@ -44,6 +44,10 @@ export default function DailySummary() {
   const [rows, setRows] = useState<DailySummaryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [managerTab, setManagerTab] = useState<'entry' | 'analytics'>('entry');
+
+  // Hide range/export when manager is on the Entry tab (single-date entry only)
+  const hideRangeFilters = isManager && managerTab === 'entry';
 
   useEffect(() => {
     const load = async () => {
