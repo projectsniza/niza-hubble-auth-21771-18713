@@ -110,75 +110,79 @@ export default function DailySummary() {
 
         {/* Date range + export */}
         <div className="flex flex-wrap items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                From: {format(from, 'PP')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar mode="single" selected={from} onSelect={(d) => d && setFrom(d)} initialFocus className="pointer-events-auto" />
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                To: {format(to, 'PP')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar mode="single" selected={to} onSelect={(d) => d && setTo(d)} initialFocus className="pointer-events-auto" />
-            </PopoverContent>
-          </Popover>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={rows.length === 0}
-            onClick={() => {
-              const branchName = (id: string) => branches.find(b => b.id === id)?.name || id;
-              const exportRows = [...rows]
-                .sort((a, b) => a.summary_date.localeCompare(b.summary_date))
-                .map(r => ({
-                  date: r.summary_date,
-                  branch: branchName(r.branch_id),
-                  shop_sale: Number(r.shop_sale).toFixed(2),
-                  fuel_sale: Number(r.fuel_sale).toFixed(2),
-                  net_sale: Number(r.net_sale).toFixed(2),
-                  customer_count: r.customer_count,
-                  fuel_volume: Number(r.fuel_volume).toFixed(2),
-                  cash_sale: Number(r.cash_sale).toFixed(2),
-                  atm_loaded: Number(r.atm_loaded).toFixed(2),
-                  store_paid_outs: Number(r.store_paid_outs).toFixed(2),
-                  cash_deposit: Number(r.cash_deposit).toFixed(2),
-                  notes: r.notes ?? '',
-                }));
-              downloadCSV(
-                `daily-summary_${format(from, 'yyyy-MM-dd')}_to_${format(to, 'yyyy-MM-dd')}.csv`,
-                exportRows,
-                [
-                  { key: 'date', label: 'Date' },
-                  { key: 'branch', label: 'Branch' },
-                  { key: 'shop_sale', label: 'Shop sale (Gross) (£)' },
-                  { key: 'fuel_sale', label: 'Fuel Sale (£)' },
-                  { key: 'net_sale', label: 'Shop sale (Net) (£)' },
-                  { key: 'customer_count', label: 'Customers' },
-                  { key: 'fuel_volume', label: 'Fuel volume (Liter)' },
-                  { key: 'cash_sale', label: 'Cash Sale (£)' },
-                  { key: 'atm_loaded', label: 'ATM Loaded (£)' },
-                  { key: 'store_paid_outs', label: 'Store Paid Outs (£)' },
-                  { key: 'cash_deposit', label: 'Cash Deposit (£)' },
-                  { key: 'notes', label: 'Notes' },
-                ]
-              );
-              toast.success('CSV exported');
-            }}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
-        </div>
+        {/* Date range + export — hidden on Manager Entry tab */}
+        {!hideRangeFilters && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="font-normal">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  From: {format(from, 'PP')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar mode="single" selected={from} onSelect={(d) => d && setFrom(d)} initialFocus className="pointer-events-auto" />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="font-normal">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  To: {format(to, 'PP')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar mode="single" selected={to} onSelect={(d) => d && setTo(d)} initialFocus className="pointer-events-auto" />
+              </PopoverContent>
+            </Popover>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={rows.length === 0}
+              onClick={() => {
+                const branchName = (id: string) => branches.find(b => b.id === id)?.name || id;
+                const exportRows = [...rows]
+                  .sort((a, b) => a.summary_date.localeCompare(b.summary_date))
+                  .map(r => ({
+                    date: r.summary_date,
+                    branch: branchName(r.branch_id),
+                    shop_sale: Number(r.shop_sale).toFixed(2),
+                    fuel_sale: Number(r.fuel_sale).toFixed(2),
+                    net_sale: Number(r.net_sale).toFixed(2),
+                    customer_count: r.customer_count,
+                    fuel_volume: Number(r.fuel_volume).toFixed(2),
+                    cash_sale: Number(r.cash_sale).toFixed(2),
+                    atm_loaded: Number(r.atm_loaded).toFixed(2),
+                    store_paid_outs: Number(r.store_paid_outs).toFixed(2),
+                    cash_deposit: Number(r.cash_deposit).toFixed(2),
+                    notes: r.notes ?? '',
+                  }));
+                downloadCSV(
+                  `daily-summary_${format(from, 'yyyy-MM-dd')}_to_${format(to, 'yyyy-MM-dd')}.csv`,
+                  exportRows,
+                  [
+                    { key: 'date', label: 'Date' },
+                    { key: 'branch', label: 'Branch' },
+                    { key: 'shop_sale', label: 'Shop sale (Gross) (£)' },
+                    { key: 'fuel_sale', label: 'Fuel Sale (£)' },
+                    { key: 'net_sale', label: 'Shop sale (Net) (£)' },
+                    { key: 'customer_count', label: 'Customers' },
+                    { key: 'fuel_volume', label: 'Fuel volume (Liter)' },
+                    { key: 'cash_sale', label: 'Cash Sale (£)' },
+                    { key: 'atm_loaded', label: 'ATM Loaded (£)' },
+                    { key: 'store_paid_outs', label: 'Store Paid Outs (£)' },
+                    { key: 'cash_deposit', label: 'Cash Deposit (£)' },
+                    { key: 'notes', label: 'Notes' },
+                  ]
+                );
+                toast.success('CSV exported');
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Manager view */}
