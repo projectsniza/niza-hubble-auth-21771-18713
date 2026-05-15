@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Upload, FileSpreadsheet, LogOut, Menu } from 'lucide-react';
+import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
@@ -16,6 +16,7 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
   const items = [
     { title: 'Home', icon: Home, path: '/niza-analysis' },
     { title: 'Daily Sales', icon: Upload, path: '/niza-analysis/daily-sales' },
+    { title: 'Branch Formats', icon: Settings2, path: '/niza-analysis/branch-formats' },
     { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
   ];
 

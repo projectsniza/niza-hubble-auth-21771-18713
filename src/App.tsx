@@ -79,6 +79,7 @@ const NizaAnalysis = lazy(() => import("./pages/NizaAnalysis"));
 const NizaAnalysisHome = lazy(() => import("./pages/niza-analysis/Home"));
 const DailySalesAdmin = lazy(() => import("./pages/niza-analysis/DailySalesAdmin"));
 const XeroExport = lazy(() => import("./pages/niza-analysis/XeroExport"));
+const BranchFormats = lazy(() => import("./pages/niza-analysis/BranchFormats"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -177,6 +178,7 @@ const App = () => (
               <Route path="/niza-analysis" element={<NizaAnalysis />}>
                 <Route index element={<NizaAnalysisHome />} />
                 <Route path="daily-sales" element={<DailySalesAdmin />} />
+                <Route path="branch-formats" element={<BranchFormats />} />
                 <Route path="xero-export" element={<XeroExport />} />
               </Route>
               <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
