@@ -6,18 +6,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Trash2 } from 'lucide-react';
+import { Upload, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
+import { parseCoopFuel, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
+
+type BranchProfile = {
+  branch_id: string | null;
+  organization_id: string | null;
+  import_format: ImportFormatId | null;
+};
 
 export default function DailySalesUpload() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<{ branch_id: string | null; organization_id: string | null } | null>(null);
+  const [profile, setProfile] = useState<BranchProfile | null>(null);
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [files, setFiles] = useState<FileList | null>(null);
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
+
+  const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
 
   const loadRows = async () => {
     const { data } = await supabase
@@ -30,8 +39,21 @@ export default function DailySalesUpload() {
 
   useEffect(() => {
     if (!user?.id) return;
-    supabase.from('profiles').select('branch_id, organization_id').eq('id', user.id).maybeSingle()
-      .then(({ data }) => setProfile(data as any));
+    (async () => {
+      const { data: prof } = await supabase
+        .from('profiles').select('branch_id, organization_id').eq('id', user.id).maybeSingle();
+      let import_format: ImportFormatId | null = null;
+      if (prof?.branch_id) {
+        const { data: br } = await supabase
+          .from('branches').select('import_format').eq('id', prof.branch_id).maybeSingle();
+        import_format = (br as any)?.import_format || null;
+      }
+      setProfile({
+        branch_id: prof?.branch_id || null,
+        organization_id: prof?.organization_id || null,
+        import_format,
+      });
+    })();
     loadRows();
   }, [user?.id]);
 
@@ -40,28 +62,71 @@ export default function DailySalesUpload() {
     if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
     setBusy(true);
     try {
-      for (const file of Array.from(files)) {
-        const text = await file.text();
-        const totals = parseDailySales(text);
-        const path = `${profile.branch_id}/${date}/${Date.now()}_${file.name}`;
-        const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, file, { upsert: false });
-        if (upErr) throw upErr;
+      const fileArr = Array.from(files);
+
+      // ----- Co-op Fuel: combine TXT1 + DEPARTMENTVAT into one record -----
+      if (profile.import_format === 'coop_fuel') {
+        const findFile = (re: RegExp) => fileArr.find(f => re.test(f.name));
+        const txtFile = findFile(/^TXT\d*[._-]?/i);
+        const deptFile = findFile(/DEPARTMENT.*VAT/i);
+        if (!txtFile || !deptFile) {
+          throw new Error('Co-op Fuel format requires both a TXT*.csv and a DEPARTMENTVAT*.csv file.');
+        }
+        const [txtText, deptText] = await Promise.all([txtFile.text(), deptFile.text()]);
+        const breakdown = parseCoopFuel({ txt1: txtText, deptVat: deptText });
+        const legacy = parseDailySales(txtText); // keep shop/fuel/lottery shape for back-compat
+        const combinedTotals = {
+          ...legacy,
+          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+          fuel: breakdown.FU,
+          lottery: breakdown.national_lottery,
+          breakdown,
+          format: 'coop_fuel' as const,
+        };
+        // Store both files
+        for (const f of [txtFile, deptFile]) {
+          const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
+          const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, f, { upsert: false });
+          if (upErr) throw upErr;
+        }
         const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
           organization_id: profile.organization_id,
           branch_id: profile.branch_id,
           sale_date: date,
-          source_filename: file.name,
-          source_format: file.name.split('.').pop()?.toLowerCase() || 'csv',
-          storage_path: path,
-          raw_text: text.length > 200000 ? text.slice(0, 200000) : text,
-          parsed_totals: totals as any,
+          source_filename: `${txtFile.name} + ${deptFile.name}`,
+          source_format: 'coop_fuel',
+          storage_path: `${profile.branch_id}/${date}/`,
+          raw_text: (txtText + '\n---DEPT---\n' + deptText).slice(0, 200000),
+          parsed_totals: combinedTotals as any,
           uploaded_by: user!.id,
         });
         if (insErr) throw insErr;
+      } else {
+        // Generic / unconfigured fallback (existing behaviour)
+        for (const file of fileArr) {
+          const text = await file.text();
+          const totals = parseDailySales(text);
+          const path = `${profile.branch_id}/${date}/${Date.now()}_${file.name}`;
+          const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, file, { upsert: false });
+          if (upErr) throw upErr;
+          const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
+            organization_id: profile.organization_id,
+            branch_id: profile.branch_id,
+            sale_date: date,
+            source_filename: file.name,
+            source_format: file.name.split('.').pop()?.toLowerCase() || 'csv',
+            storage_path: path,
+            raw_text: text.length > 200000 ? text.slice(0, 200000) : text,
+            parsed_totals: totals as any,
+            uploaded_by: user!.id,
+          });
+          if (insErr) throw insErr;
+        }
       }
       toast.success('Upload complete');
       setFiles(null);
-      (document.getElementById('ds-file') as HTMLInputElement | null)?.value && ((document.getElementById('ds-file') as HTMLInputElement).value = '');
+      const fi = document.getElementById('ds-file') as HTMLInputElement | null;
+      if (fi) fi.value = '';
       loadRows();
     } catch (e: any) {
       toast.error(e?.message || 'Upload failed');
@@ -82,9 +147,27 @@ export default function DailySalesUpload() {
       <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
         <Upload className="h-6 w-6 text-primary" /> Daily Sales Upload
       </h1>
-      <p className="text-sm text-muted-foreground mb-4">
-        Upload your daily till report (CSV or XML). Head office will convert these into the Xero import file.
-      </p>
+
+      {formatMeta ? (
+        <Card className="p-3 mb-4 bg-primary/5 border-primary/20">
+          <p className="text-sm">
+            <span className="font-semibold">Format:</span> {formatMeta.label}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">{formatMeta.description}</p>
+          {profile?.import_format === 'coop_fuel' && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Select <strong>both</strong> daily files together: <code>TXT*.csv</code> and <code>DEPARTMENTVAT*.csv</code>.
+            </p>
+          )}
+        </Card>
+      ) : (
+        <Card className="p-3 mb-4 bg-amber-500/10 border-amber-500/30 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            No import format has been configured for your store yet. Please ask head office to set one in Niza Analysis → Branch Formats.
+          </p>
+        </Card>
+      )}
 
       <Card className="p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div>
