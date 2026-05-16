@@ -84,40 +84,62 @@ const codeForDept = (label: string): keyof CoopCategoryTotals | null => {
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
+// Tolerant department parser:
+// - splits on comma / tab / semicolon
+// - strips empty cells
+// - identifies a "dept row" by an uppercase-ish label that contains "- (NNN)" OR
+//   matches one of the known department keywords
+// - extracts up to 3 (net, vat) pairs from the row (for 0%, 20%, 5% — order in file
+//   is consistent: 0%, then 20%, then 5%). VAT cells are the cell right after a
+//   non-zero net cell in a numeric run.
+const DEPT_HINT = /\bDEPT\b|\(\d{2,4}\)|FUEL|TOBACCO|CIGARETTES|BEVERAGES|GROCERY|FROZEN|PROVISIONS|ALCOHOL|WINE|SPIRIT|BEER|NEWSPAPER|MAGAZINE|VENDING|BAKERY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|CONCESSION|CAR\s*CARE|PHONECARDS|CAR\s*WASH|JET\s*WASH/i;
+
+const splitRow = (line: string): string[] => line.split(/[,\t;]/).map(c => c.trim());
+
+const isNumericCell = (s: string) => /^-?\d{1,3}(?:,\d{3})*(?:\.\d+)?$|^-?\d+\.\d+$|^-?\d+$/.test(s.replace(/\s+/g, ''));
+
 const parseDepartmentVat = (text: string): DeptRow[] => {
   const rows: DeptRow[] = [];
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    if (!line || !line.trim()) continue;
-    // Only lines that begin with a department-style label (uppercase + " - (")
-    if (!/^[A-Z0-9][^,]*-\s*\(\d+\)/.test(line.split(',')[0].trim())) continue;
-    const cols = line.split(',').map(c => c.trim());
-    // Expected layout (post-trim, ignoring blanks):
-    //  0:DEPT_LABEL,,,,,n0,amt0,vat0,,n20,amt20,vat20,,n5,amt5,vat5,,...
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+$/,'');
+    if (!line) continue;
+    const cols = splitRow(line).filter(c => c !== '');
+    if (cols.length < 4) continue;
     const label = cols[0];
+    if (!DEPT_HINT.test(label)) continue;
+    // Collect numeric cells (preserving order) — first numeric "block" is qty/net0,
+    // then nets/vats per rate. We pick last 6 numeric cells and treat them as
+    // [n0, v0, n20, v20, n5, v5] when ≥6 numerics; otherwise pad with zeros.
+    const nums = cols.slice(1).filter(isNumericCell).map(numFromCell);
+    if (nums.length < 2) continue;
+    // Heuristic: in the till export the row layout (after the label) is
+    //   qty0, amt0, vat0,  qty20, amt20, vat20,  qty5, amt5, vat5, totals...
+    // We want amt+vat by rate. Pull the relevant slots if present.
+    const get = (i: number) => (i < nums.length ? nums[i] : 0);
     rows.push({
       label,
-      net0:  numFromCell(cols[6]),
-      net20: numFromCell(cols[10]),
-      vat20: numFromCell(cols[11]),
-      net5:  numFromCell(cols[14]),
-      vat5:  numFromCell(cols[15]),
+      net0:  get(1),   // amt0
+      net20: get(4),   // amt20
+      vat20: get(5),   // vat20
+      net5:  get(7),   // amt5
+      vat5:  get(8),   // vat5
     });
   }
   return rows;
 };
 
 export interface CoopParseInput {
-  txt1?: string;     // TXT1*.csv contents
-  deptVat?: string;  // DEPARTMENTVAT*.csv contents
+  txt1?: string;     // TXT1*.csv contents (single till export — may also contain dept rows)
+  deptVat?: string;  // optional DEPARTMENTVAT*.csv contents (legacy two-file flow)
 }
 
 export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
   const out = emptyCoopTotals();
 
-  // ---- Department breakdown ----
-  if (input.deptVat) {
-    for (const r of parseDepartmentVat(input.deptVat)) {
+  // ---- Department breakdown (prefer explicit dept file, else fall back to TXT) ----
+  const deptSource = input.deptVat || input.txt1 || '';
+  if (deptSource) {
+    for (const r of parseDepartmentVat(deptSource)) {
       const code = codeForDept(r.label);
       if (!code) continue;
       const gross20 = r.net20 + r.vat20;
@@ -144,7 +166,8 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
     out.payzone            = findTxtLineLast(t, /^\s*Payzone\b/im);
     const carWash          = sumTxtLines(t, /CAR\s*WASH/i);
     const jetWash          = sumTxtLines(t, /JET\s*WASH/i);
-    out.CW                 = +(carWash + jetWash).toFixed(2);
+    // Only override CW from TXT if dept file didn't already supply it
+    if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
   }
@@ -260,6 +283,6 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
 
 // Format registry — single source of truth used across UI.
 export const IMPORT_FORMATS = [
-  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'TXT1 + DEPARTMENTVAT till exports → Xero sales import.' },
+  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'Single TXT till export → Xero sales import. Upload one TXT/CSV per day.' },
 ] as const;
 export type ImportFormatId = typeof IMPORT_FORMATS[number]['id'];

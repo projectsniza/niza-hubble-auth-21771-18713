@@ -15,9 +15,9 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
 
   const items = [
     { title: 'Home', icon: Home, path: '/niza-analysis' },
+    { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
     { title: 'Daily Sales', icon: Upload, path: '/niza-analysis/daily-sales' },
     { title: 'Branch Formats', icon: Settings2, path: '/niza-analysis/branch-formats' },
-    { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
   ];
 
   return (
