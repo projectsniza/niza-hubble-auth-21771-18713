@@ -158,7 +158,7 @@ export default function DailySalesUpload() {
           <p className="text-xs text-muted-foreground mt-1">{formatMeta.description}</p>
           {profile?.import_format === 'coop_fuel' && (
             <p className="text-xs text-muted-foreground mt-1">
-              Select <strong>both</strong> daily files together: <code>TXT*.csv</code> and <code>DEPARTMENTVAT*.csv</code>.
+              Select the single daily till CSV/TXT export (e.g. <code>TXT1 (1).CSV</code>). Minor formatting breaks or blank lines are tolerated.
             </p>
           )}
         </Card>
