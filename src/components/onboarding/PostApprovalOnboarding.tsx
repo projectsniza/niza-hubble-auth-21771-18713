@@ -264,6 +264,76 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     }
   };
 
+  const generateAndSaveOnboardingPdfs = async () => {
+    try {
+      // Fetch employee folder
+      const { data: employeeFolder } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .eq('folder_type', 'employee')
+        .maybeSingle();
+      if (!employeeFolder) return;
+
+      // Fetch all 3 form responses in parallel
+      const [appRes, starterRes, bankRes] = await Promise.all([
+        supabase.from('onboarding_form_responses').select('form_data').eq('employee_id', employeeId).eq('form_type', 'application_form').maybeSingle(),
+        supabase.from('onboarding_form_responses').select('form_data').eq('employee_id', employeeId).eq('form_type', 'starter_checklist').maybeSingle(),
+        supabase.from('onboarding_form_responses').select('form_data').eq('employee_id', employeeId).eq('form_type', 'bank_details').maybeSingle(),
+      ]);
+
+      // Skip files that already exist in this folder (avoid duplicates)
+      const { data: existingDocs } = await supabase
+        .from('documents')
+        .select('title')
+        .eq('folder_id', employeeFolder.id)
+        .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
+      const existingTitles = new Set((existingDocs || []).map((d: any) => d.title));
+
+      const orgName = employee?.organizations?.name;
+      const branchName = employee?.branches?.name;
+
+      const uploads: Array<{ title: string; doc: any; baseName: string }> = [];
+      if (appRes.data?.form_data && !existingTitles.has('Application Form')) {
+        const doc = await buildApplicationFormPdf(appRes.data.form_data as any, orgName, branchName);
+        uploads.push({ title: 'Application Form', doc, baseName: 'Application_Form' });
+      }
+      if (starterRes.data?.form_data && !existingTitles.has('Starter Checklist')) {
+        const doc = await buildStarterChecklistPdf(starterRes.data.form_data as any);
+        uploads.push({ title: 'Starter Checklist', doc, baseName: 'Starter_Checklist' });
+      }
+      if (bankRes.data?.form_data && !existingTitles.has('Bank Details')) {
+        const doc = await buildBankDetailsPdf(bankRes.data.form_data as any);
+        uploads.push({ title: 'Bank Details', doc, baseName: 'Bank_Details' });
+      }
+
+      for (const u of uploads) {
+        const blob: Blob = u.doc.output('blob');
+        const fileName = `${u.baseName}_${employeeId}_${Date.now()}.pdf`;
+        const filePath = `employees/${employeeId}/onboarding-forms/${fileName}`;
+        const { error: upErr } = await supabase.storage
+          .from('documents')
+          .upload(filePath, blob, { contentType: 'application/pdf' });
+        if (upErr) {
+          console.error(`Failed to upload ${u.title}:`, upErr);
+          continue;
+        }
+        await supabase.from('documents').insert({
+          title: u.title,
+          file_name: `${u.baseName}.pdf`,
+          file_path: filePath,
+          file_type: 'application/pdf',
+          file_size: blob.size,
+          employee_id: employeeId,
+          folder_id: employeeFolder.id,
+          uploaded_by: user?.id,
+        });
+      }
+    } catch (err) {
+      console.error('Onboarding PDF generation error:', err);
+    }
+  };
+
   const handleComplete = async () => {
     setLoading(true);
     try {
@@ -276,6 +346,10 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         .from('employee_onboarding')
         .update({ completed_at: new Date().toISOString() })
         .eq('employee_id', employeeId);
+
+      // Auto-generate Application Form, Starter Checklist and Bank Details PDFs
+      // and save them into the employee's document folder.
+      await generateAndSaveOnboardingPdfs();
 
       toast.success('Onboarding completed!');
       onBack();
