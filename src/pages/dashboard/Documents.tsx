@@ -305,9 +305,13 @@ export default function Documents() {
     return 'normal';
   };
 
-  // When filtering by overdue/upcoming, use all documents globally
+  // Only use global documents when the user landed here via the upcoming/overdue
+  // route filter (e.g. dashboard widget). Inside an employee/branch folder the
+  // Upcoming/Overdue tabs should stay scoped to the current folder's documents.
+  const urlFilter = searchParams.get('filter');
+  const isFromRoute = urlFilter === 'overdue' || urlFilter === 'upcoming';
   const isOverdueOrUpcoming = activeTab === 'overdue' || activeTab === 'upcoming';
-  const docsToFilter = isOverdueOrUpcoming ? allDocuments : documents;
+  const docsToFilter = isOverdueOrUpcoming && isFromRoute ? allDocuments : documents;
   
   const filteredDocuments = docsToFilter.filter(doc => {
     const matchesSearch = !searchQuery || 
