@@ -7,6 +7,11 @@ import { ArrowLeft, ArrowRight, Check, Upload, FileSignature, FilePen, CheckCirc
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  buildApplicationFormPdf,
+  buildStarterChecklistPdf,
+  buildBankDetailsPdf,
+} from '@/lib/onboardingPdfs';
 
 interface PostApprovalOnboardingProps {
   employeeId: string;
