@@ -283,6 +283,6 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
 
 // Format registry — single source of truth used across UI.
 export const IMPORT_FORMATS = [
-  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'TXT1 + DEPARTMENTVAT till exports → Xero sales import.' },
+  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'Single TXT till export → Xero sales import. Upload one TXT/CSV per day.' },
 ] as const;
 export type ImportFormatId = typeof IMPORT_FORMATS[number]['id'];
