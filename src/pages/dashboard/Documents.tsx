@@ -719,7 +719,7 @@ export default function Documents() {
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">
                   Documents ({filteredDocuments.length})
-                  {isOverdueOrUpcoming && <span className="ml-2 text-xs">• Showing all {activeTab} documents</span>}
+                  {isOverdueOrUpcoming && isFromRoute && <span className="ml-2 text-xs">• Showing all {activeTab} documents</span>}
                 </h3>
                 <div className="space-y-2">
                   {filteredDocuments.map((doc) => {
@@ -730,7 +730,7 @@ export default function Documents() {
                         className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => {
                           // Navigate to the document's folder
-                          if (isOverdueOrUpcoming && doc.folder_id) {
+                          if (isOverdueOrUpcoming && isFromRoute && doc.folder_id) {
                             setCurrentFolderId(doc.folder_id);
                             setActiveTab('all');
                           }
@@ -758,7 +758,7 @@ export default function Documents() {
                                     Expires: {format(new Date(doc.expiry_date), 'dd MMM yyyy')}
                                   </Badge>
                                 )}
-                                {isOverdueOrUpcoming && doc.folder_id && (
+                                {isOverdueOrUpcoming && isFromRoute && doc.folder_id && (
                                   <Badge variant="secondary" className="gap-1">
                                     <Folder className="h-3 w-3" />
                                     Click to view in folder
