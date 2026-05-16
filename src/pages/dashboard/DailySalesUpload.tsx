@@ -64,17 +64,19 @@ export default function DailySalesUpload() {
     try {
       const fileArr = Array.from(files);
 
-      // ----- Co-op Fuel: combine TXT1 + DEPARTMENTVAT into one record -----
+      // ----- Co-op Fuel: single TXT till export (robust to small misalignments) -----
       if (profile.import_format === 'coop_fuel') {
-        const findFile = (re: RegExp) => fileArr.find(f => re.test(f.name));
-        const txtFile = findFile(/^TXT\d*[._-]?/i);
-        const deptFile = findFile(/DEPARTMENT.*VAT/i);
-        if (!txtFile || !deptFile) {
-          throw new Error('Co-op Fuel format requires both a TXT*.csv and a DEPARTMENTVAT*.csv file.');
-        }
-        const [txtText, deptText] = await Promise.all([txtFile.text(), deptFile.text()]);
+        // Prefer the TXT/CSV that looks like the till export; otherwise just the first file.
+        const txtFile =
+          fileArr.find(f => /^TXT/i.test(f.name)) ||
+          fileArr.find(f => /\.(csv|txt)$/i.test(f.name)) ||
+          fileArr[0];
+        const deptFile = fileArr.find(f => /DEPARTMENT.*VAT/i.test(f.name)); // optional legacy
+        if (!txtFile) throw new Error('Please select the daily till CSV/TXT file.');
+        const txtText = await txtFile.text();
+        const deptText = deptFile ? await deptFile.text() : undefined;
         const breakdown = parseCoopFuel({ txt1: txtText, deptVat: deptText });
-        const legacy = parseDailySales(txtText); // keep shop/fuel/lottery shape for back-compat
+        const legacy = parseDailySales(txtText);
         const combinedTotals = {
           ...legacy,
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
@@ -83,8 +85,8 @@ export default function DailySalesUpload() {
           breakdown,
           format: 'coop_fuel' as const,
         };
-        // Store both files
-        for (const f of [txtFile, deptFile]) {
+        const filesToStore = deptFile ? [txtFile, deptFile] : [txtFile];
+        for (const f of filesToStore) {
           const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
           const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, f, { upsert: false });
           if (upErr) throw upErr;
@@ -93,10 +95,10 @@ export default function DailySalesUpload() {
           organization_id: profile.organization_id,
           branch_id: profile.branch_id,
           sale_date: date,
-          source_filename: `${txtFile.name} + ${deptFile.name}`,
+          source_filename: deptFile ? `${txtFile.name} + ${deptFile.name}` : txtFile.name,
           source_format: 'coop_fuel',
           storage_path: `${profile.branch_id}/${date}/`,
-          raw_text: (txtText + '\n---DEPT---\n' + deptText).slice(0, 200000),
+          raw_text: ((deptText ? txtText + '\n---DEPT---\n' + deptText : txtText)).slice(0, 200000),
           parsed_totals: combinedTotals as any,
           uploaded_by: user!.id,
         });
