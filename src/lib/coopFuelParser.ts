@@ -259,12 +259,7 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[]): string {
 }
 
 // Intermediate "Daily Summary" CSV — one row per day, matching the CASH SUM1
-// monthly cash-summary template (Houndmills format). Fields we can derive from
-// the till upload are filled; bank/invoice-sourced fields are left blank so the
-// admin can fill them in later from the bank/invoice feed.
-//
-// Each selected day produces one row (even when a single date is selected) so
-// the output mirrors the printed monthly sheet structure on a per-day basis.
+// monthly cash-summary template (single-tab fallback).
 export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const headers = [
     'DATE','BRANCH','OPEN BALANCE','OTHER INCOME','DETAILS',
@@ -281,17 +276,113 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
                       (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
     const cols = [
       r.sale_date, r.branch_name,
-      '', '', '',                                  // open balance / other income / details — from bank
+      '', '', '',
       fmt(shopSales), fmt(t.CW), fmt(t.VM), fmt(t.payzone),
       fmt(t.FU), fmt(t.national_lottery), fmt(Math.abs(t.lottery_payouts || 0)),
-      '', '',                                      // credit c.sales / cash s.total — from bank
-      '', '',                                      // account customers / vouchers income — from bank
-      '', '',                                      // misc expence / products for resale — from invoices
-      '', '', '', ''                               // banking / closing / actual / different — from bank
+      '', '', '', '', '', '', '', '', '', ''
     ];
     out.push(cols.map(csvEscape).join(','));
   }
   return out.join('\n');
+}
+
+// ---------- Multi-tab "Branch Cash Summary" workbook ----------
+// Mirrors the printed monthly management pack (CASH SUM1, SALE, SHIFT SHEET,
+// COUNTING, DIPS, OBJECTIVE, C.CARD, C.PURCH, EXPENSES, PURCHASE, P&L, BANK,
+// STOCK CONT, Week Wages, HOURS & WAGES, comp statement). Sheets derivable
+// from till uploads are populated; the rest are skeletons for bank/invoice
+// data the admin will fill in later.
+export async function buildBranchSummaryWorkbook(
+  rows: CoopXeroRow[],
+  meta: { branch_name: string; period_label: string }
+): Promise<Blob> {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+  const title = (label: string) => [
+    [label.toUpperCase()], [meta.branch_name], [`Period: ${meta.period_label}`], [],
+  ];
+
+  // CASH SUM1
+  const cashHeaders = [
+    'DATE','OPEN BALANCE','OTHER INCOME','DETAILS',
+    'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
+    'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
+    'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
+  ];
+  const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    const shop = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
+                 (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
+    cashRows.push([
+      r.sale_date, '', '', '',
+      shop || '', t.CW || '', t.VM || '', t.payzone || '',
+      t.FU || '', t.national_lottery || '', Math.abs(t.lottery_payouts || 0) || '',
+      '', '', '', '', '', '', '', '', '', ''
+    ]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashRows), 'CASH SUM1');
+
+  // SALE — departmental breakdown
+  const saleHeaders = ['DATE','FUEL','TOBACCO','DRINKS','GROCERY STD','GROCERY ZERO',
+    'DOMESTIC 5%','ALCOHOL','NEWSPAPERS','VENDING','CAR WASH',
+    'NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE','LOTTO PAYOUTS','DRIVE OFF'];
+  const saleRows: any[][] = [...title('Sales by Department'), saleHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    saleRows.push([
+      r.sale_date,
+      t.FU || '', t.TO || '', t.DR || '', t.GS || '', t.GZ || '',
+      t.DO || '', t.AL || '', t.NP || '', t.VM || '', t.CW || '',
+      t.national_lottery || '', t.instant_lottery || '',
+      t.paypoint || '', t.payzone || '',
+      t.lottery_payouts || '', t.fuel_drive_off || ''
+    ]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(saleRows), '  SALE  ');
+
+  const stub = (label: string, headers: string[]) => {
+    const aoa: any[][] = [...title(label), headers];
+    for (const r of rows) {
+      const row = new Array(headers.length).fill('');
+      row[0] = r.sale_date;
+      aoa.push(row);
+    }
+    return XLSX.utils.aoa_to_sheet(aoa);
+  };
+
+  XLSX.utils.book_append_sheet(wb, stub('Shift Sheet',
+    ['DATE','RECEIVED','AMOUNT','SALES','AMOUNT','NOTES']), 'SHIFT SHEET');
+  XLSX.utils.book_append_sheet(wb, stub('Counting Summary',
+    ['DATE','PLU NO','ITEM','PRICE','OPEN','ADD','CLOSE','SALE']), 'COUNTING');
+  XLSX.utils.book_append_sheet(wb, stub('Tank Dips',
+    ['DATE','TANK','METER READINGS','TOTAL ISSUE','TODAYS DIP','DELIVERY','GONE FROM TANK','GAIN/LOSS','%']), 'DIPS');
+  XLSX.utils.book_append_sheet(wb, stub('Objectives',
+    ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
+  XLSX.utils.book_append_sheet(wb, stub('Credit Card Receipts',
+    ['DATE','VISA','MASTERCARD','AMEX','DINERS','FUEL CARD','OTHER','TOTAL']), 'C.CARD');
+  XLSX.utils.book_append_sheet(wb, stub('Credit Purchases',
+    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS']), 'C.PURCH');
+  XLSX.utils.book_append_sheet(wb, stub('Expenses',
+    ['DATE','PAYEE','DESCRIPTION','CATEGORY','NET','VAT','GROSS','PAID BY']), 'EXPENSES');
+  XLSX.utils.book_append_sheet(wb, stub('Purchases',
+    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS']), 'PURCHASE');
+  XLSX.utils.book_append_sheet(wb, stub('Profit & Loss',
+    ['DATE','SALES','COST OF SALES','GROSS PROFIT','EXPENSES','NET PROFIT']), '      P &  L  ');
+  XLSX.utils.book_append_sheet(wb, stub('Banking',
+    ['DATE','CASH BANKED','CHEQUES BANKED','CARD SETTLEMENT','OTHER','TOTAL']), ' BANK ');
+  XLSX.utils.book_append_sheet(wb, stub('Stock Control',
+    ['DATE','OPENING STOCK','PURCHASES','SALES','CLOSING STOCK','VARIANCE']), 'STOCK CONT');
+  XLSX.utils.book_append_sheet(wb, stub('Week Wages',
+    ['WEEK ENDING','EMPLOYEE','HOURS','RATE','GROSS','TAX','NI','NET']), 'Week Wages');
+  XLSX.utils.book_append_sheet(wb, stub('Hours & Wages',
+    ['DATE','EMPLOYEE','HOURS','RATE','AMOUNT']), 'HOURS & WAGES');
+  XLSX.utils.book_append_sheet(wb, stub('Comparative Statement',
+    ['DATE','THIS MONTH','LAST MONTH','VARIANCE','YTD']), 'comp statement');
+
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 // Format registry — single source of truth used across UI.
@@ -299,3 +390,4 @@ export const IMPORT_FORMATS = [
   { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'Single TXT till export → Xero sales import. Upload one TXT/CSV per day.' },
 ] as const;
 export type ImportFormatId = typeof IMPORT_FORMATS[number]['id'];
+
