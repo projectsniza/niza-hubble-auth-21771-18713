@@ -258,23 +258,36 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[]): string {
   return out.join('\n');
 }
 
-// Intermediate "Daily Summary" CSV — gives super admin a flat per-day breakdown
-// with all known fields (other fields like bank deposits/invoices stay blank for now).
+// Intermediate "Daily Summary" CSV — one row per day, matching the CASH SUM1
+// monthly cash-summary template (Houndmills format). Fields we can derive from
+// the till upload are filled; bank/invoice-sourced fields are left blank so the
+// admin can fill them in later from the bank/invoice feed.
+//
+// Each selected day produces one row (even when a single date is selected) so
+// the output mirrors the printed monthly sheet structure on a per-day basis.
 export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const headers = [
-    'Date','Branch','Invoice #',
-    'Fuel','Tobacco','Drinks','Grocery Std','Grocery Zero','Domestic 5%','Alcohol','Newspapers','Vending','Car/Jet Wash',
-    'National Lottery','Instant Lottery','Paypoint','Payzone','Lottery Payouts','Petty Cash','Drive Off','Bad Debtors',
-    'Bank Deposit','Cash Banked','Card Settlement','Invoices Received','Notes'
+    'DATE','BRANCH','OPEN BALANCE','OTHER INCOME','DETAILS',
+    'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
+    'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
+    'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
   ];
   const out = [headers.join(',')];
+  const fmt = (n: number) => (n ? Number(n).toFixed(2) : '');
   for (const r of rows) {
     const t = r.totals;
+    const shopSales = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
+                      (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
     const cols = [
-      r.sale_date, r.branch_name, r.invoice_number,
-      t.FU, t.TO, t.DR, t.GS, t.GZ, t.DO, t.AL, t.NP, t.VM, t.CW,
-      t.national_lottery, t.instant_lottery, t.paypoint, t.payzone, t.lottery_payouts, t.petty_cash, t.fuel_drive_off, t.bad_debtors,
-      '', '', '', '', ''
+      r.sale_date, r.branch_name,
+      '', '', '',                                  // open balance / other income / details — from bank
+      fmt(shopSales), fmt(t.CW), fmt(t.VM), fmt(t.payzone),
+      fmt(t.FU), fmt(t.national_lottery), fmt(Math.abs(t.lottery_payouts || 0)),
+      '', '',                                      // credit c.sales / cash s.total — from bank
+      '', '',                                      // account customers / vouchers income — from bank
+      '', '',                                      // misc expence / products for resale — from invoices
+      '', '', '', ''                               // banking / closing / actual / different — from bank
     ];
     out.push(cols.map(csvEscape).join(','));
   }
