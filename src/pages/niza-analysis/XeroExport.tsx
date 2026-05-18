@@ -19,7 +19,9 @@ interface UploadRow {
   branch?: { id: string; name: string; import_format: string | null } | null;
 }
 
-export default function XeroExport() {
+interface XeroExportProps { embedded?: boolean }
+
+export default function XeroExport({ embedded = false }: XeroExportProps) {
   const today = new Date();
   const [from, setFrom] = useState<string>(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [to, setTo] = useState<string>(format(endOfMonth(today), 'yyyy-MM-dd'));
