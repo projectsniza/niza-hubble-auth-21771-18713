@@ -98,10 +98,27 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     downloadCsv(csv, `xero_sales_${tag}.csv`);
   };
 
-  const downloadSummary = () => {
+  const downloadSummary = async () => {
     if (coopRows.length === 0) return toast.error('No Co-op Fuel rows in range');
     const tag = single ? single : `${from}_to_${to}`;
-    downloadCsv(buildDailySummaryCsv(coopRows), `daily_summary_${tag}.csv`);
+    // Group rows by branch so each branch gets its own workbook (filename includes branch).
+    const byBranch = new Map<string, CoopXeroRow[]>();
+    for (const r of coopRows) {
+      const k = r.branch_name || 'branch';
+      if (!byBranch.has(k)) byBranch.set(k, []);
+      byBranch.get(k)!.push(r);
+    }
+    const safe = (s: string) => s.replace(/[^a-z0-9_-]+/gi, '_');
+    for (const [branch, list] of byBranch) {
+      const period = single ? single : `${from}_to_${to}`;
+      const blob = await buildBranchSummaryWorkbook(list, { branch_name: branch, period_label: period });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe(branch)}_cash_summary_${safe(tag)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   const setMonth = (offset: number) => {
