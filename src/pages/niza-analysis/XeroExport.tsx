@@ -111,15 +111,48 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     setSingle('');
   };
 
-  return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        <FileSpreadsheet className="h-6 w-6 text-primary" /> Xero Export
-      </h1>
+  const totals = useMemo(() => {
+    let fuel = 0, shop = 0, lottery = 0;
+    for (const r of rows) {
+      const b = r.parsed_totals?.breakdown;
+      if (b) {
+        fuel += Number(b.FU || 0);
+        shop += ['TO','DR','GS','GZ','DO','AL','NP','VM'].reduce((a, k) => a + Number(b[k] || 0), 0);
+        lottery += Number(b.national_lottery || 0);
+      } else {
+        fuel += Number(r.parsed_totals?.fuel || 0);
+        shop += Number(r.parsed_totals?.shop || 0);
+        lottery += Number(r.parsed_totals?.lottery || 0);
+      }
+    }
+    return { fuel, shop, lottery };
+  }, [rows]);
 
-      <Card className="p-4 mb-4">
+  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+    embedded
+      ? <div className="p-6">{children}</div>
+      : <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30">
+          <div className="p-6 md:p-10 max-w-6xl mx-auto">{children}</div>
+        </div>;
+
+  return (
+    <Wrapper>
+      {!embedded && (
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <span className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <FileSpreadsheet className="h-5 w-5" />
+            </span>
+            Xero Export
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Build Xero-ready CSVs and the daily cash summary.</p>
+        </div>
+      )}
+
+      {/* Filters */}
+      <Card className="p-5 mb-5 border-border/60 shadow-sm">
         <Tabs defaultValue="range">
-          <TabsList>
+          <TabsList className="mb-3">
             <TabsTrigger value="range" onClick={() => setSingle('')}>Date range / Month</TabsTrigger>
             <TabsTrigger value="day">Single day</TabsTrigger>
           </TabsList>
@@ -159,11 +192,32 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
         </div>
       </Card>
 
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <p className="text-sm text-muted-foreground">
-            {rows.length} day(s) loaded · {coopRows.length} Co-op Fuel · {legacyRows.length} other
-          </p>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: 'Days loaded', value: rows.length, sub: `${coopRows.length} Co-op · ${legacyRows.length} other`, accent: 'from-primary/15 to-primary/0' },
+          { label: 'Fuel', value: `£${totals.fuel.toFixed(2)}`, sub: 'Total in range', accent: 'from-sky-500/15 to-sky-500/0' },
+          { label: 'Shop', value: `£${totals.shop.toFixed(2)}`, sub: 'Total in range', accent: 'from-emerald-500/15 to-emerald-500/0' },
+          { label: 'Lottery', value: `£${totals.lottery.toFixed(2)}`, sub: 'Total in range', accent: 'from-violet-500/15 to-violet-500/0' },
+        ].map((s) => (
+          <Card key={s.label} className={`relative overflow-hidden p-4 border-border/60`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${s.accent} pointer-events-none`} />
+            <div className="relative">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</div>
+              <div className="text-2xl font-semibold mt-1">{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{s.sub}</div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Results + Downloads */}
+      <Card className="p-5 border-border/60 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <div className="font-semibold">Preview</div>
+            <p className="text-xs text-muted-foreground">One row per uploaded day. Download in Xero or summary format.</p>
+          </div>
           <div className="flex gap-2">
             <Button onClick={downloadSummary} variant="outline" disabled={coopRows.length === 0}>
               <Download className="h-4 w-4 mr-2" /> Daily Summary CSV
@@ -173,14 +227,18 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
             </Button>
           </div>
         </div>
-        {rows.length > 0 && (
-          <div className="text-sm space-y-1 max-h-96 overflow-y-auto">
+        {rows.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-lg">
+            No data loaded yet. Pick a range and click <span className="font-medium">Load</span>.
+          </div>
+        ) : (
+          <div className="text-sm divide-y rounded-lg border max-h-96 overflow-y-auto">
             {rows.map((r) => {
               const b = r.parsed_totals?.breakdown;
               return (
-                <div key={r.id} className="flex justify-between border-b py-1">
-                  <span>{r.sale_date} {r.branch?.name ? `· ${r.branch.name}` : ''}</span>
-                  <span className="text-muted-foreground">
+                <div key={r.id} className="flex justify-between items-center px-3 py-2 hover:bg-muted/40">
+                  <span className="font-medium">{r.sale_date} <span className="text-muted-foreground font-normal">{r.branch?.name ? `· ${r.branch.name}` : ''}</span></span>
+                  <span className="text-muted-foreground text-xs md:text-sm">
                     {b
                       ? `Fuel £${Number(b.FU || 0).toFixed(2)} · Shop £${(['TO','DR','GS','GZ','DO','AL','NP','VM'].reduce((a, k) => a + (b[k] || 0), 0)).toFixed(2)} · Lottery £${Number(b.national_lottery || 0).toFixed(2)}`
                       : `Shop £${Number(r.parsed_totals?.shop || 0).toFixed(2)} · Fuel £${Number(r.parsed_totals?.fuel || 0).toFixed(2)} · Lottery £${Number(r.parsed_totals?.lottery || 0).toFixed(2)}`}
@@ -191,6 +249,6 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
           </div>
         )}
       </Card>
-    </div>
+    </Wrapper>
   );
 }
