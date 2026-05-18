@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildXeroCsv, DailySalesTotals } from '@/lib/dailySalesParser';
-import { buildCoopXeroCsv, buildDailySummaryCsv, emptyCoopTotals, type CoopXeroRow } from '@/lib/coopFuelParser';
+import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, type CoopXeroRow } from '@/lib/coopFuelParser';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 interface UploadRow {
