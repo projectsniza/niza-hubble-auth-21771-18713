@@ -237,7 +237,7 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
           </div>
           <div className="flex gap-2">
             <Button onClick={downloadSummary} variant="outline" disabled={coopRows.length === 0}>
-              <Download className="h-4 w-4 mr-2" /> Daily Summary CSV
+              <Download className="h-4 w-4 mr-2" /> Branch Cash Summary (Excel)
             </Button>
             <Button onClick={downloadXero} disabled={rows.length === 0}>
               <Download className="h-4 w-4 mr-2" /> Xero Sales CSV
