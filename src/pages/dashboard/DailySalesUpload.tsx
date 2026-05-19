@@ -10,7 +10,7 @@ import { Upload, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
-import { parseCoopFuel, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
+import { parseCoopFuel, parseCharfieldShiftReport, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
