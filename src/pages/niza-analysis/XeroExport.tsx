@@ -54,7 +54,13 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
   const coopRows = useMemo<CoopXeroRow[]>(() => {
     let seq = 3651;
     return rows
-      .filter(r => r.branch && (r.branch.import_format === 'coop_fuel' || r.parsed_totals?.format === 'coop_fuel'))
+      .filter(r => r.branch && (
+        r.branch.import_format === 'coop_fuel' ||
+        r.branch.import_format === 'charfield_shift' ||
+        r.parsed_totals?.format === 'coop_fuel' ||
+        r.parsed_totals?.format === 'charfield_shift'
+      ))
+
       .map(r => {
         const breakdown = r.parsed_totals?.breakdown || emptyCoopTotals();
         const branchName = r.branch?.name || '';
