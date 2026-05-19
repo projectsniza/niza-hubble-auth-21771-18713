@@ -421,12 +421,12 @@ export default function CustomerAccountDetail({ customer, onBack, canEdit, isSup
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
+                         ) : (
+                          <div className="flex items-center gap-2">
                             <p className="text-xl font-bold">£{account.total_due.toFixed(2)}</p>
                             {isSuperAdmin && (
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditAmountId(account.id); setEditAmountValue(String(account.total_due)); }}>
-                                <Edit className="h-3 w-3 text-muted-foreground" />
+                              <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => { setEditAmountId(account.id); setEditAmountValue(String(account.total_due)); }}>
+                                <Edit className="h-3 w-3 mr-1" />Edit
                               </Button>
                             )}
                           </div>
