@@ -10,7 +10,7 @@ import { Upload, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
-import { parseCoopFuel, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
+import { parseCoopFuel, parseCharfieldShiftReport, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
@@ -103,7 +103,37 @@ export default function DailySalesUpload() {
           uploaded_by: user!.id,
         });
         if (insErr) throw insErr;
+      } else if (profile.import_format === 'charfield_shift') {
+        // Charfield / Cotswold / Packhorse — Shift & Period Report XLSX (one per day)
+        const xlsxFile =
+          fileArr.find(f => /\.xlsx$/i.test(f.name)) || fileArr[0];
+        if (!xlsxFile) throw new Error('Please select the daily Shift & Period Report XLSX file.');
+        const buf = await xlsxFile.arrayBuffer();
+        const breakdown = await parseCharfieldShiftReport(buf);
+        const combinedTotals = {
+          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+          fuel: breakdown.FU,
+          lottery: breakdown.national_lottery,
+          breakdown,
+          format: 'charfield_shift' as const,
+        };
+        const path = `${profile.branch_id}/${date}/${Date.now()}_${xlsxFile.name}`;
+        const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, xlsxFile, { upsert: false });
+        if (upErr) throw upErr;
+        const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
+          organization_id: profile.organization_id,
+          branch_id: profile.branch_id,
+          sale_date: date,
+          source_filename: xlsxFile.name,
+          source_format: 'charfield_shift',
+          storage_path: path,
+          raw_text: null,
+          parsed_totals: combinedTotals as any,
+          uploaded_by: user!.id,
+        });
+        if (insErr) throw insErr;
       } else {
+
         // Generic / unconfigured fallback (existing behaviour)
         for (const file of fileArr) {
           const text = await file.text();
@@ -161,6 +191,12 @@ export default function DailySalesUpload() {
               Select the single daily till CSV/TXT export (e.g. <code>TXT1 (1).CSV</code>). Minor formatting breaks or blank lines are tolerated.
             </p>
           )}
+          {profile?.import_format === 'charfield_shift' && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Select the daily <code>Shift &amp; Period Report</code> XLSX exported from the till. One workbook per day.
+            </p>
+          )}
+
         </Card>
       ) : (
         <Card className="p-3 mb-4 bg-amber-500/10 border-amber-500/30 flex items-start gap-2">

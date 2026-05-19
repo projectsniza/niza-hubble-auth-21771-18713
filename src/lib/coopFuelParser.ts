@@ -388,6 +388,82 @@ export async function buildBranchSummaryWorkbook(
 // Format registry — single source of truth used across UI.
 export const IMPORT_FORMATS = [
   { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'Single TXT till export → Xero sales import. Upload one TXT/CSV per day.' },
+  { id: 'charfield_shift', label: '2. Charfield, Cotswold & Packhorse', description: 'Shift & Period Report (XLSX) from the till. Upload one workbook per day.' },
 ] as const;
 export type ImportFormatId = typeof IMPORT_FORMATS[number]['id'];
+
+// ---------- Charfield / Cotswold / Packhorse "Shift & Period Report" XLSX ----------
+// Reads the till's Shift & Period Report workbook and produces the same
+// CoopCategoryTotals shape used by Co-op Fuel uploads so all downstream
+// exports (Xero Sales CSV + Branch Cash Summary workbook) work identically.
+const CHARFIELD_DEPT: Array<[RegExp, keyof CoopCategoryTotals]> = [
+  [/tobacco|cigarette/i, 'TO'],
+  [/news|magazine/i, 'NP'],
+  [/vending/i, 'VM'],
+  [/off\s*licence|alcohol|wine|spirit|beer|cider/i, 'AL'],
+  [/drink|beverage/i, 'DR'],
+  [/5%\s*vat|domestic/i, 'DO'],
+  [/car\s*wash|jet\s*wash|air\s*line|screen\s*wash/i, 'CW'],
+  [/grocery\s*zero|chiller|sandwich|bakery|fruit|vegetable/i, 'GZ'],
+  [/grocery|confection|ice\s*cream|snack|car\s*care|takeaway|hot\s*food|deli|frozen|provision/i, 'GS'],
+  [/^fuel\b|manual\s*fuel/i, 'FU'],
+];
+
+const charfieldCode = (label: string): keyof CoopCategoryTotals | null => {
+  for (const [re, code] of CHARFIELD_DEPT) if (re.test(label)) return code;
+  return null;
+};
+
+const toNum = (v: any): number => {
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const n = parseFloat(String(v).replace(/[^\d.\-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+
+export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<CoopCategoryTotals> {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const out = emptyCoopTotals();
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any;
+
+    let inDept = false;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const c0 = String(row[0] ?? '').trim();
+
+      if (/^department totals$/i.test(c0)) { inDept = true; continue; }
+      if (inDept) {
+        if (!c0 || /^total$/i.test(c0) || /^payment totals$/i.test(c0) ||
+            /^money analysis$/i.test(c0) || /^safe drops$/i.test(c0)) {
+          inDept = false;
+        } else if (!/^sales department$/i.test(c0) && !/^quantity$/i.test(c0)) {
+          const value = toNum(row[2]);
+          if (value) {
+            const code = charfieldCode(c0);
+            // Skip FU here — taken from Money Analysis "Fuel Sales" below for accuracy.
+            if (code && code !== 'FU') (out[code] as number) = +((out[code] as number) + value).toFixed(2);
+          }
+        }
+      }
+
+      // Money Analysis values (authoritative for fuel/lottery/paypoint).
+      if (/^fuel sales$/i.test(c0))   out.FU = +(out.FU + toNum(row[1])).toFixed(2);
+      if (/^lottery$/i.test(c0) && !/prize/i.test(c0)) out.national_lottery += toNum(row[1]) || toNum(row[2]);
+      if (/scratchcard/i.test(c0) && !/prize/i.test(c0)) out.instant_lottery += toNum(row[1]) || toNum(row[2]);
+      if (/lotto\s*prize|lottery\s*prize/i.test(c0)) out.lottery_payouts -= Math.abs(toNum(row[1]) || toNum(row[2]));
+      if (/scratchcard\s*prize/i.test(c0)) out.lottery_payouts -= Math.abs(toNum(row[1]) || toNum(row[2]));
+      if (/^paypoint$/i.test(c0)) out.paypoint += toNum(row[1]) || toNum(row[2]);
+      if (/^payzone$/i.test(c0))  out.payzone  += toNum(row[1]) || toNum(row[2]);
+      if (/drive\s*off/i.test(c0)) out.fuel_drive_off -= Math.abs(toNum(row[1]) || toNum(row[2]));
+    }
+  }
+  (Object.keys(out) as (keyof CoopCategoryTotals)[]).forEach(k => {
+    out[k] = +(out[k] as number).toFixed(2) as any;
+  });
+  return out;
+}
+
 
