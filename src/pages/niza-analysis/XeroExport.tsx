@@ -78,13 +78,19 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
 
   const legacyRows = useMemo(() => {
     return rows
-      .filter(r => !(r.branch?.import_format === 'coop_fuel' || r.parsed_totals?.format === 'coop_fuel'))
+      .filter(r => !(
+        r.branch?.import_format === 'coop_fuel' ||
+        r.branch?.import_format === 'charfield_shift' ||
+        r.parsed_totals?.format === 'coop_fuel' ||
+        r.parsed_totals?.format === 'charfield_shift'
+      ))
       .map(r => ({
         sale_date: r.sale_date,
         totals: (r.parsed_totals || { shop: 0, fuel: 0, lottery: 0 }) as DailySalesTotals,
         branch_name: r.branch?.name,
       }));
   }, [rows]);
+
 
   const downloadCsv = (csv: string, filename: string) => {
     const blob = new Blob([csv], { type: 'text/csv' });
