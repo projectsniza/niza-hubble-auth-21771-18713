@@ -191,6 +191,12 @@ export default function DailySalesUpload() {
               Select the single daily till CSV/TXT export (e.g. <code>TXT1 (1).CSV</code>). Minor formatting breaks or blank lines are tolerated.
             </p>
           )}
+          {profile?.import_format === 'charfield_shift' && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Select the daily <code>Shift &amp; Period Report</code> XLSX exported from the till. One workbook per day.
+            </p>
+          )}
+
         </Card>
       ) : (
         <Card className="p-3 mb-4 bg-amber-500/10 border-amber-500/30 flex items-start gap-2">
