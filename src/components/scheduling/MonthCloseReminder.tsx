@@ -26,8 +26,10 @@ export function MonthCloseReminder({ branchId }: Props) {
     : new Date(today.getFullYear(), today.getMonth() - 1, 21);
   const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 20);
 
-  // Show reminder window: from 3 days before close (18th) until 2 days after (22nd)
-  const inReminderWindow = (day >= 18 && day <= 31) || (day <= 2);
+  // Show reminder ONLY on the day after close (21st = overdue) and 22nd (final warning).
+  // Do NOT show on the 20th itself (closing day).
+  const inReminderWindow = day === 21 || day === 22;
+
 
   const role = user?.role;
   const eligible = role === 'manager' || role === 'hr';
@@ -47,26 +49,18 @@ export function MonthCloseReminder({ branchId }: Props) {
 
   if (!eligible || !branchId || !inReminderWindow || isLocked) return null;
 
-  const daysToClose = day >= 21 ? Math.max(0, 20 - day + 30) : 20 - day;
-  const isClosingToday = day === 20;
+  const isFinalWarning = day === 22;
   const isOverdue = day === 21 || day === 22;
 
   return (
-    <Alert className={
-      isOverdue
-        ? 'border-destructive/40 bg-destructive/5'
-        : isClosingToday
-          ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/30'
-          : 'border-primary/30 bg-primary/5'
-    }>
-      <CalendarClock className={`h-4 w-4 ${isOverdue ? 'text-destructive' : isClosingToday ? 'text-amber-600' : 'text-primary'}`} />
+    <Alert className="border-destructive/40 bg-destructive/5">
+      <CalendarClock className="h-4 w-4 text-destructive" />
       <AlertTitle>
-        {isOverdue
-          ? `${format(periodEnd, 'MMMM yyyy')} payroll close is overdue — lock & submit now`
-          : isClosingToday
-            ? `Today is the last day to close ${format(periodEnd, 'MMMM yyyy')} payroll`
-            : `Reminder: close ${format(periodEnd, 'MMMM yyyy')} schedule in ${daysToClose} day${daysToClose === 1 ? '' : 's'}`}
+        {isFinalWarning
+          ? `FINAL WARNING: ${format(periodEnd, 'MMMM yyyy')} payroll close is overdue — lock & submit immediately`
+          : `${format(periodEnd, 'MMMM yyyy')} payroll close is overdue — lock & submit now`}
       </AlertTitle>
+
       <AlertDescription className="text-sm">
         Please review and lock the <strong>{format(periodEnd, 'MMMM yyyy')}</strong> schedule (<strong>{format(periodStart, 'dd MMM')} – {format(periodEnd, 'dd MMM yyyy')}</strong>) using the
         “Lock &amp; Submit Month” button. Once locked, store accounts can no longer edit this period.
