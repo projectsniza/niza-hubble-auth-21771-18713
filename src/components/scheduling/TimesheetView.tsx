@@ -771,17 +771,66 @@ export function TimesheetView() {
       };
     });
 
-    allMonthTimesheets.forEach(ts => {
-      if (!consolidation[ts.employee_id]) return;
-      
-      const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
-      if (weekIdx >= 0) {
-        consolidation[ts.employee_id].weeklyHours[weekIdx] = Number(ts.total_worked_hours) || 0;
+    const payroll = getPayrollPeriod(currentMonth);
+
+    // Apply same scope filters (org/branch/search) used elsewhere
+    const scopedMonthTs = allMonthTimesheets.filter(ts => {
+      const emp = ts.employee;
+      if (!emp) return false;
+      const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+      if (!canViewFilters) return true;
+      if (filterMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
+      if (filterMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
+      return true;
+    });
+
+    scopedMonthTs.forEach(ts => {
+      // Auto-include employees that have timesheets in this payroll period but
+      // are missing from the active employees list (e.g. MOHAMMED ARSHAD with
+      // a non-active status). Skip if no employee record was joined or no branch.
+      if (!consolidation[ts.employee_id]) {
+        if (!ts.employee || !ts.employee.branch?.name) return;
+        consolidation[ts.employee_id] = {
+          employee: ts.employee as Employee,
+          weeklyHours: monthWeeks.map(() => 0),
+          totalHours: 0,
+          lastMonthAdj: lastMonthAdjustment[ts.employee_id] || 0,
+          totalHrs: 0,
+          holidayHrs: 0,
+          sickHrs: 0,
+        };
       }
-      
-      consolidation[ts.employee_id].totalHours += Number(ts.total_worked_hours) || 0;
-      consolidation[ts.employee_id].holidayHrs += Number(ts.total_holiday_hours) || 0;
-      consolidation[ts.employee_id].sickHrs += Number(ts.total_sick_hours) || 0;
+
+      const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
+
+      // Sum entries restricted to dates within the payroll period (21st → 20th).
+      // Partial weeks (week 1 may start before 21st, week 6 may extend past 20th)
+      // must only count in-period days.
+      const entries = (ts as any).entries as Array<any> | undefined;
+      let worked = 0, holiday = 0, sick = 0;
+      if (entries && entries.length) {
+        entries.forEach((e: any) => {
+          const d = parseISO(e.entry_date);
+          const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          if (dd < payroll.start || dd > payroll.end) return;
+          worked += Number(e.actual_hours) || 0;
+          holiday += Number(e.holiday_hours) || 0;
+          sick += Number(e.sick_hours) || 0;
+        });
+      } else {
+        // Fallback to stored totals when entries weren't loaded
+        worked = Number(ts.total_worked_hours) || 0;
+        holiday = Number(ts.total_holiday_hours) || 0;
+        sick = Number(ts.total_sick_hours) || 0;
+      }
+
+      if (weekIdx >= 0) {
+        consolidation[ts.employee_id].weeklyHours[weekIdx] += worked;
+      }
+      consolidation[ts.employee_id].totalHours += worked;
+      consolidation[ts.employee_id].holidayHrs += holiday;
+      consolidation[ts.employee_id].sickHrs += sick;
     });
 
     Object.values(consolidation).forEach(emp => {
@@ -790,13 +839,15 @@ export function TimesheetView() {
 
     const grouped: Record<string, typeof consolidation> = {};
     Object.entries(consolidation).forEach(([empId, data]) => {
-      const branchName = data.employee.branch?.name || 'Unassigned';
+      const branchName = data.employee.branch?.name;
+      if (!branchName) return; // hide Unassigned
       if (!grouped[branchName]) grouped[branchName] = {};
       grouped[branchName][empId] = data;
     });
 
     return { consolidation, grouped };
-  }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment]);
+  }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment, currentMonth, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
+
 
   const monthlyGrandTotals = useMemo(() => {
     const values = Object.values(monthlyConsolidation.consolidation);
