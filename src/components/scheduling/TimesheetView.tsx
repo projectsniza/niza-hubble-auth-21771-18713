@@ -224,11 +224,12 @@ export function TimesheetView() {
 
       const { data: employeesData } = await supabase
         .from('employees')
-        .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
-        .eq('status', 'active')
+        .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
+        .in('status', ['active', 'onboarding', 'on_leave'])
         .order('first_name');
 
       setEmployees(employeesData || []);
+
 
       const { data: weekTimesheetsData } = await supabase
         .from('timesheets')
