@@ -26,8 +26,10 @@ export function MonthCloseReminder({ branchId }: Props) {
     : new Date(today.getFullYear(), today.getMonth() - 1, 21);
   const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 20);
 
-  // Show reminder window: from 3 days before close (18th) until 2 days after (22nd)
-  const inReminderWindow = (day >= 18 && day <= 31) || (day <= 2);
+  // Show reminder ONLY on the day after close (21st = overdue) and 22nd (final warning).
+  // Do NOT show on the 20th itself (closing day).
+  const inReminderWindow = day === 21 || day === 22;
+
 
   const role = user?.role;
   const eligible = role === 'manager' || role === 'hr';
