@@ -720,7 +720,10 @@ export function TimesheetView() {
     const dedupedTimesheets = Array.from(dedupMap.values());
 
     const grouped = dedupedTimesheets.reduce((acc, ts) => {
-      const branchName = ts.employee?.branch?.name || 'Unassigned';
+      const branchName = ts.employee?.branch?.name;
+      // Skip employees with no branch (avoids stray "Unassigned" group when
+      // viewing a specific branch — e.g. WELCOME SHEPERDSBush).
+      if (!branchName) return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
       const worked = Number(ts.total_worked_hours) || 0;
@@ -736,6 +739,7 @@ export function TimesheetView() {
     }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number; total: number } }>);
     return grouped;
   }, [filteredTimesheets]);
+
 
   const weeklyGrandTotals = useMemo(() => ({
     worked: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
