@@ -257,8 +257,25 @@ export function TimesheetView() {
         .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'));
-      
-      setAllMonthTimesheets(monthTimesheetsData || []);
+
+      // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
+      // before 21st, week 6 extending past 20th) can be summed by date.
+      const monthTsList = monthTimesheetsData || [];
+      const monthTsIds = monthTsList.map((t: any) => t.id);
+      let entriesByTs: Record<string, any[]> = {};
+      if (monthTsIds.length) {
+        const { data: allEntries } = await supabase
+          .from('timesheet_entries')
+          .select('*')
+          .in('timesheet_id', monthTsIds);
+        (allEntries || []).forEach((e: any) => {
+          (entriesByTs[e.timesheet_id] ||= []).push(e);
+        });
+      }
+      const monthTsWithEntries = monthTsList.map((t: any) => ({ ...t, entries: entriesByTs[t.id] || [] }));
+
+      setAllMonthTimesheets(monthTsWithEntries);
+
 
       const { data: prevMonthData } = await supabase
         .from('timesheets')
