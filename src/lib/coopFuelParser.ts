@@ -321,7 +321,12 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
 // data the admin will fill in later.
 export async function buildBranchSummaryWorkbook(
   rows: CoopXeroRow[],
-  meta: { branch_name: string; period_label: string }
+  meta: {
+    branch_name: string;
+    period_label: string;
+    invoices?: NizaInvoiceRow[];
+    configuredCodes?: Set<string>;
+  }
 ): Promise<Blob> {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
