@@ -226,7 +226,19 @@ export interface CoopXeroRow {
   totals: CoopCategoryTotals;
 }
 
-export function buildCoopXeroCsv(rows: CoopXeroRow[]): string {
+export interface NizaInvoiceRow {
+  invoice_date: string | null;
+  supplier: string | null;
+  invoice_number: string | null;
+  category: string | null;
+  net: number | null;
+  vat: number | null;
+  gross: number | null;
+  source?: string | null;        // 'email', 'manual', 'upload'
+  payment_method?: string | null;
+}
+
+export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<string>): string {
   const out: string[] = [HEADER];
   for (const r of rows) {
     const date = fmtDate(r.sale_date);
@@ -257,7 +269,9 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[]): string {
     ];
 
     for (const l of lines) {
-      if (!l.always && (l.amount === 0 || !Number.isFinite(l.amount))) continue;
+      const isZero = l.amount === 0 || !Number.isFinite(l.amount);
+      const forceShow = !!(l.code && configuredCodes?.has(l.code));
+      if (!l.always && !forceShow && isZero) continue;
       const cols = [
         r.contact_name, '', '', '', '', '', '', '', '', '',
         r.invoice_number, reference, date, due, '',
@@ -307,7 +321,12 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
 // data the admin will fill in later.
 export async function buildBranchSummaryWorkbook(
   rows: CoopXeroRow[],
-  meta: { branch_name: string; period_label: string }
+  meta: {
+    branch_name: string;
+    period_label: string;
+    invoices?: NizaInvoiceRow[];
+    configuredCodes?: Set<string>;
+  }
 ): Promise<Blob> {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
@@ -375,12 +394,48 @@ export async function buildBranchSummaryWorkbook(
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
   XLSX.utils.book_append_sheet(wb, stub('Credit Card Receipts',
     ['DATE','VISA','MASTERCARD','AMEX','DINERS','FUEL CARD','OTHER','TOTAL']), 'C.CARD');
-  XLSX.utils.book_append_sheet(wb, stub('Credit Purchases',
-    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS']), 'C.PURCH');
-  XLSX.utils.book_append_sheet(wb, stub('Expenses',
-    ['DATE','PAYEE','DESCRIPTION','CATEGORY','NET','VAT','GROSS','PAID BY']), 'EXPENSES');
-  XLSX.utils.book_append_sheet(wb, stub('Purchases',
-    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS']), 'PURCHASE');
+  // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
+  const inv = meta.invoices || [];
+  const cpurch = inv.filter(i => (i.source || '').toLowerCase() === 'credit' || (i.payment_method || '').toLowerCase() === 'credit');
+  const expenses = inv.filter(i => (i.source || '').toLowerCase() === 'expense' || (i.category || '').toLowerCase().includes('expense'));
+  const purchases = inv.filter(i => !cpurch.includes(i) && !expenses.includes(i));
+
+  const invoiceSheet = (
+    label: string,
+    headers: string[],
+    list: NizaInvoiceRow[],
+    extraPaidBy = false
+  ) => {
+    const aoa: any[][] = [...title(label), headers];
+    for (const i of list) {
+      const base = [
+        i.invoice_date || '',
+        i.supplier || '',
+        i.invoice_number || '',
+        i.category || '',
+        i.net ?? '',
+        i.vat ?? '',
+        i.gross ?? '',
+      ];
+      aoa.push(extraPaidBy ? [base[0], base[1], i.category || '', base[3], base[4], base[5], base[6], i.payment_method || ''] : base);
+    }
+    // Pad with at least the till-date skeleton if no invoices, so layout matches.
+    if (list.length === 0) {
+      for (const r of rows) {
+        const row = new Array(headers.length).fill('');
+        row[0] = r.sale_date;
+        aoa.push(row);
+      }
+    }
+    return XLSX.utils.aoa_to_sheet(aoa);
+  };
+
+  XLSX.utils.book_append_sheet(wb, invoiceSheet('Credit Purchases',
+    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS'], cpurch), 'C.PURCH');
+  XLSX.utils.book_append_sheet(wb, invoiceSheet('Expenses',
+    ['DATE','PAYEE','DESCRIPTION','CATEGORY','NET','VAT','GROSS','PAID BY'], expenses, true), 'EXPENSES');
+  XLSX.utils.book_append_sheet(wb, invoiceSheet('Purchases',
+    ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS'], purchases), 'PURCHASE');
   XLSX.utils.book_append_sheet(wb, stub('Profit & Loss',
     ['DATE','SALES','COST OF SALES','GROSS PROFIT','EXPENSES','NET PROFIT']), '      P &  L  ');
   XLSX.utils.book_append_sheet(wb, stub('Banking',

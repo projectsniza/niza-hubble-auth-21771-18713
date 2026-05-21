@@ -80,6 +80,8 @@ const NizaAnalysisHome = lazy(() => import("./pages/niza-analysis/Home"));
 const DailySalesAdmin = lazy(() => import("./pages/niza-analysis/DailySalesAdmin"));
 const XeroExport = lazy(() => import("./pages/niza-analysis/XeroExport"));
 const BranchFormats = lazy(() => import("./pages/niza-analysis/BranchFormats"));
+const CategoryAlerts = lazy(() => import("./pages/niza-analysis/CategoryAlerts"));
+const EmailAgents = lazy(() => import("./pages/niza-analysis/EmailAgents"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -180,6 +182,8 @@ const App = () => (
                 <Route path="daily-sales" element={<DailySalesAdmin />} />
                 <Route path="branch-formats" element={<BranchFormats />} />
                 <Route path="xero-export" element={<XeroExport />} />
+                <Route path="category-alerts" element={<CategoryAlerts />} />
+                <Route path="email-agents" element={<EmailAgents />} />
               </Route>
               <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
