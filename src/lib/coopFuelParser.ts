@@ -226,7 +226,19 @@ export interface CoopXeroRow {
   totals: CoopCategoryTotals;
 }
 
-export function buildCoopXeroCsv(rows: CoopXeroRow[]): string {
+export interface NizaInvoiceRow {
+  invoice_date: string | null;
+  supplier: string | null;
+  invoice_number: string | null;
+  category: string | null;
+  net: number | null;
+  vat: number | null;
+  gross: number | null;
+  source?: string | null;        // 'email', 'manual', 'upload'
+  payment_method?: string | null;
+}
+
+export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<string>): string {
   const out: string[] = [HEADER];
   for (const r of rows) {
     const date = fmtDate(r.sale_date);
