@@ -115,7 +115,13 @@ export default function DailySalesUpload() {
           fileArr.find(f => /\.xlsx$/i.test(f.name)) || fileArr[0];
         if (!xlsxFile) throw new Error('Please select the daily Shift & Period Report XLSX file.');
         const buf = await xlsxFile.arrayBuffer();
-        const breakdown = await parseCharfieldShiftReport(buf);
+        const detailed = await parseCharfieldShiftReportDetailed(buf);
+        const breakdown = detailed.totals;
+        if (detailed.unknownDepartments.length > 0) {
+          await reportUnknowns(detailed.unknownDepartments, xlsxFile.name);
+          throw new Error(`Upload blocked: ${detailed.unknownDepartments.length} new till category(ies) detected. Super Admin has been notified to map them before this can be uploaded.`);
+        }
+        await recordKnownCategories(detailed.knownLabels, breakdown);
         const combinedTotals = {
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,
