@@ -75,7 +75,12 @@ export default function DailySalesUpload() {
         if (!txtFile) throw new Error('Please select the daily till CSV/TXT file.');
         const txtText = await txtFile.text();
         const deptText = deptFile ? await deptFile.text() : undefined;
-        const breakdown = parseCoopFuel({ txt1: txtText, deptVat: deptText });
+        const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
+        const breakdown = detailed.totals;
+        if (detailed.unknownDepartments.length > 0) {
+          await reportUnknowns(detailed.unknownDepartments, txtFile.name);
+          throw new Error(`Upload blocked: ${detailed.unknownDepartments.length} new till category(ies) detected. Super Admin has been notified to map them before this can be uploaded.`);
+        }
         const legacy = parseDailySales(txtText);
         const combinedTotals = {
           ...legacy,
@@ -85,6 +90,7 @@ export default function DailySalesUpload() {
           breakdown,
           format: 'coop_fuel' as const,
         };
+        await recordKnownCategories(detailed.knownLabels, breakdown);
         const filesToStore = deptFile ? [txtFile, deptFile] : [txtFile];
         for (const f of filesToStore) {
           const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
