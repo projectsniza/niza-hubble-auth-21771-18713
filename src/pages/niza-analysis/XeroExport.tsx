@@ -100,10 +100,45 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     URL.revokeObjectURL(url);
   };
 
-  const downloadXero = () => {
+  const fetchConfiguredCodes = async (branchIds: string[]) => {
+    if (branchIds.length === 0) return new Map<string, Set<string>>();
+    const { data } = await supabase
+      .from('niza_branch_categories')
+      .select('branch_id, category_code')
+      .in('branch_id', branchIds);
+    const map = new Map<string, Set<string>>();
+    (data || []).forEach((r: any) => {
+      if (!map.has(r.branch_id)) map.set(r.branch_id, new Set());
+      map.get(r.branch_id)!.add(r.category_code);
+    });
+    return map;
+  };
+
+  const fetchInvoices = async (branchIds: string[], from: string, to: string) => {
+    if (branchIds.length === 0) return new Map<string, any[]>();
+    const { data } = await supabase
+      .from('niza_invoices')
+      .select('branch_id, invoice_date, supplier, invoice_number, category, net, vat, gross, source')
+      .in('branch_id', branchIds)
+      .gte('invoice_date', from)
+      .lte('invoice_date', to);
+    const map = new Map<string, any[]>();
+    (data || []).forEach((r: any) => {
+      if (!map.has(r.branch_id)) map.set(r.branch_id, []);
+      map.get(r.branch_id)!.push(r);
+    });
+    return map;
+  };
+
+  const downloadXero = async () => {
     if (rows.length === 0) return toast.error('No rows to export');
+    const branchIds = Array.from(new Set(rows.map(r => r.branch?.id).filter(Boolean) as string[]));
+    const codesByBranch = await fetchConfiguredCodes(branchIds);
+    const allCodes = new Set<string>();
+    codesByBranch.forEach(s => s.forEach(c => allCodes.add(c)));
+
     const parts: string[] = [];
-    if (coopRows.length) parts.push(buildCoopXeroCsv(coopRows));
+    if (coopRows.length) parts.push(buildCoopXeroCsv(coopRows, allCodes));
     if (legacyRows.length) parts.push(buildXeroCsv(legacyRows));
     const csv = parts.join('\n\n');
     const tag = single ? single : `${from}_to_${to}`;
@@ -113,21 +148,35 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
   const downloadSummary = async () => {
     if (coopRows.length === 0) return toast.error('No Co-op Fuel rows in range');
     const tag = single ? single : `${from}_to_${to}`;
-    // Group rows by branch so each branch gets its own workbook (filename includes branch).
-    const byBranch = new Map<string, CoopXeroRow[]>();
+    const branchIds = Array.from(new Set(rows.map(r => r.branch?.id).filter(Boolean) as string[]));
+    const [codesByBranch, invoicesByBranch] = await Promise.all([
+      fetchConfiguredCodes(branchIds),
+      fetchInvoices(branchIds, single || from, single || to),
+    ]);
+    // Group rows by branch (id + name) so each gets its own workbook.
+    const byBranch = new Map<string, { name: string; id?: string; list: CoopXeroRow[] }>();
     for (const r of coopRows) {
-      const k = r.branch_name || 'branch';
-      if (!byBranch.has(k)) byBranch.set(k, []);
-      byBranch.get(k)!.push(r);
+      const name = r.branch_name || 'branch';
+      // Find branch id from rows source
+      const src = rows.find(x => x.branch?.name === name);
+      const id = src?.branch?.id;
+      const key = id || name;
+      if (!byBranch.has(key)) byBranch.set(key, { name, id, list: [] });
+      byBranch.get(key)!.list.push(r);
     }
     const safe = (s: string) => s.replace(/[^a-z0-9_-]+/gi, '_');
-    for (const [branch, list] of byBranch) {
+    for (const [, entry] of byBranch) {
       const period = single ? single : `${from}_to_${to}`;
-      const blob = await buildBranchSummaryWorkbook(list, { branch_name: branch, period_label: period });
+      const blob = await buildBranchSummaryWorkbook(entry.list, {
+        branch_name: entry.name,
+        period_label: period,
+        invoices: entry.id ? (invoicesByBranch.get(entry.id) || []) : [],
+        configuredCodes: entry.id ? (codesByBranch.get(entry.id) || new Set()) : new Set(),
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${safe(branch)}_cash_summary_${safe(tag)}.xlsx`;
+      a.download = `${safe(entry.name)}_cash_summary_${safe(tag)}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     }
