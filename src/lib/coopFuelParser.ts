@@ -269,7 +269,9 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<stri
     ];
 
     for (const l of lines) {
-      if (!l.always && (l.amount === 0 || !Number.isFinite(l.amount))) continue;
+      const isZero = l.amount === 0 || !Number.isFinite(l.amount);
+      const forceShow = !!(l.code && configuredCodes?.has(l.code));
+      if (!l.always && !forceShow && isZero) continue;
       const cols = [
         r.contact_name, '', '', '', '', '', '', '', '', '',
         r.invoice_number, reference, date, due, '',
