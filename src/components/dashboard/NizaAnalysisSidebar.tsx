@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu } from 'lucide-react';
+import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu, AlertTriangle, Bot } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
@@ -18,6 +18,8 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
     { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
     { title: 'Daily Sales', icon: Upload, path: '/niza-analysis/daily-sales' },
     { title: 'Branch Formats', icon: Settings2, path: '/niza-analysis/branch-formats' },
+    { title: 'Category Alerts', icon: AlertTriangle, path: '/niza-analysis/category-alerts' },
+    { title: 'Email Agents', icon: Bot, path: '/niza-analysis/email-agents' },
   ];
 
   return (
