@@ -57,6 +57,38 @@ export default function DailySalesUpload() {
     loadRows();
   }, [user?.id]);
 
+  const reportUnknowns = async (unknowns: UnknownDepartment[], filename: string) => {
+    if (!profile?.branch_id) return;
+    const rows = unknowns.map(u => ({
+      organization_id: profile.organization_id,
+      branch_id: profile.branch_id,
+      raw_label: u.label,
+      sample_amount: u.amount,
+      source_filename: filename,
+      sale_date: date,
+      status: 'pending',
+      created_by: user!.id,
+    }));
+    await supabase.from('niza_category_alerts' as any).insert(rows);
+    toast.error(`New till category detected: ${unknowns.map(u => u.label).join(', ')}. Super Admin notified.`);
+  };
+
+  const recordKnownCategories = async (labels: string[], breakdown: any) => {
+    if (!profile?.branch_id || labels.length === 0) return;
+    const seen = new Set<string>();
+    const rows: any[] = [];
+    const codes = ['FU','TO','DR','GS','GZ','DO','AL','NP','VM','CW'];
+    for (const code of codes) {
+      if (Number(breakdown?.[code] || 0) === 0) continue;
+      if (seen.has(code)) continue;
+      seen.add(code);
+      rows.push({ branch_id: profile.branch_id, category_code: code, last_seen_at: new Date().toISOString() });
+    }
+    if (rows.length) {
+      await supabase.from('niza_branch_categories' as any).upsert(rows, { onConflict: 'branch_id,category_code' });
+    }
+  };
+
   const handleUpload = async () => {
     if (!files || files.length === 0) return toast.error('Select at least one file');
     if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
