@@ -1,11 +1,4 @@
-// Extract invoice fields (supplier, invoice_no, date, net, vat, gross, line items)
-// from a PDF or image using either OpenAI (vision/files) or Google Gemini.
-// Body: { storage_path?: string, file_base64?: string, mime_type?: string,
-//         provider?: 'openai'|'gemini', model?: string, api_key?: string,
-//         invoice_id?: string }
-// If invoice_id is provided, the resulting fields are also written back to
-// public.niza_invoices.
-
+// Extract invoice fields from a PDF/image using OpenAI or Gemini.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -30,23 +23,28 @@ Return ONLY a JSON object with these keys:
 }
 Numbers must be plain numbers, never strings. If a field is unreadable use null.`;
 
+function bytesToBase64(buf: Uint8Array) {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < buf.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, buf.subarray(i, i + chunk) as unknown as number[]);
+  }
+  return btoa(bin);
+}
+
 async function callOpenAI(apiKey: string, model: string, base64: string, mime: string) {
-  const url = "https://api.openai.com/v1/chat/completions";
   const body = {
     model: model || "gpt-4o-mini",
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: SYS_PROMPT },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "Extract the invoice data from this document." },
-          { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
-        ],
-      },
+      { role: "user", content: [
+        { type: "text", text: "Extract the invoice data from this document." },
+        { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
+      ] },
     ],
   };
-  const r = await fetch(url, {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -60,12 +58,10 @@ async function callGemini(apiKey: string, model: string, base64: string, mime: s
   const m = model || "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
   const body = {
-    contents: [
-      { role: "user", parts: [
-        { text: SYS_PROMPT + "\nReturn JSON only, no prose." },
-        { inline_data: { mime_type: mime, data: base64 } },
-      ] },
-    ],
+    contents: [{ role: "user", parts: [
+      { text: SYS_PROMPT + "\nReturn JSON only, no prose." },
+      { inline_data: { mime_type: mime, data: base64 } },
+    ] }],
     generationConfig: { response_mime_type: "application/json" },
   };
   const r = await fetch(url, {
@@ -75,34 +71,32 @@ async function callGemini(apiKey: string, model: string, base64: string, mime: s
   });
   if (!r.ok) throw new Error(`Gemini ${r.status}: ${await r.text()}`);
   const j = await r.json();
-  const txt = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  return JSON.parse(txt);
+  return JSON.parse(j.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}");
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const supa = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  let invoiceId: string | undefined;
   try {
-    const supa = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
     const body = await req.json();
+    invoiceId = body.invoice_id;
     const provider = (body.provider || "openai").toLowerCase();
     const model = body.model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini");
 
     let apiKey = body.api_key as string | undefined;
     if (!apiKey) apiKey = provider === "gemini" ? Deno.env.get("GEMINI_API_KEY") : Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) throw new Error(`Missing API key for ${provider}`);
+    if (!apiKey) throw new Error(`Missing API key for ${provider}. Configure it on an AI Agent or as a project secret.`);
 
     let base64 = body.file_base64 as string | undefined;
     let mime = body.mime_type as string | undefined;
     if (!base64 && body.storage_path) {
       const { data, error } = await supa.storage.from("niza-invoices").download(body.storage_path);
       if (error) throw error;
-      const buf = new Uint8Array(await data.arrayBuffer());
-      // base64 encode
-      let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-      base64 = btoa(bin);
+      base64 = bytesToBase64(new Uint8Array(await data.arrayBuffer()));
       mime = data.type || (body.storage_path.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
     }
     if (!base64 || !mime) throw new Error("No file data provided");
@@ -111,7 +105,7 @@ Deno.serve(async (req) => {
       ? await callGemini(apiKey, model, base64, mime)
       : await callOpenAI(apiKey, model, base64, mime);
 
-    if (body.invoice_id) {
+    if (invoiceId) {
       await supa.from("niza_invoices").update({
         supplier: extracted.supplier ?? null,
         invoice_number: extracted.invoice_number ?? null,
@@ -123,8 +117,9 @@ Deno.serve(async (req) => {
         category: extracted.category ?? null,
         raw_extracted: extracted,
         extraction_status: "extracted",
+        extraction_error: null,
         ai_model: `${provider}:${model}`,
-      }).eq("id", body.invoice_id);
+      }).eq("id", invoiceId);
     }
 
     return new Response(JSON.stringify({ ok: true, extracted }), {
@@ -132,12 +127,11 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (body_id_log(req)) {}
-    if ((globalThis as any).__lastInvoiceId) {
+    if (invoiceId) {
       try {
-        const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-        await supa.from("niza_invoices").update({ extraction_status: "failed", extraction_error: msg })
-          .eq("id", (globalThis as any).__lastInvoiceId);
+        await supa.from("niza_invoices").update({
+          extraction_status: "failed", extraction_error: msg,
+        }).eq("id", invoiceId);
       } catch {}
     }
     return new Response(JSON.stringify({ ok: false, error: msg }), {
@@ -145,5 +139,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-function body_id_log(_: Request) { return false; }
