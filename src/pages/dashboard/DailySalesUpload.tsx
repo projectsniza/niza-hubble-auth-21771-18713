@@ -10,7 +10,7 @@ import { Upload, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
-import { parseCoopFuel, parseCharfieldShiftReport, IMPORT_FORMATS, type ImportFormatId } from '@/lib/coopFuelParser';
+import { parseCoopFuelDetailed, parseCharfieldShiftReportDetailed, IMPORT_FORMATS, type ImportFormatId, type UnknownDepartment } from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
@@ -57,6 +57,38 @@ export default function DailySalesUpload() {
     loadRows();
   }, [user?.id]);
 
+  const reportUnknowns = async (unknowns: UnknownDepartment[], filename: string) => {
+    if (!profile?.branch_id) return;
+    const rows = unknowns.map(u => ({
+      organization_id: profile.organization_id,
+      branch_id: profile.branch_id,
+      raw_label: u.label,
+      sample_amount: u.amount,
+      source_filename: filename,
+      sale_date: date,
+      status: 'pending',
+      created_by: user!.id,
+    }));
+    await supabase.from('niza_category_alerts' as any).insert(rows);
+    toast.error(`New till category detected: ${unknowns.map(u => u.label).join(', ')}. Super Admin notified.`);
+  };
+
+  const recordKnownCategories = async (labels: string[], breakdown: any) => {
+    if (!profile?.branch_id || labels.length === 0) return;
+    const seen = new Set<string>();
+    const rows: any[] = [];
+    const codes = ['FU','TO','DR','GS','GZ','DO','AL','NP','VM','CW'];
+    for (const code of codes) {
+      if (Number(breakdown?.[code] || 0) === 0) continue;
+      if (seen.has(code)) continue;
+      seen.add(code);
+      rows.push({ branch_id: profile.branch_id, category_code: code, last_seen_at: new Date().toISOString() });
+    }
+    if (rows.length) {
+      await supabase.from('niza_branch_categories' as any).upsert(rows, { onConflict: 'branch_id,category_code' });
+    }
+  };
+
   const handleUpload = async () => {
     if (!files || files.length === 0) return toast.error('Select at least one file');
     if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
@@ -75,7 +107,12 @@ export default function DailySalesUpload() {
         if (!txtFile) throw new Error('Please select the daily till CSV/TXT file.');
         const txtText = await txtFile.text();
         const deptText = deptFile ? await deptFile.text() : undefined;
-        const breakdown = parseCoopFuel({ txt1: txtText, deptVat: deptText });
+        const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
+        const breakdown = detailed.totals;
+        if (detailed.unknownDepartments.length > 0) {
+          await reportUnknowns(detailed.unknownDepartments, txtFile.name);
+          throw new Error(`Upload blocked: ${detailed.unknownDepartments.length} new till category(ies) detected. Super Admin has been notified to map them before this can be uploaded.`);
+        }
         const legacy = parseDailySales(txtText);
         const combinedTotals = {
           ...legacy,
@@ -85,6 +122,7 @@ export default function DailySalesUpload() {
           breakdown,
           format: 'coop_fuel' as const,
         };
+        await recordKnownCategories(detailed.knownLabels, breakdown);
         const filesToStore = deptFile ? [txtFile, deptFile] : [txtFile];
         for (const f of filesToStore) {
           const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
@@ -109,7 +147,13 @@ export default function DailySalesUpload() {
           fileArr.find(f => /\.xlsx$/i.test(f.name)) || fileArr[0];
         if (!xlsxFile) throw new Error('Please select the daily Shift & Period Report XLSX file.');
         const buf = await xlsxFile.arrayBuffer();
-        const breakdown = await parseCharfieldShiftReport(buf);
+        const detailed = await parseCharfieldShiftReportDetailed(buf);
+        const breakdown = detailed.totals;
+        if (detailed.unknownDepartments.length > 0) {
+          await reportUnknowns(detailed.unknownDepartments, xlsxFile.name);
+          throw new Error(`Upload blocked: ${detailed.unknownDepartments.length} new till category(ies) detected. Super Admin has been notified to map them before this can be uploaded.`);
+        }
+        await recordKnownCategories(detailed.knownLabels, breakdown);
         const combinedTotals = {
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,

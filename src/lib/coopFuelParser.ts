@@ -133,18 +133,34 @@ export interface CoopParseInput {
   deptVat?: string;  // optional DEPARTMENTVAT*.csv contents (legacy two-file flow)
 }
 
-export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
-  const out = emptyCoopTotals();
+export interface UnknownDepartment { label: string; amount: number; }
+export interface CoopParseResult {
+  totals: CoopCategoryTotals;
+  knownLabels: string[];
+  unknownDepartments: UnknownDepartment[];
+}
 
-  // ---- Department breakdown (prefer explicit dept file, else fall back to TXT) ----
+export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
+  return parseCoopFuelDetailed(input).totals;
+}
+
+export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
+  const out = emptyCoopTotals();
+  const knownLabels: string[] = [];
+  const unknownDepartments: UnknownDepartment[] = [];
+
   const deptSource = input.deptVat || input.txt1 || '';
   if (deptSource) {
     for (const r of parseDepartmentVat(deptSource)) {
       const code = codeForDept(r.label);
-      if (!code) continue;
       const gross20 = r.net20 + r.vat20;
       const gross5  = r.net5  + r.vat5;
-      // 5% slice always goes to DO; the rest by mapped code.
+      const totalGross = +(gross20 + gross5 + r.net0).toFixed(2);
+      if (!code) {
+        if (totalGross !== 0) unknownDepartments.push({ label: r.label, amount: totalGross });
+        continue;
+      }
+      knownLabels.push(r.label);
       if (gross5 > 0) out.DO = +(out.DO + gross5).toFixed(2);
       const targetGross = gross20 + r.net0;
       if (code === 'NP' || code === 'GZ' || code === 'AL' || code === 'VM' ||
@@ -154,10 +170,8 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
     }
   }
 
-  // ---- TXT1 tender / lottery / wash / paypoint ----
   if (input.txt1) {
     const t = input.txt1;
-    // Lottery sales (positive) and prizes paid (negative)
     out.national_lottery   = findTxtLineLast(t, /^\s*Lottery\b(?!\s*Prizes)/im);
     out.instant_lottery    = findTxtLineLast(t, /Scratchcards/i);
     out.lottery_payouts    = -Math.abs(findTxtLineLast(t, /Lotto\s*Prizes/i)) +
@@ -166,13 +180,12 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
     out.payzone            = findTxtLineLast(t, /^\s*Payzone\b/im);
     const carWash          = sumTxtLines(t, /CAR\s*WASH/i);
     const jetWash          = sumTxtLines(t, /JET\s*WASH/i);
-    // Only override CW from TXT if dept file didn't already supply it
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
   }
 
-  return out;
+  return { totals: out, knownLabels, unknownDepartments };
 }
 
 // ---------- Xero CSV builder ----------
@@ -422,9 +435,15 @@ const toNum = (v: any): number => {
 };
 
 export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<CoopCategoryTotals> {
+  return (await parseCharfieldShiftReportDetailed(buffer)).totals;
+}
+
+export async function parseCharfieldShiftReportDetailed(buffer: ArrayBuffer): Promise<CoopParseResult> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'array' });
   const out = emptyCoopTotals();
+  const knownLabels: string[] = [];
+  const unknownDepartments: UnknownDepartment[] = [];
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
     const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any;
@@ -443,13 +462,16 @@ export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<Co
           const value = toNum(row[2]);
           if (value) {
             const code = charfieldCode(c0);
-            // Skip FU here — taken from Money Analysis "Fuel Sales" below for accuracy.
-            if (code && code !== 'FU') (out[code] as number) = +((out[code] as number) + value).toFixed(2);
+            if (code) {
+              knownLabels.push(c0);
+              if (code !== 'FU') (out[code] as number) = +((out[code] as number) + value).toFixed(2);
+            } else {
+              unknownDepartments.push({ label: c0, amount: value });
+            }
           }
         }
       }
 
-      // Money Analysis values (authoritative for fuel/lottery/paypoint).
       if (/^fuel sales$/i.test(c0))   out.FU = +(out.FU + toNum(row[1])).toFixed(2);
       if (/^lottery$/i.test(c0) && !/prize/i.test(c0)) out.national_lottery += toNum(row[1]) || toNum(row[2]);
       if (/scratchcard/i.test(c0) && !/prize/i.test(c0)) out.instant_lottery += toNum(row[1]) || toNum(row[2]);
@@ -463,7 +485,7 @@ export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<Co
   (Object.keys(out) as (keyof CoopCategoryTotals)[]).forEach(k => {
     out[k] = +(out[k] as number).toFixed(2) as any;
   });
-  return out;
+  return { totals: out, knownLabels, unknownDepartments };
 }
 
 

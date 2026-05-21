@@ -4319,6 +4319,319 @@ export type Database = {
           },
         ]
       }
+      niza_branch_categories: {
+        Row: {
+          branch_id: string
+          category_code: string
+          display_name: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          raw_label: string | null
+        }
+        Insert: {
+          branch_id: string
+          category_code: string
+          display_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          raw_label?: string | null
+        }
+        Update: {
+          branch_id?: string
+          category_code?: string
+          display_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          raw_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_branch_categories_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_category_alerts: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mapped_to_code: string | null
+          notes: string | null
+          organization_id: string | null
+          raw_label: string
+          resolved_at: string | null
+          resolved_by: string | null
+          sale_date: string | null
+          sample_amount: number | null
+          source_filename: string | null
+          status: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mapped_to_code?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          raw_label: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sale_date?: string | null
+          sample_amount?: number | null
+          source_filename?: string | null
+          status?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mapped_to_code?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          raw_label?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sale_date?: string | null
+          sample_amount?: number | null
+          source_filename?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_category_alerts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_email_agent_runs: {
+        Row: {
+          agent_id: string
+          emails_scanned: number | null
+          ended_at: string | null
+          error_message: string | null
+          id: string
+          invoices_extracted: number | null
+          log_text: string | null
+          started_at: string
+          status: string | null
+        }
+        Insert: {
+          agent_id: string
+          emails_scanned?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          invoices_extracted?: number | null
+          log_text?: string | null
+          started_at?: string
+          status?: string | null
+        }
+        Update: {
+          agent_id?: string
+          emails_scanned?: number | null
+          ended_at?: string | null
+          error_message?: string | null
+          id?: string
+          invoices_extracted?: number | null
+          log_text?: string | null
+          started_at?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_email_agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "niza_email_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_email_agents: {
+        Row: {
+          ai_api_key: string | null
+          ai_model: string | null
+          ai_provider: string
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          folder: string | null
+          gmail_connection_id: string | null
+          id: string
+          imap_host: string | null
+          imap_password: string | null
+          imap_port: number | null
+          imap_use_tls: boolean | null
+          imap_user: string | null
+          is_active: boolean | null
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          mailbox_type: string
+          name: string
+          organization_id: string | null
+          outlook_connection_id: string | null
+          schedule_cron: string | null
+          supplier_filters: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          ai_api_key?: string | null
+          ai_model?: string | null
+          ai_provider?: string
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          folder?: string | null
+          gmail_connection_id?: string | null
+          id?: string
+          imap_host?: string | null
+          imap_password?: string | null
+          imap_port?: number | null
+          imap_use_tls?: boolean | null
+          imap_user?: string | null
+          is_active?: boolean | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          mailbox_type?: string
+          name: string
+          organization_id?: string | null
+          outlook_connection_id?: string | null
+          schedule_cron?: string | null
+          supplier_filters?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          ai_api_key?: string | null
+          ai_model?: string | null
+          ai_provider?: string
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          folder?: string | null
+          gmail_connection_id?: string | null
+          id?: string
+          imap_host?: string | null
+          imap_password?: string | null
+          imap_port?: number | null
+          imap_use_tls?: boolean | null
+          imap_user?: string | null
+          is_active?: boolean | null
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          mailbox_type?: string
+          name?: string
+          organization_id?: string | null
+          outlook_connection_id?: string | null
+          schedule_cron?: string | null
+          supplier_filters?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_email_agents_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_invoices: {
+        Row: {
+          ai_model: string | null
+          branch_id: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          email_message_id: string | null
+          extraction_error: string | null
+          extraction_status: string | null
+          file_path: string | null
+          gross: number | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          net: number | null
+          organization_id: string | null
+          raw_extracted: Json | null
+          source: string
+          supplier: string | null
+          updated_at: string
+          vat: number | null
+        }
+        Insert: {
+          ai_model?: string | null
+          branch_id?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          email_message_id?: string | null
+          extraction_error?: string | null
+          extraction_status?: string | null
+          file_path?: string | null
+          gross?: number | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          net?: number | null
+          organization_id?: string | null
+          raw_extracted?: Json | null
+          source?: string
+          supplier?: string | null
+          updated_at?: string
+          vat?: number | null
+        }
+        Update: {
+          ai_model?: string | null
+          branch_id?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          email_message_id?: string | null
+          extraction_error?: string | null
+          extraction_status?: string | null
+          file_path?: string | null
+          gross?: number | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          net?: number | null
+          organization_id?: string | null
+          raw_extracted?: Json | null
+          source?: string
+          supplier?: string | null
+          updated_at?: string
+          vat?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_invoices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_custom_pages: {
         Row: {
           branch_id: string | null
