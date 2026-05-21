@@ -133,18 +133,34 @@ export interface CoopParseInput {
   deptVat?: string;  // optional DEPARTMENTVAT*.csv contents (legacy two-file flow)
 }
 
-export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
-  const out = emptyCoopTotals();
+export interface UnknownDepartment { label: string; amount: number; }
+export interface CoopParseResult {
+  totals: CoopCategoryTotals;
+  knownLabels: string[];
+  unknownDepartments: UnknownDepartment[];
+}
 
-  // ---- Department breakdown (prefer explicit dept file, else fall back to TXT) ----
+export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
+  return parseCoopFuelDetailed(input).totals;
+}
+
+export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
+  const out = emptyCoopTotals();
+  const knownLabels: string[] = [];
+  const unknownDepartments: UnknownDepartment[] = [];
+
   const deptSource = input.deptVat || input.txt1 || '';
   if (deptSource) {
     for (const r of parseDepartmentVat(deptSource)) {
       const code = codeForDept(r.label);
-      if (!code) continue;
       const gross20 = r.net20 + r.vat20;
       const gross5  = r.net5  + r.vat5;
-      // 5% slice always goes to DO; the rest by mapped code.
+      const totalGross = +(gross20 + gross5 + r.net0).toFixed(2);
+      if (!code) {
+        if (totalGross !== 0) unknownDepartments.push({ label: r.label, amount: totalGross });
+        continue;
+      }
+      knownLabels.push(r.label);
       if (gross5 > 0) out.DO = +(out.DO + gross5).toFixed(2);
       const targetGross = gross20 + r.net0;
       if (code === 'NP' || code === 'GZ' || code === 'AL' || code === 'VM' ||
@@ -154,10 +170,8 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
     }
   }
 
-  // ---- TXT1 tender / lottery / wash / paypoint ----
   if (input.txt1) {
     const t = input.txt1;
-    // Lottery sales (positive) and prizes paid (negative)
     out.national_lottery   = findTxtLineLast(t, /^\s*Lottery\b(?!\s*Prizes)/im);
     out.instant_lottery    = findTxtLineLast(t, /Scratchcards/i);
     out.lottery_payouts    = -Math.abs(findTxtLineLast(t, /Lotto\s*Prizes/i)) +
@@ -166,13 +180,12 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
     out.payzone            = findTxtLineLast(t, /^\s*Payzone\b/im);
     const carWash          = sumTxtLines(t, /CAR\s*WASH/i);
     const jetWash          = sumTxtLines(t, /JET\s*WASH/i);
-    // Only override CW from TXT if dept file didn't already supply it
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
   }
 
-  return out;
+  return { totals: out, knownLabels, unknownDepartments };
 }
 
 // ---------- Xero CSV builder ----------
