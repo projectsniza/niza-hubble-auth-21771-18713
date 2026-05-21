@@ -435,9 +435,15 @@ const toNum = (v: any): number => {
 };
 
 export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<CoopCategoryTotals> {
+  return (await parseCharfieldShiftReportDetailed(buffer)).totals;
+}
+
+export async function parseCharfieldShiftReportDetailed(buffer: ArrayBuffer): Promise<CoopParseResult> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'array' });
   const out = emptyCoopTotals();
+  const knownLabels: string[] = [];
+  const unknownDepartments: UnknownDepartment[] = [];
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
     const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any;
@@ -456,13 +462,16 @@ export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<Co
           const value = toNum(row[2]);
           if (value) {
             const code = charfieldCode(c0);
-            // Skip FU here — taken from Money Analysis "Fuel Sales" below for accuracy.
-            if (code && code !== 'FU') (out[code] as number) = +((out[code] as number) + value).toFixed(2);
+            if (code) {
+              knownLabels.push(c0);
+              if (code !== 'FU') (out[code] as number) = +((out[code] as number) + value).toFixed(2);
+            } else {
+              unknownDepartments.push({ label: c0, amount: value });
+            }
           }
         }
       }
 
-      // Money Analysis values (authoritative for fuel/lottery/paypoint).
       if (/^fuel sales$/i.test(c0))   out.FU = +(out.FU + toNum(row[1])).toFixed(2);
       if (/^lottery$/i.test(c0) && !/prize/i.test(c0)) out.national_lottery += toNum(row[1]) || toNum(row[2]);
       if (/scratchcard/i.test(c0) && !/prize/i.test(c0)) out.instant_lottery += toNum(row[1]) || toNum(row[2]);
@@ -476,7 +485,7 @@ export async function parseCharfieldShiftReport(buffer: ArrayBuffer): Promise<Co
   (Object.keys(out) as (keyof CoopCategoryTotals)[]).forEach(k => {
     out[k] = +(out[k] as number).toFixed(2) as any;
   });
-  return out;
+  return { totals: out, knownLabels, unknownDepartments };
 }
 
 
