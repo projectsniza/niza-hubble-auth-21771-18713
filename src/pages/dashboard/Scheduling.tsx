@@ -229,8 +229,13 @@ export default function Scheduling() {
           <TimesheetView />
         </TabsContent>
 
-        <TabsContent value="holiday" className="mt-0">
+        <TabsContent value="holiday" className="mt-0 space-y-4">
+          <MonthlyHoursPanel />
           <HolidayBalance />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <SchedulingReports />
         </TabsContent>
 
         {user?.role === 'super_admin' && (
