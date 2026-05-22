@@ -101,6 +101,9 @@ export function DriveOffFormDialog({
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [supportingFiles, setSupportingFiles] = useState<SupportingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  const draftKey = user?.id ? `driveOffDraft:${user.id}` : null;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
