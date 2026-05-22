@@ -361,6 +361,18 @@ export function DriveOffFormDialog({
           </DialogTitle>
         </DialogHeader>
 
+        {draftRestored && !editingDriveOff && (
+          <div className="flex items-center justify-between gap-3 p-3 rounded-md border border-amber-500/40 bg-amber-500/10">
+            <div className="flex items-center gap-2 text-sm">
+              <FileClock className="h-4 w-4 text-amber-600" />
+              <span>Unsaved draft restored. Continue where you left off, or clear it to start fresh.</span>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft}>
+              <Trash2 className="h-4 w-4 mr-1" /> Clear draft
+            </Button>
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             {/* Organization & Branch Selection */}
