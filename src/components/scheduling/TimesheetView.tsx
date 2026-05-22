@@ -1296,9 +1296,14 @@ export function TimesheetView() {
                                     ) : hasEdit ? (
                                       <Input
                                         type="time"
+                                        step={HALF_HOUR_TIME_STEP}
                                         value={editingDay?.start ?? entry?.shift_start_time ?? ''}
                                         data-shift-cell={`${ts.id}-${day}`}
-                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'start', e.target.value)}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                          handleInlineTimeChange(ts.id, day, 'start', snapToHalfHour(v));
+                                        }}
                                         className="h-6 text-[10px] p-1 w-full"
                                         onBlur={(e) => {
                                           const next = e.relatedTarget as HTMLElement | null;
