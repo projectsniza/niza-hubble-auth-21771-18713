@@ -5,6 +5,8 @@ import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
 import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
 import { BranchHourTargets } from '@/components/scheduling/BranchHourTargets';
+import { SchedulingReports } from '@/components/scheduling/reports/SchedulingReports';
+import { MonthlyHoursPanel } from '@/components/scheduling/MonthlyHoursPanel';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
