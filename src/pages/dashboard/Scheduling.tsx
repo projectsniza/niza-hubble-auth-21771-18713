@@ -216,6 +216,7 @@ export default function Scheduling() {
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">
           <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
           <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
+          <TabsTrigger value="reports" className="flex-1 min-w-[100px] text-xs md:text-sm">Reports</TabsTrigger>
           {user?.role === 'super_admin' && (
             <>
               <TabsTrigger value="targets" className="flex-1 min-w-[100px] text-xs md:text-sm">Hour Targets</TabsTrigger>
