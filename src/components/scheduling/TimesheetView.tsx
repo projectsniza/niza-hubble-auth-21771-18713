@@ -109,6 +109,8 @@ export function TimesheetView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
+  const [entryView, setEntryView] = useState<'full' | 'single'>(() => (localStorage.getItem('scheduling.entryView') as any) || 'full');
+  useEffect(() => { localStorage.setItem('scheduling.entryView', entryView); }, [entryView]);
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
     const today = new Date();
     // Payroll cycle is 21st → 20th. Before the 21st we are still in the previous month's payroll.
