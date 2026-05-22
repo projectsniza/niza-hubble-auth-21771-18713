@@ -194,12 +194,68 @@ export function DriveOffFormDialog({
     } else {
       form.reset();
       setSupportingFiles([]);
+      setDraftRestored(false);
       // Set default branch for non-super admin users
       if (user?.role === 'manager' && user.branchId) {
         form.setValue('branch_id', user.branchId);
       }
+      // Restore draft if present
+      if (open && draftKey) {
+        try {
+          const raw = localStorage.getItem(draftKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.values) form.reset(parsed.values);
+            if (Array.isArray(parsed.supportingFiles)) setSupportingFiles(parsed.supportingFiles);
+            if (parsed.selectedOrgId) setSelectedOrgId(parsed.selectedOrgId);
+            setDraftRestored(true);
+          }
+        } catch {/* ignore */}
+      }
     }
-  }, [editingDriveOff, form, user, branches]);
+  }, [editingDriveOff, form, user, branches, open, draftKey]);
+
+  // Auto-save draft (new records only)
+  useEffect(() => {
+    if (!open || editingDriveOff || !draftKey) return;
+    const sub = form.watch((values) => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          values,
+          supportingFiles,
+          selectedOrgId,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch {/* ignore quota */}
+    });
+    return () => sub.unsubscribe();
+  }, [form, open, editingDriveOff, draftKey, supportingFiles, selectedOrgId]);
+
+  // Also persist when files / org change
+  useEffect(() => {
+    if (!open || editingDriveOff || !draftKey) return;
+    try {
+      const values = form.getValues();
+      localStorage.setItem(draftKey, JSON.stringify({
+        values,
+        supportingFiles,
+        selectedOrgId,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {/* ignore */}
+  }, [supportingFiles, selectedOrgId, open, editingDriveOff, draftKey, form]);
+
+  const clearDraft = () => {
+    if (draftKey) localStorage.removeItem(draftKey);
+    form.reset();
+    setSupportingFiles([]);
+    setSelectedOrgId('');
+    setDraftRestored(false);
+    if (user?.role === 'manager' && user.branchId) {
+      form.setValue('branch_id', user.branchId);
+    }
+    toast.success('Draft cleared');
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
