@@ -26,6 +26,8 @@ import { TimesheetMonthLock } from './TimesheetMonthLock';
 import { MonthCloseReminder } from './MonthCloseReminder';
 import { TempStaffSection } from './TempStaffSection';
 import { Lock } from 'lucide-react';
+import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
+import { FullMonthEntryView } from './FullMonthEntryView';
 
 interface Employee {
   id: string;
@@ -107,6 +109,8 @@ export function TimesheetView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewTab, setViewTab] = useState<'weekly' | 'monthly'>('weekly');
+  const [entryView, setEntryView] = useState<'full' | 'single'>(() => (localStorage.getItem('scheduling.entryView') as any) || 'full');
+  useEffect(() => { localStorage.setItem('scheduling.entryView', entryView); }, [entryView]);
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
     const today = new Date();
     // Payroll cycle is 21st → 20th. Before the 21st we are still in the previous month's payroll.
@@ -1055,6 +1059,13 @@ export function TimesheetView() {
               </div>
               
               {viewTab === 'weekly' && (
+                <div className="flex items-center gap-1 bg-background rounded-lg p-1 shadow-sm">
+                  <Button size="sm" variant={entryView === 'full' ? 'default' : 'ghost'} className="h-7 text-xs" onClick={() => setEntryView('full')}>Full View</Button>
+                  <Button size="sm" variant={entryView === 'single' ? 'default' : 'ghost'} className="h-7 text-xs" onClick={() => setEntryView('single')}>Weekly View</Button>
+                </div>
+              )}
+
+              {viewTab === 'weekly' && entryView === 'single' && (
                 <Select value={String(selectedWeekIndex)} onValueChange={(v) => setSelectedWeekIndex(Number(v))}>
                   <SelectTrigger className="w-28 bg-background shadow-sm">
                     <SelectValue />
@@ -1170,6 +1181,14 @@ export function TimesheetView() {
         <div className="flex items-center justify-center h-40">
           <NizaLoaderInline />
         </div>
+      ) : viewTab === 'weekly' && entryView === 'full' ? (
+        <FullMonthEntryView
+          currentMonth={currentMonth}
+          filterMode={filterMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onJumpToWeek={(wi) => { setEntryView('single'); setSelectedWeekIndex(wi); }}
+        />
       ) : viewTab === 'weekly' ? (
         <>
         {/* Weekly View */}
@@ -1295,9 +1314,14 @@ export function TimesheetView() {
                                     ) : hasEdit ? (
                                       <Input
                                         type="time"
+                                        step={HALF_HOUR_TIME_STEP}
                                         value={editingDay?.start ?? entry?.shift_start_time ?? ''}
                                         data-shift-cell={`${ts.id}-${day}`}
-                                        onChange={(e) => handleInlineTimeChange(ts.id, day, 'start', e.target.value)}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                          handleInlineTimeChange(ts.id, day, 'start', snapToHalfHour(v));
+                                        }}
                                         className="h-6 text-[10px] p-1 w-full"
                                         onBlur={(e) => {
                                           const next = e.relatedTarget as HTMLElement | null;
@@ -1322,9 +1346,14 @@ export function TimesheetView() {
                                       <div className="flex items-center gap-0.5">
                                         <Input
                                           type="time"
+                                          step={HALF_HOUR_TIME_STEP}
                                           value={editingDay?.end ?? entry?.shift_end_time ?? ''}
                                           data-shift-cell={`${ts.id}-${day}`}
-                                          onChange={(e) => handleInlineTimeChange(ts.id, day, 'end', e.target.value)}
+                                          onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                            handleInlineTimeChange(ts.id, day, 'end', snapToHalfHour(v));
+                                          }}
                                           className="h-6 text-[10px] p-1 w-full"
                                           onBlur={(e) => {
                                             const next = e.relatedTarget as HTMLElement | null;
@@ -1663,8 +1692,13 @@ export function TimesheetView() {
                     <Label className="text-xs">Start Time</Label>
                     <Input 
                       type="time" 
+                      step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_start_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value || null)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        updateEntry(idx, 'shift_start_time', snapToHalfHour(v) || null);
+                      }}
                       className="mt-1"
                     />
                   </div>
@@ -1672,8 +1706,13 @@ export function TimesheetView() {
                     <Label className="text-xs">End Time</Label>
                     <Input 
                       type="time" 
+                      step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_end_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value || null)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        updateEntry(idx, 'shift_end_time', snapToHalfHour(v) || null);
+                      }}
                       className="mt-1"
                     />
                   </div>

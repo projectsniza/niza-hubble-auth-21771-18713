@@ -15,6 +15,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 
 interface TempEmployee {
   id: string;
@@ -397,9 +398,15 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                               {isEditing ? (
                                 <Input
                                   type="time"
+                                  step={HALF_HOUR_TIME_STEP}
                                   value={startVal}
                                   disabled={disabled}
-                                  onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { start: e.target.value, end: p[cellKey]?.end ?? endVal } }))}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                    const snapped = snapToHalfHour(v);
+                                    setEditingCell(p => ({ ...p, [cellKey]: { start: snapped, end: p[cellKey]?.end ?? endVal } }));
+                                  }}
                                   className="h-6 text-[10px] p-1 w-full"
                                   data-temp-cell={cellKey}
                                   onBlur={(e) => {
@@ -426,9 +433,15 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                                 <div className="flex items-center gap-0.5">
                                   <Input
                                     type="time"
+                                    step={HALF_HOUR_TIME_STEP}
                                     value={endVal}
                                     disabled={disabled}
-                                    onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { start: p[cellKey]?.start ?? startVal, end: e.target.value } }))}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                      const snapped = snapToHalfHour(v);
+                                      setEditingCell(p => ({ ...p, [cellKey]: { start: p[cellKey]?.start ?? startVal, end: snapped } }));
+                                    }}
                                     className="h-6 text-[10px] p-1 w-full"
                                     data-temp-cell={cellKey}
                                     onBlur={(e) => {

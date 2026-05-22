@@ -5,6 +5,8 @@ import { TimesheetView } from '@/components/scheduling/TimesheetView';
 import { HolidayBalance } from '@/components/scheduling/HolidayBalance';
 import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
 import { BranchHourTargets } from '@/components/scheduling/BranchHourTargets';
+import { SchedulingReports } from '@/components/scheduling/reports/SchedulingReports';
+import { MonthlyHoursPanel } from '@/components/scheduling/MonthlyHoursPanel';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
@@ -214,6 +216,7 @@ export default function Scheduling() {
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">
           <TabsTrigger value="timesheets" className="flex-1 min-w-[100px] text-xs md:text-sm">Weekly Timesheets</TabsTrigger>
           <TabsTrigger value="holiday" className="flex-1 min-w-[100px] text-xs md:text-sm">Holiday Balance</TabsTrigger>
+          <TabsTrigger value="reports" className="flex-1 min-w-[100px] text-xs md:text-sm">Reports</TabsTrigger>
           {user?.role === 'super_admin' && (
             <>
               <TabsTrigger value="targets" className="flex-1 min-w-[100px] text-xs md:text-sm">Hour Targets</TabsTrigger>
@@ -226,8 +229,13 @@ export default function Scheduling() {
           <TimesheetView />
         </TabsContent>
 
-        <TabsContent value="holiday" className="mt-0">
+        <TabsContent value="holiday" className="mt-0 space-y-4">
+          <MonthlyHoursPanel />
           <HolidayBalance />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <SchedulingReports />
         </TabsContent>
 
         {user?.role === 'super_admin' && (

@@ -2675,6 +2675,64 @@ export type Database = {
           },
         ]
       }
+      employee_separations: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          left_on: string
+          organization_id: string | null
+          reason: string | null
+          recorded_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          left_on?: string
+          organization_id?: string | null
+          reason?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          left_on?: string
+          organization_id?: string | null
+          reason?: string | null
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_separations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_separations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_separations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           account_activated: boolean | null
