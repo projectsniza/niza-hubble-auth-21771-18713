@@ -29,7 +29,7 @@ import {
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import { DriveOff, DriveOffFormData } from '@/hooks/useDriveOffs';
-import { Loader2, Upload, X, FileText, Video, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, X, FileText, Video, Image as ImageIcon, FileClock, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
