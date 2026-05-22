@@ -1181,6 +1181,14 @@ export function TimesheetView() {
         <div className="flex items-center justify-center h-40">
           <NizaLoaderInline />
         </div>
+      ) : viewTab === 'weekly' && entryView === 'full' ? (
+        <FullMonthEntryView
+          currentMonth={currentMonth}
+          filterMode={filterMode}
+          selectedOrg={selectedOrg}
+          selectedBranch={selectedBranch}
+          onJumpToWeek={(wi) => { setEntryView('single'); setSelectedWeekIndex(wi); }}
+        />
       ) : viewTab === 'weekly' ? (
         <>
         {/* Weekly View */}
