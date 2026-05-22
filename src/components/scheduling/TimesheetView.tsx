@@ -1674,8 +1674,13 @@ export function TimesheetView() {
                     <Label className="text-xs">Start Time</Label>
                     <Input 
                       type="time" 
+                      step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_start_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_start_time', e.target.value || null)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        updateEntry(idx, 'shift_start_time', snapToHalfHour(v) || null);
+                      }}
                       className="mt-1"
                     />
                   </div>
@@ -1683,8 +1688,13 @@ export function TimesheetView() {
                     <Label className="text-xs">End Time</Label>
                     <Input 
                       type="time" 
+                      step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_end_time || ''} 
-                      onChange={(e) => updateEntry(idx, 'shift_end_time', e.target.value || null)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        updateEntry(idx, 'shift_end_time', snapToHalfHour(v) || null);
+                      }}
                       className="mt-1"
                     />
                   </div>
