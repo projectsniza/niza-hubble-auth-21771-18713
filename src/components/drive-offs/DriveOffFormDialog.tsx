@@ -29,7 +29,7 @@ import {
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import { DriveOff, DriveOffFormData } from '@/hooks/useDriveOffs';
-import { Loader2, Upload, X, FileText, Video, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, X, FileText, Video, Image as ImageIcon, FileClock, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -101,6 +101,9 @@ export function DriveOffFormDialog({
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [supportingFiles, setSupportingFiles] = useState<SupportingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  const draftKey = user?.id ? `driveOffDraft:${user.id}` : null;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -191,12 +194,68 @@ export function DriveOffFormDialog({
     } else {
       form.reset();
       setSupportingFiles([]);
+      setDraftRestored(false);
       // Set default branch for non-super admin users
       if (user?.role === 'manager' && user.branchId) {
         form.setValue('branch_id', user.branchId);
       }
+      // Restore draft if present
+      if (open && draftKey) {
+        try {
+          const raw = localStorage.getItem(draftKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.values) form.reset(parsed.values);
+            if (Array.isArray(parsed.supportingFiles)) setSupportingFiles(parsed.supportingFiles);
+            if (parsed.selectedOrgId) setSelectedOrgId(parsed.selectedOrgId);
+            setDraftRestored(true);
+          }
+        } catch {/* ignore */}
+      }
     }
-  }, [editingDriveOff, form, user, branches]);
+  }, [editingDriveOff, form, user, branches, open, draftKey]);
+
+  // Auto-save draft (new records only)
+  useEffect(() => {
+    if (!open || editingDriveOff || !draftKey) return;
+    const sub = form.watch((values) => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          values,
+          supportingFiles,
+          selectedOrgId,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch {/* ignore quota */}
+    });
+    return () => sub.unsubscribe();
+  }, [form, open, editingDriveOff, draftKey, supportingFiles, selectedOrgId]);
+
+  // Also persist when files / org change
+  useEffect(() => {
+    if (!open || editingDriveOff || !draftKey) return;
+    try {
+      const values = form.getValues();
+      localStorage.setItem(draftKey, JSON.stringify({
+        values,
+        supportingFiles,
+        selectedOrgId,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch {/* ignore */}
+  }, [supportingFiles, selectedOrgId, open, editingDriveOff, draftKey, form]);
+
+  const clearDraft = () => {
+    if (draftKey) localStorage.removeItem(draftKey);
+    form.reset();
+    setSupportingFiles([]);
+    setSelectedOrgId('');
+    setDraftRestored(false);
+    if (user?.role === 'manager' && user.branchId) {
+      form.setValue('branch_id', user.branchId);
+    }
+    toast.success('Draft cleared');
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -288,6 +347,8 @@ export function DriveOffFormDialog({
       supporting_files: supportingFiles,
     };
     await onSubmit(formData);
+    if (draftKey && !editingDriveOff) localStorage.removeItem(draftKey);
+    setDraftRestored(false);
     onClose();
   };
 
@@ -299,6 +360,18 @@ export function DriveOffFormDialog({
             {editingDriveOff ? 'Edit Drive-Off Record' : 'Record New Drive-Off'}
           </DialogTitle>
         </DialogHeader>
+
+        {draftRestored && !editingDriveOff && (
+          <div className="flex items-center justify-between gap-3 p-3 rounded-md border border-amber-500/40 bg-amber-500/10">
+            <div className="flex items-center gap-2 text-sm">
+              <FileClock className="h-4 w-4 text-amber-600" />
+              <span>Unsaved draft restored. Continue where you left off, or clear it to start fresh.</span>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft}>
+              <Trash2 className="h-4 w-4 mr-1" /> Clear draft
+            </Button>
+          </div>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
