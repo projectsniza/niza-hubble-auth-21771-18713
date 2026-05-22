@@ -398,9 +398,15 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                               {isEditing ? (
                                 <Input
                                   type="time"
+                                  step={HALF_HOUR_TIME_STEP}
                                   value={startVal}
                                   disabled={disabled}
-                                  onChange={(e) => setEditingCell(p => ({ ...p, [cellKey]: { start: e.target.value, end: p[cellKey]?.end ?? endVal } }))}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                    const snapped = snapToHalfHour(v);
+                                    setEditingCell(p => ({ ...p, [cellKey]: { start: snapped, end: p[cellKey]?.end ?? endVal } }));
+                                  }}
                                   className="h-6 text-[10px] p-1 w-full"
                                   data-temp-cell={cellKey}
                                   onBlur={(e) => {
