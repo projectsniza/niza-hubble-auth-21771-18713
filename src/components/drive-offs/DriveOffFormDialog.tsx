@@ -347,6 +347,8 @@ export function DriveOffFormDialog({
       supporting_files: supportingFiles,
     };
     await onSubmit(formData);
+    if (draftKey && !editingDriveOff) localStorage.removeItem(draftKey);
+    setDraftRestored(false);
     onClose();
   };
 
