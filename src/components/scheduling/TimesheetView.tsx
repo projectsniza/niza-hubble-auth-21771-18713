@@ -27,6 +27,7 @@ import { MonthCloseReminder } from './MonthCloseReminder';
 import { TempStaffSection } from './TempStaffSection';
 import { Lock } from 'lucide-react';
 import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
+import { FullMonthEntryView } from './FullMonthEntryView';
 
 interface Employee {
   id: string;
