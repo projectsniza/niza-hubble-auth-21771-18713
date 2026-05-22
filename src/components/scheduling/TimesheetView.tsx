@@ -1059,6 +1059,13 @@ export function TimesheetView() {
               </div>
               
               {viewTab === 'weekly' && (
+                <div className="flex items-center gap-1 bg-background rounded-lg p-1 shadow-sm">
+                  <Button size="sm" variant={entryView === 'full' ? 'default' : 'ghost'} className="h-7 text-xs" onClick={() => setEntryView('full')}>Full View</Button>
+                  <Button size="sm" variant={entryView === 'single' ? 'default' : 'ghost'} className="h-7 text-xs" onClick={() => setEntryView('single')}>Weekly View</Button>
+                </div>
+              )}
+
+              {viewTab === 'weekly' && entryView === 'single' && (
                 <Select value={String(selectedWeekIndex)} onValueChange={(v) => setSelectedWeekIndex(Number(v))}>
                   <SelectTrigger className="w-28 bg-background shadow-sm">
                     <SelectValue />
