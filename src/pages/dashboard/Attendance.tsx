@@ -712,9 +712,9 @@ export default function Attendance() {
                 // Build sets of dates for highlighting
                 const leaveDateMap = new Map<string, { type: string; status: string; leaveTypeName: string }[]>();
                 leaveRequests.forEach(req => {
-                  const start = new Date(req.start_date);
-                  const end = new Date(req.end_date);
-                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const start = parseISO(req.start_date);
+                  const end = parseISO(req.end_date);
+                  for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                     const key = format(d, 'yyyy-MM-dd');
                     if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
                     leaveDateMap.get(key)!.push({
@@ -725,9 +725,9 @@ export default function Attendance() {
                   }
                 });
                 mandatoryLeave.forEach(ml => {
-                  const start = new Date(ml.start_date);
-                  const end = new Date(ml.end_date);
-                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const start = parseISO(ml.start_date);
+                  const end = parseISO(ml.end_date);
+                  for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                     const key = format(d, 'yyyy-MM-dd');
                     if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
                     leaveDateMap.get(key)!.push({
