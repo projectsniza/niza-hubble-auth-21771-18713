@@ -16,7 +16,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Plus, Check, X, Settings, Trash2, BarChart3, Upload, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, parseISO, addDays, isBefore, isEqual } from "date-fns";
 import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { OrgBranchFilter } from "@/components/filters/OrgBranchFilter";
