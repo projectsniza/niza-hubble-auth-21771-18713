@@ -152,13 +152,50 @@ export function HolidayBalance() {
       const yearStart = parseISO(selectedYear);
       const yearEnd = addMonths(yearStart, 12);
 
+      // Fetch timesheets for the fiscal year. We extend the lower bound by ~10 days
+      // so we also catch weeks whose Monday falls before Apr 1 but whose days
+      // straddle into the fiscal year (and the upper bound similarly forward).
+      const fetchStart = new Date(yearStart.getFullYear(), yearStart.getMonth(), yearStart.getDate() - 10);
+      const fetchEnd = new Date(yearEnd.getFullYear(), yearEnd.getMonth(), yearEnd.getDate() + 10);
       const { data: timesheets, error: tsError } = await supabase
         .from('timesheets')
-        .select('employee_id, total_worked_hours, total_holiday_hours, total_sick_hours, total_adjustment_hours, week_start_date')
-        .gte('week_start_date', format(yearStart, 'yyyy-MM-dd'))
-        .lt('week_start_date', format(yearEnd, 'yyyy-MM-dd'));
+        .select('id, employee_id, week_start_date')
+        .gte('week_start_date', format(fetchStart, 'yyyy-MM-dd'))
+        .lt('week_start_date', format(fetchEnd, 'yyyy-MM-dd'));
 
       if (tsError) throw tsError;
+
+      // Per-day entries — bucket by entry_date so weeks straddling the 21st
+      // (payroll cycle boundary) split correctly between cycles.
+      const tsIds = (timesheets || []).map(t => t.id);
+      const tsToEmp = new Map<string, string>();
+      (timesheets || []).forEach(t => tsToEmp.set(t.id, t.employee_id));
+
+      let entries: Array<{ timesheet_id: string; entry_date: string; actual_hours: number | null; holiday_hours: number | null }> = [];
+      if (tsIds.length) {
+        const chunkSize = 500;
+        for (let i = 0; i < tsIds.length; i += chunkSize) {
+          const slice = tsIds.slice(i, i + chunkSize);
+          const { data: ents, error: entError } = await supabase
+            .from('timesheet_entries')
+            .select('timesheet_id, entry_date, actual_hours, holiday_hours')
+            .in('timesheet_id', slice);
+          if (entError) throw entError;
+          if (ents) entries = entries.concat(ents as any);
+        }
+      }
+
+      const entriesByEmpDate = new Map<string, Map<string, { w: number; h: number }>>();
+      entries.forEach(e => {
+        const empId = tsToEmp.get(e.timesheet_id);
+        if (!empId) return;
+        let dateMap = entriesByEmpDate.get(empId);
+        if (!dateMap) { dateMap = new Map(); entriesByEmpDate.set(empId, dateMap); }
+        const cur = dateMap.get(e.entry_date) || { w: 0, h: 0 };
+        cur.w += Number(e.actual_hours) || 0;
+        cur.h += Number(e.holiday_hours) || 0;
+        dateMap.set(e.entry_date, cur);
+      });
 
       const { data: contracts } = await supabase
         .from('employee_contracts')
@@ -184,34 +221,34 @@ export function HolidayBalance() {
 
       Object.entries(branchGroups).forEach(([branchName, branchEmployees]) => {
         branchEmployees.forEach((emp, empIdx) => {
-          const empTimesheets = timesheets?.filter(t => t.employee_id === emp.id) || [];
           const contract = contractMap.get(emp.id);
           const weeklyHours = contract?.weekly_contracted_hours || DEFAULT_WEEKLY_HOURS;
           const holidayDays = contract?.holiday_entitlement_days || DEFAULT_HOLIDAY_DAYS;
           const contractType = contract?.contract_type || (weeklyHours >= 35 ? 'Full-Time' : 'Part-Time');
           const carryForward = carryForwardMap.get(emp.id) || 0;
-          
+
+          const empDateMap = entriesByEmpDate.get(emp.id);
+          const sumRange = (startStr: string, endStr: string): { w: number; h: number } => {
+            if (!empDateMap) return { w: 0, h: 0 };
+            let w = 0, h = 0;
+            empDateMap.forEach((v, dateStr) => {
+              if (dateStr >= startStr && dateStr <= endStr) { w += v.w; h += v.h; }
+            });
+            return { w, h };
+          };
+
           const monthly_actual: number[] = MONTHS.map((_, idx) => {
             const monthDate = addMonths(yearStart, idx);
-            // Payroll period: 21st of month to 20th of next month
-            const payrollStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 21);
-            const payrollEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20);
-            
-            return empTimesheets.filter(t => {
-              const weekStart = parseISO(t.week_start_date);
-              return weekStart >= payrollStart && weekStart <= payrollEnd;
-            }).reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0);
+            const payrollStart = format(new Date(monthDate.getFullYear(), monthDate.getMonth(), 21), 'yyyy-MM-dd');
+            const payrollEnd = format(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20), 'yyyy-MM-dd');
+            return sumRange(payrollStart, payrollEnd).w;
           });
 
           const monthly_holiday: number[] = MONTHS.map((_, idx) => {
             const monthDate = addMonths(yearStart, idx);
-            const payrollStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 21);
-            const payrollEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20);
-            
-            return empTimesheets.filter(t => {
-              const weekStart = parseISO(t.week_start_date);
-              return weekStart >= payrollStart && weekStart <= payrollEnd;
-            }).reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0);
+            const payrollStart = format(new Date(monthDate.getFullYear(), monthDate.getMonth(), 21), 'yyyy-MM-dd');
+            const payrollEnd = format(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20), 'yyyy-MM-dd');
+            return sumRange(payrollStart, payrollEnd).h;
           });
 
           const actualTotal = monthly_actual.reduce((sum, v) => sum + v, 0);
