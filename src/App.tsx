@@ -82,6 +82,11 @@ const XeroExport = lazy(() => import("./pages/niza-analysis/XeroExport"));
 const BranchFormats = lazy(() => import("./pages/niza-analysis/BranchFormats"));
 const CategoryAlerts = lazy(() => import("./pages/niza-analysis/CategoryAlerts"));
 const EmailAgents = lazy(() => import("./pages/niza-analysis/EmailAgents"));
+const AnalysisSettings = lazy(() => import("./pages/niza-analysis/AnalysisSettings"));
+const SupplierLedger = lazy(() => import("./pages/niza-analysis/SupplierLedger"));
+const VarianceDashboard = lazy(() => import("./pages/niza-analysis/VarianceDashboard"));
+const CategoryMappings = lazy(() => import("./pages/niza-analysis/CategoryMappings"));
+const BranchPerformance = lazy(() => import("./pages/niza-analysis/BranchPerformance"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
