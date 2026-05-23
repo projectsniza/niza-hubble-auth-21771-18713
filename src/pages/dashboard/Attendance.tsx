@@ -1167,19 +1167,19 @@ export default function Attendance() {
               const adminLeaveDateMap = new Map<string, { employeeName: string; leaveType: string; status: string }[]>();
               const scopedRequests = applyFilters(leaveRequests);
               scopedRequests.forEach(req => {
-                const start = new Date(req.start_date);
-                const end = new Date(req.end_date);
+                const start = parseISO(req.start_date);
+                const end = parseISO(req.end_date);
                 const empName = req.employee ? `${req.employee.first_name} ${req.employee.last_name}` : 'Unknown';
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                   const key = format(d, 'yyyy-MM-dd');
                   if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
                   adminLeaveDateMap.get(key)!.push({ employeeName: empName, leaveType: req.leave_type?.name || 'Leave', status: req.status });
                 }
               });
               mandatoryLeave.forEach(ml => {
-                const start = new Date(ml.start_date);
-                const end = new Date(ml.end_date);
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const start = parseISO(ml.start_date);
+                const end = parseISO(ml.end_date);
+                for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                   const key = format(d, 'yyyy-MM-dd');
                   if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
                   adminLeaveDateMap.get(key)!.push({ employeeName: ml.title, leaveType: 'Mandatory', status: 'mandatory' });
