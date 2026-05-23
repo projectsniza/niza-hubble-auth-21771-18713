@@ -16,7 +16,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, Plus, Check, X, Settings, Trash2, BarChart3, Upload, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, parseISO, addDays, isBefore, isEqual } from "date-fns";
 import LeaveAttendanceOverview from "@/components/attendance/LeaveAttendanceOverview";
 import { getErrorMessage } from "@/lib/errorUtils";
 import { OrgBranchFilter } from "@/components/filters/OrgBranchFilter";
@@ -712,9 +712,9 @@ export default function Attendance() {
                 // Build sets of dates for highlighting
                 const leaveDateMap = new Map<string, { type: string; status: string; leaveTypeName: string }[]>();
                 leaveRequests.forEach(req => {
-                  const start = new Date(req.start_date);
-                  const end = new Date(req.end_date);
-                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const start = parseISO(req.start_date);
+                  const end = parseISO(req.end_date);
+                  for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                     const key = format(d, 'yyyy-MM-dd');
                     if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
                     leaveDateMap.get(key)!.push({
@@ -725,9 +725,9 @@ export default function Attendance() {
                   }
                 });
                 mandatoryLeave.forEach(ml => {
-                  const start = new Date(ml.start_date);
-                  const end = new Date(ml.end_date);
-                  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  const start = parseISO(ml.start_date);
+                  const end = parseISO(ml.end_date);
+                  for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                     const key = format(d, 'yyyy-MM-dd');
                     if (!leaveDateMap.has(key)) leaveDateMap.set(key, []);
                     leaveDateMap.get(key)!.push({
@@ -1167,19 +1167,19 @@ export default function Attendance() {
               const adminLeaveDateMap = new Map<string, { employeeName: string; leaveType: string; status: string }[]>();
               const scopedRequests = applyFilters(leaveRequests);
               scopedRequests.forEach(req => {
-                const start = new Date(req.start_date);
-                const end = new Date(req.end_date);
+                const start = parseISO(req.start_date);
+                const end = parseISO(req.end_date);
                 const empName = req.employee ? `${req.employee.first_name} ${req.employee.last_name}` : 'Unknown';
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                   const key = format(d, 'yyyy-MM-dd');
                   if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
                   adminLeaveDateMap.get(key)!.push({ employeeName: empName, leaveType: req.leave_type?.name || 'Leave', status: req.status });
                 }
               });
               mandatoryLeave.forEach(ml => {
-                const start = new Date(ml.start_date);
-                const end = new Date(ml.end_date);
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const start = parseISO(ml.start_date);
+                const end = parseISO(ml.end_date);
+                for (let d = start; isBefore(d, end) || isEqual(d, end); d = addDays(d, 1)) {
                   const key = format(d, 'yyyy-MM-dd');
                   if (!adminLeaveDateMap.has(key)) adminLeaveDateMap.set(key, []);
                   adminLeaveDateMap.get(key)!.push({ employeeName: ml.title, leaveType: 'Mandatory', status: 'mandatory' });
