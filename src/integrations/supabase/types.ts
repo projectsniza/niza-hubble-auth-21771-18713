@@ -4377,6 +4377,151 @@ export type Database = {
           },
         ]
       }
+      niza_agent_field_mappings: {
+        Row: {
+          agent_id: string
+          created_at: string
+          default_value: string | null
+          id: string
+          is_required: boolean | null
+          source_field: string
+          target_column: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          default_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          source_field: string
+          target_column: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          default_value?: string | null
+          id?: string
+          is_required?: boolean | null
+          source_field?: string
+          target_column?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_agent_field_mappings_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "niza_email_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_agent_rules: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          rule_type: string
+          rule_value: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          rule_type: string
+          rule_value: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          rule_type?: string
+          rule_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_agent_rules_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "niza_email_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_ai_settings: {
+        Row: {
+          created_at: string
+          id: string
+          max_tokens: number | null
+          model: string | null
+          organization_id: string | null
+          prompt: string | null
+          provider: string
+          task_key: string
+          temperature: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          organization_id?: string | null
+          prompt?: string | null
+          provider?: string
+          task_key: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          organization_id?: string | null
+          prompt?: string | null
+          provider?: string
+          task_key?: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      niza_alert_settings: {
+        Row: {
+          created_at: string
+          id: string
+          missing_day_alert: boolean | null
+          new_category_alert: boolean | null
+          organization_id: string | null
+          recipients: string[] | null
+          updated_at: string
+          variance_threshold_gbp: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          missing_day_alert?: boolean | null
+          new_category_alert?: boolean | null
+          organization_id?: string | null
+          recipients?: string[] | null
+          updated_at?: string
+          variance_threshold_gbp?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          missing_day_alert?: boolean | null
+          new_category_alert?: boolean | null
+          organization_id?: string | null
+          recipients?: string[] | null
+          updated_at?: string
+          variance_threshold_gbp?: number | null
+        }
+        Relationships: []
+      }
       niza_branch_categories: {
         Row: {
           branch_id: string
@@ -4474,6 +4619,56 @@ export type Database = {
           },
         ]
       }
+      niza_category_mappings: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          organization_id: string | null
+          tax_rate: string | null
+          till_category: string
+          updated_at: string
+          xero_account_code: string
+          xero_account_name: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          tax_rate?: string | null
+          till_category: string
+          updated_at?: string
+          xero_account_code: string
+          xero_account_name?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          tax_rate?: string | null
+          till_category?: string
+          updated_at?: string
+          xero_account_code?: string
+          xero_account_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_category_mappings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       niza_email_agent_runs: {
         Row: {
           agent_id: string
@@ -4523,6 +4718,7 @@ export type Database = {
           ai_api_key: string | null
           ai_model: string | null
           ai_provider: string
+          attachment_types: string[] | null
           branch_id: string | null
           created_at: string
           created_by: string | null
@@ -4539,17 +4735,24 @@ export type Database = {
           last_run_at: string | null
           last_status: string | null
           mailbox_type: string
+          max_emails_per_run: number | null
           name: string
           organization_id: string | null
           outlook_connection_id: string | null
+          paused: boolean | null
+          prompt_override: string | null
           schedule_cron: string | null
+          sender_filters: string[] | null
+          subject_filters: string[] | null
           supplier_filters: string[] | null
+          temperature: number | null
           updated_at: string
         }
         Insert: {
           ai_api_key?: string | null
           ai_model?: string | null
           ai_provider?: string
+          attachment_types?: string[] | null
           branch_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4566,17 +4769,24 @@ export type Database = {
           last_run_at?: string | null
           last_status?: string | null
           mailbox_type?: string
+          max_emails_per_run?: number | null
           name: string
           organization_id?: string | null
           outlook_connection_id?: string | null
+          paused?: boolean | null
+          prompt_override?: string | null
           schedule_cron?: string | null
+          sender_filters?: string[] | null
+          subject_filters?: string[] | null
           supplier_filters?: string[] | null
+          temperature?: number | null
           updated_at?: string
         }
         Update: {
           ai_api_key?: string | null
           ai_model?: string | null
           ai_provider?: string
+          attachment_types?: string[] | null
           branch_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4593,11 +4803,17 @@ export type Database = {
           last_run_at?: string | null
           last_status?: string | null
           mailbox_type?: string
+          max_emails_per_run?: number | null
           name?: string
           organization_id?: string | null
           outlook_connection_id?: string | null
+          paused?: boolean | null
+          prompt_override?: string | null
           schedule_cron?: string | null
+          sender_filters?: string[] | null
+          subject_filters?: string[] | null
           supplier_filters?: string[] | null
+          temperature?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -4609,6 +4825,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      niza_export_presets: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          organization_id: string | null
+          preset_type: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          organization_id?: string | null
+          preset_type?: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          organization_id?: string | null
+          preset_type?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       niza_invoices: {
         Row: {
