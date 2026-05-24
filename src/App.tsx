@@ -87,6 +87,7 @@ const SupplierLedger = lazy(() => import("./pages/niza-analysis/SupplierLedger")
 const VarianceDashboard = lazy(() => import("./pages/niza-analysis/VarianceDashboard"));
 const CategoryMappings = lazy(() => import("./pages/niza-analysis/CategoryMappings"));
 const BranchPerformance = lazy(() => import("./pages/niza-analysis/BranchPerformance"));
+const DataFlowchart = lazy(() => import("./pages/niza-analysis/DataFlowchart"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
