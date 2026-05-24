@@ -17,9 +17,14 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
     { title: 'Home', icon: Home, path: '/niza-analysis' },
     { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
     { title: 'Daily Sales', icon: Upload, path: '/niza-analysis/daily-sales' },
+    { title: 'Variance Dashboard', icon: GitCompare, path: '/niza-analysis/variance' },
+    { title: 'Supplier Ledger', icon: Users, path: '/niza-analysis/supplier-ledger' },
+    { title: 'Branch Performance', icon: BarChart3, path: '/niza-analysis/branch-performance' },
+    { title: 'Category Mappings', icon: Tags, path: '/niza-analysis/category-mappings' },
     { title: 'Branch Formats', icon: Settings2, path: '/niza-analysis/branch-formats' },
     { title: 'Category Alerts', icon: AlertTriangle, path: '/niza-analysis/category-alerts' },
     { title: 'Email Agents', icon: Bot, path: '/niza-analysis/email-agents' },
+    { title: 'Settings', icon: Settings, path: '/niza-analysis/settings' },
   ];
 
   return (
