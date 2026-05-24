@@ -7,27 +7,17 @@
 // Houndsmill template (one invoice per day, multiple line rows per category).
 
 export interface CoopCategoryTotals {
-  // Sales by Xero short code (gross, i.e. inc VAT where applicable)
-  FU: number; // Fuel
-  TO: number; // Tobacco
-  DR: number; // Drinks
-  GS: number; // Grocery Standard (20% VAT)
-  GZ: number; // Grocery Zero (0% VAT, excl. fuel & news)
-  DO: number; // Domestic Items (5% VAT)
-  AL: number; // Alcohol
-  NP: number; // Newspapers & Magazines
-  VM: number; // Vending Machines
-  CW: number; // Car/Jet Wash
-  // Pass-through / payable items (from TXT1)
-  national_lottery: number;     // 948B
-  instant_lottery: number;      // 949B (scratchcards)
-  paypoint: number;             // 950B
-  payzone: number;
-  lottery_payouts: number;      // 621B (negative)
-  newspaper_voucher: number;    // 622B
-  petty_cash: number;           // 623B (sum of payouts/refunds, negative)
-  bad_debtors: number;          // 451 (drive off etc.)
-  fuel_drive_off: number;       // FU negative reduction
+  FU: number; TO: number; DR: number; GS: number; GZ: number; DO: number;
+  AL: number; NP: number; VM: number; CW: number;
+  national_lottery: number; instant_lottery: number; paypoint: number; payzone: number;
+  lottery_payouts: number; newspaper_voucher: number; petty_cash: number;
+  bad_debtors: number; fuel_drive_off: number;
+  // Extended tender / banking fields extracted from TXT1
+  cash_tender: number; visa_mc: number; amex: number; fuel_card: number;
+  customer_account: number; coupon: number; cash_lifts: number;
+  cash_in_drawer: number; gross_sales: number; net_takings: number;
+  // VAT splits aggregated across all departments
+  vat_20: number; vat_5: number; net_20: number; net_5: number; net_0: number;
 }
 
 export const emptyCoopTotals = (): CoopCategoryTotals => ({
@@ -35,6 +25,9 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   national_lottery: 0, instant_lottery: 0, paypoint: 0, payzone: 0,
   lottery_payouts: 0, newspaper_voucher: 0, petty_cash: 0, bad_debtors: 0,
   fuel_drive_off: 0,
+  cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
+  coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
+  vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
 });
 
 const numFromCell = (s: string | undefined): number => {
