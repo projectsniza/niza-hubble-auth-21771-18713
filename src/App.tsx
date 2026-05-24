@@ -189,6 +189,11 @@ const App = () => (
                 <Route path="xero-export" element={<XeroExport />} />
                 <Route path="category-alerts" element={<CategoryAlerts />} />
                 <Route path="email-agents" element={<EmailAgents />} />
+                <Route path="settings" element={<AnalysisSettings />} />
+                <Route path="supplier-ledger" element={<SupplierLedger />} />
+                <Route path="variance" element={<VarianceDashboard />} />
+                <Route path="category-mappings" element={<CategoryMappings />} />
+                <Route path="branch-performance" element={<BranchPerformance />} />
               </Route>
               <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
