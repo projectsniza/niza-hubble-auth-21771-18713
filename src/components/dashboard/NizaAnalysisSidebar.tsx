@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu, AlertTriangle, Bot } from 'lucide-react';
+import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu, AlertTriangle, Bot, Users, GitCompare, Tags, BarChart3, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
