@@ -358,19 +358,25 @@ export async function buildBranchSummaryWorkbook(
     const t = r.totals;
     const shop = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
                  (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
+    const creditCardTotal = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
+    const banking = t.cash_lifts || 0;
     cashRows.push([
       r.sale_date, '', '', '',
       shop || '', t.CW || '', t.VM || '', t.payzone || '',
       t.FU || '', t.national_lottery || '', Math.abs(t.lottery_payouts || 0) || '',
-      '', '', '', '', '', '', '', '', '', ''
+      creditCardTotal || '', t.cash_tender || '',
+      t.customer_account || '', t.coupon || '',
+      Math.abs(t.petty_cash || 0) || '', '',
+      banking || '', '', '', t.cash_in_drawer || ''
     ]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashRows), 'CASH SUM1');
 
-  // SALE — departmental breakdown
+  // SALE — departmental breakdown (now also includes VAT split totals at bottom)
   const saleHeaders = ['DATE','FUEL','TOBACCO','DRINKS','GROCERY STD','GROCERY ZERO',
     'DOMESTIC 5%','ALCOHOL','NEWSPAPERS','VENDING','CAR WASH',
-    'NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE','LOTTO PAYOUTS','DRIVE OFF'];
+    'NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE','LOTTO PAYOUTS','DRIVE OFF',
+    'NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
   const saleRows: any[][] = [...title('Sales by Department'), saleHeaders];
   for (const r of rows) {
     const t = r.totals;
@@ -380,7 +386,8 @@ export async function buildBranchSummaryWorkbook(
       t.DO || '', t.AL || '', t.NP || '', t.VM || '', t.CW || '',
       t.national_lottery || '', t.instant_lottery || '',
       t.paypoint || '', t.payzone || '',
-      t.lottery_payouts || '', t.fuel_drive_off || ''
+      t.lottery_payouts || '', t.fuel_drive_off || '',
+      t.net_0 || '', t.net_20 || '', t.vat_20 || '', t.net_5 || '', t.vat_5 || ''
     ]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(saleRows), '  SALE  ');
@@ -395,16 +402,55 @@ export async function buildBranchSummaryWorkbook(
     return XLSX.utils.aoa_to_sheet(aoa);
   };
 
-  XLSX.utils.book_append_sheet(wb, stub('Shift Sheet',
-    ['DATE','RECEIVED','AMOUNT','SALES','AMOUNT','NOTES']), 'SHIFT SHEET');
+  // SHIFT SHEET — daily tender breakdown extracted from TXT1
+  const shiftHeaders = ['DATE','CASH','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT',
+    'COUPON','PAYPOINT','PAYZONE','CASH LIFTS','GROSS SALES','NET TAKINGS','CASH IN DRAWER'];
+  const shiftRows: any[][] = [...title('Shift Sheet'), shiftHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    shiftRows.push([
+      r.sale_date,
+      t.cash_tender || '', t.visa_mc || '', t.amex || '', t.fuel_card || '',
+      t.customer_account || '', t.coupon || '', t.paypoint || '', t.payzone || '',
+      t.cash_lifts || '', t.gross_sales || '', t.net_takings || '', t.cash_in_drawer || ''
+    ]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shiftRows), 'SHIFT SHEET');
+
   XLSX.utils.book_append_sheet(wb, stub('Counting Summary',
     ['DATE','PLU NO','ITEM','PRICE','OPEN','ADD','CLOSE','SALE']), 'COUNTING');
   XLSX.utils.book_append_sheet(wb, stub('Tank Dips',
     ['DATE','TANK','METER READINGS','TOTAL ISSUE','TODAYS DIP','DELIVERY','GONE FROM TANK','GAIN/LOSS','%']), 'DIPS');
   XLSX.utils.book_append_sheet(wb, stub('Objectives',
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
-  XLSX.utils.book_append_sheet(wb, stub('Credit Card Receipts',
-    ['DATE','VISA','MASTERCARD','AMEX','DINERS','FUEL CARD','OTHER','TOTAL']), 'C.CARD');
+
+  // C.CARD — card receipts breakdown from TXT1
+  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT','COUPON','OTHER','TOTAL'];
+  const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    const total = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0) +
+                  (t.customer_account || 0) + (t.coupon || 0);
+    ccardRows.push([
+      r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '',
+      t.customer_account || '', t.coupon || '', '', total || ''
+    ]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccardRows), 'C.CARD');
+
+  // BANK — daily cash banked from CSV (cash lifts)
+  const bankHeadersAuto = ['DATE','CASH BANKED','CHEQUES BANKED','CARD SETTLEMENT','OTHER','TOTAL'];
+  const bankRows: any[][] = [...title('Banking'), bankHeadersAuto];
+  for (const r of rows) {
+    const t = r.totals;
+    const cardSettle = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
+    const cash = t.cash_lifts || 0;
+    bankRows.push([
+      r.sale_date, cash || '', '', cardSettle || '', '',
+      +(cash + cardSettle).toFixed(2) || ''
+    ]);
+  }
+
   // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
   const inv = meta.invoices || [];
   const cpurch = inv.filter(i => (i.source || '').toLowerCase() === 'credit' || (i.payment_method || '').toLowerCase() === 'credit');
