@@ -149,6 +149,12 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
       const gross20 = r.net20 + r.vat20;
       const gross5  = r.net5  + r.vat5;
       const totalGross = +(gross20 + gross5 + r.net0).toFixed(2);
+      // Aggregate VAT/net splits regardless of mapping success
+      out.vat_20 = +(out.vat_20 + r.vat20).toFixed(2);
+      out.vat_5  = +(out.vat_5  + r.vat5).toFixed(2);
+      out.net_20 = +(out.net_20 + r.net20).toFixed(2);
+      out.net_5  = +(out.net_5  + r.net5).toFixed(2);
+      out.net_0  = +(out.net_0  + r.net0).toFixed(2);
       if (!code) {
         if (totalGross !== 0) unknownDepartments.push({ label: r.label, amount: totalGross });
         continue;
@@ -176,6 +182,18 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
+
+    // ---- Extended tender extraction (TXT1) ----
+    out.cash_tender        = findTxtLineLast(t, /^\s*Cash\b(?!\s*(Lifts?|in\s*Drawer))/im);
+    out.visa_mc            = findTxtLineLast(t, /Visa\s*\/?\s*Mastercard|Visa\/MC|^\s*Visa\b/im);
+    out.amex               = findTxtLineLast(t, /^\s*Amex\b/im);
+    out.fuel_card          = sumTxtLines(t, /^\s*(Fuel\s*Card|All\s*star|Allstar|UK\s*Fuels|Key\s*Fuels|BP\b|Shell\b|Routex|Fleetone|Fastfuel|Texaco)\b/im);
+    out.customer_account   = findTxtLineLast(t, /Customer\s*Account/i);
+    out.coupon             = +(findTxtLineLast(t, /^\s*Coupon\b/im) + findTxtLineLast(t, /Gift\s*Voucher/i)).toFixed(2);
+    out.cash_lifts         = findTxtLineLast(t, /Cash\s*Lifts?/i);
+    out.cash_in_drawer     = findTxtLineLast(t, /Cash\s*in\s*Drawer/i);
+    out.gross_sales        = findTxtLineLast(t, /Gross\s*Sales/i);
+    out.net_takings        = findTxtLineLast(t, /Net\s*Takings/i);
   }
 
   return { totals: out, knownLabels, unknownDepartments };
