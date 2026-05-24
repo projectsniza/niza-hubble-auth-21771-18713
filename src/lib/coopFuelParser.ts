@@ -495,8 +495,7 @@ export async function buildBranchSummaryWorkbook(
     ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS'], purchases), 'PURCHASE');
   XLSX.utils.book_append_sheet(wb, stub('Profit & Loss',
     ['DATE','SALES','COST OF SALES','GROSS PROFIT','EXPENSES','NET PROFIT']), '      P &  L  ');
-  XLSX.utils.book_append_sheet(wb, stub('Banking',
-    ['DATE','CASH BANKED','CHEQUES BANKED','CARD SETTLEMENT','OTHER','TOTAL']), ' BANK ');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bankRows), ' BANK ');
   XLSX.utils.book_append_sheet(wb, stub('Stock Control',
     ['DATE','OPENING STOCK','PURCHASES','SALES','CLOSING STOCK','VARIANCE']), 'STOCK CONT');
   XLSX.utils.book_append_sheet(wb, stub('Week Wages',
