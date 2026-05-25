@@ -116,7 +116,6 @@ export default function DailySalesUpload() {
         const breakdown = detailed.totals;
         if (detailed.unknownDepartments.length > 0) {
           await reportUnknowns(detailed.unknownDepartments, txtFile.name);
-          throw new Error(`Upload blocked: ${detailed.unknownDepartments.length} new till category(ies) detected. Super Admin has been notified to map them before this can be uploaded.`);
         }
         const legacy = parseDailySales(txtText);
         const combinedTotals = {
