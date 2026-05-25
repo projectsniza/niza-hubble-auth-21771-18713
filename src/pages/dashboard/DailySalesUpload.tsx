@@ -66,11 +66,16 @@ export default function DailySalesUpload() {
       sample_amount: u.amount,
       source_filename: filename,
       sale_date: date,
-      status: 'pending',
+      status: 'open',
       created_by: user!.id,
     }));
-    await supabase.from('niza_category_alerts' as any).insert(rows);
-    toast.error(`New till category detected: ${unknowns.map(u => u.label).join(', ')}. Super Admin notified.`);
+    const { error } = await supabase.from('niza_category_alerts' as any).insert(rows);
+    if (error) {
+      console.error('category alert insert failed', error);
+      toast.warning(`New categories detected but alert could not be recorded: ${error.message}`);
+    } else {
+      toast.warning(`New till category(ies) detected: ${unknowns.map(u => u.label).join(', ')}. Super Admin has been notified to map them.`);
+    }
   };
 
   const recordKnownCategories = async (labels: string[], breakdown: any) => {
