@@ -351,6 +351,9 @@ export default function EmailAgents() {
                     <Button onClick={() => run(selected.id)} disabled={running === selected.id || !!selected.paused}>
                       <Play className="h-4 w-4 mr-1" /> {running === selected.id ? 'Running…' : 'Run now'}
                     </Button>
+                    <Button variant="outline" onClick={() => testConnection(selected)} disabled={testing}>
+                      <PlugZap className="h-4 w-4 mr-1" /> {testing ? 'Testing…' : 'Test connection'}
+                    </Button>
                     <Button variant="outline" onClick={() => togglePause(selected)}>
                       {selected.paused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
                       {selected.paused ? 'Resume' : 'Pause'}
@@ -362,6 +365,7 @@ export default function EmailAgents() {
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
+
                 </div>
               </Card>
 
