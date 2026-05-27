@@ -282,12 +282,15 @@ export default function EmailAgents() {
         </div>
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard icon={<Bot className="h-4 w-4" />} label="Agents" value={stats.total} />
           <StatCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />} label="Active" value={stats.active} />
           <StatCard icon={<Pause className="h-4 w-4 text-amber-500" />} label="Paused" value={stats.paused} />
           <StatCard icon={<AlertCircle className="h-4 w-4 text-destructive" />} label="Errors" value={stats.errors} />
+          <StatCard icon={<Clock className="h-4 w-4 text-blue-500" />} label="Scheduled" value={stats.scheduled} />
+          <StatCard icon={<Inbox className="h-4 w-4 text-muted-foreground" />} label="Never run" value={stats.neverRun} />
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
           {/* Sidebar with agent list */}
