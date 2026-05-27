@@ -14,7 +14,9 @@ import { Separator } from '@/components/ui/separator';
 import {
   Bot, Plus, Play, Trash2, Mail, Settings2, Clock, Filter, Wand2,
   Activity, AlertCircle, CheckCircle2, Pause, RefreshCw, FileSpreadsheet,
-  ListChecks, ServerCog,
+  ListChecks, ServerCog, Zap, Sparkles, Shield, Bell, Database, Cpu,
+  TrendingUp, Inbox, Building2, KeyRound, BookOpen, Gauge, History,
+  PlugZap, AlertTriangle, Download, Eye, Globe, Lock, Layers, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
