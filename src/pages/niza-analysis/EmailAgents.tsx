@@ -720,6 +720,21 @@ export default function EmailAgents() {
               </TabsContent>
 
               <TabsContent value="mailbox" className="space-y-3 mt-4">
+                <div>
+                  <Label className="text-xs">Quick presets</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {MAILBOX_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setEditing({ ...editing, mailbox_type: p.type, imap_host: p.host, imap_port: p.port, imap_use_tls: p.tls })}
+                        className="text-xs px-2.5 py-1 rounded-md border border-border/60 hover:bg-primary/10 hover:border-primary/40 transition-colors flex items-center gap-1"
+                      >
+                        <Globe className="h-3 w-3" /> {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <Label>Type</Label>
@@ -742,14 +757,19 @@ export default function EmailAgents() {
                     <div><Label>IMAP host</Label><Input value={editing.imap_host || ''} onChange={(e) => setEditing({ ...editing, imap_host: e.target.value })} placeholder="imap.zoho.eu" /></div>
                     <div><Label>Port</Label><Input type="number" value={editing.imap_port ?? 993} onChange={(e) => setEditing({ ...editing, imap_port: Number(e.target.value) })} /></div>
                     <div><Label>Email</Label><Input value={editing.imap_user || ''} onChange={(e) => setEditing({ ...editing, imap_user: e.target.value })} /></div>
-                    <div><Label>App password</Label><Input type="password" value={editing.imap_password || ''} onChange={(e) => setEditing({ ...editing, imap_password: e.target.value })} /></div>
+                    <div><Label>App password</Label><Input type="password" value={editing.imap_password || ''} onChange={(e) => setEditing({ ...editing, imap_password: e.target.value })} placeholder="App-specific password" /></div>
                     <div className="flex items-center gap-2 mt-6">
                       <Switch checked={!!editing.imap_use_tls} onCheckedChange={(v) => setEditing({ ...editing, imap_use_tls: v })} />
-                      <Label>Use TLS</Label>
+                      <Label>Use TLS (recommended)</Label>
                     </div>
                   </div>
                 )}
+                <div className="text-xs text-muted-foreground bg-muted/40 p-2 rounded flex gap-2">
+                  <KeyRound className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>For Gmail & M365, generate an <strong>App Password</strong> in your account security settings — your normal login password will not work.</span>
+                </div>
               </TabsContent>
+
 
               <TabsContent value="ai" className="space-y-3 mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
