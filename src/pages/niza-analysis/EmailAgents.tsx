@@ -58,15 +58,45 @@ const DEFAULT_AGENT: Partial<Agent> = {
   attachment_types: ['pdf'], temperature: 0.1,
 };
 
-const SOURCE_FIELDS = ['supplier', 'invoice_date', 'invoice_number', 'net', 'vat', 'gross', 'category', 'currency'];
+const SOURCE_FIELDS = ['supplier', 'invoice_date', 'invoice_number', 'net', 'vat', 'gross', 'category', 'currency', 'po_number', 'due_date', 'payment_terms', 'discount', 'line_items'];
 const RULE_TYPES = [
   { value: 'subject_contains', label: 'Subject contains' },
   { value: 'subject_excludes', label: 'Subject excludes' },
   { value: 'sender_contains', label: 'Sender contains' },
   { value: 'sender_excludes', label: 'Sender excludes' },
   { value: 'supplier_whitelist', label: 'Allowed supplier' },
+  { value: 'supplier_blacklist', label: 'Blocked supplier' },
   { value: 'attachment_required', label: 'Attachment required (type)' },
+  { value: 'amount_min', label: 'Minimum gross amount' },
+  { value: 'amount_max', label: 'Maximum gross amount' },
+  { value: 'date_after', label: 'Invoice date after' },
 ];
+
+const MAILBOX_PRESETS = [
+  { id: 'zoho-eu',   name: 'Zoho Mail (EU)',     host: 'imap.zoho.eu',         port: 993, tls: true, type: 'imap' },
+  { id: 'zoho-com',  name: 'Zoho Mail (.com)',   host: 'imap.zoho.com',        port: 993, tls: true, type: 'imap' },
+  { id: 'gmail',     name: 'Gmail (IMAP)',       host: 'imap.gmail.com',       port: 993, tls: true, type: 'imap' },
+  { id: 'outlook',   name: 'Outlook / M365',     host: 'outlook.office365.com',port: 993, tls: true, type: 'imap' },
+  { id: 'yahoo',     name: 'Yahoo Mail',         host: 'imap.mail.yahoo.com',  port: 993, tls: true, type: 'imap' },
+  { id: 'icloud',    name: 'iCloud Mail',        host: 'imap.mail.me.com',     port: 993, tls: true, type: 'imap' },
+  { id: 'fastmail',  name: 'Fastmail',           host: 'imap.fastmail.com',    port: 993, tls: true, type: 'imap' },
+  { id: 'cpanel',    name: 'cPanel / shared host',host: 'mail.yourdomain.com', port: 993, tls: true, type: 'imap' },
+];
+
+const CRON_PRESETS = [
+  { label: 'Every 15 min',  value: '*/15 * * * *' },
+  { label: 'Hourly',        value: '0 * * * *' },
+  { label: 'Every 2 hours', value: '0 */2 * * *' },
+  { label: 'Every 6 hours', value: '0 */6 * * *' },
+  { label: 'Daily 06:00',   value: '0 6 * * *' },
+  { label: 'Daily 09:00 & 17:00', value: '0 9,17 * * *' },
+  { label: 'Weekdays 08:00', value: '0 8 * * 1-5' },
+];
+
+const MODEL_OPTIONS: Record<string, string[]> = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
+  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+};
 
 export default function EmailAgents() {
   const [agents, setAgents] = useState<Agent[]>([]);
