@@ -783,8 +783,22 @@ export default function EmailAgents() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Model</Label><Input value={editing.ai_model || ''} onChange={(e) => setEditing({ ...editing, ai_model: e.target.value })} /></div>
-                  <div><Label>Temperature</Label><Input type="number" step="0.1" value={editing.temperature ?? 0.1} onChange={(e) => setEditing({ ...editing, temperature: Number(e.target.value) })} /></div>
+                  <div>
+                    <Label>Model</Label>
+                    <Select value={editing.ai_model || ''} onValueChange={(v) => setEditing({ ...editing, ai_model: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                      <SelectContent>
+                        {(MODEL_OPTIONS[editing.ai_provider || 'openai'] || []).map(m => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Temperature ({editing.temperature ?? 0.1})</Label>
+                    <Input type="range" min="0" max="1" step="0.1" value={editing.temperature ?? 0.1} onChange={(e) => setEditing({ ...editing, temperature: Number(e.target.value) })} />
+                    <p className="text-[10px] text-muted-foreground">Lower = more deterministic (recommended 0.1)</p>
+                  </div>
                 </div>
                 <div>
                   <Label>Prompt override (optional)</Label>
