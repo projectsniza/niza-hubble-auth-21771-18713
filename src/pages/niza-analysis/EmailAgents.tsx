@@ -108,6 +108,8 @@ export default function EmailAgents() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
+  const [testing, setTesting] = useState(false);
   const [newRule, setNewRule] = useState<{ rule_type: string; rule_value: string }>({ rule_type: 'subject_contains', rule_value: '' });
   const [newMap, setNewMap] = useState<{ source_field: string; target_column: string }>({ source_field: 'supplier', target_column: 'Supplier' });
 
@@ -122,14 +124,16 @@ export default function EmailAgents() {
   };
 
   const loadDetail = async (id: string) => {
-    const [{ data: r }, { data: m }, { data: rn }] = await Promise.all([
+    const [{ data: r }, { data: m }, { data: rn }, { data: inv }] = await Promise.all([
       supabase.from('niza_agent_rules').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
       supabase.from('niza_agent_field_mappings').select('*').eq('agent_id', id).order('source_field'),
       supabase.from('niza_email_agent_runs').select('*').eq('agent_id', id).order('started_at', { ascending: false }).limit(20),
+      supabase.from('niza_invoices').select('id,supplier,invoice_date,gross,extraction_status,created_at,file_path').eq('source', 'email_agent').order('created_at', { ascending: false }).limit(15),
     ]);
     setRules((r as any) || []);
     setMappings((m as any) || []);
     setRuns((rn as any) || []);
+    setRecentInvoices((inv as any) || []);
   };
 
   useEffect(() => { loadAgents(); }, []);
