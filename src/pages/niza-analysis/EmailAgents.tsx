@@ -14,7 +14,9 @@ import { Separator } from '@/components/ui/separator';
 import {
   Bot, Plus, Play, Trash2, Mail, Settings2, Clock, Filter, Wand2,
   Activity, AlertCircle, CheckCircle2, Pause, RefreshCw, FileSpreadsheet,
-  ListChecks, ServerCog,
+  ListChecks, ServerCog, Zap, Sparkles, Shield, Bell, Database, Cpu,
+  TrendingUp, Inbox, Building2, KeyRound, BookOpen, Gauge, History,
+  PlugZap, AlertTriangle, Download, Eye, Globe, Lock, Layers, BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -56,15 +58,45 @@ const DEFAULT_AGENT: Partial<Agent> = {
   attachment_types: ['pdf'], temperature: 0.1,
 };
 
-const SOURCE_FIELDS = ['supplier', 'invoice_date', 'invoice_number', 'net', 'vat', 'gross', 'category', 'currency'];
+const SOURCE_FIELDS = ['supplier', 'invoice_date', 'invoice_number', 'net', 'vat', 'gross', 'category', 'currency', 'po_number', 'due_date', 'payment_terms', 'discount', 'line_items'];
 const RULE_TYPES = [
   { value: 'subject_contains', label: 'Subject contains' },
   { value: 'subject_excludes', label: 'Subject excludes' },
   { value: 'sender_contains', label: 'Sender contains' },
   { value: 'sender_excludes', label: 'Sender excludes' },
   { value: 'supplier_whitelist', label: 'Allowed supplier' },
+  { value: 'supplier_blacklist', label: 'Blocked supplier' },
   { value: 'attachment_required', label: 'Attachment required (type)' },
+  { value: 'amount_min', label: 'Minimum gross amount' },
+  { value: 'amount_max', label: 'Maximum gross amount' },
+  { value: 'date_after', label: 'Invoice date after' },
 ];
+
+const MAILBOX_PRESETS = [
+  { id: 'zoho-eu',   name: 'Zoho Mail (EU)',     host: 'imap.zoho.eu',         port: 993, tls: true, type: 'imap' },
+  { id: 'zoho-com',  name: 'Zoho Mail (.com)',   host: 'imap.zoho.com',        port: 993, tls: true, type: 'imap' },
+  { id: 'gmail',     name: 'Gmail (IMAP)',       host: 'imap.gmail.com',       port: 993, tls: true, type: 'imap' },
+  { id: 'outlook',   name: 'Outlook / M365',     host: 'outlook.office365.com',port: 993, tls: true, type: 'imap' },
+  { id: 'yahoo',     name: 'Yahoo Mail',         host: 'imap.mail.yahoo.com',  port: 993, tls: true, type: 'imap' },
+  { id: 'icloud',    name: 'iCloud Mail',        host: 'imap.mail.me.com',     port: 993, tls: true, type: 'imap' },
+  { id: 'fastmail',  name: 'Fastmail',           host: 'imap.fastmail.com',    port: 993, tls: true, type: 'imap' },
+  { id: 'cpanel',    name: 'cPanel / shared host',host: 'mail.yourdomain.com', port: 993, tls: true, type: 'imap' },
+];
+
+const CRON_PRESETS = [
+  { label: 'Every 15 min',  value: '*/15 * * * *' },
+  { label: 'Hourly',        value: '0 * * * *' },
+  { label: 'Every 2 hours', value: '0 */2 * * *' },
+  { label: 'Every 6 hours', value: '0 */6 * * *' },
+  { label: 'Daily 06:00',   value: '0 6 * * *' },
+  { label: 'Daily 09:00 & 17:00', value: '0 9,17 * * *' },
+  { label: 'Weekdays 08:00', value: '0 8 * * 1-5' },
+];
+
+const MODEL_OPTIONS: Record<string, string[]> = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'],
+  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+};
 
 export default function EmailAgents() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -76,6 +108,8 @@ export default function EmailAgents() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
+  const [testing, setTesting] = useState(false);
   const [newRule, setNewRule] = useState<{ rule_type: string; rule_value: string }>({ rule_type: 'subject_contains', rule_value: '' });
   const [newMap, setNewMap] = useState<{ source_field: string; target_column: string }>({ source_field: 'supplier', target_column: 'Supplier' });
 
@@ -90,14 +124,16 @@ export default function EmailAgents() {
   };
 
   const loadDetail = async (id: string) => {
-    const [{ data: r }, { data: m }, { data: rn }] = await Promise.all([
+    const [{ data: r }, { data: m }, { data: rn }, { data: inv }] = await Promise.all([
       supabase.from('niza_agent_rules').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
       supabase.from('niza_agent_field_mappings').select('*').eq('agent_id', id).order('source_field'),
       supabase.from('niza_email_agent_runs').select('*').eq('agent_id', id).order('started_at', { ascending: false }).limit(20),
+      supabase.from('niza_invoices').select('id,supplier,invoice_date,gross,extraction_status,created_at,file_path').eq('source', 'email_agent').order('created_at', { ascending: false }).limit(15),
     ]);
     setRules((r as any) || []);
     setMappings((m as any) || []);
     setRuns((rn as any) || []);
+    setRecentInvoices((inv as any) || []);
   };
 
   useEffect(() => { loadAgents(); }, []);
@@ -189,8 +225,38 @@ export default function EmailAgents() {
     const active = agents.filter(a => a.is_active && !a.paused).length;
     const paused = agents.filter(a => a.paused).length;
     const errors = agents.filter(a => a.last_status === 'error').length;
-    return { total, active, paused, errors };
+    const scheduled = agents.filter(a => !!a.schedule_cron).length;
+    const neverRun = agents.filter(a => !a.last_run_at).length;
+    return { total, active, paused, errors, scheduled, neverRun };
   }, [agents]);
+
+  const runStats = useMemo(() => {
+    if (runs.length === 0) return { successRate: 0, avgDuration: 0, totalScanned: 0, totalExtracted: 0, conversion: 0 };
+    const ok = runs.filter(r => r.status !== 'error' && r.status !== 'failed').length;
+    const durs = runs.filter(r => r.ended_at).map(r => (new Date(r.ended_at!).getTime() - new Date(r.started_at).getTime()) / 1000);
+    const totalScanned = runs.reduce((s, r) => s + (r.emails_scanned || 0), 0);
+    const totalExtracted = runs.reduce((s, r) => s + (r.invoices_extracted || 0), 0);
+    return {
+      successRate: Math.round((ok / runs.length) * 100),
+      avgDuration: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0,
+      totalScanned, totalExtracted,
+      conversion: totalScanned ? Math.round((totalExtracted / totalScanned) * 100) : 0,
+    };
+  }, [runs]);
+
+  const testConnection = async (a: Agent) => {
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('niza-email-agent-run', { body: { agent_id: a.id, test_only: true } });
+      if (error) throw error;
+      toast.success(`Connection OK · ${data?.scanned ?? 0} unread`);
+    } catch (e: any) {
+      toast.error(`Connection failed: ${e?.message || 'unknown'}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30">
@@ -216,12 +282,15 @@ export default function EmailAgents() {
         </div>
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <StatCard icon={<Bot className="h-4 w-4" />} label="Agents" value={stats.total} />
           <StatCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />} label="Active" value={stats.active} />
           <StatCard icon={<Pause className="h-4 w-4 text-amber-500" />} label="Paused" value={stats.paused} />
           <StatCard icon={<AlertCircle className="h-4 w-4 text-destructive" />} label="Errors" value={stats.errors} />
+          <StatCard icon={<Clock className="h-4 w-4 text-blue-500" />} label="Scheduled" value={stats.scheduled} />
+          <StatCard icon={<Inbox className="h-4 w-4 text-muted-foreground" />} label="Never run" value={stats.neverRun} />
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
           {/* Sidebar with agent list */}
@@ -282,6 +351,9 @@ export default function EmailAgents() {
                     <Button onClick={() => run(selected.id)} disabled={running === selected.id || !!selected.paused}>
                       <Play className="h-4 w-4 mr-1" /> {running === selected.id ? 'Running…' : 'Run now'}
                     </Button>
+                    <Button variant="outline" onClick={() => testConnection(selected)} disabled={testing}>
+                      <PlugZap className="h-4 w-4 mr-1" /> {testing ? 'Testing…' : 'Test connection'}
+                    </Button>
                     <Button variant="outline" onClick={() => togglePause(selected)}>
                       {selected.paused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
                       {selected.paused ? 'Resume' : 'Pause'}
@@ -293,6 +365,7 @@ export default function EmailAgents() {
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
+
                 </div>
               </Card>
 
@@ -340,6 +413,18 @@ export default function EmailAgents() {
                           loadAgents();
                         }}
                       />
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {CRON_PRESETS.map(c => (
+                          <button
+                            key={c.value}
+                            onClick={async () => {
+                              await supabase.from('niza_email_agents').update({ schedule_cron: c.value }).eq('id', selected.id);
+                              loadAgents();
+                            }}
+                            className="text-[10px] px-2 py-0.5 rounded-full border border-border/60 hover:bg-primary/10 hover:border-primary/40 transition-colors"
+                          >{c.label}</button>
+                        ))}
+                      </div>
                       <p className="text-[10px] text-muted-foreground mt-1">Empty = manual only</p>
                     </div>
                     <div>
@@ -367,6 +452,7 @@ export default function EmailAgents() {
                           <Badge variant="outline">{m.source_field}</Badge>
                           <span>→</span>
                           <span className="font-medium">{m.target_column}</span>
+                          {m.is_required && <Badge variant="secondary" className="text-[10px]">required</Badge>}
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => delMapping(m.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                       </div>
@@ -383,50 +469,208 @@ export default function EmailAgents() {
                   </div>
                 </Card>
 
-                {/* Stats card */}
-                <Card className="p-4 md:col-span-2">
-                  <BentoHeader icon={<Activity className="h-4 w-4" />} title="Run Stats (20)" />
+                {/* Health gauge */}
+                <Card className="p-4 md:col-span-2 bg-gradient-to-br from-emerald-500/5 to-background border-emerald-500/20">
+                  <BentoHeader icon={<Gauge className="h-4 w-4" />} title="Agent Health" />
+                  <div className="text-center py-2">
+                    <div className={`text-4xl font-bold ${runStats.successRate >= 90 ? 'text-emerald-500' : runStats.successRate >= 70 ? 'text-amber-500' : 'text-destructive'}`}>
+                      {runStats.successRate}%
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">Success rate (last 20)</div>
+                  </div>
+                  <div className="space-y-1.5 text-xs mt-2">
+                    <Row label="Avg duration" value={`${runStats.avgDuration}s`} />
+                    <Row label="Emails → invoices" value={`${runStats.conversion}%`} />
+                    <Row label="Total scanned" value={runStats.totalScanned} />
+                    <Row label="Total extracted" value={runStats.totalExtracted} />
+                  </div>
+                </Card>
+
+                {/* Throughput sparkline */}
+                <Card className="p-4 md:col-span-4">
+                  <BentoHeader icon={<BarChart3 className="h-4 w-4" />} title="Throughput (last 20 runs)" subtitle="emails scanned vs invoices extracted" />
                   {runs.length === 0 ? (
-                    <div className="text-xs text-muted-foreground italic">No runs yet.</div>
+                    <div className="text-xs text-muted-foreground italic py-8 text-center">No data yet</div>
                   ) : (
-                    <div className="space-y-2 text-sm">
-                      <Row label="Total emails scanned" value={runs.reduce((s, r) => s + (r.emails_scanned || 0), 0)} />
-                      <Row label="Invoices extracted" value={runs.reduce((s, r) => s + (r.invoices_extracted || 0), 0)} />
-                      <Row label="Errors" value={runs.filter(r => r.status === 'error').length} />
-                      <Row label="Avg per run" value={(runs.reduce((s, r) => s + (r.invoices_extracted || 0), 0) / runs.length).toFixed(1)} />
+                    <div className="flex items-end gap-1 h-32">
+                      {[...runs].reverse().map(r => {
+                        const max = Math.max(...runs.map(x => x.emails_scanned || 0), 1);
+                        const sH = ((r.emails_scanned || 0) / max) * 100;
+                        const eH = ((r.invoices_extracted || 0) / max) * 100;
+                        return (
+                          <div key={r.id} className="flex-1 flex flex-col justify-end gap-0.5 group relative" title={`${new Date(r.started_at).toLocaleString()} · scanned ${r.emails_scanned} · extracted ${r.invoices_extracted}`}>
+                            <div className="bg-primary/30 rounded-sm" style={{ height: `${sH}%`, minHeight: '2px' }} />
+                            <div className="bg-emerald-500/70 rounded-sm" style={{ height: `${eH}%`, minHeight: '2px' }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex gap-3 text-[10px] text-muted-foreground mt-2">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-primary/30 rounded-sm" /> Scanned</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500/70 rounded-sm" /> Extracted</span>
+                  </div>
+                </Card>
+
+                {/* AI Model card */}
+                <Card className="p-4 md:col-span-3">
+                  <BentoHeader icon={<Cpu className="h-4 w-4" />} title="AI Model & Prompt" />
+                  <div className="space-y-2 text-sm">
+                    <Row label="Provider" value={<Badge variant="outline">{selected.ai_provider}</Badge>} />
+                    <Row label="Model" value={<code className="text-xs">{selected.ai_model || '—'}</code>} />
+                    <Row label="Temperature" value={selected.temperature ?? 0.1} />
+                    <Row label="Custom prompt" value={selected.prompt_override ? <Badge>customized</Badge> : <span className="text-muted-foreground text-xs">default</span>} />
+                  </div>
+                  {selected.prompt_override && (
+                    <div className="mt-2 text-[11px] text-muted-foreground bg-muted/40 rounded p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
+                      {selected.prompt_override}
                     </div>
                   )}
                 </Card>
 
+                {/* Security / mailbox */}
+                <Card className="p-4 md:col-span-3">
+                  <BentoHeader icon={<Shield className="h-4 w-4" />} title="Mailbox & Security" />
+                  <div className="space-y-2 text-sm">
+                    <Row label="Type" value={<Badge variant="outline">{selected.mailbox_type}</Badge>} />
+                    <Row label="Host" value={<code className="text-xs">{selected.imap_host || '—'}</code>} />
+                    <Row label="Port" value={selected.imap_port ?? '—'} />
+                    <Row label="User" value={<span className="text-xs truncate max-w-[180px] inline-block">{selected.imap_user || '—'}</span>} />
+                    <Row label="TLS" value={selected.imap_use_tls ? <Badge className="bg-emerald-500">enabled</Badge> : <Badge variant="destructive">disabled</Badge>} />
+                    <Row label="Folder" value={<code className="text-xs">{selected.folder || 'INBOX'}</code>} />
+                  </div>
+                </Card>
+
+                {/* Recent extracted invoices */}
+                <Card className="p-4 md:col-span-6">
+                  <BentoHeader icon={<Database className="h-4 w-4" />} title="Recent Extracted Invoices" subtitle={`${recentInvoices.length} most recent (all email agents)`} />
+                  {recentInvoices.length === 0 ? (
+                    <div className="text-xs text-muted-foreground italic py-4 text-center">No invoices extracted yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-xs text-muted-foreground border-b">
+                          <tr>
+                            <th className="text-left py-2 px-2">Supplier</th>
+                            <th className="text-left py-2 px-2">Invoice date</th>
+                            <th className="text-right py-2 px-2">Gross</th>
+                            <th className="text-left py-2 px-2">Status</th>
+                            <th className="text-left py-2 px-2">Captured</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentInvoices.map((i: any) => (
+                            <tr key={i.id} className="border-b border-border/40 hover:bg-muted/40">
+                              <td className="py-2 px-2 font-medium truncate max-w-[220px]">{i.supplier || <span className="text-muted-foreground italic">(unknown)</span>}</td>
+                              <td className="py-2 px-2 text-xs">{i.invoice_date || '—'}</td>
+                              <td className="py-2 px-2 text-right tabular-nums">{i.gross != null ? `£${Number(i.gross).toFixed(2)}` : '—'}</td>
+                              <td className="py-2 px-2">
+                                <Badge variant={i.extraction_status === 'completed' ? 'default' : i.extraction_status === 'failed' ? 'destructive' : 'secondary'} className="text-[10px]">
+                                  {i.extraction_status || 'pending'}
+                                </Badge>
+                              </td>
+                              <td className="py-2 px-2 text-xs text-muted-foreground">{new Date(i.created_at).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Quick filters summary */}
+                <Card className="p-4 md:col-span-3">
+                  <BentoHeader icon={<Filter className="h-4 w-4" />} title="Active Filters Summary" />
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Subject keywords:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(selected.subject_filters || []).length === 0
+                          ? <span className="italic text-muted-foreground">none — all subjects</span>
+                          : selected.subject_filters!.map(f => <Badge key={f} variant="outline">{f}</Badge>)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Sender filters:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(selected.sender_filters || []).length === 0
+                          ? <span className="italic text-muted-foreground">none — all senders</span>
+                          : selected.sender_filters!.map(f => <Badge key={f} variant="outline">{f}</Badge>)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Attachment types:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(selected.attachment_types || ['pdf']).map(f => <Badge key={f}>{f}</Badge>)}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Branch scoping */}
+                <Card className="p-4 md:col-span-3">
+                  <BentoHeader icon={<Building2 className="h-4 w-4" />} title="Branch & Scope" />
+                  <div className="space-y-2 text-sm">
+                    <Row label="Branch" value={selected.branch_id ? (branches.find(b => b.id === selected.branch_id)?.name || selected.branch_id) : <span className="text-muted-foreground italic">All branches</span>} />
+                    <Row label="Status" value={selected.is_active ? <Badge className="bg-emerald-500">Active</Badge> : <Badge variant="outline">Inactive</Badge>} />
+                    <Row label="Paused" value={selected.paused ? <Badge variant="secondary">Yes</Badge> : <Badge variant="outline">No</Badge>} />
+                    <Row label="Schedule" value={selected.schedule_cron ? <code className="text-xs">{selected.schedule_cron}</code> : <span className="text-muted-foreground italic">Manual only</span>} />
+                  </div>
+                </Card>
+
+                {/* Documentation / Tips */}
+                <Card className="p-4 md:col-span-6 bg-gradient-to-br from-blue-500/5 to-background border-blue-500/20">
+                  <BentoHeader icon={<BookOpen className="h-4 w-4" />} title="Tips & Best Practices" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-md bg-background/60 border border-border/40">
+                      <div className="font-semibold flex items-center gap-1 mb-1"><Lock className="h-3 w-3" /> App Passwords</div>
+                      <p className="text-muted-foreground">Always use an app-specific password rather than your real mailbox password. Gmail, Zoho and M365 all support this in security settings.</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-background/60 border border-border/40">
+                      <div className="font-semibold flex items-center gap-1 mb-1"><Filter className="h-3 w-3" /> Tight Rules</div>
+                      <p className="text-muted-foreground">Add at least one subject or sender rule to avoid scanning marketing emails. This saves AI tokens and keeps invoices clean.</p>
+                    </div>
+                    <div className="p-3 rounded-md bg-background/60 border border-border/40">
+                      <div className="font-semibold flex items-center gap-1 mb-1"><Sparkles className="h-3 w-3" /> Field Mapping</div>
+                      <p className="text-muted-foreground">Map AI-extracted fields to your CSV header names exactly as they appear in your Branch Cash Summary template.</p>
+                    </div>
+                  </div>
+                </Card>
+
                 {/* Logs — full width */}
                 <Card className="p-4 md:col-span-6">
-                  <BentoHeader icon={<ListChecks className="h-4 w-4" />} title="Run History & Logs" subtitle="Latest 20 runs" />
+                  <BentoHeader icon={<History className="h-4 w-4" />} title="Run History & Logs" subtitle="Latest 20 runs" />
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {runs.length === 0 && <div className="text-xs text-muted-foreground italic">No runs yet — click Run now.</div>}
-                    {runs.map(r => (
-                      <details key={r.id} className="rounded border border-border/60">
-                        <summary className="cursor-pointer p-2 flex items-center justify-between gap-2 hover:bg-muted/40">
-                          <div className="flex items-center gap-2">
-                            {r.status === 'error' ? <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                              : r.status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground animate-spin" />}
-                            <span className="text-sm">{new Date(r.started_at).toLocaleString()}</span>
-                            <Badge variant="outline">{r.status}</Badge>
+                    {runs.map(r => {
+                      const dur = r.ended_at ? Math.round((new Date(r.ended_at).getTime() - new Date(r.started_at).getTime()) / 1000) : null;
+                      return (
+                        <details key={r.id} className="rounded border border-border/60">
+                          <summary className="cursor-pointer p-2 flex items-center justify-between gap-2 hover:bg-muted/40">
+                            <div className="flex items-center gap-2">
+                              {r.status === 'error' || r.status === 'failed' ? <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                                : r.status === 'completed' || r.status === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground animate-spin" />}
+                              <span className="text-sm">{new Date(r.started_at).toLocaleString()}</span>
+                              <Badge variant="outline">{r.status}</Badge>
+                              {dur != null && <Badge variant="secondary" className="text-[10px]">{dur}s</Badge>}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              scanned {r.emails_scanned} · extracted {r.invoices_extracted}
+                            </div>
+                          </summary>
+                          <div className="p-2 bg-muted/40 text-xs font-mono whitespace-pre-wrap border-t">
+                            {r.log_text || '(no log)'}
+                            {r.error_message && <div className="text-destructive mt-1">Error: {r.error_message}</div>}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            scanned {r.emails_scanned} · extracted {r.invoices_extracted}
-                          </div>
-                        </summary>
-                        <div className="p-2 bg-muted/40 text-xs font-mono whitespace-pre-wrap border-t">
-                          {r.log_text || '(no log)'}
-                          {r.error_message && <div className="text-destructive mt-1">Error: {r.error_message}</div>}
-                        </div>
-                      </details>
-                    ))}
+                        </details>
+                      );
+                    })}
                   </div>
                 </Card>
               </div>
             </div>
+
           ) : (
             <Card className="p-10 text-center text-muted-foreground">
               <Bot className="h-12 w-12 mx-auto mb-3 opacity-40" />
@@ -476,6 +720,21 @@ export default function EmailAgents() {
               </TabsContent>
 
               <TabsContent value="mailbox" className="space-y-3 mt-4">
+                <div>
+                  <Label className="text-xs">Quick presets</Label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {MAILBOX_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setEditing({ ...editing, mailbox_type: p.type, imap_host: p.host, imap_port: p.port, imap_use_tls: p.tls })}
+                        className="text-xs px-2.5 py-1 rounded-md border border-border/60 hover:bg-primary/10 hover:border-primary/40 transition-colors flex items-center gap-1"
+                      >
+                        <Globe className="h-3 w-3" /> {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <Label>Type</Label>
@@ -498,14 +757,19 @@ export default function EmailAgents() {
                     <div><Label>IMAP host</Label><Input value={editing.imap_host || ''} onChange={(e) => setEditing({ ...editing, imap_host: e.target.value })} placeholder="imap.zoho.eu" /></div>
                     <div><Label>Port</Label><Input type="number" value={editing.imap_port ?? 993} onChange={(e) => setEditing({ ...editing, imap_port: Number(e.target.value) })} /></div>
                     <div><Label>Email</Label><Input value={editing.imap_user || ''} onChange={(e) => setEditing({ ...editing, imap_user: e.target.value })} /></div>
-                    <div><Label>App password</Label><Input type="password" value={editing.imap_password || ''} onChange={(e) => setEditing({ ...editing, imap_password: e.target.value })} /></div>
+                    <div><Label>App password</Label><Input type="password" value={editing.imap_password || ''} onChange={(e) => setEditing({ ...editing, imap_password: e.target.value })} placeholder="App-specific password" /></div>
                     <div className="flex items-center gap-2 mt-6">
                       <Switch checked={!!editing.imap_use_tls} onCheckedChange={(v) => setEditing({ ...editing, imap_use_tls: v })} />
-                      <Label>Use TLS</Label>
+                      <Label>Use TLS (recommended)</Label>
                     </div>
                   </div>
                 )}
+                <div className="text-xs text-muted-foreground bg-muted/40 p-2 rounded flex gap-2">
+                  <KeyRound className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>For Gmail & M365, generate an <strong>App Password</strong> in your account security settings — your normal login password will not work.</span>
+                </div>
               </TabsContent>
+
 
               <TabsContent value="ai" className="space-y-3 mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -519,8 +783,22 @@ export default function EmailAgents() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Model</Label><Input value={editing.ai_model || ''} onChange={(e) => setEditing({ ...editing, ai_model: e.target.value })} /></div>
-                  <div><Label>Temperature</Label><Input type="number" step="0.1" value={editing.temperature ?? 0.1} onChange={(e) => setEditing({ ...editing, temperature: Number(e.target.value) })} /></div>
+                  <div>
+                    <Label>Model</Label>
+                    <Select value={editing.ai_model || ''} onValueChange={(v) => setEditing({ ...editing, ai_model: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                      <SelectContent>
+                        {(MODEL_OPTIONS[editing.ai_provider || 'openai'] || []).map(m => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Temperature ({editing.temperature ?? 0.1})</Label>
+                    <Input type="range" min="0" max="1" step="0.1" value={editing.temperature ?? 0.1} onChange={(e) => setEditing({ ...editing, temperature: Number(e.target.value) })} />
+                    <p className="text-[10px] text-muted-foreground">Lower = more deterministic (recommended 0.1)</p>
+                  </div>
                 </div>
                 <div>
                   <Label>Prompt override (optional)</Label>
