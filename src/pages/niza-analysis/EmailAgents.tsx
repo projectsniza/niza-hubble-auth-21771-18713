@@ -225,8 +225,38 @@ export default function EmailAgents() {
     const active = agents.filter(a => a.is_active && !a.paused).length;
     const paused = agents.filter(a => a.paused).length;
     const errors = agents.filter(a => a.last_status === 'error').length;
-    return { total, active, paused, errors };
+    const scheduled = agents.filter(a => !!a.schedule_cron).length;
+    const neverRun = agents.filter(a => !a.last_run_at).length;
+    return { total, active, paused, errors, scheduled, neverRun };
   }, [agents]);
+
+  const runStats = useMemo(() => {
+    if (runs.length === 0) return { successRate: 0, avgDuration: 0, totalScanned: 0, totalExtracted: 0, conversion: 0 };
+    const ok = runs.filter(r => r.status !== 'error' && r.status !== 'failed').length;
+    const durs = runs.filter(r => r.ended_at).map(r => (new Date(r.ended_at!).getTime() - new Date(r.started_at).getTime()) / 1000);
+    const totalScanned = runs.reduce((s, r) => s + (r.emails_scanned || 0), 0);
+    const totalExtracted = runs.reduce((s, r) => s + (r.invoices_extracted || 0), 0);
+    return {
+      successRate: Math.round((ok / runs.length) * 100),
+      avgDuration: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0,
+      totalScanned, totalExtracted,
+      conversion: totalScanned ? Math.round((totalExtracted / totalScanned) * 100) : 0,
+    };
+  }, [runs]);
+
+  const testConnection = async (a: Agent) => {
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('niza-email-agent-run', { body: { agent_id: a.id, test_only: true } });
+      if (error) throw error;
+      toast.success(`Connection OK · ${data?.scanned ?? 0} unread`);
+    } catch (e: any) {
+      toast.error(`Connection failed: ${e?.message || 'unknown'}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30">
