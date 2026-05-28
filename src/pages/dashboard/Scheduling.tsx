@@ -13,6 +13,7 @@ import { Calendar, Clock, CalendarDays } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useTimeIncrement } from '@/hooks/useTimeIncrement';
 
 interface Shift {
   id: string;
