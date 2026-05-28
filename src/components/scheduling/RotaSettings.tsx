@@ -3,12 +3,14 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Table, CalendarDays, Layers, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, CalendarDays, Layers, Loader2, Clock } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { refreshTimeIncrement } from '@/hooks/useTimeIncrement';
 
 type RotaView = 'table' | 'timeline' | 'drag-drop';
 
@@ -19,6 +21,7 @@ interface RotaSettingsData {
   hide_shift_labels: boolean;
   accept_decline_enabled: boolean;
   open_shifts_enabled: boolean;
+  time_increment_minutes: number;
 }
 
 export function RotaSettings() {
@@ -28,7 +31,8 @@ export function RotaSettings() {
     restricted_permissions: false,
     hide_shift_labels: false,
     accept_decline_enabled: false,
-    open_shifts_enabled: false
+    open_shifts_enabled: false,
+    time_increment_minutes: 30,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,35 +64,26 @@ export function RotaSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const payload = {
+        default_view: settings.default_view,
+        restricted_permissions: settings.restricted_permissions,
+        hide_shift_labels: settings.hide_shift_labels,
+        accept_decline_enabled: settings.accept_decline_enabled,
+        open_shifts_enabled: settings.open_shifts_enabled,
+        time_increment_minutes: settings.time_increment_minutes,
+      };
       if (settings.id) {
-        // Update existing
         const { error } = await supabase
           .from('rota_settings')
-          .update({
-            default_view: settings.default_view,
-            restricted_permissions: settings.restricted_permissions,
-            hide_shift_labels: settings.hide_shift_labels,
-            accept_decline_enabled: settings.accept_decline_enabled,
-            open_shifts_enabled: settings.open_shifts_enabled
-          })
+          .update(payload)
           .eq('id', settings.id);
-
         if (error) throw error;
       } else {
-        // Insert new
-        const { error } = await supabase
-          .from('rota_settings')
-          .insert({
-            default_view: settings.default_view,
-            restricted_permissions: settings.restricted_permissions,
-            hide_shift_labels: settings.hide_shift_labels,
-            accept_decline_enabled: settings.accept_decline_enabled,
-            open_shifts_enabled: settings.open_shifts_enabled
-          });
-
+        const { error } = await supabase.from('rota_settings').insert(payload);
         if (error) throw error;
       }
 
+      await refreshTimeIncrement();
       toast.success('Settings saved successfully');
       fetchSettings();
     } catch (error: any) {
@@ -314,7 +309,38 @@ export function RotaSettings() {
               </div>
             </RadioGroup>
           </div>
+
+          {/* Allowed shift time increment */}
+          <div className="space-y-4 pt-6 border-t mt-6">
+            <div>
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <Clock className="h-4 w-4" /> Allowed shift time increment
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose which minute values managers can enter for shift start/end times across all branches.
+                For example, choosing 30 only allows :00 and :30 (e.g. 10:00, 10:30) and blocks 10:10 or 10:15.
+                Choose 5 to allow any 5-minute value.
+              </p>
+            </div>
+            <Select
+              value={String(settings.time_increment_minutes)}
+              onValueChange={(v) => setSettings({ ...settings, time_increment_minutes: parseInt(v, 10) })}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">Every 5 minutes (e.g. 10:05, 10:10)</SelectItem>
+                <SelectItem value="10">Every 10 minutes (e.g. 10:10, 10:20)</SelectItem>
+                <SelectItem value="15">Every 15 minutes (quarter-hour)</SelectItem>
+                <SelectItem value="20">Every 20 minutes</SelectItem>
+                <SelectItem value="30">Every 30 minutes (half-hour) — default</SelectItem>
+                <SelectItem value="60">Every 60 minutes (full hour only)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
 
         <div className="flex justify-end gap-4 pt-4 border-t">
           <Button variant="outline" onClick={fetchSettings}>Cancel</Button>

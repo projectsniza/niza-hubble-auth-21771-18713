@@ -5783,6 +5783,7 @@ export type Database = {
           open_shifts_enabled: boolean | null
           organization_id: string | null
           restricted_permissions: boolean | null
+          time_increment_minutes: number
           updated_at: string | null
         }
         Insert: {
@@ -5794,6 +5795,7 @@ export type Database = {
           open_shifts_enabled?: boolean | null
           organization_id?: string | null
           restricted_permissions?: boolean | null
+          time_increment_minutes?: number
           updated_at?: string | null
         }
         Update: {
@@ -5805,6 +5807,7 @@ export type Database = {
           open_shifts_enabled?: boolean | null
           organization_id?: string | null
           restricted_permissions?: boolean | null
+          time_increment_minutes?: number
           updated_at?: string | null
         }
         Relationships: [

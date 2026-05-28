@@ -51,77 +51,104 @@ interface EmpRow {
 
 export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, selectedBranch, onJumpToWeek }: Props) {
   const weeks = useMemo(() => getPayrollWeeks(currentMonth), [currentMonth]);
-  const { start: payStart, end: payEnd } = getPayrollPeriod(currentMonth);
+  const { start: payStart, end: payEnd } = useMemo(() => getPayrollPeriod(currentMonth), [currentMonth]);
   const [loading, setLoading] = useState(true);
   const [byWeek, setByWeek] = useState<Record<string, EmpRow[]>>({});
 
+  // Stable string keys for effect deps (Date objects + memo array reidentify each render).
+  const monthKey = format(currentMonth, 'yyyy-MM');
+
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const startStr = format(payStart, 'yyyy-MM-dd');
-        const endStr = format(payEnd, 'yyyy-MM-dd');
         const rangeStart = format(weeks[0] || payStart, 'yyyy-MM-dd');
-        const rangeEnd = format(weeks[weeks.length - 1] ? endOfWeek(weeks[weeks.length - 1], { weekStartsOn: 1 }) : payEnd, 'yyyy-MM-dd');
+        const rangeEnd = format(
+          weeks[weeks.length - 1] ? endOfWeek(weeks[weeks.length - 1], { weekStartsOn: 1 }) : payEnd,
+          'yyyy-MM-dd'
+        );
 
-        // Active employees
+        // Active employees (scoped)
         let empQ = supabase
           .from('employees')
           .select('id, first_name, last_name, branch_id, organization_id, branch:branches(name)')
-          .in('status', ['active', 'onboarding', 'on_leave']);
+          .in('status', ['active', 'onboarding', 'on_leave'])
+          .limit(5000);
         if (filterMode === 'organization' && selectedOrg) empQ = empQ.eq('organization_id', selectedOrg);
         if (filterMode === 'branch' && selectedBranch) empQ = empQ.eq('branch_id', selectedBranch);
         const { data: emps } = await empQ;
-        const empMap: Record<string, any> = {};
-        (emps || []).forEach((e: any) => { empMap[e.id] = e; });
+        if (cancelled) return;
+        const empIds = (emps || []).map((e: any) => e.id);
+        if (empIds.length === 0) {
+          setByWeek(Object.fromEntries(weeks.map(w => [format(w, 'yyyy-MM-dd'), []])));
+          return;
+        }
 
+        // Timesheets restricted to these employees + date range (avoid 1000-row limit blowups)
         const { data: ts } = await supabase
           .from('timesheets')
           .select('id, employee_id, week_start_date, total_adjustment_hours')
+          .in('employee_id', empIds)
           .gte('week_start_date', rangeStart)
-          .lte('week_start_date', rangeEnd);
+          .lte('week_start_date', rangeEnd)
+          .limit(10000);
+        if (cancelled) return;
 
-        const tsIds = (ts || []).map(t => t.id);
-        const tsMap: Record<string, any> = {};
-        (ts || []).forEach(t => { tsMap[t.id] = t; });
+        const tsList = ts || [];
+        const tsIds = tsList.map(t => t.id);
 
-        let entries: any[] = [];
+        // Index timesheet by employee+week, entries by timesheet id (O(1) lookups)
+        const tsByEmpWeek = new Map<string, any>();
+        tsList.forEach(t => tsByEmpWeek.set(`${t.employee_id}|${t.week_start_date}`, t));
+
+        const entriesByTs = new Map<string, any[]>();
         if (tsIds.length) {
-          const { data: ents } = await supabase
-            .from('timesheet_entries')
-            .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
-            .in('timesheet_id', tsIds);
-          entries = ents || [];
+          // Chunked .in() to dodge URL-length / row limits on large months
+          const chunkSize = 200;
+          for (let i = 0; i < tsIds.length; i += chunkSize) {
+            const chunk = tsIds.slice(i, i + chunkSize);
+            const { data: ents } = await supabase
+              .from('timesheet_entries')
+              .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
+              .in('timesheet_id', chunk)
+              .limit(10000);
+            if (cancelled) return;
+            (ents || []).forEach((e: any) => {
+              const arr = entriesByTs.get(e.timesheet_id) || [];
+              arr.push(e);
+              entriesByTs.set(e.timesheet_id, arr);
+            });
+          }
         }
 
-        // Group by week_start
         const out: Record<string, EmpRow[]> = {};
         weeks.forEach(weekStart => {
           const wsStr = format(weekStart, 'yyyy-MM-dd');
           const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
           const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+          const dayIndex = new Map<string, number>();
+          days.forEach((d, i) => dayIndex.set(format(d, 'yyyy-MM-dd'), i));
           const rows: EmpRow[] = [];
 
-          // Per employee, find timesheet
           (emps || []).forEach((emp: any) => {
-            const ts = (Object.values(tsMap) as any[]).find(t => t.employee_id === emp.id && t.week_start_date === wsStr);
+            const t = tsByEmpWeek.get(`${emp.id}|${wsStr}`);
             const daily = new Array(7).fill(0);
             let worked = 0, holiday = 0, sick = 0;
-            if (ts) {
-              entries.filter((e: any) => e.timesheet_id === ts.id).forEach((e: any) => {
-                const idx = days.findIndex(d => format(d, 'yyyy-MM-dd') === e.entry_date);
-                if (idx < 0) return;
+            if (t) {
+              (entriesByTs.get(t.id) || []).forEach((e: any) => {
+                const idx = dayIndex.get(e.entry_date);
+                if (idx === undefined) return;
                 const inPayroll = days[idx] >= payStart && days[idx] <= payEnd;
+                if (!inPayroll) return;
                 const h = Number(e.actual_hours) || 0;
-                const hh = Number(e.holiday_hours) || 0;
-                const sh = Number(e.sick_hours) || 0;
-                if (inPayroll) {
-                  daily[idx] = h;
-                  worked += h; holiday += hh; sick += sh;
-                }
+                daily[idx] = h;
+                worked += h;
+                holiday += Number(e.holiday_hours) || 0;
+                sick += Number(e.sick_hours) || 0;
               });
             }
-            if (ts || worked || holiday || sick) {
+            if (t || worked || holiday || sick) {
               rows.push({
                 employee_id: emp.id,
                 name: `${emp.first_name} ${emp.last_name}`,
@@ -131,19 +158,26 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
                 worked,
                 holiday,
                 sick,
-                adj: Number(ts?.total_adjustment_hours) || 0,
-                timesheet_id: ts?.id,
+                adj: Number(t?.total_adjustment_hours) || 0,
+                timesheet_id: t?.id,
               });
             }
           });
-          out[wsStr] = rows.sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name));
+          out[wsStr] = rows.sort(
+            (a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name)
+          );
         });
-        setByWeek(out);
+        if (!cancelled) setByWeek(out);
+      } catch (e) {
+        console.error('FullMonthEntryView load failed', e);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, [currentMonth, filterMode, selectedOrg, selectedBranch, weeks, payStart, payEnd]);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthKey, filterMode, selectedOrg, selectedBranch]);
+
 
   if (loading) {
     return <div className="flex items-center justify-center h-40"><NizaLoaderInline /></div>;

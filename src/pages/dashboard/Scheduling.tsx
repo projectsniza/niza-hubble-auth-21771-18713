@@ -13,6 +13,7 @@ import { Calendar, Clock, CalendarDays } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useTimeIncrement } from '@/hooks/useTimeIncrement';
 
 interface Shift {
   id: string;
@@ -27,6 +28,8 @@ const getTodayLocal = () => format(new Date(), 'yyyy-MM-dd');
 
 export default function Scheduling() {
   const { user } = useAuth();
+  useTimeIncrement(); // load global increment setting at module mount
+
   const [activeTab, setActiveTab] = useState('timesheets');
   const [employeeShifts, setEmployeeShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
