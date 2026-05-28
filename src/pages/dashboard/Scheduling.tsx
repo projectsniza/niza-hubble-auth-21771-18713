@@ -28,6 +28,8 @@ const getTodayLocal = () => format(new Date(), 'yyyy-MM-dd');
 
 export default function Scheduling() {
   const { user } = useAuth();
+  useTimeIncrement(); // load global increment setting at module mount
+
   const [activeTab, setActiveTab] = useState('timesheets');
   const [employeeShifts, setEmployeeShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
