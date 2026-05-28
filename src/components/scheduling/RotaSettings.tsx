@@ -3,12 +3,14 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Table, CalendarDays, Layers, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, CalendarDays, Layers, Loader2, Clock } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { refreshTimeIncrement } from '@/hooks/useTimeIncrement';
 
 type RotaView = 'table' | 'timeline' | 'drag-drop';
 
