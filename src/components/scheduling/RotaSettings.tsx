@@ -64,35 +64,26 @@ export function RotaSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const payload = {
+        default_view: settings.default_view,
+        restricted_permissions: settings.restricted_permissions,
+        hide_shift_labels: settings.hide_shift_labels,
+        accept_decline_enabled: settings.accept_decline_enabled,
+        open_shifts_enabled: settings.open_shifts_enabled,
+        time_increment_minutes: settings.time_increment_minutes,
+      };
       if (settings.id) {
-        // Update existing
         const { error } = await supabase
           .from('rota_settings')
-          .update({
-            default_view: settings.default_view,
-            restricted_permissions: settings.restricted_permissions,
-            hide_shift_labels: settings.hide_shift_labels,
-            accept_decline_enabled: settings.accept_decline_enabled,
-            open_shifts_enabled: settings.open_shifts_enabled
-          })
+          .update(payload)
           .eq('id', settings.id);
-
         if (error) throw error;
       } else {
-        // Insert new
-        const { error } = await supabase
-          .from('rota_settings')
-          .insert({
-            default_view: settings.default_view,
-            restricted_permissions: settings.restricted_permissions,
-            hide_shift_labels: settings.hide_shift_labels,
-            accept_decline_enabled: settings.accept_decline_enabled,
-            open_shifts_enabled: settings.open_shifts_enabled
-          });
-
+        const { error } = await supabase.from('rota_settings').insert(payload);
         if (error) throw error;
       }
 
+      await refreshTimeIncrement();
       toast.success('Settings saved successfully');
       fetchSettings();
     } catch (error: any) {
