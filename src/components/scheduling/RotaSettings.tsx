@@ -21,6 +21,7 @@ interface RotaSettingsData {
   hide_shift_labels: boolean;
   accept_decline_enabled: boolean;
   open_shifts_enabled: boolean;
+  time_increment_minutes: number;
 }
 
 export function RotaSettings() {
@@ -30,7 +31,8 @@ export function RotaSettings() {
     restricted_permissions: false,
     hide_shift_labels: false,
     accept_decline_enabled: false,
-    open_shifts_enabled: false
+    open_shifts_enabled: false,
+    time_increment_minutes: 30,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
