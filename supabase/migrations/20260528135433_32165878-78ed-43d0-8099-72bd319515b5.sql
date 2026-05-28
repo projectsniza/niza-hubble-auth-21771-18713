@@ -1,0 +1,1 @@
+ALTER TABLE public.rota_settings ADD COLUMN IF NOT EXISTS time_increment_minutes integer NOT NULL DEFAULT 30 CHECK (time_increment_minutes IN (5,10,15,20,30,60));
