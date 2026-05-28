@@ -309,7 +309,38 @@ export function RotaSettings() {
               </div>
             </RadioGroup>
           </div>
+
+          {/* Allowed shift time increment */}
+          <div className="space-y-4 pt-6 border-t mt-6">
+            <div>
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <Clock className="h-4 w-4" /> Allowed shift time increment
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose which minute values managers can enter for shift start/end times across all branches.
+                For example, choosing 30 only allows :00 and :30 (e.g. 10:00, 10:30) and blocks 10:10 or 10:15.
+                Choose 5 to allow any 5-minute value.
+              </p>
+            </div>
+            <Select
+              value={String(settings.time_increment_minutes)}
+              onValueChange={(v) => setSettings({ ...settings, time_increment_minutes: parseInt(v, 10) })}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">Every 5 minutes (e.g. 10:05, 10:10)</SelectItem>
+                <SelectItem value="10">Every 10 minutes (e.g. 10:10, 10:20)</SelectItem>
+                <SelectItem value="15">Every 15 minutes (quarter-hour)</SelectItem>
+                <SelectItem value="20">Every 20 minutes</SelectItem>
+                <SelectItem value="30">Every 30 minutes (half-hour) — default</SelectItem>
+                <SelectItem value="60">Every 60 minutes (full hour only)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
 
         <div className="flex justify-end gap-4 pt-4 border-t">
           <Button variant="outline" onClick={fetchSettings}>Cancel</Button>
