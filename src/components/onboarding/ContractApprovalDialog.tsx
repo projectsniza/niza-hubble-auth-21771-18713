@@ -306,6 +306,28 @@ export default function ContractApprovalDialog({
           </TabsList>
 
           <TabsContent value="details" className="space-y-4 pt-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">Employee & Contract Details</h3>
+              {!isEditing ? (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="gap-2">
+                  <Pencil className="h-4 w-4" /> Edit details
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => { setEdits({}); setIsEditing(false); }}>Cancel</Button>
+                  <Button size="sm" onClick={handleSaveEdits} disabled={isSavingEdits} className="gap-2">
+                    <Save className="h-4 w-4" /> {isSavingEdits ? 'Saving...' : 'Save changes'}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {isEditing && (
+              <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded p-2">
+                Edits update the contract content used for signing & download. Employee name, email, organization and branch are not editable here.
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Employee Name</Label>
@@ -318,9 +340,14 @@ export default function ContractApprovalDialog({
                 <Label className="text-muted-foreground">Email</Label>
                 <p className="font-medium">{employee.email}</p>
               </div>
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Job Title</Label>
-                <p className="font-medium">{contractContent?.job_title || employee.job_title || 'Not specified'}</p>
+                {isEditing ? (
+                  <Input value={contractContent?.job_title ?? ''} onChange={(e) => updateField('job_title', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{contractContent?.job_title || employee.job_title || 'Not specified'}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Department</Label>
@@ -337,21 +364,64 @@ export default function ContractApprovalDialog({
                 <Label className="text-muted-foreground">Branch</Label>
                 <p className="font-medium">{employee.branch?.name}</p>
               </div>
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Commencement Date</Label>
-                <p className="font-medium">{contractContent?.commencement_date || employee.join_date || 'Not specified'}</p>
+                {isEditing ? (
+                  <Input type="date" value={contractContent?.commencement_date ?? ''} onChange={(e) => updateField('commencement_date', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{contractContent?.commencement_date || employee.join_date || 'Not specified'}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Hours Per Week</Label>
-                <p className="font-medium">{contractContent?.hours_per_week || 'Not specified'}</p>
+                {isEditing ? (
+                  <Input type="number" min={0} step="0.5" value={contractContent?.hours_per_week ?? ''} onChange={(e) => updateField('hours_per_week', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{contractContent?.hours_per_week || 'Not specified'}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Salary Rate</Label>
-                <p className="font-medium">{contractContent?.salary_rate ? `£${contractContent.salary_rate}/hour` : 'Not specified'}</p>
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <Input type="number" min={0} step="0.01" placeholder="0.00" value={contractContent?.salary_rate ?? ''} onChange={(e) => updateField('salary_rate', e.target.value)} />
+                    <select
+                      className="border rounded-md px-2 text-sm bg-background"
+                      value={contractContent?.salary_type || 'hourly'}
+                      onChange={(e) => updateField('salary_type', e.target.value)}
+                    >
+                      <option value="hourly">/hour</option>
+                      <option value="annual">/annum</option>
+                    </select>
+                  </div>
+                ) : (
+                  <p className="font-medium">{contractContent?.salary_rate ? `£${contractContent.salary_rate}/${contractContent?.salary_type === 'annual' ? 'annum' : 'hour'}` : 'Not specified'}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Place of Work</Label>
-                <p className="font-medium">{contractContent?.place_of_work || 'Not specified'}</p>
+                {isEditing ? (
+                  <Input value={contractContent?.place_of_work ?? ''} onChange={(e) => updateField('place_of_work', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{contractContent?.place_of_work || 'Not specified'}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Holiday Entitlement (days/year)</Label>
+                {isEditing ? (
+                  <Input type="number" min={0} value={contractContent?.holiday_days ?? ''} onChange={(e) => updateField('holiday_days', e.target.value)} placeholder="28" />
+                ) : (
+                  <p className="font-medium">{contractContent?.holiday_days || '28'} days</p>
+                )}
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label className="text-muted-foreground">Contract Date</Label>
+                {isEditing ? (
+                  <Input type="date" value={contractContent?.contract_date ?? ''} onChange={(e) => updateField('contract_date', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{contractContent?.contract_date || 'Not specified'}</p>
+                )}
               </div>
             </div>
           </TabsContent>
