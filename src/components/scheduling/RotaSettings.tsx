@@ -32,7 +32,7 @@ export function RotaSettings() {
     hide_shift_labels: false,
     accept_decline_enabled: false,
     open_shifts_enabled: false,
-    time_increment_minutes: 30,
+    time_increment_minutes: 1,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -318,8 +318,8 @@ export function RotaSettings() {
               </Label>
               <p className="text-sm text-muted-foreground mt-1">
                 Choose which minute values managers can enter for shift start/end times across all branches.
-                For example, choosing 30 only allows :00 and :30 (e.g. 10:00, 10:30) and blocks 10:10 or 10:15.
-                Choose 5 to allow any 5-minute value.
+                Default is <strong>Any time</strong> — any minute value such as 6:15, 7:45, or 10:10 is allowed.
+                Tightening this (e.g. 30) restricts entries to :00 / :30 only.
               </p>
             </div>
             <Select
@@ -330,11 +330,12 @@ export function RotaSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="1">Any time (per minute) — default</SelectItem>
                 <SelectItem value="5">Every 5 minutes (e.g. 10:05, 10:10)</SelectItem>
                 <SelectItem value="10">Every 10 minutes (e.g. 10:10, 10:20)</SelectItem>
                 <SelectItem value="15">Every 15 minutes (quarter-hour)</SelectItem>
                 <SelectItem value="20">Every 20 minutes</SelectItem>
-                <SelectItem value="30">Every 30 minutes (half-hour) — default</SelectItem>
+                <SelectItem value="30">Every 30 minutes (half-hour)</SelectItem>
                 <SelectItem value="60">Every 60 minutes (full hour only)</SelectItem>
               </SelectContent>
             </Select>

@@ -1,10 +1,10 @@
 // Configurable time-increment snapping for scheduling shifts.
-// Default increment is 30 (half-hour). Super Admin can change via Rota Settings.
+// Default is 1 minute (any value allowed) — Super Admin can tighten via Rota Settings.
 
-const VALID_INCREMENTS = [5, 10, 15, 20, 30, 60] as const;
+const VALID_INCREMENTS = [1, 5, 10, 15, 20, 30, 60] as const;
 export type TimeIncrement = (typeof VALID_INCREMENTS)[number];
 
-let CURRENT_INCREMENT: TimeIncrement = 30;
+let CURRENT_INCREMENT: TimeIncrement = 1;
 
 export function setGlobalTimeIncrement(mins: number) {
   const n = Number(mins);
@@ -17,9 +17,11 @@ export function getGlobalTimeIncrement(): TimeIncrement {
 }
 
 // Snap a HH:MM string to nearest multiple of `mins` (defaults to global setting).
+// When step is 1 this is a no-op — any minute value is allowed.
 export function snapToIncrement(value: string | null | undefined, mins?: number): string {
   const step = mins ?? CURRENT_INCREMENT;
   if (!value) return value || '';
+  if (step <= 1) return value;
   const m = /^(\d{1,2}):(\d{2})/.exec(value);
   if (!m) return value;
   let h = parseInt(m[1], 10);
@@ -38,6 +40,7 @@ export function snapToIncrement(value: string | null | undefined, mins?: number)
 export function isIncrementAligned(value: string | null | undefined, mins?: number): boolean {
   const step = mins ?? CURRENT_INCREMENT;
   if (!value) return true;
+  if (step <= 1) return true;
   const m = /^(\d{1,2}):(\d{2})/.exec(value);
   if (!m) return true;
   const minutes = parseInt(m[2], 10);
@@ -48,6 +51,6 @@ export function isIncrementAligned(value: string | null | undefined, mins?: numb
 export const snapToHalfHour = (v: string | null | undefined) => snapToIncrement(v, CURRENT_INCREMENT);
 export const isHalfHourAligned = (v: string | null | undefined) => isIncrementAligned(v, CURRENT_INCREMENT);
 
-// HTML <input type="time"> step attribute (seconds).
-export const HALF_HOUR_TIME_STEP = 1800;
-export const timeStepSeconds = (mins?: number) => (mins ?? CURRENT_INCREMENT) * 60;
+// HTML <input type="time"> step attribute (seconds). 60s = any minute.
+export const HALF_HOUR_TIME_STEP = 60;
+export const timeStepSeconds = (mins?: number) => Math.max(60, (mins ?? CURRENT_INCREMENT) * 60);
