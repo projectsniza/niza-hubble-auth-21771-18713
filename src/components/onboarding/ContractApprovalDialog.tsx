@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X } from 'lucide-react';
+import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -54,12 +54,50 @@ export default function ContractApprovalDialog({
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState('');
 
+  // Editable contract fields (Super Admin can fix details before approving)
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
+  const [edits, setEdits] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    setEdits({});
+    setIsEditing(false);
+  }, [approval?.id]);
+
   if (!approval) return null;
 
   const employee = approval.employee;
   if (!employee) return null;
 
-  const contractContent = approval.contract_content as any;
+  const baseContent = (approval.contract_content as any) || {};
+  const contractContent = { ...baseContent, ...edits };
+
+  const updateField = (key: string, value: any) =>
+    setEdits((p) => ({ ...p, [key]: value }));
+
+  const handleSaveEdits = async () => {
+    if (Object.keys(edits).length === 0) {
+      setIsEditing(false);
+      return;
+    }
+    setIsSavingEdits(true);
+    try {
+      const merged = { ...baseContent, ...edits };
+      const { error } = await supabase
+        .from('contract_approvals')
+        .update({ contract_content: merged })
+        .eq('id', approval.id);
+      if (error) throw error;
+      approval.contract_content = merged;
+      setEdits({});
+      setIsEditing(false);
+      toast.success('Contract details updated');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save edits');
+    } finally {
+      setIsSavingEdits(false);
+    }
+  };
 
   const handleDownloadContract = async () => {
     if (approval.contract_file_path) {
