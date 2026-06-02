@@ -226,6 +226,10 @@ export default function ContractApprovalDialog({
   };
 
   const handleApprove = async () => {
+    if (isEditing || Object.keys(edits).length > 0) {
+      toast.error('Please save or cancel your contract edits before approving');
+      return;
+    }
     if (!signatureDate) {
       toast.error('Please select a signature date');
       return;
