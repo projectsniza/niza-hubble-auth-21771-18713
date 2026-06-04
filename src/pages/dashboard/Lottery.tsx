@@ -312,14 +312,17 @@ export default function Lottery() {
     
     switch (field) {
       case 'stockBegin': {
-        // If there's a saved value, use it
-        if (record?.stock_begin !== undefined && record.stock_begin !== null) {
+        // Use saved value only if it's a meaningful positive number.
+        // (Treat null/undefined/0 as "not set" so carry-forward from previous day's closing kicks in.)
+        if (record?.stock_begin != null && Number(record.stock_begin) > 0) {
           return record.stock_begin;
         }
         // Otherwise, try to auto-populate from previous day's closing stock
         const prevClosing = getPreviousDayClosingStock(gameId, dateStr);
-        return prevClosing;
+        if (prevClosing != null && prevClosing > 0) return prevClosing;
+        return record?.stock_begin ?? null;
       }
+
       case 'activatedTickets': return record?.activated_tickets ?? null;
       case 'stockEnd': return record?.stock_end ?? null;
       default: return null;
