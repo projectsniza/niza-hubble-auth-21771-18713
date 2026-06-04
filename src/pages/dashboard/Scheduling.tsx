@@ -226,9 +226,11 @@ export default function Scheduling() {
             <>
               <TabsTrigger value="targets" className="flex-1 min-w-[100px] text-xs md:text-sm">Hour Targets</TabsTrigger>
               <TabsTrigger value="lockstatus" className="flex-1 min-w-[100px] text-xs md:text-sm">Lock Status</TabsTrigger>
+              <TabsTrigger value="rotasettings" className="flex-1 min-w-[100px] text-xs md:text-sm">Rota Settings</TabsTrigger>
             </>
           )}
         </TabsList>
+
 
         <TabsContent value="timesheets" className="mt-0">
           <TimesheetView />
