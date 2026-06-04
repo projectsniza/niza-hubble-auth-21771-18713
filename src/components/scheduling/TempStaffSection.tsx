@@ -403,7 +403,7 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                                   disabled={disabled}
                                   onChange={(e) => {
                                     const v = e.target.value;
-                                    if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                    /* time alignment warning removed - any minute allowed by default */
                                     const snapped = snapToHalfHour(v);
                                     setEditingCell(p => ({ ...p, [cellKey]: { start: snapped, end: p[cellKey]?.end ?? endVal } }));
                                   }}
@@ -438,7 +438,7 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                                     disabled={disabled}
                                     onChange={(e) => {
                                       const v = e.target.value;
-                                      if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                      /* time alignment warning removed - any minute allowed by default */
                                       const snapped = snapToHalfHour(v);
                                       setEditingCell(p => ({ ...p, [cellKey]: { start: p[cellKey]?.start ?? startVal, end: snapped } }));
                                     }}

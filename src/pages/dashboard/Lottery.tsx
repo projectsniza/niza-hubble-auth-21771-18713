@@ -312,14 +312,17 @@ export default function Lottery() {
     
     switch (field) {
       case 'stockBegin': {
-        // If there's a saved value, use it
-        if (record?.stock_begin !== undefined && record.stock_begin !== null) {
+        // Use saved value only if it's a meaningful positive number.
+        // (Treat null/undefined/0 as "not set" so carry-forward from previous day's closing kicks in.)
+        if (record?.stock_begin != null && Number(record.stock_begin) > 0) {
           return record.stock_begin;
         }
         // Otherwise, try to auto-populate from previous day's closing stock
         const prevClosing = getPreviousDayClosingStock(gameId, dateStr);
-        return prevClosing;
+        if (prevClosing != null && prevClosing > 0) return prevClosing;
+        return record?.stock_begin ?? null;
       }
+
       case 'activatedTickets': return record?.activated_tickets ?? null;
       case 'stockEnd': return record?.stock_end ?? null;
       default: return null;
@@ -1889,12 +1892,19 @@ export default function Lottery() {
                             <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
                               Closing Stock
                             </th>
-                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                            <th className="px-3 py-2 text-center font-semibold min-w-[110px] border-r">
                               Sales Value
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[130px] border-r">
+                              Sales (Day Report)
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Variance
                             </th>
                             <th className="px-3 py-2 text-center font-semibold min-w-[80px]">
                               Balance ✓
                             </th>
+
                           </tr>
                         </thead>
                         <tbody>
@@ -1939,9 +1949,24 @@ export default function Lottery() {
                                 <td className="px-3 py-2 text-center border-r text-green-600 font-medium">
                                   {sales > 0 ? `£${sales.toFixed(2)}` : '-'}
                                 </td>
+                                {(() => {
+                                  const till = getTillValue(dateStr);
+                                  const variance = till != null ? sales - till : null;
+                                  return (
+                                    <>
+                                      <td className="px-3 py-2 text-center border-r text-purple-600 font-medium">
+                                        {till != null ? `£${till.toFixed(2)}` : '-'}
+                                      </td>
+                                      <td className={`px-3 py-2 text-center border-r font-medium ${variance == null ? 'text-muted-foreground' : Math.abs(variance) < 0.005 ? 'text-green-600' : variance > 0 ? 'text-amber-600' : 'text-destructive'}`}>
+                                        {variance == null ? '-' : `${variance >= 0 ? '+' : '−'}£${Math.abs(variance).toFixed(2)}`}
+                                      </td>
+                                    </>
+                                  );
+                                })()}
                                 <td className={`px-3 py-2 text-center ${hasData ? (isBalanced ? 'text-green-600' : 'text-destructive') : 'text-muted-foreground'}`}>
                                   {hasData ? (isBalanced ? '✓' : '✗') : '-'}
                                 </td>
+
                               </tr>
                             );
                           })}

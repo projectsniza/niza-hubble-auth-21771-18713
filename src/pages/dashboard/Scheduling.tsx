@@ -7,6 +7,7 @@ import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
 import { BranchHourTargets } from '@/components/scheduling/BranchHourTargets';
 import { SchedulingReports } from '@/components/scheduling/reports/SchedulingReports';
 import { MonthlyHoursPanel } from '@/components/scheduling/MonthlyHoursPanel';
+import { RotaSettings } from '@/components/scheduling/RotaSettings';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
@@ -14,6 +15,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { useTimeIncrement } from '@/hooks/useTimeIncrement';
+
 
 interface Shift {
   id: string;
@@ -224,9 +226,11 @@ export default function Scheduling() {
             <>
               <TabsTrigger value="targets" className="flex-1 min-w-[100px] text-xs md:text-sm">Hour Targets</TabsTrigger>
               <TabsTrigger value="lockstatus" className="flex-1 min-w-[100px] text-xs md:text-sm">Lock Status</TabsTrigger>
+              <TabsTrigger value="rotasettings" className="flex-1 min-w-[100px] text-xs md:text-sm">Rota Settings</TabsTrigger>
             </>
           )}
         </TabsList>
+
 
         <TabsContent value="timesheets" className="mt-0">
           <TimesheetView />
@@ -249,7 +253,11 @@ export default function Scheduling() {
             <TabsContent value="lockstatus" className="mt-0">
               <MonthlyLockStatus />
             </TabsContent>
+            <TabsContent value="rotasettings" className="mt-0">
+              <RotaSettings />
+            </TabsContent>
           </>
+
         )}
       </Tabs>
     </div>
