@@ -1892,12 +1892,19 @@ export default function Lottery() {
                             <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
                               Closing Stock
                             </th>
-                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                            <th className="px-3 py-2 text-center font-semibold min-w-[110px] border-r">
                               Sales Value
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[130px] border-r">
+                              Sales (Day Report)
+                            </th>
+                            <th className="px-3 py-2 text-center font-semibold min-w-[100px] border-r">
+                              Variance
                             </th>
                             <th className="px-3 py-2 text-center font-semibold min-w-[80px]">
                               Balance ✓
                             </th>
+
                           </tr>
                         </thead>
                         <tbody>
