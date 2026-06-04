@@ -1949,9 +1949,24 @@ export default function Lottery() {
                                 <td className="px-3 py-2 text-center border-r text-green-600 font-medium">
                                   {sales > 0 ? `£${sales.toFixed(2)}` : '-'}
                                 </td>
+                                {(() => {
+                                  const till = getTillValue(dateStr);
+                                  const variance = till != null ? sales - till : null;
+                                  return (
+                                    <>
+                                      <td className="px-3 py-2 text-center border-r text-purple-600 font-medium">
+                                        {till != null ? `£${till.toFixed(2)}` : '-'}
+                                      </td>
+                                      <td className={`px-3 py-2 text-center border-r font-medium ${variance == null ? 'text-muted-foreground' : Math.abs(variance) < 0.005 ? 'text-green-600' : variance > 0 ? 'text-amber-600' : 'text-destructive'}`}>
+                                        {variance == null ? '-' : `${variance >= 0 ? '+' : '−'}£${Math.abs(variance).toFixed(2)}`}
+                                      </td>
+                                    </>
+                                  );
+                                })()}
                                 <td className={`px-3 py-2 text-center ${hasData ? (isBalanced ? 'text-green-600' : 'text-destructive') : 'text-muted-foreground'}`}>
                                   {hasData ? (isBalanced ? '✓' : '✗') : '-'}
                                 </td>
+
                               </tr>
                             );
                           })}
