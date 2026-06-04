@@ -7,6 +7,7 @@ import { MonthlyLockStatus } from '@/components/scheduling/MonthlyLockStatus';
 import { BranchHourTargets } from '@/components/scheduling/BranchHourTargets';
 import { SchedulingReports } from '@/components/scheduling/reports/SchedulingReports';
 import { MonthlyHoursPanel } from '@/components/scheduling/MonthlyHoursPanel';
+import { RotaSettings } from '@/components/scheduling/RotaSettings';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CalendarDays } from 'lucide-react';
@@ -14,6 +15,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { useTimeIncrement } from '@/hooks/useTimeIncrement';
+
 
 interface Shift {
   id: string;
