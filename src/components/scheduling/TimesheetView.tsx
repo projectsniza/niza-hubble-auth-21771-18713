@@ -1319,7 +1319,7 @@ export function TimesheetView() {
                                         data-shift-cell={`${ts.id}-${day}`}
                                         onChange={(e) => {
                                           const v = e.target.value;
-                                          if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                          /* time alignment warning removed - any minute allowed by default */
                                           handleInlineTimeChange(ts.id, day, 'start', snapToHalfHour(v));
                                         }}
                                         className="h-6 text-[10px] p-1 w-full"
@@ -1351,7 +1351,7 @@ export function TimesheetView() {
                                           data-shift-cell={`${ts.id}-${day}`}
                                           onChange={(e) => {
                                             const v = e.target.value;
-                                            if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                                            /* time alignment warning removed - any minute allowed by default */
                                             handleInlineTimeChange(ts.id, day, 'end', snapToHalfHour(v));
                                           }}
                                           className="h-6 text-[10px] p-1 w-full"
@@ -1696,7 +1696,7 @@ export function TimesheetView() {
                       value={entry.shift_start_time || ''} 
                       onChange={(e) => {
                         const v = e.target.value;
-                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        /* time alignment warning removed - any minute allowed by default */
                         updateEntry(idx, 'shift_start_time', snapToHalfHour(v) || null);
                       }}
                       className="mt-1"
@@ -1710,7 +1710,7 @@ export function TimesheetView() {
                       value={entry.shift_end_time || ''} 
                       onChange={(e) => {
                         const v = e.target.value;
-                        if (v && !isHalfHourAligned(v)) toast.warning('Shifts may only start/end on the hour or half-hour');
+                        /* time alignment warning removed - any minute allowed by default */
                         updateEntry(idx, 'shift_end_time', snapToHalfHour(v) || null);
                       }}
                       className="mt-1"
