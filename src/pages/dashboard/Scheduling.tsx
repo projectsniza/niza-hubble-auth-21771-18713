@@ -253,7 +253,11 @@ export default function Scheduling() {
             <TabsContent value="lockstatus" className="mt-0">
               <MonthlyLockStatus />
             </TabsContent>
+            <TabsContent value="rotasettings" className="mt-0">
+              <RotaSettings />
+            </TabsContent>
           </>
+
         )}
       </Tabs>
     </div>
