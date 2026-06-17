@@ -1377,8 +1377,9 @@ export function TimesheetView() {
                                       </div>
                                     ) : (
                                       <span 
-                                        className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
+                                        className={`cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded ${!inPayroll ? 'italic opacity-70' : ''}`}
                                         onClick={() => handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '')}
+                                        title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle) but a shift was recorded here' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_end_time || null) || (isHoliday ? `${holidayHours}h` : isSick ? `${sickHours}h` : '-')}
                                       </span>
