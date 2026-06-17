@@ -1306,10 +1306,11 @@ export function TimesheetView() {
                                     ? 'bg-rose-100/70 dark:bg-rose-900/30' 
                                     : '';
                               
+                              const hasShiftData = !!(entry?.shift_start_time || entry?.shift_end_time);
                               return (
                                 <React.Fragment key={dayIdx}>
                                   <TableCell className={`text-center px-1 border-l text-[10px] ${cellBgClass}`}>
-                                    {!inPayroll ? (
+                                    {!inPayroll && !hasShiftData ? (
                                       <span className="text-muted-foreground">—</span>
                                     ) : hasEdit ? (
                                       <Input
@@ -1332,15 +1333,16 @@ export function TimesheetView() {
                                       />
                                     ) : (
                                       <span 
-                                        className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
+                                        className={`cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded ${!inPayroll ? 'italic opacity-70' : ''}`}
                                         onClick={() => handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '')}
+                                        title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle) but a shift was recorded here' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_start_time || null) || (isHoliday ? 'HOL' : isSick ? 'SICK' : '-')}
                                       </span>
                                     )}
                                   </TableCell>
                                   <TableCell className={`text-center px-1 border-r text-[10px] ${cellBgClass}`}>
-                                    {!inPayroll ? (
+                                    {!inPayroll && !hasShiftData ? (
                                       <span className="text-muted-foreground">—</span>
                                     ) : hasEdit ? (
                                       <div className="flex items-center gap-0.5">
@@ -1375,8 +1377,9 @@ export function TimesheetView() {
                                       </div>
                                     ) : (
                                       <span 
-                                        className="cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded"
+                                        className={`cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded ${!inPayroll ? 'italic opacity-70' : ''}`}
                                         onClick={() => handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '')}
+                                        title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle) but a shift was recorded here' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_end_time || null) || (isHoliday ? `${holidayHours}h` : isSick ? `${sickHours}h` : '-')}
                                       </span>
