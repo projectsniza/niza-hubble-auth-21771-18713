@@ -1419,16 +1419,16 @@ export function TimesheetView() {
                               );
                             })}
                             <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
-                              {ts.total_worked_hours > 0 ? ts.total_worked_hours : 0}
+                              {inPeriod.worked > 0 ? inPeriod.worked.toFixed(1) : 0}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-amber-50/50 dark:bg-amber-950/30 text-amber-600">
-                              {ts.total_holiday_hours > 0 ? ts.total_holiday_hours : ''}
+                              {inPeriod.holiday > 0 ? inPeriod.holiday.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-rose-50/50 dark:bg-rose-950/30 text-rose-600">
-                              {ts.total_sick_hours > 0 ? ts.total_sick_hours : ''}
+                              {inPeriod.sick > 0 ? inPeriod.sick.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-purple-50/50 dark:bg-purple-950/30 text-purple-600">
-                              {ts.total_adjustment_hours ? ts.total_adjustment_hours : ''}
+                              {inPeriod.adj ? inPeriod.adj.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">
                               {total.toFixed(1)}
