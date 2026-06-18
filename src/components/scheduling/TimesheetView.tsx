@@ -104,6 +104,33 @@ const isDateInPayrollPeriod = (date: Date, payrollMonth: Date) => {
   return d >= start && d <= end;
 };
 
+// Sum a timesheet's hours restricted to dates within the payroll period
+// (21st → 20th). Falls back to stored totals only when entries aren't loaded.
+const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
+  const { start, end } = getPayrollPeriod(payrollMonth);
+  const entries = ts?.entries as Array<any> | undefined;
+  if (!entries || !entries.length) {
+    return {
+      worked: Number(ts?.total_worked_hours) || 0,
+      holiday: Number(ts?.total_holiday_hours) || 0,
+      sick: Number(ts?.total_sick_hours) || 0,
+      adj: Number(ts?.total_adjustment_hours) || 0,
+    };
+  }
+  let worked = 0, holiday = 0, sick = 0, adj = 0;
+  entries.forEach((e: any) => {
+    if (!e?.entry_date) return;
+    const [yy, mm, dd] = String(e.entry_date).split('-').map(Number);
+    const d = new Date(yy, (mm || 1) - 1, dd || 1);
+    if (d < start || d > end) return;
+    worked += Number(e.actual_hours) || 0;
+    holiday += Number(e.holiday_hours) || 0;
+    sick += Number(e.sick_hours) || 0;
+    adj += Number(e.adjustment_hours) || 0;
+  });
+  return { worked, holiday, sick, adj };
+};
+
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -730,10 +757,7 @@ export function TimesheetView() {
       if (!branchName) return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
-      const worked = Number(ts.total_worked_hours) || 0;
-      const holiday = Number(ts.total_holiday_hours) || 0;
-      const sick = Number(ts.total_sick_hours) || 0;
-      const adj = Number(ts.total_adjustment_hours) || 0;
+      const { worked, holiday, sick, adj } = getTsInPeriodTotals(ts, currentMonth);
       acc[branchName].totals.worked += worked;
       acc[branchName].totals.holiday += holiday;
       acc[branchName].totals.sick += sick;
@@ -742,15 +766,20 @@ export function TimesheetView() {
       return acc;
     }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number; total: number } }>);
     return grouped;
-  }, [filteredTimesheets]);
+  }, [filteredTimesheets, currentMonth]);
 
 
-  const weeklyGrandTotals = useMemo(() => ({
-    worked: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
-    holiday: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0),
-    sick: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_sick_hours) || 0), 0),
-    adj: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0)
-  }), [filteredTimesheets]);
+  const weeklyGrandTotals = useMemo(() => {
+    const totals = { worked: 0, holiday: 0, sick: 0, adj: 0 };
+    filteredTimesheets.forEach(t => {
+      const v = getTsInPeriodTotals(t, currentMonth);
+      totals.worked += v.worked;
+      totals.holiday += v.holiday;
+      totals.sick += v.sick;
+      totals.adj += v.adj;
+    });
+    return totals;
+  }, [filteredTimesheets, currentMonth]);
 
   const monthlyConsolidation = useMemo(() => {
     const consolidation: Record<string, {
@@ -1280,7 +1309,8 @@ export function TimesheetView() {
                       </TableRow>
                       {/* Employee Rows */}
                       {data.timesheets.map((ts, idx) => {
-                        const total = Number(ts.total_worked_hours) + Number(ts.total_holiday_hours) + Number(ts.total_sick_hours) + Number(ts.total_adjustment_hours || 0);
+                        const inPeriod = getTsInPeriodTotals(ts, currentMonth);
+                        const total = inPeriod.worked + inPeriod.holiday + inPeriod.sick + inPeriod.adj;
                         return (
                           <TableRow key={ts.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                             <TableCell className="sticky left-0 bg-inherit z-10 font-medium">
@@ -1389,16 +1419,16 @@ export function TimesheetView() {
                               );
                             })}
                             <TableCell className="text-center font-bold bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300">
-                              {ts.total_worked_hours > 0 ? ts.total_worked_hours : 0}
+                              {inPeriod.worked > 0 ? inPeriod.worked.toFixed(1) : 0}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-amber-50/50 dark:bg-amber-950/30 text-amber-600">
-                              {ts.total_holiday_hours > 0 ? ts.total_holiday_hours : ''}
+                              {inPeriod.holiday > 0 ? inPeriod.holiday.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-rose-50/50 dark:bg-rose-950/30 text-rose-600">
-                              {ts.total_sick_hours > 0 ? ts.total_sick_hours : ''}
+                              {inPeriod.sick > 0 ? inPeriod.sick.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-purple-50/50 dark:bg-purple-950/30 text-purple-600">
-                              {ts.total_adjustment_hours ? ts.total_adjustment_hours : ''}
+                              {inPeriod.adj ? inPeriod.adj.toFixed(1) : ''}
                             </TableCell>
                             <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">
                               {total.toFixed(1)}
