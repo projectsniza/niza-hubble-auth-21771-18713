@@ -757,10 +757,7 @@ export function TimesheetView() {
       if (!branchName) return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
-      const worked = Number(ts.total_worked_hours) || 0;
-      const holiday = Number(ts.total_holiday_hours) || 0;
-      const sick = Number(ts.total_sick_hours) || 0;
-      const adj = Number(ts.total_adjustment_hours) || 0;
+      const { worked, holiday, sick, adj } = getTsInPeriodTotals(ts, currentMonth);
       acc[branchName].totals.worked += worked;
       acc[branchName].totals.holiday += holiday;
       acc[branchName].totals.sick += sick;
@@ -769,15 +766,20 @@ export function TimesheetView() {
       return acc;
     }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number; total: number } }>);
     return grouped;
-  }, [filteredTimesheets]);
+  }, [filteredTimesheets, currentMonth]);
 
 
-  const weeklyGrandTotals = useMemo(() => ({
-    worked: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_worked_hours) || 0), 0),
-    holiday: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_holiday_hours) || 0), 0),
-    sick: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_sick_hours) || 0), 0),
-    adj: filteredTimesheets.reduce((sum, t) => sum + (Number(t.total_adjustment_hours) || 0), 0)
-  }), [filteredTimesheets]);
+  const weeklyGrandTotals = useMemo(() => {
+    const totals = { worked: 0, holiday: 0, sick: 0, adj: 0 };
+    filteredTimesheets.forEach(t => {
+      const v = getTsInPeriodTotals(t, currentMonth);
+      totals.worked += v.worked;
+      totals.holiday += v.holiday;
+      totals.sick += v.sick;
+      totals.adj += v.adj;
+    });
+    return totals;
+  }, [filteredTimesheets, currentMonth]);
 
   const monthlyConsolidation = useMemo(() => {
     const consolidation: Record<string, {
