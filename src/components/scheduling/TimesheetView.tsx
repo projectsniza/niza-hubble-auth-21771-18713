@@ -1309,7 +1309,8 @@ export function TimesheetView() {
                       </TableRow>
                       {/* Employee Rows */}
                       {data.timesheets.map((ts, idx) => {
-                        const total = Number(ts.total_worked_hours) + Number(ts.total_holiday_hours) + Number(ts.total_sick_hours) + Number(ts.total_adjustment_hours || 0);
+                        const inPeriod = getTsInPeriodTotals(ts, currentMonth);
+                        const total = inPeriod.worked + inPeriod.holiday + inPeriod.sick + inPeriod.adj;
                         return (
                           <TableRow key={ts.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                             <TableCell className="sticky left-0 bg-inherit z-10 font-medium">
