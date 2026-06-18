@@ -104,6 +104,33 @@ const isDateInPayrollPeriod = (date: Date, payrollMonth: Date) => {
   return d >= start && d <= end;
 };
 
+// Sum a timesheet's hours restricted to dates within the payroll period
+// (21st → 20th). Falls back to stored totals only when entries aren't loaded.
+const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
+  const { start, end } = getPayrollPeriod(payrollMonth);
+  const entries = ts?.entries as Array<any> | undefined;
+  if (!entries || !entries.length) {
+    return {
+      worked: Number(ts?.total_worked_hours) || 0,
+      holiday: Number(ts?.total_holiday_hours) || 0,
+      sick: Number(ts?.total_sick_hours) || 0,
+      adj: Number(ts?.total_adjustment_hours) || 0,
+    };
+  }
+  let worked = 0, holiday = 0, sick = 0, adj = 0;
+  entries.forEach((e: any) => {
+    if (!e?.entry_date) return;
+    const [yy, mm, dd] = String(e.entry_date).split('-').map(Number);
+    const d = new Date(yy, (mm || 1) - 1, dd || 1);
+    if (d < start || d > end) return;
+    worked += Number(e.actual_hours) || 0;
+    holiday += Number(e.holiday_hours) || 0;
+    sick += Number(e.sick_hours) || 0;
+    adj += Number(e.adjustment_hours) || 0;
+  });
+  return { worked, holiday, sick, adj };
+};
+
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
