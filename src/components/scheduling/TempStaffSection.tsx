@@ -114,7 +114,14 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
   }, [organizationId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { if (showAdd) fetchBranches(); }, [showAdd, fetchBranches]);
+  useEffect(() => {
+    if (showAdd) {
+      fetchBranches();
+      // Reset start_date to the currently viewed week so the temp is in-range
+      // for the week the user is editing (not the week at initial mount).
+      setNewTemp(prev => ({ ...prev, start_date: format(weekStart, 'yyyy-MM-dd') }));
+    }
+  }, [showAdd, fetchBranches, weekStart]);
 
   const branchNameById = useMemo(() => {
     const m: Record<string, string> = {};
