@@ -1654,21 +1654,56 @@ export function TimesheetView() {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {/* Temporary Staff Rows for this branch (amber accent) */}
+                        {(monthlyTempByBranch[branchName] || []).map((temp) => {
+                          const tempTotal = temp.totalHours;
+                          return (
+                            <TableRow key={`temp-${temp.id}`} className="bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/30 border-l-2 border-amber-400">
+                              <TableCell className="sticky left-0 bg-amber-50/40 dark:bg-amber-950/20 z-10 font-medium">
+                                <div className="flex items-start gap-1.5">
+                                  <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[9px] px-1 py-0 mt-0.5">TEMP</Badge>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-amber-900 dark:text-amber-300">{temp.name}</div>
+                                    {temp.source && <div className="text-[10px] text-amber-700/80">{temp.source}</div>}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              {temp.weeklyHours.map((h, i) => (
+                                <TableCell key={i} className="text-center text-amber-900 dark:text-amber-200">
+                                  {h > 0 ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-center font-bold bg-slate-50 dark:bg-slate-800/50">{tempTotal.toFixed(1)}</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                              <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">{tempTotal.toFixed(1)}</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                            </TableRow>
+                          );
+                        })}
                         {/* Branch Subtotal */}
                         <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
                           <TableCell className="sticky left-0 bg-muted/50 z-10 text-xs">SUBTOTAL</TableCell>
-                          {branchTotals.weeks.map((w, i) => (
-                            <TableCell key={i} className="text-center">{w.toFixed(1)}</TableCell>
-                          ))}
-                          <TableCell className="text-center bg-slate-100/50">{branchTotals.total.toFixed(1)}</TableCell>
+                          {branchTotals.weeks.map((w, i) => {
+                            const tempW = (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + (t.weeklyHours[i] || 0), 0);
+                            return (
+                              <TableCell key={i} className="text-center">{(w + tempW).toFixed(1)}</TableCell>
+                            );
+                          })}
+                          <TableCell className="text-center bg-slate-100/50">
+                            {(branchTotals.total + (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + t.totalHours, 0)).toFixed(1)}
+                          </TableCell>
                           <TableCell className="text-center bg-purple-100/50">{branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}</TableCell>
-                          <TableCell className="text-center bg-emerald-100/50">{branchTotals.totalHrs.toFixed(1)}</TableCell>
+                          <TableCell className="text-center bg-emerald-100/50">
+                            {(branchTotals.totalHrs + (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + t.totalHours, 0)).toFixed(1)}
+                          </TableCell>
                           <TableCell className="text-center bg-amber-100/50">{branchTotals.holiday.toFixed(1)}</TableCell>
                           <TableCell className="text-center bg-rose-100/50">{branchTotals.sick.toFixed(1)}</TableCell>
                         </TableRow>
                       </React.Fragment>
                     );
                   })}
+
                   {/* Grand Total */}
                   <TableRow className="bg-primary/10 font-bold hover:bg-primary/10">
                     <TableCell className="sticky left-0 bg-primary/10 z-10">GRAND TOTAL</TableCell>
