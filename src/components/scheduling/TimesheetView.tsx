@@ -723,11 +723,16 @@ export function TimesheetView() {
       actualHours = Math.round(totalMins / 60 * 100) / 100;
     }
 
-    await supabase.from('timesheet_entries').update({
+    const { error: inlineErr } = await supabase.from('timesheet_entries').update({
       shift_start_time: startTime,
       shift_end_time: endTime,
       actual_hours: actualHours
     }).eq('id', entry.id);
+    if (inlineErr) {
+      toast.error(`Could not save ${dayOfWeek}: ${inlineErr.message}`);
+      return;
+    }
+
 
     // Do NOT manually update total_worked_hours here — the database trigger
     // (update_timesheet_totals_trigger) recalculates totals from all entries
