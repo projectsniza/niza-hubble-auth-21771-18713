@@ -221,6 +221,79 @@ export function TimesheetView() {
     })();
   }, [currentWeekStart && format(currentWeekStart, 'yyyy-MM-dd')]);
 
+  // Monthly temporary-staff consolidation — sums temp entries strictly within
+  // the 21st-20th payroll period, bucketed per (branch -> temp -> week).
+  useEffect(() => {
+    (async () => {
+      try {
+        const payroll = getPayrollPeriod(currentMonth);
+        const startStr = format(payroll.start, 'yyyy-MM-dd');
+        const endStr = format(payroll.end, 'yyyy-MM-dd');
+        const rangeStart = format(monthWeeks[0] || payroll.start, 'yyyy-MM-dd');
+
+        const { data: entries } = await supabase
+          .from('temporary_timesheet_entries')
+          .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
+          .gte('entry_date', startStr)
+          .lte('entry_date', endStr)
+          .limit(10000);
+
+        const tempIds = Array.from(new Set((entries || []).map((e: any) => e.temporary_employee_id)));
+        if (tempIds.length === 0) { setMonthlyTempByBranch({}); return; }
+
+        const { data: temps } = await supabase
+          .from('temporary_employees')
+          .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
+          .in('id', tempIds);
+
+        const tempById: Record<string, any> = {};
+        (temps || []).forEach((t: any) => { tempById[t.id] = t; });
+
+        const grouped: Record<string, Array<{ id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }>> = {};
+        const tempRows: Record<string, { branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+
+        (entries || []).forEach((e: any) => {
+          const t = tempById[e.temporary_employee_id];
+          if (!t) return;
+          // Apply same scope filters as the consolidation
+          if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
+          if (canViewFilters && filterMode === 'branch' && selectedBranch && t.branch_id !== selectedBranch) return;
+
+          const branchName = t.branch?.name || '—';
+          // Find week index by entry_date (the date the work happened)
+          const ed = parseISO(e.entry_date);
+          const dd = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate());
+          const wIdx = monthWeeks.findIndex(w => {
+            const wEnd = endOfWeek(w, { weekStartsOn: 1 });
+            return dd >= w && dd <= wEnd;
+          });
+          if (wIdx < 0) return;
+
+          const row = (tempRows[t.id] ||= {
+            branchName,
+            name: `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase(),
+            source: t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null),
+            weeklyHours: monthWeeks.map(() => 0),
+            totalHours: 0,
+          });
+          const h = Number(e.actual_hours) || 0;
+          row.weeklyHours[wIdx] += h;
+          row.totalHours += h;
+        });
+
+        Object.entries(tempRows).forEach(([id, r]) => {
+          (grouped[r.branchName] ||= []).push({
+            id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
+          });
+        });
+        setMonthlyTempByBranch(grouped);
+      } catch (err) {
+        console.error('Monthly temp consolidation failed', err);
+      }
+    })();
+  }, [currentMonth, monthWeeks, canViewFilters, filterMode, selectedOrg, selectedBranch]);
+
+
   // Determine the branch in scope for the lock check
   const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
   const canBypassLock = user?.role === 'super_admin';
