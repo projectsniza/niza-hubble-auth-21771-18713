@@ -818,10 +818,19 @@ export function TimesheetView() {
       return true;
     });
 
+    // De-duplicate timesheets per (employee_id + week_start_date) — keep the one
+    // with the richest entries. Prevents double counting when historical/stale
+    // duplicate timesheet rows exist for the same employee+week.
+    const tsByKey = new Map<string, any>();
     scopedMonthTs.forEach(ts => {
-      // Auto-include employees that have timesheets in this payroll period but
-      // are missing from the active employees list (e.g. MOHAMMED ARSHAD with
-      // a non-active status). Skip if no employee record was joined or no branch.
+      const key = `${ts.employee_id}|${ts.week_start_date}`;
+      const prior = tsByKey.get(key);
+      const entriesLen = ((ts as any).entries || []).length;
+      const priorLen = prior ? ((prior as any).entries || []).length : -1;
+      if (!prior || entriesLen > priorLen) tsByKey.set(key, ts);
+    });
+
+    Array.from(tsByKey.values()).forEach(ts => {
       if (!consolidation[ts.employee_id]) {
         if (!ts.employee || !ts.employee.branch?.name) return;
         consolidation[ts.employee_id] = {
@@ -838,25 +847,22 @@ export function TimesheetView() {
       const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
 
       // Sum entries restricted to dates within the payroll period (21st → 20th).
-      // Partial weeks (week 1 may start before 21st, week 6 may extend past 20th)
-      // must only count in-period days.
-      const entries = (ts as any).entries as Array<any> | undefined;
+      // De-dupe by entry_date so a row appearing twice never double-counts.
+      const entries = ((ts as any).entries as Array<any> | undefined) || [];
+      const seenDates = new Set<string>();
       let worked = 0, holiday = 0, sick = 0;
-      if (entries && entries.length) {
-        entries.forEach((e: any) => {
-          const d = parseISO(e.entry_date);
-          const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-          if (dd < payroll.start || dd > payroll.end) return;
-          worked += Number(e.actual_hours) || 0;
-          holiday += Number(e.holiday_hours) || 0;
-          sick += Number(e.sick_hours) || 0;
-        });
-      } else {
-        // Fallback to stored totals when entries weren't loaded
-        worked = Number(ts.total_worked_hours) || 0;
-        holiday = Number(ts.total_holiday_hours) || 0;
-        sick = Number(ts.total_sick_hours) || 0;
-      }
+      entries.forEach((e: any) => {
+        if (!e?.entry_date || seenDates.has(e.entry_date)) return;
+        seenDates.add(e.entry_date);
+        const d = parseISO(e.entry_date);
+        const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (dd < payroll.start || dd > payroll.end) return;
+        worked += Number(e.actual_hours) || 0;
+        holiday += Number(e.holiday_hours) || 0;
+        sick += Number(e.sick_hours) || 0;
+      });
+      // NOTE: do NOT fall back to stored total_worked_hours — they can be stale
+      // (e.g. on a duplicate timesheet without entries) and cause doubled totals.
 
       if (weekIdx >= 0) {
         consolidation[ts.employee_id].weeklyHours[weekIdx] += worked;
@@ -880,6 +886,7 @@ export function TimesheetView() {
 
     return { consolidation, grouped };
   }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment, currentMonth, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
+
 
 
   const monthlyGrandTotals = useMemo(() => {
