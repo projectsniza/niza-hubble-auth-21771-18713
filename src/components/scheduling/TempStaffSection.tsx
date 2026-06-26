@@ -224,19 +224,16 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     fetchData();
   };
 
-  // Permanent delete (also removes timesheet entries)
+  // Archive (preserve history). Historical shift/timing data must NEVER be
+  // removed when a temp employee is "deleted" — Super Admin can soft-archive
+  // instead so monthly/weekly timesheet history remains intact.
   const deleteTemp = async (temp: TempEmployee) => {
-    const { error: e1 } = await supabase
-      .from('temporary_timesheet_entries')
-      .delete()
-      .eq('temporary_employee_id', temp.id);
-    if (e1) { toast.error(e1.message); return; }
-    const { error: e2 } = await supabase
+    const { error } = await supabase
       .from('temporary_employees')
-      .delete()
+      .update({ is_active: false, end_date: format(new Date(), 'yyyy-MM-dd') })
       .eq('id', temp.id);
-    if (e2) { toast.error(e2.message); return; }
-    toast.success(`Deleted ${temp.first_name}`);
+    if (error) { toast.error(`Could not archive: ${error.message}`); return; }
+    toast.success(`${temp.first_name} archived. Past timesheet entries preserved.`);
     fetchData();
   };
 
@@ -250,9 +247,14 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
   };
 
   const saveCell = async (temp: TempEmployee, day: Date, dayOfWeek: string, key: string, opts?: { clear?: boolean }) => {
-    if (isLocked) { toast.error('This payroll period is locked.'); return; }
+    if (isLocked) { toast.error('This payroll period is locked — unlock it in Lock Status before editing.'); return; }
     const edit = editingCell[key];
     const dateStr = format(day, 'yyyy-MM-dd');
+    const inRange = dateStr >= temp.start_date && (!temp.end_date || dateStr <= temp.end_date);
+    if (!inRange) {
+      toast.error(`${temp.first_name}'s engagement does not cover ${format(day, 'dd MMM yyyy')}. Edit their start/end date first.`);
+      return;
+    }
     const existing = entries.find(e => e.temporary_employee_id === temp.id && e.entry_date === dateStr);
 
     let startTime: string | null = opts?.clear ? null : (edit?.start || existing?.shift_start_time || null);
@@ -262,11 +264,12 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     const hours = computeHours(startTime, endTime);
 
     if (existing?.id) {
-      await supabase.from('temporary_timesheet_entries').update({
+      const { error } = await supabase.from('temporary_timesheet_entries').update({
         shift_start_time: startTime, shift_end_time: endTime, actual_hours: hours,
       }).eq('id', existing.id);
+      if (error) { toast.error(`Save failed: ${error.message}`); return; }
     } else {
-      await supabase.from('temporary_timesheet_entries').insert({
+      const { error } = await supabase.from('temporary_timesheet_entries').insert({
         temporary_employee_id: temp.id,
         branch_id: temp.branch_id,
         week_start_date: weekStartStr,
@@ -276,10 +279,12 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
         shift_end_time: endTime,
         actual_hours: hours,
       });
+      if (error) { toast.error(`Save failed: ${error.message}`); return; }
     }
     setEditingCell(prev => { const c = { ...prev }; delete c[key]; return c; });
     fetchData();
   };
+
 
   const formatTime = (t: string | null) => {
     if (!t) return '';
