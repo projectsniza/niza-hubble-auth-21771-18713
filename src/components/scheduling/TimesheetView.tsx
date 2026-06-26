@@ -168,6 +168,11 @@ export function TimesheetView() {
   const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
   // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
   const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
+  // Monthly temp staff consolidation: branch -> array of { name, weekly[], total }
+  const [monthlyTempByBranch, setMonthlyTempByBranch] = useState<Record<string, Array<{
+    id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number;
+  }>>>({});
+
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
@@ -215,6 +220,79 @@ export function TimesheetView() {
       setTempHoursByBranch(map);
     })();
   }, [currentWeekStart && format(currentWeekStart, 'yyyy-MM-dd')]);
+
+  // Monthly temporary-staff consolidation — sums temp entries strictly within
+  // the 21st-20th payroll period, bucketed per (branch -> temp -> week).
+  useEffect(() => {
+    (async () => {
+      try {
+        const payroll = getPayrollPeriod(currentMonth);
+        const startStr = format(payroll.start, 'yyyy-MM-dd');
+        const endStr = format(payroll.end, 'yyyy-MM-dd');
+        const rangeStart = format(monthWeeks[0] || payroll.start, 'yyyy-MM-dd');
+
+        const { data: entries } = await supabase
+          .from('temporary_timesheet_entries')
+          .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
+          .gte('entry_date', startStr)
+          .lte('entry_date', endStr)
+          .limit(10000);
+
+        const tempIds = Array.from(new Set((entries || []).map((e: any) => e.temporary_employee_id)));
+        if (tempIds.length === 0) { setMonthlyTempByBranch({}); return; }
+
+        const { data: temps } = await supabase
+          .from('temporary_employees')
+          .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
+          .in('id', tempIds);
+
+        const tempById: Record<string, any> = {};
+        (temps || []).forEach((t: any) => { tempById[t.id] = t; });
+
+        const grouped: Record<string, Array<{ id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }>> = {};
+        const tempRows: Record<string, { branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+
+        (entries || []).forEach((e: any) => {
+          const t = tempById[e.temporary_employee_id];
+          if (!t) return;
+          // Apply same scope filters as the consolidation
+          if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
+          if (canViewFilters && filterMode === 'branch' && selectedBranch && t.branch_id !== selectedBranch) return;
+
+          const branchName = t.branch?.name || '—';
+          // Find week index by entry_date (the date the work happened)
+          const ed = parseISO(e.entry_date);
+          const dd = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate());
+          const wIdx = monthWeeks.findIndex(w => {
+            const wEnd = endOfWeek(w, { weekStartsOn: 1 });
+            return dd >= w && dd <= wEnd;
+          });
+          if (wIdx < 0) return;
+
+          const row = (tempRows[t.id] ||= {
+            branchName,
+            name: `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase(),
+            source: t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null),
+            weeklyHours: monthWeeks.map(() => 0),
+            totalHours: 0,
+          });
+          const h = Number(e.actual_hours) || 0;
+          row.weeklyHours[wIdx] += h;
+          row.totalHours += h;
+        });
+
+        Object.entries(tempRows).forEach(([id, r]) => {
+          (grouped[r.branchName] ||= []).push({
+            id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
+          });
+        });
+        setMonthlyTempByBranch(grouped);
+      } catch (err) {
+        console.error('Monthly temp consolidation failed', err);
+      }
+    })();
+  }, [currentMonth, monthWeeks, canViewFilters, filterMode, selectedOrg, selectedBranch]);
+
 
   // Determine the branch in scope for the lock check
   const lockBranchId = user?.role === 'manager' ? user?.branchId || null : (selectedBranch || null);
@@ -534,7 +612,7 @@ export function TimesheetView() {
 
       for (const entry of entries) {
         if (entry.id) {
-          await supabase.from('timesheet_entries').update({
+          const { error: entryErr } = await supabase.from('timesheet_entries').update({
             shift_start_time: entry.shift_start_time,
             shift_end_time: entry.shift_end_time,
             break_duration_minutes: entry.break_duration_minutes,
@@ -545,15 +623,18 @@ export function TimesheetView() {
             entry_type: entry.entry_type,
             notes: entry.notes
           }).eq('id', entry.id);
+          if (entryErr) throw new Error(`Could not save ${entry.day_of_week || 'entry'}: ${entryErr.message}`);
         }
       }
 
-      await supabase.from('timesheets').update({
+      const { error: tsErr } = await supabase.from('timesheets').update({
         total_worked_hours: totalWorked,
         total_holiday_hours: totalHoliday,
         total_sick_hours: totalSick,
         total_adjustment_hours: totalAdj
       }).eq('id', selectedTimesheet.id);
+      if (tsErr) throw new Error(`Could not save totals: ${tsErr.message}`);
+
 
       toast.success('Timesheet saved');
       setShowEditPanel(false);
@@ -642,11 +723,16 @@ export function TimesheetView() {
       actualHours = Math.round(totalMins / 60 * 100) / 100;
     }
 
-    await supabase.from('timesheet_entries').update({
+    const { error: inlineErr } = await supabase.from('timesheet_entries').update({
       shift_start_time: startTime,
       shift_end_time: endTime,
       actual_hours: actualHours
     }).eq('id', entry.id);
+    if (inlineErr) {
+      toast.error(`Could not save ${dayOfWeek}: ${inlineErr.message}`);
+      return;
+    }
+
 
     // Do NOT manually update total_worked_hours here — the database trigger
     // (update_timesheet_totals_trigger) recalculates totals from all entries
@@ -818,10 +904,19 @@ export function TimesheetView() {
       return true;
     });
 
+    // De-duplicate timesheets per (employee_id + week_start_date) — keep the one
+    // with the richest entries. Prevents double counting when historical/stale
+    // duplicate timesheet rows exist for the same employee+week.
+    const tsByKey = new Map<string, any>();
     scopedMonthTs.forEach(ts => {
-      // Auto-include employees that have timesheets in this payroll period but
-      // are missing from the active employees list (e.g. MOHAMMED ARSHAD with
-      // a non-active status). Skip if no employee record was joined or no branch.
+      const key = `${ts.employee_id}|${ts.week_start_date}`;
+      const prior = tsByKey.get(key);
+      const entriesLen = ((ts as any).entries || []).length;
+      const priorLen = prior ? ((prior as any).entries || []).length : -1;
+      if (!prior || entriesLen > priorLen) tsByKey.set(key, ts);
+    });
+
+    Array.from(tsByKey.values()).forEach(ts => {
       if (!consolidation[ts.employee_id]) {
         if (!ts.employee || !ts.employee.branch?.name) return;
         consolidation[ts.employee_id] = {
@@ -838,25 +933,22 @@ export function TimesheetView() {
       const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
 
       // Sum entries restricted to dates within the payroll period (21st → 20th).
-      // Partial weeks (week 1 may start before 21st, week 6 may extend past 20th)
-      // must only count in-period days.
-      const entries = (ts as any).entries as Array<any> | undefined;
+      // De-dupe by entry_date so a row appearing twice never double-counts.
+      const entries = ((ts as any).entries as Array<any> | undefined) || [];
+      const seenDates = new Set<string>();
       let worked = 0, holiday = 0, sick = 0;
-      if (entries && entries.length) {
-        entries.forEach((e: any) => {
-          const d = parseISO(e.entry_date);
-          const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-          if (dd < payroll.start || dd > payroll.end) return;
-          worked += Number(e.actual_hours) || 0;
-          holiday += Number(e.holiday_hours) || 0;
-          sick += Number(e.sick_hours) || 0;
-        });
-      } else {
-        // Fallback to stored totals when entries weren't loaded
-        worked = Number(ts.total_worked_hours) || 0;
-        holiday = Number(ts.total_holiday_hours) || 0;
-        sick = Number(ts.total_sick_hours) || 0;
-      }
+      entries.forEach((e: any) => {
+        if (!e?.entry_date || seenDates.has(e.entry_date)) return;
+        seenDates.add(e.entry_date);
+        const d = parseISO(e.entry_date);
+        const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (dd < payroll.start || dd > payroll.end) return;
+        worked += Number(e.actual_hours) || 0;
+        holiday += Number(e.holiday_hours) || 0;
+        sick += Number(e.sick_hours) || 0;
+      });
+      // NOTE: do NOT fall back to stored total_worked_hours — they can be stale
+      // (e.g. on a duplicate timesheet without entries) and cause doubled totals.
 
       if (weekIdx >= 0) {
         consolidation[ts.employee_id].weeklyHours[weekIdx] += worked;
@@ -882,16 +974,21 @@ export function TimesheetView() {
   }, [filteredEmployees, allMonthTimesheets, monthWeeks, lastMonthAdjustment, currentMonth, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
 
+
   const monthlyGrandTotals = useMemo(() => {
     const values = Object.values(monthlyConsolidation.consolidation);
+    const tempRows = Object.values(monthlyTempByBranch).flat();
+    const tempWeekly = monthWeeks.map((_, i) => tempRows.reduce((s, t) => s + (t.weeklyHours[i] || 0), 0));
+    const tempTotal = tempRows.reduce((s, t) => s + t.totalHours, 0);
     return {
-      weeklyTotals: monthWeeks.map((_, i) => values.reduce((sum, v) => sum + v.weeklyHours[i], 0)),
-      totalHours: values.reduce((sum, v) => sum + v.totalHours, 0),
-      totalHrs: values.reduce((sum, v) => sum + v.totalHrs, 0),
+      weeklyTotals: monthWeeks.map((_, i) => values.reduce((sum, v) => sum + v.weeklyHours[i], 0) + tempWeekly[i]),
+      totalHours: values.reduce((sum, v) => sum + v.totalHours, 0) + tempTotal,
+      totalHrs: values.reduce((sum, v) => sum + v.totalHrs, 0) + tempTotal,
       holidayHrs: values.reduce((sum, v) => sum + v.holidayHrs, 0),
       sickHrs: values.reduce((sum, v) => sum + v.sickHrs, 0)
     };
-  }, [monthlyConsolidation, monthWeeks]);
+  }, [monthlyConsolidation, monthWeeks, monthlyTempByBranch]);
+
 
   const exportToCSV = async () => {
     const headers = viewTab === 'weekly' 
@@ -1569,21 +1666,56 @@ export function TimesheetView() {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {/* Temporary Staff Rows for this branch (amber accent) */}
+                        {(monthlyTempByBranch[branchName] || []).map((temp) => {
+                          const tempTotal = temp.totalHours;
+                          return (
+                            <TableRow key={`temp-${temp.id}`} className="bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/30 border-l-2 border-amber-400">
+                              <TableCell className="sticky left-0 bg-amber-50/40 dark:bg-amber-950/20 z-10 font-medium">
+                                <div className="flex items-start gap-1.5">
+                                  <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[9px] px-1 py-0 mt-0.5">TEMP</Badge>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-amber-900 dark:text-amber-300">{temp.name}</div>
+                                    {temp.source && <div className="text-[10px] text-amber-700/80">{temp.source}</div>}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              {temp.weeklyHours.map((h, i) => (
+                                <TableCell key={i} className="text-center text-amber-900 dark:text-amber-200">
+                                  {h > 0 ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-center font-bold bg-slate-50 dark:bg-slate-800/50">{tempTotal.toFixed(1)}</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                              <TableCell className="text-center font-bold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300">{tempTotal.toFixed(1)}</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                              <TableCell className="text-center text-muted-foreground">-</TableCell>
+                            </TableRow>
+                          );
+                        })}
                         {/* Branch Subtotal */}
                         <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
                           <TableCell className="sticky left-0 bg-muted/50 z-10 text-xs">SUBTOTAL</TableCell>
-                          {branchTotals.weeks.map((w, i) => (
-                            <TableCell key={i} className="text-center">{w.toFixed(1)}</TableCell>
-                          ))}
-                          <TableCell className="text-center bg-slate-100/50">{branchTotals.total.toFixed(1)}</TableCell>
+                          {branchTotals.weeks.map((w, i) => {
+                            const tempW = (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + (t.weeklyHours[i] || 0), 0);
+                            return (
+                              <TableCell key={i} className="text-center">{(w + tempW).toFixed(1)}</TableCell>
+                            );
+                          })}
+                          <TableCell className="text-center bg-slate-100/50">
+                            {(branchTotals.total + (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + t.totalHours, 0)).toFixed(1)}
+                          </TableCell>
                           <TableCell className="text-center bg-purple-100/50">{branchTotals.lastMonth !== 0 ? branchTotals.lastMonth.toFixed(1) : '-'}</TableCell>
-                          <TableCell className="text-center bg-emerald-100/50">{branchTotals.totalHrs.toFixed(1)}</TableCell>
+                          <TableCell className="text-center bg-emerald-100/50">
+                            {(branchTotals.totalHrs + (monthlyTempByBranch[branchName] || []).reduce((s, t) => s + t.totalHours, 0)).toFixed(1)}
+                          </TableCell>
                           <TableCell className="text-center bg-amber-100/50">{branchTotals.holiday.toFixed(1)}</TableCell>
                           <TableCell className="text-center bg-rose-100/50">{branchTotals.sick.toFixed(1)}</TableCell>
                         </TableRow>
                       </React.Fragment>
                     );
                   })}
+
                   {/* Grand Total */}
                   <TableRow className="bg-primary/10 font-bold hover:bg-primary/10">
                     <TableCell className="sticky left-0 bg-primary/10 z-10">GRAND TOTAL</TableCell>
