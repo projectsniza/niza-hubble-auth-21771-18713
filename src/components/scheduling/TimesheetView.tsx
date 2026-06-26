@@ -969,14 +969,18 @@ export function TimesheetView() {
 
   const monthlyGrandTotals = useMemo(() => {
     const values = Object.values(monthlyConsolidation.consolidation);
+    const tempRows = Object.values(monthlyTempByBranch).flat();
+    const tempWeekly = monthWeeks.map((_, i) => tempRows.reduce((s, t) => s + (t.weeklyHours[i] || 0), 0));
+    const tempTotal = tempRows.reduce((s, t) => s + t.totalHours, 0);
     return {
-      weeklyTotals: monthWeeks.map((_, i) => values.reduce((sum, v) => sum + v.weeklyHours[i], 0)),
-      totalHours: values.reduce((sum, v) => sum + v.totalHours, 0),
-      totalHrs: values.reduce((sum, v) => sum + v.totalHrs, 0),
+      weeklyTotals: monthWeeks.map((_, i) => values.reduce((sum, v) => sum + v.weeklyHours[i], 0) + tempWeekly[i]),
+      totalHours: values.reduce((sum, v) => sum + v.totalHours, 0) + tempTotal,
+      totalHrs: values.reduce((sum, v) => sum + v.totalHrs, 0) + tempTotal,
       holidayHrs: values.reduce((sum, v) => sum + v.holidayHrs, 0),
       sickHrs: values.reduce((sum, v) => sum + v.sickHrs, 0)
     };
-  }, [monthlyConsolidation, monthWeeks]);
+  }, [monthlyConsolidation, monthWeeks, monthlyTempByBranch]);
+
 
   const exportToCSV = async () => {
     const headers = viewTab === 'weekly' 
