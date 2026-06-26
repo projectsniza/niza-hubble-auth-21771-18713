@@ -612,7 +612,7 @@ export function TimesheetView() {
 
       for (const entry of entries) {
         if (entry.id) {
-          await supabase.from('timesheet_entries').update({
+          const { error: entryErr } = await supabase.from('timesheet_entries').update({
             shift_start_time: entry.shift_start_time,
             shift_end_time: entry.shift_end_time,
             break_duration_minutes: entry.break_duration_minutes,
@@ -623,15 +623,18 @@ export function TimesheetView() {
             entry_type: entry.entry_type,
             notes: entry.notes
           }).eq('id', entry.id);
+          if (entryErr) throw new Error(`Could not save ${entry.day_of_week || 'entry'}: ${entryErr.message}`);
         }
       }
 
-      await supabase.from('timesheets').update({
+      const { error: tsErr } = await supabase.from('timesheets').update({
         total_worked_hours: totalWorked,
         total_holiday_hours: totalHoliday,
         total_sick_hours: totalSick,
         total_adjustment_hours: totalAdj
       }).eq('id', selectedTimesheet.id);
+      if (tsErr) throw new Error(`Could not save totals: ${tsErr.message}`);
+
 
       toast.success('Timesheet saved');
       setShowEditPanel(false);
