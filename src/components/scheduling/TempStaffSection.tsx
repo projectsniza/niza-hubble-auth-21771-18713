@@ -506,21 +506,23 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" title="Delete permanently">
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" title="Archive (history preserved)">
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete temporary employee?</AlertDialogTitle>
+                                <AlertDialogTitle>Archive temporary employee?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This permanently removes {temp.first_name} {temp.last_name} and all their timesheet entries. This cannot be undone.
+                                  {temp.first_name} {temp.last_name} will be marked inactive and removed from the live roster.
+                                  All past timesheet entries (hours, shift times, weekly &amp; monthly totals) are preserved unchanged.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => deleteTemp(temp)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                                <AlertDialogAction onClick={() => deleteTemp(temp)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Archive</AlertDialogAction>
                               </AlertDialogFooter>
+
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
