@@ -168,6 +168,11 @@ export function TimesheetView() {
   const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
   // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
   const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
+  // Monthly temp staff consolidation: branch -> array of { name, weekly[], total }
+  const [monthlyTempByBranch, setMonthlyTempByBranch] = useState<Record<string, Array<{
+    id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number;
+  }>>>({});
+
   
   const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
   
