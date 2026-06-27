@@ -1576,7 +1576,11 @@ export function TimesheetView() {
         </Card>
         <TempStaffSection
           branchId={lockBranchId}
-          organizationId={user?.role === 'manager' ? user?.organizationId || null : (selectedOrg || null)}
+          organizationId={
+            user?.role === 'manager'
+              ? user?.organizationId || null
+              : (selectedOrg || branches.find(b => b.id === lockBranchId)?.organization_id || null)
+          }
           weekStart={currentWeekStart}
           weekDays={weekDays}
           isLocked={editingDisabled}
