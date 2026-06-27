@@ -751,21 +751,27 @@ export function TimesheetView() {
     const totalWorked = Number(refreshed?.total_worked_hours) || 0;
 
     // Optimistically update local timesheets state — no full refetch (prevents refresh that interrupts editing)
-    setTimesheets(prev => prev.map(ts => {
-      if (ts.id !== timesheet.id) return ts;
-      return {
-        ...ts,
-        total_worked_hours: totalWorked,
-        total_holiday_hours: Number(refreshed?.total_holiday_hours ?? ts.total_holiday_hours) || 0,
-        total_sick_hours: Number(refreshed?.total_sick_hours ?? ts.total_sick_hours) || 0,
-        total_adjustment_hours: Number(refreshed?.total_adjustment_hours ?? ts.total_adjustment_hours) || 0,
-        entries: ts.entries?.map(e =>
-          e.day_of_week === dayOfWeek
-            ? { ...e, shift_start_time: startTime, shift_end_time: endTime, actual_hours: actualHours }
-            : e
-        ),
-      };
-    }));
+    const patchTs = (ts: Timesheet): Timesheet => ({
+      ...ts,
+      total_worked_hours: totalWorked,
+      total_holiday_hours: Number(refreshed?.total_holiday_hours ?? ts.total_holiday_hours) || 0,
+      total_sick_hours: Number(refreshed?.total_sick_hours ?? ts.total_sick_hours) || 0,
+      total_adjustment_hours: Number(refreshed?.total_adjustment_hours ?? ts.total_adjustment_hours) || 0,
+      entries: ts.entries?.map(e =>
+        e.day_of_week === dayOfWeek
+          ? { ...e, shift_start_time: startTime, shift_end_time: endTime, actual_hours: actualHours }
+          : e
+      ),
+    });
+    setTimesheets(prev => prev.map(ts => (ts.id === timesheet.id ? patchTs(ts) : ts)));
+    // Also keep the month-level cache in sync so Monthly Consolidation reflects
+    // inline edits immediately (without waiting for a fetchData refresh).
+    setAllMonthTimesheets(prev => {
+      const exists = prev.some(ts => ts.id === timesheet.id);
+      if (exists) return prev.map(ts => (ts.id === timesheet.id ? patchTs(ts) : ts));
+      // Insert a fresh copy derived from the weekly timesheet so it appears in monthly.
+      return [...prev, patchTs(timesheet)];
+    });
 
     if (!opts?.keepEditing) {
       setInlineEditing(prev => {
