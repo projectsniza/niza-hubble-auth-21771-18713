@@ -930,32 +930,33 @@ export function TimesheetView() {
         };
       }
 
-      const weekIdx = monthWeeks.findIndex(w => format(w, 'yyyy-MM-dd') === ts.week_start_date);
-
-      // Sum entries restricted to dates within the payroll period (21st → 20th).
-      // De-dupe by entry_date so a row appearing twice never double-counts.
+      // Bucket each entry into the monthWeek that contains its entry_date.
+      // This avoids losing hours when a timesheet's week_start_date doesn't
+      // exactly match a monthWeeks Monday (e.g. cross-week edits, off-by-one
+      // weeks created from a different month context).
       const entries = ((ts as any).entries as Array<any> | undefined) || [];
       const seenDates = new Set<string>();
-      let worked = 0, holiday = 0, sick = 0;
       entries.forEach((e: any) => {
         if (!e?.entry_date || seenDates.has(e.entry_date)) return;
         seenDates.add(e.entry_date);
         const d = parseISO(e.entry_date);
         const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         if (dd < payroll.start || dd > payroll.end) return;
-        worked += Number(e.actual_hours) || 0;
-        holiday += Number(e.holiday_hours) || 0;
-        sick += Number(e.sick_hours) || 0;
-      });
-      // NOTE: do NOT fall back to stored total_worked_hours — they can be stale
-      // (e.g. on a duplicate timesheet without entries) and cause doubled totals.
+        const w = Number(e.actual_hours) || 0;
+        const h = Number(e.holiday_hours) || 0;
+        const s = Number(e.sick_hours) || 0;
 
-      if (weekIdx >= 0) {
-        consolidation[ts.employee_id].weeklyHours[weekIdx] += worked;
-      }
-      consolidation[ts.employee_id].totalHours += worked;
-      consolidation[ts.employee_id].holidayHrs += holiday;
-      consolidation[ts.employee_id].sickHrs += sick;
+        const wIdx = monthWeeks.findIndex(mw => {
+          const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
+          return dd >= mw && dd <= wEnd;
+        });
+        if (wIdx >= 0) {
+          consolidation[ts.employee_id].weeklyHours[wIdx] += w;
+        }
+        consolidation[ts.employee_id].totalHours += w;
+        consolidation[ts.employee_id].holidayHrs += h;
+        consolidation[ts.employee_id].sickHrs += s;
+      });
     });
 
     Object.values(consolidation).forEach(emp => {
@@ -1613,7 +1614,14 @@ export function TimesheetView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(monthlyConsolidation.grouped).map(([branchName, branchData]) => {
+                  {(() => {
+                    type EmpMap = typeof monthlyConsolidation.grouped[string];
+                    const merged: Record<string, EmpMap> = { ...monthlyConsolidation.grouped };
+                    Object.keys(monthlyTempByBranch).forEach(bn => {
+                      if (!merged[bn]) merged[bn] = {} as EmpMap;
+                    });
+                    return Object.entries(merged) as Array<[string, EmpMap]>;
+                  })().map(([branchName, branchData]) => {
                     const branchTotals = {
                       weeks: monthWeeks.map(() => 0),
                       total: 0,
