@@ -1615,11 +1615,12 @@ export function TimesheetView() {
                 </TableHeader>
                 <TableBody>
                   {(() => {
-                    const merged: Record<string, any> = { ...monthlyConsolidation.grouped };
+                    type EmpMap = typeof monthlyConsolidation.grouped[string];
+                    const merged: Record<string, EmpMap> = { ...monthlyConsolidation.grouped };
                     Object.keys(monthlyTempByBranch).forEach(bn => {
-                      if (!merged[bn]) merged[bn] = {};
+                      if (!merged[bn]) merged[bn] = {} as EmpMap;
                     });
-                    return Object.entries(merged);
+                    return Object.entries(merged) as Array<[string, EmpMap]>;
                   })().map(([branchName, branchData]) => {
                     const branchTotals = {
                       weeks: monthWeeks.map(() => 0),
