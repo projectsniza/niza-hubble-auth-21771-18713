@@ -1614,7 +1614,13 @@ export function TimesheetView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(monthlyConsolidation.grouped).map(([branchName, branchData]) => {
+                  {(() => {
+                    const merged: Record<string, any> = { ...monthlyConsolidation.grouped };
+                    Object.keys(monthlyTempByBranch).forEach(bn => {
+                      if (!merged[bn]) merged[bn] = {};
+                    });
+                    return Object.entries(merged);
+                  })().map(([branchName, branchData]) => {
                     const branchTotals = {
                       weeks: monthWeeks.map(() => 0),
                       total: 0,
