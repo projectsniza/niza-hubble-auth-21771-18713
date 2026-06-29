@@ -977,8 +977,22 @@ export function TimesheetView() {
     const bestEntryByEmployeeDate = new Map<string, { rowKey: string; entry: any }>();
 
     scopedMonthTs.forEach(ts => {
-      if (!ts.employee || !ts.employee.branch?.name) return;
-      const { key: rowKey } = ensureRow(ts.employee as Employee);
+      if (!ts.employee || !getTimesheetBranchName(ts) || getTimesheetBranchName(ts) === 'Unassigned') return;
+      const rowKey = getTimesheetMonthlyKey(ts);
+      if (!consolidation[rowKey]) {
+        consolidation[rowKey] = {
+          employee: {
+            ...(ts.employee as Employee),
+            branch: { name: getTimesheetBranchName(ts) }
+          },
+          weeklyHours: monthWeeks.map(() => 0),
+          totalHours: 0,
+          lastMonthAdj: lastMonthAdjustment[ts.employee_id] || 0,
+          totalHrs: 0,
+          holidayHrs: 0,
+          sickHrs: 0,
+        };
+      }
       const entries = ((ts as any).entries as Array<any> | undefined) || [];
       entries.forEach((e: any) => {
         if (!e?.entry_date) return;
