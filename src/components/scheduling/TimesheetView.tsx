@@ -19,7 +19,7 @@ import {
   FileSpreadsheet, Edit3, CheckCircle2, XCircle, X
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
@@ -509,11 +509,23 @@ export function TimesheetView() {
     if (!weekStart) return;
 
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const employee = employees.find(e => e.id === employeeId);
+    const employeeKey = employee ? getEmployeeMonthlyKey(employee) : '';
     
-    // Find existing timesheet
-    const existingTimesheet = allMonthTimesheets.find(
-      ts => ts.employee_id === employeeId && ts.week_start_date === weekStartStr
-    );
+    // Find an existing sheet by exact employee/week first, then by same
+    // employee-name+branch with entries inside the requested week. This avoids
+    // creating duplicate sheets when legacy rows were made from a different
+    // week context but contain the correct dated entries.
+    const existingTimesheet = allMonthTimesheets.find(ts => ts.employee_id === employeeId && ts.week_start_date === weekStartStr)
+      || allMonthTimesheets.find(ts => {
+        const sameEmployee = ts.employee_id === employeeId || (!!employeeKey && getEmployeeMonthlyKey(ts.employee) === employeeKey);
+        if (!sameEmployee) return false;
+        return (ts.entries || []).some(e => {
+          const dd = parseLocalDate(e.entry_date);
+          return dd >= weekStart && dd <= wkEnd;
+        });
+      });
 
     if (existingTimesheet) {
       // Open existing timesheet
@@ -528,13 +540,11 @@ export function TimesheetView() {
       setShowEditPanel(true);
     } else {
       // Create timesheet for this week
-      const employee = employees.find(e => e.id === employeeId);
       if (!employee) {
         toast.error('Employee not found');
         return;
       }
 
-      const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
       const wkDays = eachDayOfInterval({ start: weekStart, end: wkEnd });
 
       try {
