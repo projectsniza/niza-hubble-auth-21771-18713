@@ -893,8 +893,8 @@ export function TimesheetView() {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
     if (!canViewFilters) return true;
-    if (filterMode === 'organization' && selectedOrg) return (t.organization_id || emp.organization_id) === selectedOrg;
-    if (filterMode === 'branch' && selectedBranch) return (t.branch_id || emp.branch_id) === selectedBranch;
+    if (filterMode === 'organization' && selectedOrg) return t.organization_id === selectedOrg || emp.organization_id === selectedOrg;
+    if (filterMode === 'branch' && selectedBranch) return t.branch_id === selectedBranch || emp.branch_id === selectedBranch;
     return true;
   }), [timesheets, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
@@ -989,8 +989,8 @@ export function TimesheetView() {
       const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
       if (!canViewFilters) return true;
-      if (filterMode === 'organization' && selectedOrg) return (ts.organization_id || emp.organization_id) === selectedOrg;
-      if (filterMode === 'branch' && selectedBranch) return (ts.branch_id || emp.branch_id) === selectedBranch;
+      if (filterMode === 'organization' && selectedOrg) return ts.organization_id === selectedOrg || emp.organization_id === selectedOrg;
+      if (filterMode === 'branch' && selectedBranch) return ts.branch_id === selectedBranch || emp.branch_id === selectedBranch;
       return true;
     });
 
@@ -1759,7 +1759,7 @@ export function TimesheetView() {
                               <TableCell 
                                 key={i} 
                                 className="text-center cursor-pointer hover:bg-primary/10 transition-colors"
-                                onClick={() => openTimesheetEditorForWeek(emp.employee.id, i)}
+                                onClick={() => openTimesheetEditorForWeek(emp.employee.id, i, branchName)}
                                 title={`Click to edit Week ${i + 1}`}
                               >
                                 {h > 0 ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
