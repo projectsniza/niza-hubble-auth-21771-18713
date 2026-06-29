@@ -164,6 +164,23 @@ const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
   return { worked, holiday, sick, adj };
 };
 
+const entryTotal = (entry: Partial<TimesheetEntry> | null | undefined) =>
+  (Number(entry?.actual_hours) || 0) +
+  (Number(entry?.holiday_hours) || 0) +
+  (Number(entry?.sick_hours) || 0) +
+  (Number(entry?.adjustment_hours) || 0);
+
+const getWeeklyEntrySignature = (entry: Partial<TimesheetEntry> | null | undefined) => [
+  entry?.shift_start_time || '',
+  entry?.shift_end_time || '',
+  Number(entry?.actual_hours) || 0,
+  Number(entry?.holiday_hours) || 0,
+  Number(entry?.sick_hours) || 0,
+  Number(entry?.adjustment_hours) || 0,
+  Number(entry?.break_duration_minutes) || 0,
+  entry?.entry_type || '',
+].join('|');
+
 export function TimesheetView() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
