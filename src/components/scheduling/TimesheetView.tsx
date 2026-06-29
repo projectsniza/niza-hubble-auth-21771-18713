@@ -65,6 +65,7 @@ interface Timesheet {
   total_adjustment_hours: number;
   notes: string | null;
   employee?: Employee;
+  branch?: { name: string };
   entries?: TimesheetEntry[];
 }
 
@@ -119,6 +120,15 @@ const getEmployeeMonthlyKey = (employee?: Employee | null) => {
   const fullName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim().toUpperCase();
   return `${branchName}::${fullName}`;
 };
+
+const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
+  const branchName = timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
+  const fullName = `${timesheet?.employee?.first_name || ''} ${timesheet?.employee?.last_name || ''}`.trim().toUpperCase();
+  return `${branchName}::${fullName}`;
+};
+
+const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
+  timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
 
 const entryActivityTotal = (entry: any) =>
   (Number(entry?.actual_hours) || 0) +
