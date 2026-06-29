@@ -370,7 +370,7 @@ export function TimesheetView() {
 
       const { data: weekTimesheetsData } = await supabase
         .from('timesheets')
-        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .eq('week_start_date', weekStartStr);
 
       const timesheetsWithEntries = await Promise.all(
@@ -392,7 +392,7 @@ export function TimesheetView() {
 
       const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
-        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
         .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
         .limit(10000);
