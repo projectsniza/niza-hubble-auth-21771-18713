@@ -636,12 +636,14 @@ export function TimesheetView() {
     if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     setSaving(true);
     try {
-      const totalWorked = entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
-      const totalHoliday = entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0);
-      const totalSick = entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0);
-      const totalAdj = entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0);
+      const periodEntries = entries.filter(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+      const totalWorked = periodEntries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
+      const totalHoliday = periodEntries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0);
+      const totalSick = periodEntries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0);
+      const totalAdj = periodEntries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0);
 
       for (const entry of entries) {
+        if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) continue;
         if (entry.id) {
           const { error: entryErr } = await supabase.from('timesheet_entries').update({
             shift_start_time: entry.shift_start_time,
@@ -1826,7 +1828,7 @@ export function TimesheetView() {
                         if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
                         
                         const updated = entries.map((entry, idx) => {
-                          if (idx === 0) return entry;
+                          if (idx === 0 || !isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) return entry;
                           
                           const newEntry = { ...entry };
                           newEntry.shift_start_time = firstEntry.shift_start_time;
@@ -1862,13 +1864,13 @@ export function TimesheetView() {
                     size="sm"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => {
-                      const updated = entries.map(entry => ({
+                      const updated = entries.map(entry => isDateStringInPayrollPeriod(entry.entry_date, currentMonth) ? ({
                         ...entry,
                         shift_start_time: null,
                         shift_end_time: null,
                         break_duration_minutes: 0,
                         actual_hours: 0
-                      }));
+                      }) : entry);
                       setEntries(updated);
                       toast.success('All days cleared');
                     }}
