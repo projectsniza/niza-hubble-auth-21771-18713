@@ -882,9 +882,7 @@ export function TimesheetView() {
     // records in the database.
     const dedupMap = new Map<string, Timesheet>();
     filteredTimesheets.forEach(ts => {
-      const branchName = ts.employee?.branch?.name || 'Unassigned';
-      const fullName = `${ts.employee?.first_name || ''} ${ts.employee?.last_name || ''}`.trim().toUpperCase();
-      const key = `${branchName}::${fullName}`;
+      const key = getTimesheetMonthlyKey(ts);
       const existing = dedupMap.get(key);
       const tsTotal = (Number(ts.total_worked_hours) || 0) + (Number(ts.total_holiday_hours) || 0) + (Number(ts.total_sick_hours) || 0) + (Number(ts.total_adjustment_hours) || 0);
       if (!existing) {
@@ -897,10 +895,10 @@ export function TimesheetView() {
     const dedupedTimesheets = Array.from(dedupMap.values());
 
     const grouped = dedupedTimesheets.reduce((acc, ts) => {
-      const branchName = ts.employee?.branch?.name;
+      const branchName = getTimesheetBranchName(ts);
       // Skip employees with no branch (avoids stray "Unassigned" group when
       // viewing a specific branch — e.g. WELCOME SHEPERDSBush).
-      if (!branchName) return acc;
+      if (!branchName || branchName === 'Unassigned') return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
       const { worked, holiday, sick, adj } = getTsInPeriodTotals(ts, currentMonth);
