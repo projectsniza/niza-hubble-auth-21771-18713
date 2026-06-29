@@ -1882,18 +1882,28 @@ export function TimesheetView() {
               )}
             </div>
 
-            {entries.map((entry, idx) => (
-              <div key={idx} className="space-y-3 p-4 rounded-lg bg-muted/30">
+            {entries.map((entry, idx) => {
+              const canEditDate = canEditEntryDate(entry.entry_date);
+              return (
+              <div key={idx} className={`space-y-3 p-4 rounded-lg ${canEditDate ? 'bg-muted/30' : 'bg-muted/20 opacity-70 border border-dashed border-muted-foreground/30'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">{entry.day_of_week}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                    {!canEditDate && (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Outside payroll</Badge>
+                    )}
                     {(entry.shift_start_time || entry.shift_end_time) && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        disabled={!canEditDate}
                         onClick={() => {
+                          if (!canEditDate) {
+                            toast.error('This date is outside the selected 21st–20th payroll period.');
+                            return;
+                          }
                           const updated = [...entries];
                           updated[idx] = {
                             ...updated[idx],
@@ -1918,6 +1928,7 @@ export function TimesheetView() {
                       type="time" 
                       step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_start_time || ''} 
+                      disabled={!canEditDate}
                       onChange={(e) => {
                         const v = e.target.value;
                         /* time alignment warning removed - any minute allowed by default */
@@ -1932,6 +1943,7 @@ export function TimesheetView() {
                       type="time" 
                       step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_end_time || ''} 
+                      disabled={!canEditDate}
                       onChange={(e) => {
                         const v = e.target.value;
                         /* time alignment warning removed - any minute allowed by default */
@@ -1948,6 +1960,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.actual_hours === 0 ? '' : entry.actual_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'actual_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1959,6 +1972,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.holiday_hours === 0 ? '' : entry.holiday_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'holiday_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1970,6 +1984,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.sick_hours === 0 ? '' : entry.sick_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'sick_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1981,6 +1996,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.adjustment_hours === 0 ? '' : entry.adjustment_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'adjustment_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1988,7 +2004,7 @@ export function TimesheetView() {
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
 
           <SheetFooter className="flex gap-2">
