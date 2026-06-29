@@ -26,7 +26,7 @@ import { TimesheetMonthLock } from './TimesheetMonthLock';
 import { MonthCloseReminder } from './MonthCloseReminder';
 import { TempStaffSection } from './TempStaffSection';
 import { Lock } from 'lucide-react';
-import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
+import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 
 interface Employee {
@@ -250,8 +250,6 @@ export function TimesheetView() {
         const payroll = getPayrollPeriod(currentMonth);
         const startStr = format(payroll.start, 'yyyy-MM-dd');
         const endStr = format(payroll.end, 'yyyy-MM-dd');
-        const rangeStart = format(monthWeeks[0] || payroll.start, 'yyyy-MM-dd');
-
         const { data: entries } = await supabase
           .from('temporary_timesheet_entries')
           .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
@@ -282,8 +280,7 @@ export function TimesheetView() {
 
           const branchName = t.branch?.name || '—';
           // Find week index by entry_date (the date the work happened)
-          const ed = parseISO(e.entry_date);
-          const dd = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate());
+          const dd = parseLocalDate(e.entry_date);
           const wIdx = monthWeeks.findIndex(w => {
             const wEnd = endOfWeek(w, { weekStartsOn: 1 });
             return dd >= w && dd <= wEnd;
@@ -729,6 +726,10 @@ export function TimesheetView() {
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
+    if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) {
+      toast.error('This date is outside the selected 21st–20th payroll period.');
+      return;
+    }
 
     let startTime: string | null;
     let endTime: string | null;
@@ -817,7 +818,7 @@ export function TimesheetView() {
     }
 
     if (opts?.clear) toast.success('Shift cleared');
-  }, [inlineEditing, editingDisabled]);
+  }, [inlineEditing, editingDisabled, currentMonth]);
 
   const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
     // Clear local edit state first
@@ -1889,7 +1890,7 @@ export function TimesheetView() {
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">{entry.day_of_week}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                    <span className="text-xs text-muted-foreground">{format(parseLocalDate(entry.entry_date), 'dd MMM yyyy')}</span>
                     {!canEditDate && (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">Outside payroll</Badge>
                     )}
