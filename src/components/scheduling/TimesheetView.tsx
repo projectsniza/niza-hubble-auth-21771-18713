@@ -534,6 +534,7 @@ export function TimesheetView() {
 
   // Open timesheet editor for a specific employee and week (for monthly view)
   const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number, targetBranchName?: string) => {
+    setSelectedWeekIndex(weekIdx);
     const weekStart = monthWeeks[weekIdx];
     if (!weekStart) return;
 
@@ -1868,13 +1869,16 @@ export function TimesheetView() {
           <div className="py-6 space-y-6">
             {/* Apply to All Days / Clear All Buttons */}
             <div className="flex gap-2">
-              {entries.length > 0 && entries[0]?.shift_start_time && entries[0]?.shift_end_time && (
+              {(() => {
+                const firstEditableEntry = entries.find(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+                return !!(firstEditableEntry?.shift_start_time && firstEditableEntry?.shift_end_time);
+              })() && (
                 <div className="flex-1 p-3 bg-primary/5 rounded-lg border border-primary/20">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Apply to All Days</p>
                       <p className="text-xs text-muted-foreground">
-                        Copy {entries[0].day_of_week}'s timing ({formatTimeDisplay(entries[0].shift_start_time)} - {formatTimeDisplay(entries[0].shift_end_time)}) to all days
+                        Copy first in-payroll day's timing to all editable days
                       </p>
                     </div>
                     <Button 
@@ -1888,8 +1892,8 @@ export function TimesheetView() {
                         }
                         if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
                         
-                        const updated = entries.map((entry, idx) => {
-                          if (idx === 0 || !isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) return entry;
+                        const updated = entries.map((entry) => {
+                          if (entry.id === firstEntry.id || !isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) return entry;
                           
                           const newEntry = { ...entry };
                           newEntry.shift_start_time = firstEntry.shift_start_time;
