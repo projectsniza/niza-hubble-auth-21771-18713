@@ -533,7 +533,7 @@ export function TimesheetView() {
   };
 
   // Open timesheet editor for a specific employee and week (for monthly view)
-  const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number) => {
+  const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number, targetBranchName?: string) => {
     const weekStart = monthWeeks[weekIdx];
     if (!weekStart) return;
 
@@ -546,8 +546,13 @@ export function TimesheetView() {
     // employee-name+branch with entries inside the requested week. This avoids
     // creating duplicate sheets when legacy rows were made from a different
     // week context but contain the correct dated entries.
-    const existingTimesheet = allMonthTimesheets.find(ts => ts.employee_id === employeeId && ts.week_start_date === weekStartStr)
+    const existingTimesheet = allMonthTimesheets.find(ts =>
+      ts.employee_id === employeeId &&
+      ts.week_start_date === weekStartStr &&
+      (!targetBranchName || getTimesheetBranchName(ts) === targetBranchName)
+    )
       || allMonthTimesheets.find(ts => {
+        if (targetBranchName && getTimesheetBranchName(ts) !== targetBranchName) return false;
         const sameEmployee = ts.employee_id === employeeId || (!!employeeKey && getEmployeeMonthlyKey(ts.employee) === employeeKey);
         if (!sameEmployee) return false;
         return (ts.entries || []).some(e => {
@@ -1876,7 +1881,11 @@ export function TimesheetView() {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const firstEntry = entries[0];
+                        const firstEntry = entries.find(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+                        if (!firstEntry) {
+                          toast.error('No editable day is inside the selected 21st–20th payroll period.');
+                          return;
+                        }
                         if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
                         
                         const updated = entries.map((entry, idx) => {
@@ -1909,7 +1918,7 @@ export function TimesheetView() {
                 </div>
               )}
               
-              {entries.some(e => e.shift_start_time || e.shift_end_time || e.actual_hours > 0) && (
+              {entries.some(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth) && (e.shift_start_time || e.shift_end_time || e.actual_hours > 0)) && (
                 <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20">
                   <Button 
                     variant="ghost" 
