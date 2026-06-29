@@ -19,14 +19,14 @@ import {
   FileSpreadsheet, Edit3, CheckCircle2, XCircle, X
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
 import { MonthCloseReminder } from './MonthCloseReminder';
 import { TempStaffSection } from './TempStaffSection';
 import { Lock } from 'lucide-react';
-import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
+import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 
 interface Employee {
@@ -56,6 +56,8 @@ interface TimesheetEntry {
 interface Timesheet {
   id: string;
   employee_id: string;
+  organization_id?: string;
+  branch_id?: string;
   week_start_date: string;
   week_end_date: string;
   status: string;
@@ -65,6 +67,7 @@ interface Timesheet {
   total_adjustment_hours: number;
   notes: string | null;
   employee?: Employee;
+  branch?: { name: string };
   entries?: TimesheetEntry[];
 }
 
@@ -104,6 +107,37 @@ const isDateInPayrollPeriod = (date: Date, payrollMonth: Date) => {
   return d >= start && d <= end;
 };
 
+const parseLocalDate = (dateString: string) => {
+  const [yy, mm, dd] = String(dateString).split('-').map(Number);
+  return new Date(yy, (mm || 1) - 1, dd || 1);
+};
+
+const isDateStringInPayrollPeriod = (dateString: string | null | undefined, payrollMonth: Date) => {
+  if (!dateString) return false;
+  return isDateInPayrollPeriod(parseLocalDate(dateString), payrollMonth);
+};
+
+const getEmployeeMonthlyKey = (employee?: Employee | null) => {
+  const branchName = employee?.branch?.name || 'Unassigned';
+  const fullName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim().toUpperCase();
+  return `${branchName}::${fullName}`;
+};
+
+const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
+  const branchName = timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
+  const fullName = `${timesheet?.employee?.first_name || ''} ${timesheet?.employee?.last_name || ''}`.trim().toUpperCase();
+  return `${branchName}::${fullName}`;
+};
+
+const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
+  timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
+
+const entryActivityTotal = (entry: any) =>
+  (Number(entry?.actual_hours) || 0) +
+  (Number(entry?.holiday_hours) || 0) +
+  (Number(entry?.sick_hours) || 0) +
+  (Number(entry?.adjustment_hours) || 0);
+
 // Sum a timesheet's hours restricted to dates within the payroll period
 // (21st → 20th). Falls back to stored totals only when entries aren't loaded.
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
@@ -120,8 +154,7 @@ const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
   let worked = 0, holiday = 0, sick = 0, adj = 0;
   entries.forEach((e: any) => {
     if (!e?.entry_date) return;
-    const [yy, mm, dd] = String(e.entry_date).split('-').map(Number);
-    const d = new Date(yy, (mm || 1) - 1, dd || 1);
+    const d = parseLocalDate(String(e.entry_date));
     if (d < start || d > end) return;
     worked += Number(e.actual_hours) || 0;
     holiday += Number(e.holiday_hours) || 0;
@@ -130,6 +163,23 @@ const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
   });
   return { worked, holiday, sick, adj };
 };
+
+const entryTotal = (entry: Partial<TimesheetEntry> | null | undefined) =>
+  (Number(entry?.actual_hours) || 0) +
+  (Number(entry?.holiday_hours) || 0) +
+  (Number(entry?.sick_hours) || 0) +
+  (Number(entry?.adjustment_hours) || 0);
+
+const getWeeklyEntrySignature = (entry: Partial<TimesheetEntry> | null | undefined) => [
+  entry?.shift_start_time || '',
+  entry?.shift_end_time || '',
+  Number(entry?.actual_hours) || 0,
+  Number(entry?.holiday_hours) || 0,
+  Number(entry?.sick_hours) || 0,
+  Number(entry?.adjustment_hours) || 0,
+  Number(entry?.break_duration_minutes) || 0,
+  entry?.entry_type || '',
+].join('|');
 
 export function TimesheetView() {
   const { user } = useAuth();
@@ -229,8 +279,6 @@ export function TimesheetView() {
         const payroll = getPayrollPeriod(currentMonth);
         const startStr = format(payroll.start, 'yyyy-MM-dd');
         const endStr = format(payroll.end, 'yyyy-MM-dd');
-        const rangeStart = format(monthWeeks[0] || payroll.start, 'yyyy-MM-dd');
-
         const { data: entries } = await supabase
           .from('temporary_timesheet_entries')
           .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
@@ -261,8 +309,7 @@ export function TimesheetView() {
 
           const branchName = t.branch?.name || '—';
           // Find week index by entry_date (the date the work happened)
-          const ed = parseISO(e.entry_date);
-          const dd = new Date(ed.getFullYear(), ed.getMonth(), ed.getDate());
+          const dd = parseLocalDate(e.entry_date);
           const wIdx = monthWeeks.findIndex(w => {
             const wEnd = endOfWeek(w, { weekStartsOn: 1 });
             return dd >= w && dd <= wEnd;
@@ -342,7 +389,7 @@ export function TimesheetView() {
 
       const { data: weekTimesheetsData } = await supabase
         .from('timesheets')
-        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .eq('week_start_date', weekStartStr);
 
       const timesheetsWithEntries = await Promise.all(
@@ -364,9 +411,10 @@ export function TimesheetView() {
 
       const { data: monthTimesheetsData } = await supabase
         .from('timesheets')
-        .select('*, employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
         .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'));
+        .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
+        .limit(10000);
 
       // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
       // before 21st, week 6 extending past 20th) can be summed by date.
@@ -374,13 +422,17 @@ export function TimesheetView() {
       const monthTsIds = monthTsList.map((t: any) => t.id);
       let entriesByTs: Record<string, any[]> = {};
       if (monthTsIds.length) {
-        const { data: allEntries } = await supabase
-          .from('timesheet_entries')
-          .select('*')
-          .in('timesheet_id', monthTsIds);
-        (allEntries || []).forEach((e: any) => {
-          (entriesByTs[e.timesheet_id] ||= []).push(e);
-        });
+        const chunkSize = 200;
+        for (let i = 0; i < monthTsIds.length; i += chunkSize) {
+          const { data: allEntries } = await supabase
+            .from('timesheet_entries')
+            .select('*')
+            .in('timesheet_id', monthTsIds.slice(i, i + chunkSize))
+            .limit(10000);
+          (allEntries || []).forEach((e: any) => {
+            (entriesByTs[e.timesheet_id] ||= []).push(e);
+          });
+        }
       }
       const monthTsWithEntries = monthTsList.map((t: any) => ({ ...t, entries: entriesByTs[t.id] || [] }));
 
@@ -391,7 +443,8 @@ export function TimesheetView() {
         .from('timesheets')
         .select('employee_id, total_adjustment_hours')
         .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'));
+        .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
+        .limit(10000);
       
       const adjustments: Record<string, number> = {};
       prevMonthData?.forEach(t => {
@@ -480,16 +533,34 @@ export function TimesheetView() {
   };
 
   // Open timesheet editor for a specific employee and week (for monthly view)
-  const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number) => {
+  const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number, targetBranchName?: string) => {
+    setSelectedWeekIndex(weekIdx);
     const weekStart = monthWeeks[weekIdx];
     if (!weekStart) return;
 
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const employee = employees.find(e => e.id === employeeId);
+    const employeeKey = employee ? getEmployeeMonthlyKey(employee) : '';
     
-    // Find existing timesheet
-    const existingTimesheet = allMonthTimesheets.find(
-      ts => ts.employee_id === employeeId && ts.week_start_date === weekStartStr
-    );
+    // Find an existing sheet by exact employee/week first, then by same
+    // employee-name+branch with entries inside the requested week. This avoids
+    // creating duplicate sheets when legacy rows were made from a different
+    // week context but contain the correct dated entries.
+    const existingTimesheet = allMonthTimesheets.find(ts =>
+      ts.employee_id === employeeId &&
+      ts.week_start_date === weekStartStr &&
+      (!targetBranchName || getTimesheetBranchName(ts) === targetBranchName)
+    )
+      || allMonthTimesheets.find(ts => {
+        if (targetBranchName && getTimesheetBranchName(ts) !== targetBranchName) return false;
+        const sameEmployee = ts.employee_id === employeeId || (!!employeeKey && getEmployeeMonthlyKey(ts.employee) === employeeKey);
+        if (!sameEmployee) return false;
+        return (ts.entries || []).some(e => {
+          const dd = parseLocalDate(e.entry_date);
+          return dd >= weekStart && dd <= wkEnd;
+        });
+      });
 
     if (existingTimesheet) {
       // Open existing timesheet
@@ -504,13 +575,11 @@ export function TimesheetView() {
       setShowEditPanel(true);
     } else {
       // Create timesheet for this week
-      const employee = employees.find(e => e.id === employeeId);
       if (!employee) {
         toast.error('Employee not found');
         return;
       }
 
-      const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
       const wkDays = eachDayOfInterval({ start: weekStart, end: wkEnd });
 
       try {
@@ -563,6 +632,10 @@ export function TimesheetView() {
   };
 
   const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
+    if (!isDateStringInPayrollPeriod(entries[index]?.entry_date, currentMonth)) {
+      toast.error('This date is outside the selected 21st–20th payroll period.');
+      return;
+    }
     const updated = [...entries];
     const entry = { ...updated[index] };
     
@@ -605,12 +678,14 @@ export function TimesheetView() {
     if (editingDisabled) { toast.error('This payroll period is locked.'); return; }
     setSaving(true);
     try {
-      const totalWorked = entries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
-      const totalHoliday = entries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0);
-      const totalSick = entries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0);
-      const totalAdj = entries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0);
+      const periodEntries = entries.filter(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+      const totalWorked = periodEntries.reduce((sum, e) => sum + (Number(e.actual_hours) || 0), 0);
+      const totalHoliday = periodEntries.reduce((sum, e) => sum + (Number(e.holiday_hours) || 0), 0);
+      const totalSick = periodEntries.reduce((sum, e) => sum + (Number(e.sick_hours) || 0), 0);
+      const totalAdj = periodEntries.reduce((sum, e) => sum + (Number(e.adjustment_hours) || 0), 0);
 
       for (const entry of entries) {
+        if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) continue;
         if (entry.id) {
           const { error: entryErr } = await supabase.from('timesheet_entries').update({
             shift_start_time: entry.shift_start_time,
@@ -696,6 +771,10 @@ export function TimesheetView() {
     const edit = inlineEditing[timesheet.id]?.[dayOfWeek];
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
+    if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) {
+      toast.error('This date is outside the selected 21st–20th payroll period.');
+      return;
+    }
 
     let startTime: string | null;
     let endTime: string | null;
@@ -784,7 +863,7 @@ export function TimesheetView() {
     }
 
     if (opts?.clear) toast.success('Shift cleared');
-  }, [inlineEditing, editingDisabled]);
+  }, [inlineEditing, editingDisabled, currentMonth]);
 
   const resetInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string) => {
     // Clear local edit state first
@@ -815,8 +894,8 @@ export function TimesheetView() {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
     if (!canViewFilters) return true;
-    if (filterMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
-    if (filterMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
+    if (filterMode === 'organization' && selectedOrg) return t.organization_id === selectedOrg || emp.organization_id === selectedOrg;
+    if (filterMode === 'branch' && selectedBranch) return t.branch_id === selectedBranch || emp.branch_id === selectedBranch;
     return true;
   }), [timesheets, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
@@ -828,9 +907,7 @@ export function TimesheetView() {
     // records in the database.
     const dedupMap = new Map<string, Timesheet>();
     filteredTimesheets.forEach(ts => {
-      const branchName = ts.employee?.branch?.name || 'Unassigned';
-      const fullName = `${ts.employee?.first_name || ''} ${ts.employee?.last_name || ''}`.trim().toUpperCase();
-      const key = `${branchName}::${fullName}`;
+      const key = getTimesheetMonthlyKey(ts);
       const existing = dedupMap.get(key);
       const tsTotal = (Number(ts.total_worked_hours) || 0) + (Number(ts.total_holiday_hours) || 0) + (Number(ts.total_sick_hours) || 0) + (Number(ts.total_adjustment_hours) || 0);
       if (!existing) {
@@ -843,10 +920,10 @@ export function TimesheetView() {
     const dedupedTimesheets = Array.from(dedupMap.values());
 
     const grouped = dedupedTimesheets.reduce((acc, ts) => {
-      const branchName = ts.employee?.branch?.name;
+      const branchName = getTimesheetBranchName(ts);
       // Skip employees with no branch (avoids stray "Unassigned" group when
       // viewing a specific branch — e.g. WELCOME SHEPERDSBush).
-      if (!branchName) return acc;
+      if (!branchName || branchName === 'Unassigned') return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
       const { worked, holiday, sick, adj } = getTsInPeriodTotals(ts, currentMonth);
@@ -884,16 +961,24 @@ export function TimesheetView() {
       sickHrs: number;
     }> = {};
 
+    const ensureRow = (employee: Employee) => {
+      const key = getEmployeeMonthlyKey(employee);
+      if (!consolidation[key]) {
+        consolidation[key] = {
+          employee,
+          weeklyHours: monthWeeks.map(() => 0),
+          totalHours: 0,
+          lastMonthAdj: lastMonthAdjustment[employee.id] || 0,
+          totalHrs: 0,
+          holidayHrs: 0,
+          sickHrs: 0
+        };
+      }
+      return { key, row: consolidation[key] };
+    };
+
     filteredEmployees.forEach(emp => {
-      consolidation[emp.id] = {
-        employee: emp,
-        weeklyHours: monthWeeks.map(() => 0),
-        totalHours: 0,
-        lastMonthAdj: lastMonthAdjustment[emp.id] || 0,
-        totalHrs: 0,
-        holidayHrs: 0,
-        sickHrs: 0
-      };
+      ensureRow(emp);
     });
 
     const payroll = getPayrollPeriod(currentMonth);
@@ -905,28 +990,26 @@ export function TimesheetView() {
       const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
       if (!canViewFilters) return true;
-      if (filterMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
-      if (filterMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
+      if (filterMode === 'organization' && selectedOrg) return ts.organization_id === selectedOrg || emp.organization_id === selectedOrg;
+      if (filterMode === 'branch' && selectedBranch) return ts.branch_id === selectedBranch || emp.branch_id === selectedBranch;
       return true;
     });
 
-    // De-duplicate timesheets per (employee_id + week_start_date) — keep the one
-    // with the richest entries. Prevents double counting when historical/stale
-    // duplicate timesheet rows exist for the same employee+week.
-    const tsByKey = new Map<string, any>();
-    scopedMonthTs.forEach(ts => {
-      const key = `${ts.employee_id}|${ts.week_start_date}`;
-      const prior = tsByKey.get(key);
-      const entriesLen = ((ts as any).entries || []).length;
-      const priorLen = prior ? ((prior as any).entries || []).length : -1;
-      if (!prior || entriesLen > priorLen) tsByKey.set(key, ts);
-    });
+    // Build monthly from actual dated entries, not from stored weekly totals.
+    // For duplicate timesheet rows / duplicate employee records, keep only the
+    // richest entry per employee-name + branch + date. This prevents stale rows
+    // from double-counting while still preserving every real day from Week 1-6.
+    const bestEntryByEmployeeDate = new Map<string, { rowKey: string; entry: any }>();
 
-    Array.from(tsByKey.values()).forEach(ts => {
-      if (!consolidation[ts.employee_id]) {
-        if (!ts.employee || !ts.employee.branch?.name) return;
-        consolidation[ts.employee_id] = {
-          employee: ts.employee as Employee,
+    scopedMonthTs.forEach(ts => {
+      if (!ts.employee || !getTimesheetBranchName(ts) || getTimesheetBranchName(ts) === 'Unassigned') return;
+      const rowKey = getTimesheetMonthlyKey(ts);
+      if (!consolidation[rowKey]) {
+        consolidation[rowKey] = {
+          employee: {
+            ...(ts.employee as Employee),
+            branch: { name: getTimesheetBranchName(ts) }
+          },
           weeklyHours: monthWeeks.map(() => 0),
           totalHours: 0,
           lastMonthAdj: lastMonthAdjustment[ts.employee_id] || 0,
@@ -935,46 +1018,47 @@ export function TimesheetView() {
           sickHrs: 0,
         };
       }
-
-      // Bucket each entry into the monthWeek that contains its entry_date.
-      // This avoids losing hours when a timesheet's week_start_date doesn't
-      // exactly match a monthWeeks Monday (e.g. cross-week edits, off-by-one
-      // weeks created from a different month context).
       const entries = ((ts as any).entries as Array<any> | undefined) || [];
-      const seenDates = new Set<string>();
       entries.forEach((e: any) => {
-        if (!e?.entry_date || seenDates.has(e.entry_date)) return;
-        seenDates.add(e.entry_date);
-        const d = parseISO(e.entry_date);
-        const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (!e?.entry_date) return;
+        const dd = parseLocalDate(e.entry_date);
         if (dd < payroll.start || dd > payroll.end) return;
-        const w = Number(e.actual_hours) || 0;
-        const h = Number(e.holiday_hours) || 0;
-        const s = Number(e.sick_hours) || 0;
-
-        const wIdx = monthWeeks.findIndex(mw => {
-          const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
-          return dd >= mw && dd <= wEnd;
-        });
-        if (wIdx >= 0) {
-          consolidation[ts.employee_id].weeklyHours[wIdx] += w;
+        const dedupeKey = `${rowKey}|${e.entry_date}`;
+        const existing = bestEntryByEmployeeDate.get(dedupeKey);
+        if (!existing || entryActivityTotal(e) >= entryActivityTotal(existing.entry)) {
+          bestEntryByEmployeeDate.set(dedupeKey, { rowKey, entry: e });
         }
-        consolidation[ts.employee_id].totalHours += w;
-        consolidation[ts.employee_id].holidayHrs += h;
-        consolidation[ts.employee_id].sickHrs += s;
       });
     });
 
+    bestEntryByEmployeeDate.forEach(({ rowKey, entry: e }) => {
+      const dd = parseLocalDate(e.entry_date);
+      const w = Number(e.actual_hours) || 0;
+      const h = Number(e.holiday_hours) || 0;
+      const s = Number(e.sick_hours) || 0;
+
+      const wIdx = monthWeeks.findIndex(mw => {
+        const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
+        return dd >= mw && dd <= wEnd;
+      });
+      if (wIdx >= 0) {
+        consolidation[rowKey].weeklyHours[wIdx] += w;
+      }
+      consolidation[rowKey].holidayHrs += h;
+      consolidation[rowKey].sickHrs += s;
+    });
+
     Object.values(consolidation).forEach(emp => {
+      emp.totalHours = emp.weeklyHours.reduce((sum, h) => sum + h, 0);
       emp.totalHrs = emp.totalHours + emp.lastMonthAdj;
     });
 
     const grouped: Record<string, typeof consolidation> = {};
-    Object.entries(consolidation).forEach(([empId, data]) => {
+    Object.entries(consolidation).forEach(([rowKey, data]) => {
       const branchName = data.employee.branch?.name;
       if (!branchName) return; // hide Unassigned
       if (!grouped[branchName]) grouped[branchName] = {};
-      grouped[branchName][empId] = data;
+      grouped[branchName][rowKey] = data;
     });
 
     return { consolidation, grouped };
@@ -1154,6 +1238,9 @@ export function TimesheetView() {
       return time;
     }
   };
+
+  const canEditEntryDate = (entryDate: string | null | undefined) =>
+    isDateStringInPayrollPeriod(entryDate, currentMonth) && !editingDisabled;
 
   return (
     <div className="space-y-6">
@@ -1467,9 +1554,15 @@ export function TimesheetView() {
                                       />
                                     ) : (
                                       <span 
-                                        className={`cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded ${!inPayroll ? 'italic opacity-70' : ''}`}
-                                        onClick={() => handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '')}
-                                        title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle) but a shift was recorded here' : ''}
+                                         className={`${inPayroll ? 'cursor-pointer hover:bg-primary/10' : 'italic opacity-70 cursor-not-allowed'} px-1 py-0.5 rounded`}
+                                         onClick={() => {
+                                           if (!inPayroll) {
+                                             toast.error('This date is outside the selected 21st–20th payroll period.');
+                                             return;
+                                           }
+                                           handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '');
+                                         }}
+                                         title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle)' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_start_time || null) || (isHoliday ? 'HOL' : isSick ? 'SICK' : '-')}
                                       </span>
@@ -1511,9 +1604,15 @@ export function TimesheetView() {
                                       </div>
                                     ) : (
                                       <span 
-                                        className={`cursor-pointer hover:bg-primary/10 px-1 py-0.5 rounded ${!inPayroll ? 'italic opacity-70' : ''}`}
-                                        onClick={() => handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '')}
-                                        title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle) but a shift was recorded here' : ''}
+                                         className={`${inPayroll ? 'cursor-pointer hover:bg-primary/10' : 'italic opacity-70 cursor-not-allowed'} px-1 py-0.5 rounded`}
+                                         onClick={() => {
+                                           if (!inPayroll) {
+                                             toast.error('This date is outside the selected 21st–20th payroll period.');
+                                             return;
+                                           }
+                                           handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '');
+                                         }}
+                                         title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle)' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_end_time || null) || (isHoliday ? `${holidayHours}h` : isSick ? `${sickHours}h` : '-')}
                                       </span>
@@ -1661,7 +1760,7 @@ export function TimesheetView() {
                               <TableCell 
                                 key={i} 
                                 className="text-center cursor-pointer hover:bg-primary/10 transition-colors"
-                                onClick={() => openTimesheetEditorForWeek(emp.employee.id, i)}
+                                onClick={() => openTimesheetEditorForWeek(emp.employee.id, i, branchName)}
                                 title={`Click to edit Week ${i + 1}`}
                               >
                                 {h > 0 ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
@@ -1770,24 +1869,31 @@ export function TimesheetView() {
           <div className="py-6 space-y-6">
             {/* Apply to All Days / Clear All Buttons */}
             <div className="flex gap-2">
-              {entries.length > 0 && entries[0]?.shift_start_time && entries[0]?.shift_end_time && (
+              {(() => {
+                const firstEditableEntry = entries.find(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+                return !!(firstEditableEntry?.shift_start_time && firstEditableEntry?.shift_end_time);
+              })() && (
                 <div className="flex-1 p-3 bg-primary/5 rounded-lg border border-primary/20">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Apply to All Days</p>
                       <p className="text-xs text-muted-foreground">
-                        Copy {entries[0].day_of_week}'s timing ({formatTimeDisplay(entries[0].shift_start_time)} - {formatTimeDisplay(entries[0].shift_end_time)}) to all days
+                        Copy first in-payroll day's timing to all editable days
                       </p>
                     </div>
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const firstEntry = entries[0];
+                        const firstEntry = entries.find(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
+                        if (!firstEntry) {
+                          toast.error('No editable day is inside the selected 21st–20th payroll period.');
+                          return;
+                        }
                         if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
                         
-                        const updated = entries.map((entry, idx) => {
-                          if (idx === 0) return entry;
+                        const updated = entries.map((entry) => {
+                          if (entry.id === firstEntry.id || !isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) return entry;
                           
                           const newEntry = { ...entry };
                           newEntry.shift_start_time = firstEntry.shift_start_time;
@@ -1816,20 +1922,20 @@ export function TimesheetView() {
                 </div>
               )}
               
-              {entries.some(e => e.shift_start_time || e.shift_end_time || e.actual_hours > 0) && (
+              {entries.some(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth) && (e.shift_start_time || e.shift_end_time || e.actual_hours > 0)) && (
                 <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20">
                   <Button 
                     variant="ghost" 
                     size="sm"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => {
-                      const updated = entries.map(entry => ({
+                      const updated = entries.map(entry => isDateStringInPayrollPeriod(entry.entry_date, currentMonth) ? ({
                         ...entry,
                         shift_start_time: null,
                         shift_end_time: null,
                         break_duration_minutes: 0,
                         actual_hours: 0
-                      }));
+                      }) : entry);
                       setEntries(updated);
                       toast.success('All days cleared');
                     }}
@@ -1841,18 +1947,28 @@ export function TimesheetView() {
               )}
             </div>
 
-            {entries.map((entry, idx) => (
-              <div key={idx} className="space-y-3 p-4 rounded-lg bg-muted/30">
+            {entries.map((entry, idx) => {
+              const canEditDate = canEditEntryDate(entry.entry_date);
+              return (
+              <div key={idx} className={`space-y-3 p-4 rounded-lg ${canEditDate ? 'bg-muted/30' : 'bg-muted/20 opacity-70 border border-dashed border-muted-foreground/30'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-sm">{entry.day_of_week}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{format(parseISO(entry.entry_date), 'dd MMM yyyy')}</span>
+                    <span className="text-xs text-muted-foreground">{format(parseLocalDate(entry.entry_date), 'dd MMM yyyy')}</span>
+                    {!canEditDate && (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Outside payroll</Badge>
+                    )}
                     {(entry.shift_start_time || entry.shift_end_time) && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        disabled={!canEditDate}
                         onClick={() => {
+                          if (!canEditDate) {
+                            toast.error('This date is outside the selected 21st–20th payroll period.');
+                            return;
+                          }
                           const updated = [...entries];
                           updated[idx] = {
                             ...updated[idx],
@@ -1877,6 +1993,7 @@ export function TimesheetView() {
                       type="time" 
                       step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_start_time || ''} 
+                      disabled={!canEditDate}
                       onChange={(e) => {
                         const v = e.target.value;
                         /* time alignment warning removed - any minute allowed by default */
@@ -1891,6 +2008,7 @@ export function TimesheetView() {
                       type="time" 
                       step={HALF_HOUR_TIME_STEP}
                       value={entry.shift_end_time || ''} 
+                      disabled={!canEditDate}
                       onChange={(e) => {
                         const v = e.target.value;
                         /* time alignment warning removed - any minute allowed by default */
@@ -1907,6 +2025,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.actual_hours === 0 ? '' : entry.actual_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'actual_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1918,6 +2037,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.holiday_hours === 0 ? '' : entry.holiday_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'holiday_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1929,6 +2049,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.sick_hours === 0 ? '' : entry.sick_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'sick_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1940,6 +2061,7 @@ export function TimesheetView() {
                       type="number" 
                       step="0.5"
                       value={entry.adjustment_hours === 0 ? '' : entry.adjustment_hours} 
+                      disabled={!canEditDate}
                       onChange={(e) => updateEntry(idx, 'adjustment_hours', e.target.value === '' ? 0 : parseFloat(e.target.value))}
                       className="mt-1 text-center"
                       placeholder="0"
@@ -1947,7 +2069,7 @@ export function TimesheetView() {
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
 
           <SheetFooter className="flex gap-2">
