@@ -56,6 +56,8 @@ interface TimesheetEntry {
 interface Timesheet {
   id: string;
   employee_id: string;
+  organization_id?: string;
+  branch_id?: string;
   week_start_date: string;
   week_end_date: string;
   status: string;
@@ -854,8 +856,8 @@ export function TimesheetView() {
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
     if (!canViewFilters) return true;
-    if (filterMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
-    if (filterMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
+    if (filterMode === 'organization' && selectedOrg) return (t.organization_id || emp.organization_id) === selectedOrg;
+    if (filterMode === 'branch' && selectedBranch) return (t.branch_id || emp.branch_id) === selectedBranch;
     return true;
   }), [employees, searchQuery, canViewFilters, filterMode, selectedOrg, selectedBranch]);
 
@@ -965,8 +967,8 @@ export function TimesheetView() {
       const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
       if (!canViewFilters) return true;
-      if (filterMode === 'organization' && selectedOrg) return emp.organization_id === selectedOrg;
-      if (filterMode === 'branch' && selectedBranch) return emp.branch_id === selectedBranch;
+      if (filterMode === 'organization' && selectedOrg) return (ts.organization_id || emp.organization_id) === selectedOrg;
+      if (filterMode === 'branch' && selectedBranch) return (ts.branch_id || emp.branch_id) === selectedBranch;
       return true;
     });
 
