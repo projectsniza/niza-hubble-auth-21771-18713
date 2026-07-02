@@ -44,6 +44,15 @@ interface DailyRecord {
   tickets_sold: number | null;
 }
 
+interface LotteryPriceHistory {
+  id: string;
+  game_id: string;
+  branch_id: string;
+  ticket_price: number;
+  effective_date: string;
+  notes: string | null;
+}
+
 interface GameDailyData {
   stockBegin: number;
   activatedTickets: number;
@@ -218,6 +227,61 @@ export default function Lottery() {
     enabled: filteredBranchIds.length > 0,
   });
 
+  // Ticket price history keeps old lottery records on the price that was active
+  // on that date, instead of recalculating the whole month at today's price.
+  const { data: priceHistory = [] } = useQuery({
+    queryKey: ['lottery-price-history', filteredBranchIds, format(selectedMonth, 'yyyy-MM')],
+    queryFn: async () => {
+      if (filteredBranchIds.length === 0 || games.length === 0) return [];
+      const gameIds = games.map(g => g.id);
+      const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
+      const { data, error } = await (supabase as any)
+        .from('lottery_game_price_history')
+        .select('*')
+        .in('game_id', gameIds)
+        .in('branch_id', filteredBranchIds)
+        .lte('effective_date', endDate)
+        .order('effective_date', { ascending: true });
+      if (error) throw error;
+      return (data || []) as LotteryPriceHistory[];
+    },
+    enabled: filteredBranchIds.length > 0 && games.length > 0,
+  });
+
+  const priceHistoryByGame = useMemo(() => {
+    const map: Record<string, LotteryPriceHistory[]> = {};
+    priceHistory.forEach(history => {
+      (map[history.game_id] ||= []).push(history);
+    });
+    Object.values(map).forEach(rows => rows.sort((a, b) => a.effective_date.localeCompare(b.effective_date)));
+    return map;
+  }, [priceHistory]);
+
+  const getHistoricalTicketPrice = useCallback((game: LotteryGame, dateStr: string) => {
+    const history = priceHistoryByGame[game.id] || [];
+    let activePrice = Number(game.ticket_price) || 0;
+
+    for (const row of history) {
+      if (row.effective_date <= dateStr) {
+        activePrice = Number(row.ticket_price) || activePrice;
+      } else {
+        break;
+      }
+    }
+
+    return activePrice;
+  }, [priceHistoryByGame]);
+
+  const getMonthlyPriceLabel = useCallback((game: LotteryGame) => {
+    const prices = new Set<string>();
+    daysInMonth.forEach(day => {
+      prices.add(getHistoricalTicketPrice(game, format(day, 'yyyy-MM-dd')).toFixed(2));
+    });
+    const values = Array.from(prices);
+    if (values.length <= 1) return `£${values[0] || Number(game.ticket_price).toFixed(2)}`;
+    return values.map(v => `£${v}`).join(' / ');
+  }, [daysInMonth, getHistoricalTicketPrice]);
+
   // Map till reports by date (sums across branches when viewing multiple)
   const tillReportByDate = useMemo(() => {
     const map: { [date: string]: number } = {};
@@ -334,6 +398,7 @@ export default function Lottery() {
     const stockBegin = getCellValue(gameId, dateStr, 'stockBegin') ?? 0;
     const activated = getCellValue(gameId, dateStr, 'activatedTickets') ?? 0;
     const stockEnd = getCellValue(gameId, dateStr, 'stockEnd');
+    const ticketPrice = getHistoricalTicketPrice(game, dateStr);
     
     // Total = Stock Begin + Activated
     const totalStock = stockBegin + activated;
@@ -343,10 +408,10 @@ export default function Lottery() {
     const ticketsSold = stockEnd !== null ? Math.max(0, totalStock - stockEnd) : null;
     
     // Sales Value = Tickets Sold × Ticket Price
-    const salesValue = ticketsSold !== null ? ticketsSold * game.ticket_price : null;
+    const salesValue = ticketsSold !== null ? ticketsSold * ticketPrice : null;
     
-    return { stockBegin, activated, totalStock, stockEnd, ticketsSold, salesValue };
-  }, [getCellValue]);
+    return { stockBegin, activated, totalStock, stockEnd, ticketsSold, salesValue, ticketPrice };
+  }, [getCellValue, getHistoricalTicketPrice]);
 
   // Calculate game totals across all days
   const getGameTotals = useCallback((gameId: string, game: LotteryGame) => {
@@ -379,8 +444,6 @@ export default function Lottery() {
         lastStockEnd = calc.stockEnd;
       }
     });
-    
-    totalSalesValue = totalTicketsSold * game.ticket_price;
     
     return {
       initialStock,
@@ -464,21 +527,39 @@ export default function Lottery() {
     mutationFn: async () => {
       if (!editingGame) throw new Error('No game selected');
       
+      const nextPrice = parseFloat(newGame.ticketPrice);
+      const priceChanged = Number(editingGame.ticket_price) !== nextPrice;
+
       const { error } = await supabase
         .from('lottery_games')
         .update({
           game_name: newGame.name.trim(),
-          ticket_price: parseFloat(newGame.ticketPrice),
+          ticket_price: nextPrice,
         })
         .eq('id', editingGame.id);
       if (error) throw error;
+
+      if (priceChanged) {
+        const { error: historyError } = await (supabase as any)
+          .from('lottery_game_price_history')
+          .upsert({
+            game_id: editingGame.id,
+            branch_id: editingGame.branch_id,
+            ticket_price: nextPrice,
+            effective_date: format(new Date(), 'yyyy-MM-dd'),
+            changed_by: user?.id,
+            notes: `Ticket price changed from £${Number(editingGame.ticket_price).toFixed(2)} to £${nextPrice.toFixed(2)}`,
+          }, { onConflict: 'game_id,effective_date' });
+        if (historyError) throw historyError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lottery-games'] });
+      queryClient.invalidateQueries({ queryKey: ['lottery-price-history'] });
       setShowEditGameDialog(false);
       setEditingGame(null);
       setNewGame({ name: '', ticketPrice: '1' });
-      toast.success('Game updated successfully');
+      toast.success('Game updated. Price changes now apply from today only.');
     },
     onError: (error) => {
       toast.error('Failed to update game: ' + error.message);
@@ -725,7 +806,9 @@ export default function Lottery() {
         const calc = getDayCalculations(game.id, format(day, 'yyyy-MM-dd'), game);
         return calc.ticketsSold ?? '-';
       });
-      lines.push(['', '', `£${game.ticket_price}`, 'No of Tickets Sold', ...soldValues, gameTotals.totalTicketsSold].join(','));
+      const priceValues = daysInMonth.map(day => `£${getHistoricalTicketPrice(game, format(day, 'yyyy-MM-dd')).toFixed(2)}`);
+      lines.push(['', '', getMonthlyPriceLabel(game), 'Ticket Price Used', ...priceValues, getMonthlyPriceLabel(game)].join(','));
+      lines.push(['', '', getMonthlyPriceLabel(game), 'No of Tickets Sold', ...soldValues, gameTotals.totalTicketsSold].join(','));
       
       // Sales Value row
       const salesValues = daysInMonth.map(day => {
