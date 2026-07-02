@@ -439,6 +439,10 @@ export default function Lottery() {
       if (calc.ticketsSold !== null) {
         totalTicketsSold += calc.ticketsSold;
       }
+
+      if (calc.salesValue !== null) {
+        totalSalesValue += calc.salesValue;
+      }
       
       if (calc.stockEnd !== null) {
         lastStockEnd = calc.stockEnd;
