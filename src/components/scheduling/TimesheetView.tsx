@@ -418,9 +418,26 @@ export function TimesheetView() {
 
       // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
       // before 21st, week 6 extending past 20th) can be summed by date.
+      // Also fetch entries directly by entry_date. This is the important safety
+      // net: if a legacy/edited parent timesheet has the wrong week_start_date,
+      // the monthly view still uses the actual dated entry that weekly shows.
       const monthTsList = monthTimesheetsData || [];
       const monthTsIds = monthTsList.map((t: any) => t.id);
-      let entriesByTs: Record<string, any[]> = {};
+      const monthTsMap = new Map<string, any>();
+      monthTsList.forEach((t: any) => monthTsMap.set(t.id, { ...t, entries: [] }));
+
+      const addEntryToMonthTimesheet = (timesheetId: string, entry: any, parent?: any) => {
+        if (!timesheetId) return;
+        if (!monthTsMap.has(timesheetId) && parent) {
+          monthTsMap.set(timesheetId, { ...parent, entries: [] });
+        }
+        const target = monthTsMap.get(timesheetId);
+        if (!target) return;
+        if (!target.entries.some((existing: any) => existing.id === entry.id)) {
+          target.entries.push(entry);
+        }
+      };
+
       if (monthTsIds.length) {
         const chunkSize = 200;
         for (let i = 0; i < monthTsIds.length; i += chunkSize) {
@@ -430,11 +447,29 @@ export function TimesheetView() {
             .in('timesheet_id', monthTsIds.slice(i, i + chunkSize))
             .limit(10000);
           (allEntries || []).forEach((e: any) => {
-            (entriesByTs[e.timesheet_id] ||= []).push(e);
+            addEntryToMonthTimesheet(e.timesheet_id, e);
           });
         }
       }
-      const monthTsWithEntries = monthTsList.map((t: any) => ({ ...t, entries: entriesByTs[t.id] || [] }));
+
+      const { data: datedEntries, error: datedEntriesError } = await (supabase as any)
+        .from('timesheet_entries')
+        .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
+        .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
+        .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
+        .limit(10000);
+      if (datedEntriesError) throw datedEntriesError;
+
+      (datedEntries || []).forEach((row: any) => {
+        const { timesheet, ...entry } = row;
+        if (!timesheet?.id) return;
+        addEntryToMonthTimesheet(timesheet.id, entry, timesheet);
+      });
+
+      const monthTsWithEntries = Array.from(monthTsMap.values()).map((t: any) => ({
+        ...t,
+        entries: [...(t.entries || [])].sort((a: any, b: any) => String(a.entry_date).localeCompare(String(b.entry_date))),
+      }));
 
       setAllMonthTimesheets(monthTsWithEntries);
 
