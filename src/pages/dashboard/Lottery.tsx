@@ -2226,28 +2226,21 @@ export default function Lottery() {
             </div>
             <div className="space-y-2">
               <Label>Ticket Price (£) *</Label>
-              <Select
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
                 value={newGame.ticketPrice}
-                onValueChange={(value) => setNewGame(prev => ({ ...prev, ticketPrice: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">£1.00</SelectItem>
-                  <SelectItem value="2">£2.00</SelectItem>
-                  <SelectItem value="3">£3.00</SelectItem>
-                  <SelectItem value="5">£5.00</SelectItem>
-                  <SelectItem value="10">£10.00</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={(e) => setNewGame(prev => ({ ...prev, ticketPrice: e.target.value }))}
+                placeholder="e.g. 1, 3, 6, 10"
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddGameDialog(false)}>Cancel</Button>
             <Button 
               onClick={() => addGameMutation.mutate()} 
-              disabled={!newGame.name.trim() || addGameMutation.isPending}
+              disabled={!newGame.name.trim() || !parseFloat(newGame.ticketPrice) || parseFloat(newGame.ticketPrice) <= 0 || addGameMutation.isPending}
             >
               {addGameMutation.isPending ? 'Adding...' : 'Add Game'}
             </Button>
@@ -2278,21 +2271,17 @@ export default function Lottery() {
             </div>
             <div className="space-y-2">
               <Label>Ticket Price (£) *</Label>
-              <Select
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
                 value={newGame.ticketPrice}
-                onValueChange={(value) => setNewGame(prev => ({ ...prev, ticketPrice: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">£1.00</SelectItem>
-                  <SelectItem value="2">£2.00</SelectItem>
-                  <SelectItem value="3">£3.00</SelectItem>
-                  <SelectItem value="5">£5.00</SelectItem>
-                  <SelectItem value="10">£10.00</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={(e) => setNewGame(prev => ({ ...prev, ticketPrice: e.target.value }))}
+                placeholder="e.g. 1, 3, 6, 10"
+              />
+              <p className="text-xs text-muted-foreground">
+                If price changes, previous dates keep their old price and the new price starts from today.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -2303,7 +2292,7 @@ export default function Lottery() {
             }}>Cancel</Button>
             <Button 
               onClick={() => updateGameMutation.mutate()} 
-              disabled={!newGame.name.trim() || updateGameMutation.isPending}
+              disabled={!newGame.name.trim() || !parseFloat(newGame.ticketPrice) || parseFloat(newGame.ticketPrice) <= 0 || updateGameMutation.isPending}
             >
               {updateGameMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
