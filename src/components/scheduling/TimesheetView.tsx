@@ -150,12 +150,6 @@ const getTimesheetPayrollWeekIndex = (timesheet: Partial<Timesheet>, monthWeeks:
   });
 };
 
-const entryActivityTotal = (entry: any) =>
-  (Number(entry?.actual_hours) || 0) +
-  (Number(entry?.holiday_hours) || 0) +
-  (Number(entry?.sick_hours) || 0) +
-  (Number(entry?.adjustment_hours) || 0);
-
 // Sum a timesheet's hours restricted to dates within the payroll period
 // (21st → 20th). Falls back to stored totals only when entries aren't loaded.
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
@@ -1033,8 +1027,6 @@ export function TimesheetView() {
     filteredEmployees.forEach(emp => {
       ensureRow(emp);
     });
-
-    const payroll = getPayrollPeriod(currentMonth);
 
     // Apply same scope filters (org/branch/search) used elsewhere
     const scopedMonthTs = allMonthTimesheets.filter(ts => {
