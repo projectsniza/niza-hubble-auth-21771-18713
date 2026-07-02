@@ -1048,13 +1048,16 @@ export function TimesheetView() {
       return true;
     });
 
-    // Build monthly from actual dated entries, not from stored weekly totals.
-    // For duplicate timesheet rows / duplicate employee records, keep only the
-    // richest entry per employee-name + branch + date. This prevents stale rows
-    // from double-counting while still preserving every real day from Week 1-6.
-    const bestEntryByEmployeeDate = new Map<string, { rowKey: string; entry: any }>();
+    // Monthly must mirror the Weekly View: each Week 1–6 column is the sum of
+    // that week's visible HOURS, with only first/last week dates outside the
+    // 21st–20th payroll period excluded. Do not re-bucket by entry date here —
+    // edited/legacy rows can have imperfect entry dates, while the Weekly View
+    // is driven by the parent timesheet's week_start_date.
+    const countedTimesheetIds = new Set<string>();
 
     scopedMonthTs.forEach(ts => {
+      if (!ts.id || countedTimesheetIds.has(ts.id)) return;
+      countedTimesheetIds.add(ts.id);
       if (!ts.employee || !getTimesheetBranchName(ts) || getTimesheetBranchName(ts) === 'Unassigned') return;
       const rowKey = getTimesheetMonthlyKey(ts);
       if (!consolidation[rowKey]) {
@@ -1071,34 +1074,14 @@ export function TimesheetView() {
           sickHrs: 0,
         };
       }
-      const entries = ((ts as any).entries as Array<any> | undefined) || [];
-      entries.forEach((e: any) => {
-        if (!e?.entry_date) return;
-        const dd = parseLocalDate(e.entry_date);
-        if (dd < payroll.start || dd > payroll.end) return;
-        const dedupeKey = `${rowKey}|${e.entry_date}`;
-        const existing = bestEntryByEmployeeDate.get(dedupeKey);
-        if (!existing || entryActivityTotal(e) >= entryActivityTotal(existing.entry)) {
-          bestEntryByEmployeeDate.set(dedupeKey, { rowKey, entry: e });
-        }
-      });
-    });
 
-    bestEntryByEmployeeDate.forEach(({ rowKey, entry: e }) => {
-      const dd = parseLocalDate(e.entry_date);
-      const w = Number(e.actual_hours) || 0;
-      const h = Number(e.holiday_hours) || 0;
-      const s = Number(e.sick_hours) || 0;
-
-      const wIdx = monthWeeks.findIndex(mw => {
-        const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
-        return dd >= mw && dd <= wEnd;
-      });
+      const totals = getTsInPeriodTotals(ts, currentMonth);
+      const wIdx = getTimesheetPayrollWeekIndex(ts, monthWeeks);
       if (wIdx >= 0) {
-        consolidation[rowKey].weeklyHours[wIdx] += w;
+        consolidation[rowKey].weeklyHours[wIdx] += totals.worked;
       }
-      consolidation[rowKey].holidayHrs += h;
-      consolidation[rowKey].sickHrs += s;
+      consolidation[rowKey].holidayHrs += totals.holiday;
+      consolidation[rowKey].sickHrs += totals.sick;
     });
 
     Object.values(consolidation).forEach(emp => {
