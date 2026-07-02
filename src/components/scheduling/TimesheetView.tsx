@@ -1045,11 +1045,9 @@ export function TimesheetView() {
     // 21st–20th payroll period excluded. Do not re-bucket by entry date here —
     // edited/legacy rows can have imperfect entry dates, while the Weekly View
     // is driven by the parent timesheet's week_start_date.
-    const countedTimesheetIds = new Set<string>();
+    const bestTimesheetByRowWeek = new Map<string, { rowKey: string; ts: Timesheet; totals: ReturnType<typeof getTsInPeriodTotals>; weekIndex: number; total: number }>();
 
     scopedMonthTs.forEach(ts => {
-      if (!ts.id || countedTimesheetIds.has(ts.id)) return;
-      countedTimesheetIds.add(ts.id);
       if (!ts.employee || !getTimesheetBranchName(ts) || getTimesheetBranchName(ts) === 'Unassigned') return;
       const rowKey = getTimesheetMonthlyKey(ts);
       if (!consolidation[rowKey]) {
@@ -1069,9 +1067,20 @@ export function TimesheetView() {
 
       const totals = getTsInPeriodTotals(ts, currentMonth);
       const wIdx = getTimesheetPayrollWeekIndex(ts, monthWeeks);
-      if (wIdx >= 0) {
-        consolidation[rowKey].weeklyHours[wIdx] += totals.worked;
+      if (wIdx < 0) return;
+      const total = totals.worked + totals.holiday + totals.sick + totals.adj;
+      const dedupeKey = `${rowKey}|${wIdx}`;
+      const existing = bestTimesheetByRowWeek.get(dedupeKey);
+      // Weekly view de-duplicates same employee/branch rows and keeps the row
+      // with the most activity. Monthly must do the same per week; otherwise
+      // stale duplicate timesheets create unwanted values.
+      if (!existing || total >= existing.total) {
+        bestTimesheetByRowWeek.set(dedupeKey, { rowKey, ts, totals, weekIndex: wIdx, total });
       }
+    });
+
+    bestTimesheetByRowWeek.forEach(({ rowKey, totals, weekIndex }) => {
+      consolidation[rowKey].weeklyHours[weekIndex] += totals.worked;
       consolidation[rowKey].holidayHrs += totals.holiday;
       consolidation[rowKey].sickHrs += totals.sick;
     });
