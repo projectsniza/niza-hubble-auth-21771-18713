@@ -132,6 +132,24 @@ const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
 const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
   timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
 
+const getTimesheetPayrollWeekIndex = (timesheet: Partial<Timesheet>, monthWeeks: Date[]) => {
+  if (timesheet.week_start_date) {
+    const tsWeekStart = startOfWeek(parseLocalDate(timesheet.week_start_date), { weekStartsOn: 1 });
+    const idx = monthWeeks.findIndex(mw => format(mw, 'yyyy-MM-dd') === format(tsWeekStart, 'yyyy-MM-dd'));
+    if (idx >= 0) return idx;
+  }
+
+  const entries = (timesheet.entries || []) as Array<Partial<TimesheetEntry>>;
+  const firstDatedEntry = entries.find(e => e.entry_date);
+  if (!firstDatedEntry?.entry_date) return -1;
+
+  const entryDate = parseLocalDate(firstDatedEntry.entry_date);
+  return monthWeeks.findIndex(mw => {
+    const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
+    return entryDate >= mw && entryDate <= wEnd;
+  });
+};
+
 const entryActivityTotal = (entry: any) =>
   (Number(entry?.actual_hours) || 0) +
   (Number(entry?.holiday_hours) || 0) +
