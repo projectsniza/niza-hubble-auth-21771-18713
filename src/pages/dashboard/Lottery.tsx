@@ -1116,8 +1116,8 @@ export default function Lottery() {
                           {/* Game Header */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg">
-                                £{game.ticket_price}
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg text-xs">
+                                £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
                               </div>
                               <div>
                                 <h4 className="font-semibold text-lg">{game.game_name}</h4>
@@ -1277,7 +1277,9 @@ export default function Lottery() {
                                   <tr className="border-b bg-amber-50/50 dark:bg-amber-950/20">
                                     <td className="sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-1.5 font-medium border-r">
                                       <span className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs px-1.5">£{game.ticket_price}</Badge>
+                                        <Badge variant="outline" className="text-xs px-1.5" title="Price follows history by date">
+                                          {getMonthlyPriceLabel(game)}
+                                        </Badge>
                                         No of Tickets Sold
                                       </span>
                                     </td>
@@ -1728,11 +1730,11 @@ export default function Lottery() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-lg font-bold shadow-lg">
-                                    £{game.ticket_price}
+                                    £{calc.ticketPrice.toFixed(0)}
                                   </div>
                                   <div>
                                     <CardTitle className="text-lg">{game.game_name}</CardTitle>
-                                    <CardDescription>£{game.ticket_price.toFixed(2)} per ticket</CardDescription>
+                                    <CardDescription>£{calc.ticketPrice.toFixed(2)} per ticket for {format(selectedDate, 'dd MMM')}</CardDescription>
                                   </div>
                                 </div>
                                 {hasUnsavedChanges && isSingleBranchSelected && (
@@ -2075,8 +2077,8 @@ export default function Lottery() {
                       return (
                         <div key={game.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary">
-                              £{game.ticket_price}
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary text-xs">
+                              £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
                             </div>
                             <div>
                               <p className="font-medium">{game.game_name}</p>
@@ -2147,13 +2149,15 @@ export default function Lottery() {
                       return (
                         <div key={game.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                           <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg">
-                              £{game.ticket_price}
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg text-xs">
+                              £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
                             </div>
                             <div>
                               <h4 className="font-semibold">{game.game_name}</h4>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                <span>£{game.ticket_price.toFixed(2)} per ticket</span>
+                                <span>Current £{game.ticket_price.toFixed(2)} per ticket</span>
+                                <span>•</span>
+                                <span>This month {getMonthlyPriceLabel(game)}</span>
                                 <span>•</span>
                                 <span>{totals.totalTicketsSold} sold this month</span>
                               </div>
