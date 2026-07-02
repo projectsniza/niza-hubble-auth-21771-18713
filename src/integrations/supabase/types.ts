@@ -3911,6 +3911,57 @@ export type Database = {
         }
         Relationships: []
       }
+      lottery_game_price_history: {
+        Row: {
+          branch_id: string
+          changed_by: string | null
+          created_at: string
+          effective_date: string
+          game_id: string
+          id: string
+          notes: string | null
+          ticket_price: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          changed_by?: string | null
+          created_at?: string
+          effective_date?: string
+          game_id: string
+          id?: string
+          notes?: string | null
+          ticket_price: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          changed_by?: string | null
+          created_at?: string
+          effective_date?: string
+          game_id?: string
+          id?: string
+          notes?: string | null
+          ticket_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_game_price_history_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_game_price_history_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "lottery_games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lottery_games: {
         Row: {
           branch_id: string
