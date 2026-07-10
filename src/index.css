@@ -219,3 +219,23 @@ All colors MUST be HSL.
     transform: scale(0.95);
   }
 }
+/* Certification tier tokens (semantic) */
+:root {
+  --tier-bronze: 25 60% 42%;
+  --tier-bronze-bg: 25 70% 92%;
+  --tier-silver: 220 8% 55%;
+  --tier-silver-bg: 220 15% 92%;
+  --tier-gold: 43 90% 48%;
+  --tier-gold-bg: 43 90% 92%;
+  --tier-platinum: 200 25% 55%;
+  --tier-platinum-bg: 200 30% 93%;
+  --tier-diamond: 195 85% 45%;
+  --tier-diamond-bg: 195 85% 92%;
+}
+.dark {
+  --tier-bronze-bg: 25 40% 20%;
+  --tier-silver-bg: 220 10% 22%;
+  --tier-gold-bg: 43 40% 22%;
+  --tier-platinum-bg: 200 30% 22%;
+  --tier-diamond-bg: 195 40% 22%;
+}
