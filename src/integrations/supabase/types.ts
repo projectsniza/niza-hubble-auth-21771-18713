@@ -2450,6 +2450,7 @@ export type Database = {
         Row: {
           awarded_by: string | null
           certification_name: string
+          coin_tier: string
           created_at: string
           employee_id: string
           gold_coins: number
@@ -2460,6 +2461,7 @@ export type Database = {
         Insert: {
           awarded_by?: string | null
           certification_name: string
+          coin_tier?: string
           created_at?: string
           employee_id: string
           gold_coins?: number
@@ -2470,6 +2472,7 @@ export type Database = {
         Update: {
           awarded_by?: string | null
           certification_name?: string
+          coin_tier?: string
           created_at?: string
           employee_id?: string
           gold_coins?: number
@@ -5623,6 +5626,7 @@ export type Database = {
       }
       reminders: {
         Row: {
+          acknowledged_at: string | null
           assigned_to: string | null
           branch_id: string | null
           created_at: string | null
@@ -5637,10 +5641,12 @@ export type Database = {
           related_entity_type: string | null
           reminder_date: string
           reminder_type: string | null
+          snoozed_until: string | null
           title: string
           updated_at: string | null
         }
         Insert: {
+          acknowledged_at?: string | null
           assigned_to?: string | null
           branch_id?: string | null
           created_at?: string | null
@@ -5655,10 +5661,12 @@ export type Database = {
           related_entity_type?: string | null
           reminder_date: string
           reminder_type?: string | null
+          snoozed_until?: string | null
           title: string
           updated_at?: string | null
         }
         Update: {
+          acknowledged_at?: string | null
           assigned_to?: string | null
           branch_id?: string | null
           created_at?: string | null
@@ -5673,6 +5681,7 @@ export type Database = {
           related_entity_type?: string | null
           reminder_date?: string
           reminder_type?: string | null
+          snoozed_until?: string | null
           title?: string
           updated_at?: string | null
         }
