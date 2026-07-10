@@ -1,51 +1,67 @@
-## Root cause
 
-Your payroll cycle is **21st → 20th of next month**. Leave/holiday hours are stored per day in `timesheet_entries.entry_date`, but the **Holiday Balance** view buckets them into payroll months using only the parent timesheet's `week_start_date` (the Monday). Whenever a calendar week straddles the 21st, this attributes the entire week's holiday hours to whichever cycle the Monday falls in — not the day the leave was actually taken.
+## 1. My Reminders — Proper Task System
 
-Example — leave taken Mon 23 Jun 2025 (June cycle = 21 Jun → 20 Jul):
-- The timesheet week starts Mon 16 Jun → `week_start_date = 2025-06-16`
-- 16 Jun falls in **May's cycle** (21 May → 20 Jun)
-- Holiday hours for 23 Jun are summed under **May**, not June
+**Problems today**
+- Editing an existing reminder makes it vanish.
+- No time-of-day, no popup at due time, no professional dismissed state.
 
-The reverse also happens (e.g. leave on 21 May appearing under April for a week starting 19 May). MonthlyHoursPanel already buckets correctly by `entry_date`, so the two views disagree — which is what you're noticing.
+**Changes**
+- **Data model** (`reminders` table migration):
+  - Add `due_at timestamptz` (date + time) alongside existing `due_date`.
+  - Add `status text` with values: `active`, `snoozed`, `acknowledged`, `completed` (replaces informal "closed" — user wants professional wording; UI shows "Acknowledged" / "Completed").
+  - Add `snoozed_until timestamptz`, `acknowledged_at timestamptz`.
+  - Backfill `due_at` from `due_date` + 09:00; keep RLS as-is.
+- **Edit flow fix**: current save path likely does an insert instead of update when `id` is present, or the query filter drops updated rows. Rewrite `saveReminder` in `RemindersSidebar.tsx` to `upsert` on `id` and re-fetch, so retouching never deletes.
+- **Reminder editor UI**:
+  - Date picker + time picker (24h) → writes `due_at`.
+  - Buttons: Save, Mark Acknowledged, Snooze (15m / 1h / tomorrow / custom), Complete.
+- **Due popup** (`TaskReminderListener.tsx` already exists — extend it):
+  - Poll every 30s for reminders where `due_at <= now()` and `status = 'active'` and (`snoozed_until` null or past).
+  - Show large centered modal (shadcn Dialog, max-w-lg) with title, notes, due time, and actions: **Snooze** (dropdown 5m/15m/1h/tomorrow/pick time), **Acknowledge**, **Mark Complete**.
+  - "Acknowledged" reminders remain visible in the sidebar under a collapsed "Acknowledged" group with a muted badge (styling like completed but distinct wording).
+- Sidebar sections: **Upcoming**, **Overdue** (red), **Snoozed** (amber), **Acknowledged** (muted), **Completed** (existing collapsed).
 
-A secondary, smaller bug: leave date ranges in `Attendance.tsx` are iterated with `new Date('YYYY-MM-DD')` (parsed as UTC midnight) combined with local `setDate` / `format`, which can shift a day in non-UTC timezones.
+## 2. Certification Coins — Tiered Weightage
 
-## Fix
+**Changes**
+- **`add_certification` dialog** (`EmployeeCertifications.tsx`):
+  - Replace single "Gold Coins (Points)" numeric field with a **Tier selector**: Bronze (1), Silver (3), Gold (5), Platinum (10), Diamond (20) — with editable point override.
+  - Store on `employee_certifications`: `coin_tier text`, `coin_points int` (already have points field — reuse; add `coin_tier` column).
+- **Employee list hover tooltip** (`EmployeeList.tsx` and profile summary):
+  - Show total coins next to the name with tier icons (Lucide `Medal`, `Award`, `Trophy`, `Gem`).
+  - On hover: shadcn `HoverCard` listing each certification with its tier chip and points.
+- **Employee profile detail** (`EmployeeProfile.tsx` → certifications tab):
+  - Table with columns: Certification, Tier (colored badge), Points, Issued/Expiry, Notes.
+  - Totals row per tier + grand total.
+- Tier colors (semantic tokens in `index.css`, not hardcoded):
+  - `--tier-bronze`, `--tier-silver`, `--tier-gold`, `--tier-platinum`, `--tier-diamond`.
 
-### 1. `src/components/scheduling/HolidayBalance.tsx` (primary fix)
-Replace the timesheet-level bucketing (lines ~194–215) with per-day bucketing:
+## 3. Events & Announcements — Login Popup
 
-- Fetch `timesheet_entries(entry_date, actual_hours, holiday_hours)` for the full fiscal year alongside the existing `timesheets` query, joined by `timesheet_id → employee_id`.
-- For each month index, compute `payrollStart = 21st of monthDate` and `payrollEnd = 20th of monthDate+1`.
-- `monthly_actual[idx]` = sum of `actual_hours` where `entry_date` ∈ [payrollStart, payrollEnd].
-- `monthly_holiday[idx]` = sum of `holiday_hours` where `entry_date` ∈ [payrollStart, payrollEnd].
-- Use `parseISO(entry_date)` and string comparison on `yyyy-MM-dd` to avoid any timezone drift (compare with `format(payrollStart,'yyyy-MM-dd')` ≤ entry_date ≤ `format(payrollEnd,'yyyy-MM-dd')`).
-- Totals (`actualTotal`, `holidayTotal`, entitlement maths) stay unchanged — they are sums of the 12 monthly values, so totals remain correct, only the month a value lands in changes.
+**Changes**
+- New component `TodayEventsPopup.tsx` mounted in `Dashboard.tsx`.
+- On fresh session load (checked via `sessionStorage` key `today-events-shown-<yyyy-mm-dd>`), query `events` where `event_date = today` AND event is visible to the user (respect existing branch/org scoping already used on the Events page).
+- If any results, show a large dialog listing each event (title, category badge, description, time, branch).
+- Buttons: **Dismiss for today** (sets sessionStorage), **View all events** (routes to `/dashboard/events`).
+- Also include birthdays occurring today from the same source used by Events page.
 
-### 2. `src/pages/dashboard/Attendance.tsx` (timezone-safe date iteration)
-In the two leave-expansion loops (~lines 715 and 728), replace:
+## Technical Notes
 
-```ts
-const start = new Date(req.start_date);
-const end   = new Date(req.end_date);
-for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) { ... }
-```
+- Migrations: 1 migration adding reminder columns + status enum-like check; 1 adding `coin_tier` to `employee_certifications`. Include grants + RLS updates.
+- All new colors go through `index.css` tokens.
+- No changes to unrelated scheduling/lottery logic.
+- Files touched (approx):
+  - `supabase/migrations/*_reminders_upgrade.sql`
+  - `supabase/migrations/*_certification_tiers.sql`
+  - `src/components/reminders/RemindersSidebar.tsx`
+  - `src/components/reminders/TaskReminderListener.tsx`
+  - `src/components/reminders/ReminderDuePopup.tsx` (new)
+  - `src/components/employees/EmployeeCertifications.tsx`
+  - `src/components/employees/EmployeeList.tsx`
+  - `src/components/employees/CertificationCoinsHover.tsx` (new)
+  - `src/pages/dashboard/EmployeeProfile.tsx`
+  - `src/components/dashboard/TodayEventsPopup.tsx` (new)
+  - `src/pages/Dashboard.tsx`
+  - `src/index.css` (tier tokens)
 
-with a UTC-safe iterator using `parseISO` + `addDays` from `date-fns`, and key by `format(d,'yyyy-MM-dd')` (already done). Same pattern for the mandatory-leave loop.
-
-### 3. `src/components/attendance/LeaveAttendanceOverview.tsx` (sanity pass)
-Audit the leave/timesheet day-mapping (around the `dayStr` matching). Ensure every conversion of an ISO date string uses `parseISO` (not `new Date(str)`), so the day a leave is shown on matches the day it was approved for in any timezone.
-
-### 4. No DB changes
-No migration, no trigger, no payroll-cycle redefinition — the cycle (21 → 20) is correct and stays as is. Existing data is unaffected; the same rows simply display under the right month after the fix.
-
-## Out of scope (will NOT touch)
-- Payroll calculations, lock logic, approval workflow.
-- `MonthlyHoursPanel` (already buckets by `entry_date` correctly).
-- `TimesheetView` weekly/monthly entry — its display is week-based by design.
-- Leave approval flow in `Attendance.tsx` (only the date-iteration helper).
-
-## Verification
-- Pick an employee with a leave that crosses the 21st (e.g. 19–25 May). Before: hours appear in the wrong cycle column on Holiday Balance. After: 19–20 May → April column, 21–25 May → May column, matching MonthlyHoursPanel.
-- Confirm yearly totals (`actualTotal`, `holidayTotal`, remaining entitlement) are unchanged for the same employee.
+Confirm and I'll implement in that order (reminders → coins → events popup).
