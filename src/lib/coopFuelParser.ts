@@ -96,7 +96,7 @@ interface DeptRow { label: string; net0: number; net20: number; vat20: number; n
 // - extracts up to 3 (net, vat) pairs from the row (for 0%, 20%, 5% — order in file
 //   is consistent: 0%, then 20%, then 5%). VAT cells are the cell right after a
 //   non-zero net cell in a numeric run.
-const DEPT_HINT = /\bDEPT\b|\(\d{2,4}\)|FUEL|TOBACCO|CIGARETTES|BEVERAGES|GROCERY|FROZEN|PROVISIONS|ALCOHOL|WINE|SPIRIT|BEER|NEWSPAPER|MAGAZINE|VENDING|BAKERY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|CONCESSION|CAR\s*CARE|PHONECARDS|CAR\s*WASH|JET\s*WASH/i;
+const DEPT_HINT = /\bDEPT\b|\(\d{2,4}\)|FUEL|TOBACCO|CIGARETTES|BEVERAGES|GROCERY|FROZEN|PROVISIONS|ALCOHOL|WINE|SPIRIT|BEER|NEWSPAPER|MAGAZINE|VENDING|BAKERY|BKRY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|CONCESSION|CAR\s*CARE|PHONECARDS|CAR\s*WASH|JET\s*WASH/i;
 
 const splitRow = (line: string): string[] => line.split(/[,\t;]/).map(c => c.trim());
 
@@ -194,7 +194,10 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         (out[code] as number) = +((out[code] as number) + r.net0 + r.net20 + r.net5).toFixed(2);
       } else if (code === 'national_lottery' || code === 'paypoint' || code === 'payzone') {
         if ((out[code] as number) === 0) (out[code] as number) = +totalNet.toFixed(2);
-      } else if (code === 'TO' || code === 'DR' || code === 'AL') {
+      } else if (code === 'DR') {
+        out.DR = +(out.DR + r.net20).toFixed(2);
+        if (r.net0 > 0 && isGroceryZeroDept(r.label)) out.GZ = +(out.GZ + r.net0).toFixed(2);
+      } else if (code === 'TO' || code === 'AL') {
         (out[code] as number) = +((out[code] as number) + r.net20).toFixed(2);
       }
     }
