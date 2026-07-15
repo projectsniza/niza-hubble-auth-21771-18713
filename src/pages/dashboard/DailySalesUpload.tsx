@@ -116,6 +116,9 @@ export default function DailySalesUpload() {
         const txtText = txtFile ? await readSalesFile(txtFile) : undefined;
         const deptText = deptFile ? await readSalesFile(deptFile) : undefined;
         const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
+        if (!deptFile && detailed.knownLabels.length === 0) {
+          throw new Error('Upload the Department VAT XLSX/CSV with the till file so department totals match the paperwork.');
+        }
         const breakdown = detailed.totals;
         if (detailed.unknownDepartments.length > 0) {
           await reportUnknowns(detailed.unknownDepartments, (deptFile || txtFile)!.name);
@@ -238,7 +241,7 @@ export default function DailySalesUpload() {
           <p className="text-xs text-muted-foreground mt-1">{formatMeta.description}</p>
           {profile?.import_format === 'coop_fuel' && (
             <p className="text-xs text-muted-foreground mt-1">
-              Select the single daily till CSV/TXT export (e.g. <code>TXT1 (1).CSV</code>). Minor formatting breaks or blank lines are tolerated.
+              Select the daily till CSV/TXT export plus the Department VAT XLSX/CSV. The Department VAT amount columns are used for exact paperwork category totals.
             </p>
           )}
           {profile?.import_format === 'charfield_shift' && (
