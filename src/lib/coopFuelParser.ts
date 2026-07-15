@@ -147,6 +147,32 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
   return parseCoopFuelDetailed(input).totals;
 }
 
+const splitStoredCoopRawText = (rawText?: string | null): CoopParseInput => {
+  if (!rawText) return {};
+  const marker = '\n---DEPT---\n';
+  if (rawText.includes(marker)) {
+    const [txt1, ...rest] = rawText.split(marker);
+    return { txt1, deptVat: rest.join(marker) };
+  }
+  if (/Department\s+VAT\s+Report|^Department,|,0%,,,20%,,,5%/im.test(rawText)) return { deptVat: rawText };
+  return { txt1: rawText };
+};
+
+export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null) {
+  const input = splitStoredCoopRawText(rawText);
+  const detailed = parseCoopFuelDetailed(input);
+  if (!detailed.knownLabels.length) return parsedTotals || {};
+  const breakdown = detailed.totals;
+  return {
+    ...(parsedTotals || {}),
+    shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+    fuel: breakdown.FU,
+    lottery: breakdown.national_lottery,
+    breakdown,
+    format: 'coop_fuel' as const,
+  };
+}
+
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'array' });
