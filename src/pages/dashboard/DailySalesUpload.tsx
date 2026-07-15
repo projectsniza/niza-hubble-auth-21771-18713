@@ -10,7 +10,7 @@ import { Upload, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
-import { parseCoopFuelDetailed, parseCharfieldShiftReportDetailed, IMPORT_FORMATS, type ImportFormatId, type UnknownDepartment } from '@/lib/coopFuelParser';
+import { parseCoopFuelDetailed, parseCharfieldShiftReportDetailed, spreadsheetBufferToCsvText, IMPORT_FORMATS, type ImportFormatId, type UnknownDepartment } from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
@@ -103,21 +103,24 @@ export default function DailySalesUpload() {
 
       // ----- Co-op Fuel: single TXT till export (robust to small misalignments) -----
       if (profile.import_format === 'coop_fuel') {
-        // Prefer the TXT/CSV that looks like the till export; otherwise just the first file.
+        const readSalesFile = async (file: File) => {
+          if (/\.(xlsx|xls)$/i.test(file.name)) return spreadsheetBufferToCsvText(await file.arrayBuffer());
+          return file.text();
+        };
+        const deptFile = fileArr.find(f => /DEPARTMENT.*VAT|Department VAT/i.test(f.name));
         const txtFile =
-          fileArr.find(f => /^TXT/i.test(f.name)) ||
-          fileArr.find(f => /\.(csv|txt)$/i.test(f.name)) ||
-          fileArr[0];
-        const deptFile = fileArr.find(f => /DEPARTMENT.*VAT/i.test(f.name)); // optional legacy
-        if (!txtFile) throw new Error('Please select the daily till CSV/TXT file.');
-        const txtText = await txtFile.text();
-        const deptText = deptFile ? await deptFile.text() : undefined;
+          fileArr.find(f => /^TXT/i.test(f.name) && f !== deptFile) ||
+          fileArr.find(f => /\.(csv|txt)$/i.test(f.name) && f !== deptFile) ||
+          null;
+        if (!txtFile && !deptFile) throw new Error('Please select the daily till CSV/TXT file or Department VAT XLSX/CSV file.');
+        const txtText = txtFile ? await readSalesFile(txtFile) : undefined;
+        const deptText = deptFile ? await readSalesFile(deptFile) : undefined;
         const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
         const breakdown = detailed.totals;
         if (detailed.unknownDepartments.length > 0) {
-          await reportUnknowns(detailed.unknownDepartments, txtFile.name);
+          await reportUnknowns(detailed.unknownDepartments, (deptFile || txtFile)!.name);
         }
-        const legacy = parseDailySales(txtText);
+        const legacy = txtText ? parseDailySales(txtText) : { shop: 0, fuel: 0, lottery: 0 };
         const combinedTotals = {
           ...legacy,
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
@@ -127,7 +130,7 @@ export default function DailySalesUpload() {
           format: 'coop_fuel' as const,
         };
         await recordKnownCategories(detailed.knownLabels, breakdown);
-        const filesToStore = deptFile ? [txtFile, deptFile] : [txtFile];
+        const filesToStore = [txtFile, deptFile].filter(Boolean) as File[];
         for (const f of filesToStore) {
           const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
           const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, f, { upsert: false });
@@ -137,10 +140,10 @@ export default function DailySalesUpload() {
           organization_id: profile.organization_id,
           branch_id: profile.branch_id,
           sale_date: date,
-          source_filename: deptFile ? `${txtFile.name} + ${deptFile.name}` : txtFile.name,
+          source_filename: filesToStore.map(f => f.name).join(' + '),
           source_format: 'coop_fuel',
           storage_path: `${profile.branch_id}/${date}/`,
-          raw_text: ((deptText ? txtText + '\n---DEPT---\n' + deptText : txtText)).slice(0, 200000),
+          raw_text: [txtText, deptText].filter(Boolean).join('\n---DEPT---\n').slice(0, 200000),
           parsed_totals: combinedTotals as any,
           uploaded_by: user!.id,
         });
