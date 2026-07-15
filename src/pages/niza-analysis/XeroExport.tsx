@@ -9,13 +9,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildXeroCsv, DailySalesTotals } from '@/lib/dailySalesParser';
-import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, type CoopXeroRow } from '@/lib/coopFuelParser';
+import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, normalizeCoopParsedTotals, type CoopXeroRow } from '@/lib/coopFuelParser';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 interface UploadRow {
   id: string;
   sale_date: string;
   parsed_totals: any;
+  raw_text?: string | null;
   branch?: { id: string; name: string; import_format: string | null } | null;
 }
 
@@ -40,13 +41,16 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     const f = single || from;
     const t = single || to;
     let q = supabase.from('daily_sales_uploads')
-      .select('id, sale_date, parsed_totals, branch:branches(id, name, import_format)')
+      .select('id, sale_date, parsed_totals, raw_text, branch:branches(id, name, import_format)')
       .gte('sale_date', f).lte('sale_date', t)
       .order('sale_date');
     if (branchId !== 'all') q = q.eq('branch_id', branchId);
     const { data, error } = await q;
     if (error) { toast.error(error.message); setLoading(false); return; }
-    setRows((data as any) || []);
+    setRows(((data as any) || []).map((r: UploadRow) => ({
+      ...r,
+      parsed_totals: normalizeCoopParsedTotals(r.parsed_totals, r.raw_text),
+    })));
     setLoading(false);
   };
 

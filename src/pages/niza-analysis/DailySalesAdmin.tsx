@@ -8,12 +8,14 @@ import { format } from 'date-fns';
 import { Download, Trash2, Pencil, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DailySalesTotals } from '@/lib/dailySalesParser';
+import { normalizeCoopParsedTotals } from '@/lib/coopFuelParser';
 
 interface Row {
   id: string;
   sale_date: string;
   source_filename: string;
   parsed_totals: DailySalesTotals;
+  raw_text: string | null;
   branch?: { name: string } | null;
   organization?: { name: string } | null;
   storage_path: string | null;
@@ -30,11 +32,11 @@ export default function DailySalesAdmin() {
     setLoading(true);
     const { data, error } = await supabase
       .from('daily_sales_uploads')
-      .select('id, sale_date, source_filename, parsed_totals, storage_path, notes, branch:branches(name), organization:organizations(name)')
+      .select('id, sale_date, source_filename, parsed_totals, raw_text, storage_path, notes, branch:branches(name), organization:organizations(name)')
       .order('sale_date', { ascending: false })
       .limit(500);
     if (error) toast.error(error.message);
-    setRows((data as any) || []);
+    setRows(((data as any) || []).map((r: Row) => ({ ...r, parsed_totals: normalizeCoopParsedTotals(r.parsed_totals, r.raw_text) })));
     setLoading(false);
   };
 

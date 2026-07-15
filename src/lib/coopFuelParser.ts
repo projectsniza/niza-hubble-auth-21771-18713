@@ -59,21 +59,31 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
 };
 
 // Map a department label (left-side text in DEPARTMENTVAT) to a Xero short code.
+// Department VAT reports already split sales into Amount + VAT Amount columns.
+// The department sales columns in the client paperwork use the Amount/net values
+// only; VAT is reported separately in the NET/VAT analysis columns.
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals]> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
-  [/BEVERAGES|SOFT\s*BEVERAGES/i, 'DR'],
+  [/SOFT\s*BEVERAGES/i, 'DR'],
+  [/^BEVERAGES\b/i, 'AL'],
   [/ALCOHOL|WINE|SPIRIT|BEER/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
+  [/PAYPOINT/i, 'paypoint'],
+  [/PAYZONE/i, 'payzone'],
   [/VENDING/i, 'VM'],
-  [/BAKERY|INSTORE\s*BKRY|FRUIT\s*&\s*VEGETABLES|MEAT\s*&\s*POULTRY|DELICATESSEN|FRANCHISE\s*LOCAL|CONCESSION/i, 'GZ'],
-  [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|PHONECARDS|DEPT/i, 'GS'],
+  [/CAR\s*WASH|JET\s*WASH/i, 'CW'],
+  [/BAKERY|INSTORE\s*BKRY|FRUIT\s*&\s*VEGETABLES|MEAT\s*&\s*POULTRY|DELICATESSEN|FRANCHISE\s*LOCAL/i, 'GZ'],
+  [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|PHONECARDS|DEPT|CONCESSION|SEASONAL|STORE\s*EXPENSES/i, 'GS'],
 ];
 
 const codeForDept = (label: string): keyof CoopCategoryTotals | null => {
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
+
+const isGroceryZeroDept = (label: string) =>
+  /BAKERY|INSTORE\s*BKRY|FRUIT\s*&\s*VEGETABLES|MEAT\s*&\s*POULTRY|DELICATESSEN|FRANCHISE\s*LOCAL|CONCESSION|GROCERY|FROZEN|PROVISIONS|DEPT|SEASONAL|SOFT\s*BEVERAGES/i.test(label);
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
@@ -85,7 +95,7 @@ interface DeptRow { label: string; net0: number; net20: number; vat20: number; n
 // - extracts up to 3 (net, vat) pairs from the row (for 0%, 20%, 5% — order in file
 //   is consistent: 0%, then 20%, then 5%). VAT cells are the cell right after a
 //   non-zero net cell in a numeric run.
-const DEPT_HINT = /\bDEPT\b|\(\d{2,4}\)|FUEL|TOBACCO|CIGARETTES|BEVERAGES|GROCERY|FROZEN|PROVISIONS|ALCOHOL|WINE|SPIRIT|BEER|NEWSPAPER|MAGAZINE|VENDING|BAKERY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|CONCESSION|CAR\s*CARE|PHONECARDS|CAR\s*WASH|JET\s*WASH/i;
+const DEPT_HINT = /\bDEPT\b|\(\d{2,4}\)|FUEL|TOBACCO|CIGARETTES|BEVERAGES|GROCERY|FROZEN|PROVISIONS|ALCOHOL|WINE|SPIRIT|BEER|NEWSPAPER|MAGAZINE|VENDING|BAKERY|BKRY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|CONCESSION|CAR\s*CARE|PHONECARDS|CAR\s*WASH|JET\s*WASH/i;
 
 const splitRow = (line: string): string[] => line.split(/[,\t;]/).map(c => c.trim());
 
@@ -137,6 +147,40 @@ export function parseCoopFuel(input: CoopParseInput): CoopCategoryTotals {
   return parseCoopFuelDetailed(input).totals;
 }
 
+const splitStoredCoopRawText = (rawText?: string | null): CoopParseInput => {
+  if (!rawText) return {};
+  const marker = '\n---DEPT---\n';
+  if (rawText.includes(marker)) {
+    const [txt1, ...rest] = rawText.split(marker);
+    return { txt1, deptVat: rest.join(marker) };
+  }
+  if (/Department\s+VAT\s+Report|^Department,|,0%,,,20%,,,5%/im.test(rawText)) return { deptVat: rawText };
+  return { txt1: rawText };
+};
+
+export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null) {
+  const input = splitStoredCoopRawText(rawText);
+  const detailed = parseCoopFuelDetailed(input);
+  if (!detailed.knownLabels.length) return parsedTotals || {};
+  const breakdown = detailed.totals;
+  return {
+    ...(parsedTotals || {}),
+    shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+    fuel: breakdown.FU,
+    lottery: breakdown.national_lottery,
+    breakdown,
+    format: 'coop_fuel' as const,
+  };
+}
+
+export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.read(buffer, { type: 'array' });
+  return wb.SheetNames
+    .map((sheetName) => XLSX.utils.sheet_to_csv(wb.Sheets[sheetName], { FS: ',', RS: '\n' }))
+    .join('\n');
+}
+
 export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
   const out = emptyCoopTotals();
   const knownLabels: string[] = [];
@@ -146,9 +190,7 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
   if (deptSource) {
     for (const r of parseDepartmentVat(deptSource)) {
       const code = codeForDept(r.label);
-      const gross20 = r.net20 + r.vat20;
-      const gross5  = r.net5  + r.vat5;
-      const totalGross = +(gross20 + gross5 + r.net0).toFixed(2);
+      const totalNet = +(r.net20 + r.net5 + r.net0).toFixed(2);
       // Aggregate VAT/net splits regardless of mapping success
       out.vat_20 = +(out.vat_20 + r.vat20).toFixed(2);
       out.vat_5  = +(out.vat_5  + r.vat5).toFixed(2);
@@ -156,15 +198,39 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
       out.net_5  = +(out.net_5  + r.net5).toFixed(2);
       out.net_0  = +(out.net_0  + r.net0).toFixed(2);
       if (!code) {
-        if (totalGross !== 0) unknownDepartments.push({ label: r.label, amount: totalGross });
+        // Department VAT's National Lottery row is not the same as the sales
+        // paperwork split for Lottery/Scratchcards/Payouts. Those values come
+        // from TXT1, so do not map this department row into sales columns.
+        if (/NATIONAL\s*LOTTERY/i.test(r.label)) {
+          knownLabels.push(r.label);
+          continue;
+        }
+        if (totalNet !== 0) unknownDepartments.push({ label: r.label, amount: totalNet });
         continue;
       }
       knownLabels.push(r.label);
-      if (gross5 > 0) out.DO = +(out.DO + gross5).toFixed(2);
-      const targetGross = gross20 + r.net0;
-      if (code === 'NP' || code === 'GZ' || code === 'AL' || code === 'VM' ||
-          code === 'FU' || code === 'TO' || code === 'DR' || code === 'GS') {
-        (out[code] as number) = +((out[code] as number) + targetGross).toFixed(2);
+
+      if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
+
+      if (code === 'FU') {
+        out.FU = +(out.FU + r.net20).toFixed(2);
+        if (r.net0 > 0) out.VM = +(out.VM + r.net0).toFixed(2);
+      } else if (code === 'GS') {
+        out.GS = +(out.GS + r.net20).toFixed(2);
+        if (r.net0 > 0 && isGroceryZeroDept(r.label)) out.GZ = +(out.GZ + r.net0).toFixed(2);
+      } else if (code === 'GZ') {
+        out.GZ = +(out.GZ + r.net0 + r.net20).toFixed(2);
+      } else if (code === 'NP') {
+        out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
+      } else if (code === 'VM' || code === 'CW') {
+        (out[code] as number) = +((out[code] as number) + r.net0 + r.net20 + r.net5).toFixed(2);
+      } else if (code === 'national_lottery' || code === 'paypoint' || code === 'payzone') {
+        if ((out[code] as number) === 0) (out[code] as number) = +totalNet.toFixed(2);
+      } else if (code === 'DR') {
+        out.DR = +(out.DR + r.net20).toFixed(2);
+        if (r.net0 > 0 && isGroceryZeroDept(r.label)) out.GZ = +(out.GZ + r.net0).toFixed(2);
+      } else if (code === 'TO' || code === 'AL') {
+        (out[code] as number) = +((out[code] as number) + r.net20).toFixed(2);
       }
     }
   }
@@ -511,7 +577,7 @@ export async function buildBranchSummaryWorkbook(
 
 // Format registry — single source of truth used across UI.
 export const IMPORT_FORMATS = [
-  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'Single TXT till export → Xero sales import. Upload one TXT/CSV per day.' },
+  { id: 'coop_fuel', label: '1. Co-op Fuel stores', description: 'TXT till export plus optional Department VAT CSV/XLSX → paperwork-matched net category sales.' },
   { id: 'charfield_shift', label: '2. Charfield, Cotswold & Packhorse', description: 'Shift & Period Report (XLSX) from the till. Upload one workbook per day.' },
 ] as const;
 export type ImportFormatId = typeof IMPORT_FORMATS[number]['id'];
