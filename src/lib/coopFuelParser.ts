@@ -69,7 +69,6 @@ const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals]> = [
   [/^BEVERAGES\b/i, 'AL'],
   [/ALCOHOL|WINE|SPIRIT|BEER/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
-  [/NATIONAL\s*LOTTERY/i, 'national_lottery'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
   [/VENDING/i, 'VM'],
@@ -173,6 +172,13 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
       out.net_5  = +(out.net_5  + r.net5).toFixed(2);
       out.net_0  = +(out.net_0  + r.net0).toFixed(2);
       if (!code) {
+        // Department VAT's National Lottery row is not the same as the sales
+        // paperwork split for Lottery/Scratchcards/Payouts. Those values come
+        // from TXT1, so do not map this department row into sales columns.
+        if (/NATIONAL\s*LOTTERY/i.test(r.label)) {
+          knownLabels.push(r.label);
+          continue;
+        }
         if (totalNet !== 0) unknownDepartments.push({ label: r.label, amount: totalNet });
         continue;
       }
