@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -6,11 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Trash2, AlertCircle } from 'lucide-react';
+import { Upload, Trash2, AlertCircle, CheckCircle2, XCircle, FileText, Receipt, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
-import { parseCoopFuelDetailed, parseCharfieldShiftReportDetailed, spreadsheetBufferToCsvText, IMPORT_FORMATS, type ImportFormatId, type UnknownDepartment } from '@/lib/coopFuelParser';
+import {
+  parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
+  spreadsheetBufferToCsvText, IMPORT_FORMATS,
+  type ImportFormatId, type UnknownDepartment,
+} from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
@@ -18,23 +22,57 @@ type BranchProfile = {
   import_format: ImportFormatId | null;
 };
 
+const mondayOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+const sundayOf = (iso: string) => format(endOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
 export default function DailySalesUpload() {
   const { user } = useAuth();
   const [profile, setProfile] = useState<BranchProfile | null>(null);
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [xreadFile, setXreadFile] = useState<File | null>(null);
+  const [deptFile, setDeptFile] = useState<File | null>(null);
+  const [cashRecFile, setCashRecFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyCash, setBusyCash] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
+  const [weekStatus, setWeekStatus] = useState<Record<string, { xread: boolean; deptvat: boolean }>>({});
+  const [cashRecUploaded, setCashRecUploaded] = useState<boolean>(false);
 
   const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
+  const isCoop = profile?.import_format === 'coop_fuel';
+  const isCharfield = profile?.import_format === 'charfield_shift';
 
-  const loadRows = async () => {
+  const weekMonday = useMemo(() => mondayOf(date), [date]);
+  const weekSunday = useMemo(() => sundayOf(date), [date]);
+
+  const loadRows = async (branchId: string | null) => {
+    if (!branchId) return;
     const { data } = await supabase
       .from('daily_sales_uploads')
-      .select('id, sale_date, source_filename, parsed_totals, created_at')
+      .select('id, sale_date, source_filename, source_format, parsed_totals, created_at')
+      .eq('branch_id', branchId)
       .order('sale_date', { ascending: false })
-      .limit(50);
+      .limit(80);
     setRows(data || []);
+
+    // Build per-day slot status for the current week
+    const status: Record<string, { xread: boolean; deptvat: boolean }> = {};
+    const monday = mondayOf(date);
+    for (let i = 0; i < 7; i++) {
+      const d = format(addDays(new Date(monday), i), 'yyyy-MM-dd');
+      status[d] = { xread: false, deptvat: false };
+    }
+    let cash = false;
+    for (const r of data || []) {
+      const f = (r.source_format || '').toLowerCase();
+      if (f === 'cashrec' && r.sale_date === monday) cash = true;
+      if (status[r.sale_date]) {
+        if (f === 'xread' || f === 'coop_fuel' || f === 'charfield_shift') status[r.sale_date].xread = true;
+        if (f === 'deptvat' || f === 'coop_fuel') status[r.sale_date].deptvat = true;
+      }
+    }
+    setWeekStatus(status);
+    setCashRecUploaded(cash);
   };
 
   useEffect(() => {
@@ -48,17 +86,23 @@ export default function DailySalesUpload() {
           .from('branches').select('import_format').eq('id', prof.branch_id).maybeSingle();
         import_format = (br as any)?.import_format || null;
       }
-      setProfile({
+      const p = {
         branch_id: prof?.branch_id || null,
         organization_id: prof?.organization_id || null,
         import_format,
-      });
+      };
+      setProfile(p);
+      loadRows(p.branch_id);
     })();
-    loadRows();
   }, [user?.id]);
 
+  useEffect(() => {
+    if (profile?.branch_id) loadRows(profile.branch_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, profile?.branch_id]);
+
   const reportUnknowns = async (unknowns: UnknownDepartment[], filename: string) => {
-    if (!profile?.branch_id) return;
+    if (!profile?.branch_id || unknowns.length === 0) return;
     const rows = unknowns.map(u => ({
       organization_id: profile.organization_id,
       branch_id: profile.branch_id,
@@ -70,149 +114,137 @@ export default function DailySalesUpload() {
       created_by: user!.id,
     }));
     const { error } = await supabase.from('niza_category_alerts' as any).insert(rows);
-    if (error) {
-      console.error('category alert insert failed', error);
-      toast.warning(`New categories detected but alert could not be recorded: ${error.message}`);
-    } else {
-      toast.warning(`New till category(ies) detected: ${unknowns.map(u => u.label).join(', ')}. Super Admin has been notified to map them.`);
-    }
+    if (error) console.error('category alert insert failed', error);
+    else toast.warning(`New till category(ies) detected: ${unknowns.map(u => u.label).join(', ')}`);
   };
 
-  const recordKnownCategories = async (labels: string[], breakdown: any) => {
-    if (!profile?.branch_id || labels.length === 0) return;
-    const seen = new Set<string>();
-    const rows: any[] = [];
+  const recordKnownCategories = async (breakdown: any) => {
+    if (!profile?.branch_id) return;
     const codes = ['FU','TO','DR','GS','GZ','DO','AL','NP','VM','CW'];
-    for (const code of codes) {
-      if (Number(breakdown?.[code] || 0) === 0) continue;
-      if (seen.has(code)) continue;
-      seen.add(code);
-      rows.push({ branch_id: profile.branch_id, category_code: code, last_seen_at: new Date().toISOString() });
-    }
+    const rows = codes
+      .filter(c => Number(breakdown?.[c] || 0) !== 0)
+      .map(code => ({ branch_id: profile.branch_id, category_code: code, last_seen_at: new Date().toISOString() }));
     if (rows.length) {
       await supabase.from('niza_branch_categories' as any).upsert(rows, { onConflict: 'branch_id,category_code' });
     }
   };
 
-  const handleUpload = async () => {
-    if (!files || files.length === 0) return toast.error('Select at least one file');
+  const readFileText = async (file: File) => {
+    if (/\.(xlsx|xls)$/i.test(file.name)) return spreadsheetBufferToCsvText(await file.arrayBuffer());
+    return file.text();
+  };
+
+  const uploadStorage = async (file: File, folder: string) => {
+    const path = `${profile!.branch_id}/${folder}/${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage.from('daily-sales').upload(path, file, { upsert: false });
+    if (error) throw error;
+    return path;
+  };
+
+  const handleDailyUpload = async () => {
     if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
+    if (isCoop) {
+      if (!xreadFile || !deptFile) return toast.error('Both X-Read and Department VAT are required daily');
+    } else if (isCharfield) {
+      if (!xreadFile) return toast.error('Please select the daily Shift & Period Report');
+    } else if (!xreadFile) return toast.error('Please select the daily till export');
+
     setBusy(true);
     try {
-      const fileArr = Array.from(files);
-
-      // ----- Co-op Fuel: single TXT till export (robust to small misalignments) -----
-      if (profile.import_format === 'coop_fuel') {
-        const readSalesFile = async (file: File) => {
-          if (/\.(xlsx|xls)$/i.test(file.name)) return spreadsheetBufferToCsvText(await file.arrayBuffer());
-          return file.text();
-        };
-        const deptFile = fileArr.find(f => /DEPARTMENT.*VAT|Department VAT/i.test(f.name));
-        const txtFile =
-          fileArr.find(f => /^TXT/i.test(f.name) && f !== deptFile) ||
-          fileArr.find(f => /\.(csv|txt)$/i.test(f.name) && f !== deptFile) ||
-          null;
-        if (!txtFile && !deptFile) throw new Error('Please select the daily till CSV/TXT file or Department VAT XLSX/CSV file.');
-        const txtText = txtFile ? await readSalesFile(txtFile) : undefined;
-        const deptText = deptFile ? await readSalesFile(deptFile) : undefined;
+      if (isCoop) {
+        const [txtText, deptText] = await Promise.all([
+          readFileText(xreadFile!),
+          readFileText(deptFile!),
+        ]);
         const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
-        if (!deptFile && detailed.knownLabels.length === 0) {
-          throw new Error('Upload the Department VAT XLSX/CSV with the till file so department totals match the paperwork.');
-        }
         const breakdown = detailed.totals;
-        if (detailed.unknownDepartments.length > 0) {
-          await reportUnknowns(detailed.unknownDepartments, (deptFile || txtFile)!.name);
-        }
-        const legacy = txtText ? parseDailySales(txtText) : { shop: 0, fuel: 0, lottery: 0 };
+        await reportUnknowns(detailed.unknownDepartments, deptFile!.name);
+        await recordKnownCategories(breakdown);
+        const legacy = parseDailySales(txtText);
         const combinedTotals = {
           ...legacy,
-          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ +
+                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,
           lottery: breakdown.national_lottery,
           breakdown,
           format: 'coop_fuel' as const,
         };
-        await recordKnownCategories(detailed.knownLabels, breakdown);
-        const filesToStore = [txtFile, deptFile].filter(Boolean) as File[];
-        for (const f of filesToStore) {
-          const path = `${profile.branch_id}/${date}/${Date.now()}_${f.name}`;
-          const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, f, { upsert: false });
-          if (upErr) throw upErr;
-        }
-        const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
+
+        // Store both files under date folder
+        await uploadStorage(xreadFile!, date);
+        await uploadStorage(deptFile!, date);
+
+        // Remove existing daily row for this date to replace
+        await supabase.from('daily_sales_uploads')
+          .delete()
+          .eq('branch_id', profile.branch_id)
+          .eq('sale_date', date)
+          .in('source_format', ['coop_fuel', 'xread', 'deptvat']);
+
+        const { error } = await supabase.from('daily_sales_uploads').insert({
           organization_id: profile.organization_id,
           branch_id: profile.branch_id,
           sale_date: date,
-          source_filename: filesToStore.map(f => f.name).join(' + '),
+          source_filename: `${xreadFile!.name} + ${deptFile!.name}`,
           source_format: 'coop_fuel',
           storage_path: `${profile.branch_id}/${date}/`,
-          raw_text: [txtText, deptText].filter(Boolean).join('\n---DEPT---\n').slice(0, 200000),
+          raw_text: [txtText, deptText].join('\n---DEPT---\n').slice(0, 200000),
           parsed_totals: combinedTotals as any,
           uploaded_by: user!.id,
         });
-        if (insErr) throw insErr;
-      } else if (profile.import_format === 'charfield_shift') {
-        // Charfield / Cotswold / Packhorse — Shift & Period Report XLSX (one per day)
-        const xlsxFile =
-          fileArr.find(f => /\.xlsx$/i.test(f.name)) || fileArr[0];
-        if (!xlsxFile) throw new Error('Please select the daily Shift & Period Report XLSX file.');
-        const buf = await xlsxFile.arrayBuffer();
+        if (error) throw error;
+      } else if (isCharfield) {
+        const buf = await xreadFile!.arrayBuffer();
         const detailed = await parseCharfieldShiftReportDetailed(buf);
         const breakdown = detailed.totals;
-        if (detailed.unknownDepartments.length > 0) {
-          await reportUnknowns(detailed.unknownDepartments, xlsxFile.name);
-        }
-        await recordKnownCategories(detailed.knownLabels, breakdown);
+        await reportUnknowns(detailed.unknownDepartments, xreadFile!.name);
+        await recordKnownCategories(breakdown);
         const combinedTotals = {
-          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+          shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ +
+                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,
           lottery: breakdown.national_lottery,
           breakdown,
           format: 'charfield_shift' as const,
         };
-        const path = `${profile.branch_id}/${date}/${Date.now()}_${xlsxFile.name}`;
-        const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, xlsxFile, { upsert: false });
-        if (upErr) throw upErr;
-        const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
+        await uploadStorage(xreadFile!, date);
+        const { error } = await supabase.from('daily_sales_uploads').insert({
           organization_id: profile.organization_id,
           branch_id: profile.branch_id,
           sale_date: date,
-          source_filename: xlsxFile.name,
+          source_filename: xreadFile!.name,
           source_format: 'charfield_shift',
-          storage_path: path,
+          storage_path: `${profile.branch_id}/${date}/`,
           raw_text: null,
           parsed_totals: combinedTotals as any,
           uploaded_by: user!.id,
         });
-        if (insErr) throw insErr;
+        if (error) throw error;
       } else {
-
-        // Generic / unconfigured fallback (existing behaviour)
-        for (const file of fileArr) {
-          const text = await file.text();
-          const totals = parseDailySales(text);
-          const path = `${profile.branch_id}/${date}/${Date.now()}_${file.name}`;
-          const { error: upErr } = await supabase.storage.from('daily-sales').upload(path, file, { upsert: false });
-          if (upErr) throw upErr;
-          const { error: insErr } = await supabase.from('daily_sales_uploads').insert({
-            organization_id: profile.organization_id,
-            branch_id: profile.branch_id,
-            sale_date: date,
-            source_filename: file.name,
-            source_format: file.name.split('.').pop()?.toLowerCase() || 'csv',
-            storage_path: path,
-            raw_text: text.length > 200000 ? text.slice(0, 200000) : text,
-            parsed_totals: totals as any,
-            uploaded_by: user!.id,
-          });
-          if (insErr) throw insErr;
-        }
+        // Generic fallback
+        const text = await readFileText(xreadFile!);
+        const totals = parseDailySales(text);
+        await uploadStorage(xreadFile!, date);
+        const { error } = await supabase.from('daily_sales_uploads').insert({
+          organization_id: profile.organization_id,
+          branch_id: profile.branch_id,
+          sale_date: date,
+          source_filename: xreadFile!.name,
+          source_format: xreadFile!.name.split('.').pop()?.toLowerCase() || 'csv',
+          storage_path: `${profile.branch_id}/${date}/`,
+          raw_text: text.slice(0, 200000),
+          parsed_totals: totals as any,
+          uploaded_by: user!.id,
+        });
+        if (error) throw error;
       }
-      toast.success('Upload complete');
-      setFiles(null);
-      const fi = document.getElementById('ds-file') as HTMLInputElement | null;
-      if (fi) fi.value = '';
-      loadRows();
+      toast.success('Daily upload complete');
+      setXreadFile(null);
+      setDeptFile(null);
+      (document.getElementById('xread-file') as HTMLInputElement | null)?.setAttribute('value', '');
+      (document.getElementById('dept-file') as HTMLInputElement | null)?.setAttribute('value', '');
+      loadRows(profile.branch_id);
     } catch (e: any) {
       toast.error(e?.message || 'Upload failed');
     } finally {
@@ -220,59 +252,170 @@ export default function DailySalesUpload() {
     }
   };
 
+  const handleCashRecUpload = async () => {
+    if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
+    if (!cashRecFile) return toast.error('Please select the weekly Cash Reconciliation file');
+    setBusyCash(true);
+    try {
+      const path = await uploadStorage(cashRecFile, `cashrec/${weekMonday}`);
+      // Remove existing cash-rec row for this week
+      await supabase.from('daily_sales_uploads')
+        .delete()
+        .eq('branch_id', profile.branch_id)
+        .eq('sale_date', weekMonday)
+        .eq('source_format', 'cashrec');
+
+      const { error } = await supabase.from('daily_sales_uploads').insert({
+        organization_id: profile.organization_id,
+        branch_id: profile.branch_id,
+        sale_date: weekMonday,
+        source_filename: cashRecFile.name,
+        source_format: 'cashrec',
+        storage_path: path,
+        raw_text: null,
+        parsed_totals: { week_start: weekMonday, week_end: weekSunday } as any,
+        uploaded_by: user!.id,
+      });
+      if (error) throw error;
+      toast.success('Cash Reconciliation uploaded for week');
+      setCashRecFile(null);
+      (document.getElementById('cashrec-file') as HTMLInputElement | null)?.setAttribute('value', '');
+      loadRows(profile.branch_id);
+    } catch (e: any) {
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setBusyCash(false);
+    }
+  };
+
   const remove = async (id: string) => {
     if (!confirm('Delete this upload?')) return;
     const { error } = await supabase.from('daily_sales_uploads').delete().eq('id', id);
     if (error) return toast.error(error.message);
-    loadRows();
+    loadRows(profile?.branch_id || null);
   };
 
+  const todayXread = weekStatus[date]?.xread;
+  const todayDept = weekStatus[date]?.deptvat;
+
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
         <Upload className="h-6 w-6 text-primary" /> Daily Sales Upload
       </h1>
 
       {formatMeta ? (
         <Card className="p-3 mb-4 bg-primary/5 border-primary/20">
-          <p className="text-sm">
-            <span className="font-semibold">Format:</span> {formatMeta.label}
-          </p>
+          <p className="text-sm"><span className="font-semibold">Format:</span> {formatMeta.label}</p>
           <p className="text-xs text-muted-foreground mt-1">{formatMeta.description}</p>
-          {profile?.import_format === 'coop_fuel' && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Select the daily till CSV/TXT export plus the Department VAT XLSX/CSV. The Department VAT amount columns are used for exact paperwork category totals.
-            </p>
-          )}
-          {profile?.import_format === 'charfield_shift' && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Select the daily <code>Shift &amp; Period Report</code> XLSX exported from the till. One workbook per day.
-            </p>
-          )}
-
         </Card>
       ) : (
         <Card className="p-3 mb-4 bg-amber-500/10 border-amber-500/30 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-          <p className="text-sm text-amber-900 dark:text-amber-200">
-            No import format has been configured for your store yet. Please ask head office to set one in Niza Analysis → Branch Formats.
-          </p>
+          <p className="text-sm">No import format has been configured. Please ask head office to set one in Niza Analysis → Branch Formats.</p>
         </Card>
       )}
 
-      <Card className="p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-        <div>
-          <Label>Sale date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <Card className="p-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mb-4">
+          <div>
+            <Label>Sale date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="md:col-span-2 text-xs text-muted-foreground self-end">
+            Week: {format(new Date(weekMonday), 'dd MMM')} – {format(new Date(weekSunday), 'dd MMM yyyy')}
+          </div>
         </div>
-        <div className="md:col-span-2">
-          <Label>Files</Label>
-          <Input id="ds-file" type="file" multiple accept="*/*" onChange={(e) => setFiles(e.target.files)} />
+
+        {/* Daily slots */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Slot 1: X-Read */}
+          <Card className={`p-3 border-2 ${todayXread ? 'border-green-500/40 bg-green-500/5' : 'border-dashed'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">1. X-Read (Till)</span>
+              </div>
+              {todayXread ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-muted-foreground" />}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">Daily till report (CSV/TXT/XLSX)</p>
+            <Input id="xread-file" type="file" accept="*/*" onChange={(e) => setXreadFile(e.target.files?.[0] || null)} />
+            {xreadFile && <p className="text-xs text-primary mt-1 truncate">{xreadFile.name}</p>}
+          </Card>
+
+          {/* Slot 2: Department VAT */}
+          <Card className={`p-3 border-2 ${!isCoop ? 'opacity-50 border-dashed' : todayDept ? 'border-green-500/40 bg-green-500/5' : 'border-dashed'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">2. Department VAT</span>
+              </div>
+              {isCoop && (todayDept ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-muted-foreground" />)}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">{isCoop ? 'Daily VAT report (CSV/XLSX)' : 'Not required for this format'}</p>
+            <Input id="dept-file" type="file" accept="*/*" disabled={!isCoop}
+              onChange={(e) => setDeptFile(e.target.files?.[0] || null)} />
+            {deptFile && <p className="text-xs text-primary mt-1 truncate">{deptFile.name}</p>}
+          </Card>
+
+          {/* Slot 3: Cash Rec (weekly) */}
+          <Card className={`p-3 border-2 ${cashRecUploaded ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">3. Cash Reconciliation</span>
+              </div>
+              {cashRecUploaded
+                ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                : <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase">Weekly</span>}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              Week {format(new Date(weekMonday), 'dd MMM')} – {format(new Date(weekSunday), 'dd MMM')}. Upload anytime during the week.
+            </p>
+            <Input id="cashrec-file" type="file" accept="*/*" onChange={(e) => setCashRecFile(e.target.files?.[0] || null)} />
+            {cashRecFile && <p className="text-xs text-primary mt-1 truncate">{cashRecFile.name}</p>}
+            <Button size="sm" className="w-full mt-2" onClick={handleCashRecUpload} disabled={busyCash || !cashRecFile}>
+              {busyCash ? 'Uploading…' : cashRecUploaded ? 'Replace Cash Rec' : 'Upload Cash Rec'}
+            </Button>
+          </Card>
         </div>
-        <div className="md:col-span-3">
-          <Button onClick={handleUpload} disabled={busy}>
-            {busy ? 'Uploading...' : 'Upload'}
+
+        <div className="mt-4">
+          <Button onClick={handleDailyUpload}
+            disabled={busy || !xreadFile || (isCoop && !deptFile)}>
+            {busy ? 'Uploading…' : 'Upload Daily Files'}
           </Button>
+          {isCoop && (!xreadFile || !deptFile) && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Both X-Read and Department VAT are required each day so category totals match the client paperwork exactly.
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {/* Week completion status */}
+      <Card className="p-3 mb-4">
+        <h3 className="font-semibold text-sm mb-2">This week's status</h3>
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {Array.from({ length: 7 }).map((_, i) => {
+            const d = format(addDays(new Date(weekMonday), i), 'yyyy-MM-dd');
+            const s = weekStatus[d] || { xread: false, deptvat: false };
+            const complete = isCoop ? (s.xread && s.deptvat) : s.xread;
+            return (
+              <div key={d} className={`rounded p-2 text-center border ${complete ? 'border-green-500/40 bg-green-500/10' : 'border-muted bg-muted/30'}`}>
+                <div className="font-semibold">{format(new Date(d), 'EEE dd')}</div>
+                <div className="mt-1 flex justify-center gap-1">
+                  {s.xread ? <CheckCircle2 className="h-3 w-3 text-green-600" /> : <XCircle className="h-3 w-3 text-muted-foreground" />}
+                  {isCoop && (s.deptvat ? <CheckCircle2 className="h-3 w-3 text-green-600" /> : <XCircle className="h-3 w-3 text-muted-foreground" />)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-600" /> uploaded</span>
+          <span className="flex items-center gap-1"><XCircle className="h-3 w-3" /> missing</span>
+          {!cashRecUploaded && <span className="text-amber-600">• Cash Rec for this week not uploaded yet</span>}
         </div>
       </Card>
 
@@ -281,6 +424,7 @@ export default function DailySalesUpload() {
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>File</TableHead>
               <TableHead className="text-right">Shop</TableHead>
               <TableHead className="text-right">Fuel</TableHead>
@@ -290,14 +434,15 @@ export default function DailySalesUpload() {
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">No uploads yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No uploads yet</TableCell></TableRow>
             ) : rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell>{format(new Date(r.sale_date), 'dd MMM yyyy')}</TableCell>
-                <TableCell className="max-w-[180px] truncate" title={r.source_filename}>{r.source_filename}</TableCell>
-                <TableCell className="text-right">£{Number(r.parsed_totals?.shop || 0).toFixed(2)}</TableCell>
-                <TableCell className="text-right">£{Number(r.parsed_totals?.fuel || 0).toFixed(2)}</TableCell>
-                <TableCell className="text-right">£{Number(r.parsed_totals?.lottery || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-xs uppercase">{r.source_format || '—'}</TableCell>
+                <TableCell className="max-w-[220px] truncate" title={r.source_filename}>{r.source_filename}</TableCell>
+                <TableCell className="text-right">{r.source_format === 'cashrec' ? '—' : `£${Number(r.parsed_totals?.shop || 0).toFixed(2)}`}</TableCell>
+                <TableCell className="text-right">{r.source_format === 'cashrec' ? '—' : `£${Number(r.parsed_totals?.fuel || 0).toFixed(2)}`}</TableCell>
+                <TableCell className="text-right">{r.source_format === 'cashrec' ? '—' : `£${Number(r.parsed_totals?.lottery || 0).toFixed(2)}`}</TableCell>
                 <TableCell className="text-right">
                   <Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </TableCell>
