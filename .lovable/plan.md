@@ -1,67 +1,79 @@
 
-## 1. My Reminders — Proper Task System
+## Scope
 
-**Problems today**
-- Editing an existing reminder makes it vanish.
-- No time-of-day, no popup at due time, no professional dismissed state.
+Fix the Co-op daily uploads so that the per-day category totals reproduced in our system are **byte-for-byte identical** to the client's paperwork (`   SALE   ` and `CASH SUM1` tabs in the monthly XLS) for the two attached weekly zips (Southwater 22–28 Jun, Culverstone 22–28 Jun), and turn the upload flow into the client's real 3-file daily/weekly rhythm.
 
-**Changes**
-- **Data model** (`reminders` table migration):
-  - Add `due_at timestamptz` (date + time) alongside existing `due_date`.
-  - Add `status text` with values: `active`, `snoozed`, `acknowledged`, `completed` (replaces informal "closed" — user wants professional wording; UI shows "Acknowledged" / "Completed").
-  - Add `snoozed_until timestamptz`, `acknowledged_at timestamptz`.
-  - Backfill `due_at` from `due_date` + 09:00; keep RLS as-is.
-- **Edit flow fix**: current save path likely does an insert instead of update when `id` is present, or the query filter drops updated rows. Rewrite `saveReminder` in `RemindersSidebar.tsx` to `upsert` on `id` and re-fetch, so retouching never deletes.
-- **Reminder editor UI**:
-  - Date picker + time picker (24h) → writes `due_at`.
-  - Buttons: Save, Mark Acknowledged, Snooze (15m / 1h / tomorrow / custom), Complete.
-- **Due popup** (`TaskReminderListener.tsx` already exists — extend it):
-  - Poll every 30s for reminders where `due_at <= now()` and `status = 'active'` and (`snoozed_until` null or past).
-  - Show large centered modal (shadcn Dialog, max-w-lg) with title, notes, due time, and actions: **Snooze** (dropdown 5m/15m/1h/tomorrow/pick time), **Acknowledge**, **Mark Complete**.
-  - "Acknowledged" reminders remain visible in the sidebar under a collapsed "Acknowledged" group with a muted badge (styling like completed but distinct wording).
-- Sidebar sections: **Upcoming**, **Overdue** (red), **Snoozed** (amber), **Acknowledged** (muted), **Completed** (existing collapsed).
+## 1. Fix the category totals
 
-## 2. Certification Coins — Tiered Weightage
+Root cause of the mismatch you flagged (`Tobacco 751.40 + 125.23 = 876.63`): the current parser is summing the **Amount** cell plus the **Vat Amount** cell for the same rate. Paperwork uses **Net (Amount)** only; VAT belongs in the separate VAT columns.
 
-**Changes**
-- **`add_certification` dialog** (`EmployeeCertifications.tsx`):
-  - Replace single "Gold Coins (Points)" numeric field with a **Tier selector**: Bronze (1), Silver (3), Gold (5), Platinum (10), Diamond (20) — with editable point override.
-  - Store on `employee_certifications`: `coin_tier text`, `coin_points int` (already have points field — reuse; add `coin_tier` column).
-- **Employee list hover tooltip** (`EmployeeList.tsx` and profile summary):
-  - Show total coins next to the name with tier icons (Lucide `Medal`, `Award`, `Trophy`, `Gem`).
-  - On hover: shadcn `HoverCard` listing each certification with its tier chip and points.
-- **Employee profile detail** (`EmployeeProfile.tsx` → certifications tab):
-  - Table with columns: Certification, Tier (colored badge), Points, Issued/Expiry, Notes.
-  - Totals row per tier + grand total.
-- Tier colors (semantic tokens in `index.css`, not hardcoded):
-  - `--tier-bronze`, `--tier-silver`, `--tier-gold`, `--tier-platinum`, `--tier-diamond`.
+New behaviour — from `DEPARTMENTVAT dd.mm.yyyy.CSV`:
 
-## 3. Events & Announcements — Login Popup
+- Read **only** the three `Amount` cells per department (0%, 20%, 5% blocks); never add VAT into a category.
+- Rebuild the mapping to match the paperwork ' SALE ' tab exactly. Confirmed from your attached files:
 
-**Changes**
-- New component `TodayEventsPopup.tsx` mounted in `Dashboard.tsx`.
-- On fresh session load (checked via `sessionStorage` key `today-events-shown-<yyyy-mm-dd>`), query `events` where `event_date = today` AND event is visible to the user (respect existing branch/org scoping already used on the Events page).
-- If any results, show a large dialog listing each event (title, category badge, description, time, branch).
-- Buttons: **Dismiss for today** (sets sessionStorage), **View all events** (routes to `/dashboard/events`).
-- Also include birthdays occurring today from the same source used by Events page.
+| Paperwork column | Departments used | VAT rate used |
+|---|---|---|
+| FUEL | `FUEL` | 20% Amount |
+| TOBACCO | `CIGARETTES & TOBACCO` | 20% Amount |
+| DRINKS | `SOFT BEVERAGES` + `BEVERAGES` (20% only) | 20% Amount |
+| GROCERY STD (20%) | `GROCERY 1/2/3`, `GROCERY NONFOOD`, `FROZEN`, `PROVISIONS DAIRY/PREPARED`, `FRANCHISE LOCAL`, `CAR CARE`, `CONCESSION 1`, `DEPT 028`, `STORE EXPENSES`, `SEASONAL`, `INSTORE BKRY`, `BAKERY`, `FRUIT & VEGETABLES`, `MEAT & POULTRY`, `DELICATESSEN`, `OTHER GROCERY`, `LOCAL PRODUCTS` — 20% Amount columns |
+| GROCERY ZERO (0%) | Same department list — 0% Amount columns |
+| DOMESTIC 5% | Any department, 5% Amount column |
+| ALCOHOL | (Southwater/Culverstone don't split alcohol; leave 0 unless a dept has ALCOHOL/WINE/SPIRIT/BEER label) |
+| NEWSPAPERS | `NEWSPAPERS & MAGAZINES` 0% Amount |
+| VENDING | `VENDING` — from X-Read (Dept VAT rarely lists it separately) |
+| CAR WASH | Sum of `CAR WASH n` + `JET WASH n` — from X-Read |
+| NAT LOTTERY | `Lottery` line in X-Read (not the `NATIONAL LOTTERY` Dept VAT row, which double-counts) |
+| SCRATCHCARDS | `Scratchcards` line in X-Read |
+| PAYPOINT | `Paypoint` line in X-Read |
+| PAYZONE | `Payzone` line in X-Read |
+| LOTTO PAYOUTS | `Lotto Prizes` + `Scratchcard Prizes` from X-Read (negative) |
+| DRIVE OFF | `Drive Off` line from X-Read (negative) |
+| NET 0% / NET 20% / VAT 20% / NET 5% / VAT 5% | Aggregated across all departments — Amount + Vat Amount columns per rate |
 
-## Technical Notes
+Test against the attached zips + monthly XLS SALE tabs; the parser will only be marked "done" when the weekly sum matches for both stores. (E.g. Culverstone 22 Jun: Fuel 25506.74, Tobacco 751.40, Paypoint 220.00, Nat Lottery 132.00 from X-Read, Newspapers 18.10.)
 
-- Migrations: 1 migration adding reminder columns + status enum-like check; 1 adding `coin_tier` to `employee_certifications`. Include grants + RLS updates.
-- All new colors go through `index.css` tokens.
-- No changes to unrelated scheduling/lottery logic.
-- Files touched (approx):
-  - `supabase/migrations/*_reminders_upgrade.sql`
-  - `supabase/migrations/*_certification_tiers.sql`
-  - `src/components/reminders/RemindersSidebar.tsx`
-  - `src/components/reminders/TaskReminderListener.tsx`
-  - `src/components/reminders/ReminderDuePopup.tsx` (new)
-  - `src/components/employees/EmployeeCertifications.tsx`
-  - `src/components/employees/EmployeeList.tsx`
-  - `src/components/employees/CertificationCoinsHover.tsx` (new)
-  - `src/pages/dashboard/EmployeeProfile.tsx`
-  - `src/components/dashboard/TodayEventsPopup.tsx` (new)
-  - `src/pages/Dashboard.tsx`
-  - `src/index.css` (tier tokens)
+## 2. 3-file daily/weekly upload flow
 
-Confirm and I'll implement in that order (reminders → coins → events popup).
+Store login → **Daily Sales Upload** page becomes a **checklist** for the current sale date:
+
+```text
+┌─ Today: 15 Jul 2026 ─────────────────────────────┐
+│ 1. X-Read (till report, CSV/TXT)      [Upload]   │  ← required daily
+│ 2. Department VAT (CSV/XLSX)          [Upload]   │  ← required daily
+│ 3. Cash Reconciliation (this week)    [Upload]   │  ← weekly, any day
+└──────────────────────────────────────────────────┘
+```
+
+- Files 1 & 2 are marked complete when uploaded for the selected `sale_date`.
+- File 3 is marked complete when the branch has *any* cash-rec upload covering the ISO week containing `sale_date` (Mon–Sun). Missing weekly file shows a soft amber banner: "Cash Reconciliation for week of dd Mon still to upload."
+- Upload button stays disabled until both daily files are present; weekly file can be uploaded independently at any time.
+- Recent uploads table gets three status columns (X-Read / Dept VAT / Cash Rec) with a green tick or a red cross per day so the store manager can see gaps at a glance.
+
+Storage layout stays the same (`daily-sales` bucket, `branch_id/date/…`), and `daily_sales_uploads.source_format` becomes one of `xread`, `deptvat`, `cashrec` (weekly rows use `sale_date = Monday of the week`).
+
+## 3. Cash Reconciliation weekly reminder
+
+- Home dashboard tile "Cash Reconciliation due" appears from Sunday 00:00 until it is uploaded for the just-finished week.
+- Store admin can dismiss for the current week (session-scoped) but the tile returns next Sunday.
+
+## 4. Historical data / recalculation
+
+- `normalizeCoopParsedTotals` will be re-run automatically whenever an existing daily row is re-viewed in Daily Sales Admin / Xero Export so previously ingested days start showing the corrected numbers without a re-upload.
+- One-off script isn't needed; normalization happens at render time.
+
+## Deliverables
+
+- `src/lib/coopFuelParser.ts` — new department mapping + amount-only aggregation, X-Read wiring for Vending / Nat Lottery / Scratchcards / Paypoint / Payzone / Drive Off / Lotto Prizes / Car+Jet Wash.
+- `src/pages/dashboard/DailySalesUpload.tsx` — 3-file checklist UI, per-file upload buttons, weekly cash-rec status, uploads table with tick/cross columns.
+- Small addition to `src/components/dashboard/EmployeeDashboard.tsx` (or Home tile) for the weekly cash-rec reminder.
+- No DB migration; `source_format` values just get expanded.
+
+## Validation
+
+Before merging, upload both attached zips through the new flow and confirm the resulting per-day rows match the CASH SUM1 columns of the corresponding monthly XLS for **all 7 days** (Fuel, Shop, Vending, Payzone, Lotto, Lotto Prize columns) and the ' SALE ' tab totals for the week for each rate band.
+
+## Open question
+
+Culverstone's paperwork uses only these categories: TOBACCO, GROCERY STD, GROCERY ZERO, NEWS & MAGS, ALCOHOL, LOW RATE (5%). Southwater's may differ slightly. **Please confirm that the mapping table in section 1 above is the split you want us to use for every Co-op branch**, or list any department that should sit in a different bucket. Once you confirm, I'll implement.
