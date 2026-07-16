@@ -58,32 +58,28 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
   return total;
 };
 
-// Map a department label (left-side text in DEPARTMENTVAT) to a Xero short code.
-// Department VAT reports already split sales into Amount + VAT Amount columns.
-// The department sales columns in the client paperwork use the Amount/net values
-// only; VAT is reported separately in the NET/VAT analysis columns.
-const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals]> = [
+// Map a department label (left-side text in DEPARTMENTVAT) to a category code.
+// Amount columns only — VAT is tracked separately and never added into a category.
+// GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
+const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
   [/SOFT\s*BEVERAGES/i, 'DR'],
-  [/^BEVERAGES\b/i, 'AL'],
-  [/ALCOHOL|WINE|SPIRIT|BEER/i, 'AL'],
+  [/^BEVERAGES\b/i, 'DR'],
+  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
   [/VENDING/i, 'VM'],
   [/CAR\s*WASH|JET\s*WASH/i, 'CW'],
-  [/BAKERY|INSTORE\s*BKRY|FRUIT\s*&\s*VEGETABLES|MEAT\s*&\s*POULTRY|DELICATESSEN|FRANCHISE\s*LOCAL/i, 'GZ'],
-  [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|PHONECARDS|DEPT|CONCESSION|SEASONAL|STORE\s*EXPENSES/i, 'GS'],
+  // Everything below is grocery family — always split by VAT rate.
+  [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|CONCESSION|SEASONAL|STORE\s*EXPENSES|BAKERY|INSTORE\s*BKRY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|FRANCHISE|LOCAL\s*PRODUCTS|PHONECARDS|\bDEPT\b/i, 'GROCERY'],
 ];
 
-const codeForDept = (label: string): keyof CoopCategoryTotals | null => {
+const codeForDept = (label: string): (keyof CoopCategoryTotals | 'GROCERY') | null => {
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
-
-const isGroceryZeroDept = (label: string) =>
-  /BAKERY|INSTORE\s*BKRY|FRUIT\s*&\s*VEGETABLES|MEAT\s*&\s*POULTRY|DELICATESSEN|FRANCHISE\s*LOCAL|CONCESSION|GROCERY|FROZEN|PROVISIONS|DEPT|SEASONAL|SOFT\s*BEVERAGES/i.test(label);
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
