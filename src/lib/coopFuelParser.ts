@@ -206,27 +206,28 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
       }
       knownLabels.push(r.label);
 
+      // GROCERY family — split by VAT rate: 20%→GS, 0%→GZ, 5%→DO.
+      if (code === 'GROCERY') {
+        if (r.net20 > 0) out.GS = +(out.GS + r.net20).toFixed(2);
+        if (r.net0 > 0)  out.GZ = +(out.GZ + r.net0).toFixed(2);
+        if (r.net5 > 0)  out.DO = +(out.DO + r.net5).toFixed(2);
+        continue;
+      }
+
       if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
-        if (r.net0 > 0) out.VM = +(out.VM + r.net0).toFixed(2);
-      } else if (code === 'GS') {
-        out.GS = +(out.GS + r.net20).toFixed(2);
-        if (r.net0 > 0 && isGroceryZeroDept(r.label)) out.GZ = +(out.GZ + r.net0).toFixed(2);
-      } else if (code === 'GZ') {
-        out.GZ = +(out.GZ + r.net0 + r.net20).toFixed(2);
+        // Fuel department 0% is small/misc — leave it out of shop buckets.
       } else if (code === 'NP') {
         out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
       } else if (code === 'VM' || code === 'CW') {
-        (out[code] as number) = +((out[code] as number) + r.net0 + r.net20 + r.net5).toFixed(2);
-      } else if (code === 'national_lottery' || code === 'paypoint' || code === 'payzone') {
+        (out[code] as number) = +((out[code] as number) + r.net0 + r.net20).toFixed(2);
+      } else if (code === 'paypoint' || code === 'payzone') {
         if ((out[code] as number) === 0) (out[code] as number) = +totalNet.toFixed(2);
-      } else if (code === 'DR') {
-        out.DR = +(out.DR + r.net20).toFixed(2);
-        if (r.net0 > 0 && isGroceryZeroDept(r.label)) out.GZ = +(out.GZ + r.net0).toFixed(2);
-      } else if (code === 'TO' || code === 'AL') {
+      } else if (code === 'DR' || code === 'TO' || code === 'AL') {
         (out[code] as number) = +((out[code] as number) + r.net20).toFixed(2);
+        if (r.net0 > 0) out.GZ = +(out.GZ + r.net0).toFixed(2);
       }
     }
   }
