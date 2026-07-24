@@ -1,79 +1,46 @@
+This spans 9 items across Custom Roles, the Co-op Fuel daily upload pipeline, and the XeroExport / DailySalesAdmin views. Below is what I'll ship.
 
-## Scope
+## 1. Custom Roles — multi-branch assignment
+- Add `branch_ids uuid[]` column to `custom_roles` (keep `branch_id` for backwards compat; when a single branch is picked we still populate it).
+- `CustomRoleForm.tsx`: replace the single Branch select with a checkbox list of branches under the chosen org, plus an "All branches" toggle. Save as an array.
+- `useCustomRoleAccess`, HR-scoping helpers, and any place that reads `role.branch_id` will fall back to `branch_ids` (array contains check).
 
-Fix the Co-op daily uploads so that the per-day category totals reproduced in our system are **byte-for-byte identical** to the client's paperwork (`   SALE   ` and `CASH SUM1` tabs in the monthly XLS) for the two attached weekly zips (Southwater 22–28 Jun, Culverstone 22–28 Jun), and turn the upload flow into the client's real 3-file daily/weekly rhythm.
+## 2 + 4 + 5 + 6. Co-op Fuel parser correctness
+In `src/lib/coopFuelParser.ts`:
+- Keep Drinks and Alcohol as separate outputs (do not merge). Update the aggregate "shop" total accordingly and add `alcohol` to `parsed_totals.breakdown`.
+- Cash Reconciliation CSV/XLSX: parse it and expose per-day banking / cash / carwash / vending / payzone / paypoint / lotto values. Store parsed result on the `cashrec` row's `parsed_totals`.
+- Culverstone rule: fuel-zero-rated amount that isn't fuel → Vending. Houndsmills rule: fuel-zero-rated total = Car Wash + Vending; subtract Car Wash (from X-Read) from the fuel-zero-rated amount, remainder = Vending. Driven by a per-branch flag `vending_split_mode` ('culverstone' | 'houndsmills') on `branches`.
+- Ensure Drive Off and Alcohol pull from correct columns (fix orange-cell issues in feedback).
 
-## 1. Fix the category totals
+## 3. XLSX Export cleanup
+In `src/pages/niza-analysis/XeroExport.tsx`:
+- Remove tabs: SHIFT SHEET, COUNTING, DIPS, P & L, BANK, STOCK CONT, Week Wages, HOURS & WAGES, comp statement.
+- Keep C.CARD tab as empty plain sheet (headers only, no data).
+- Remove blue/yellow highlighting; keep green as-is; orange tabs recomputed with parser fixes above.
 
-Root cause of the mismatch you flagged (`Tobacco 751.40 + 125.23 = 876.63`): the current parser is summing the **Amount** cell plus the **Vat Amount** cell for the same rate. Paperwork uses **Net (Amount)** only; VAT belongs in the separate VAT columns.
+## 7. Live CSV preview UI
+New tab in Niza Analysis "Live Preview" (`/niza-analysis/live-preview`):
+- Date range filter (default current payroll period).
+- Renders each output sheet (SALE, CASH SUM1, OBJECTIVE, C.CARD, C.PURCH, EXPENSES, PURCHASES) live in a scrollable table, exactly as export will produce them.
+- "Download XLSX" button reuses the export function.
 
-New behaviour — from `DEPARTMENTVAT dd.mm.yyyy.CSV`:
+## 8. Uploaded files viewer
+New tab "Uploaded Files" in Niza Analysis:
+- Lists all `daily_sales_uploads` rows with branch + date + type (X-Read / Dept VAT / Cash Rec).
+- Signed URL download button per file (1h expiry).
+- Filter by branch and date range.
 
-- Read **only** the three `Amount` cells per department (0%, 20%, 5% blocks); never add VAT into a category.
-- Rebuild the mapping to match the paperwork ' SALE ' tab exactly. Confirmed from your attached files:
+## 9. Formulas viewer
+New tab "Formulas & Calculations":
+- Static documented list of every output cell with its formula/source (e.g. "SALE!Fuel = X-Read total fuel litres × price"; "CASH SUM1!Shop Sales = TO+DR+GS+GZ+DO+AL+NP+VM"; "Vending (Houndsmills) = fuel_zero_rated - car_wash").
+- Grouped by output tab, expandable rows.
 
-| Paperwork column | Departments used | VAT rate used |
-|---|---|---|
-| FUEL | `FUEL` | 20% Amount |
-| TOBACCO | `CIGARETTES & TOBACCO` | 20% Amount |
-| DRINKS | `SOFT BEVERAGES` + `BEVERAGES` (20% only) | 20% Amount |
-| GROCERY STD (20%) | `GROCERY 1/2/3`, `GROCERY NONFOOD`, `FROZEN`, `PROVISIONS DAIRY/PREPARED`, `FRANCHISE LOCAL`, `CAR CARE`, `CONCESSION 1`, `DEPT 028`, `STORE EXPENSES`, `SEASONAL`, `INSTORE BKRY`, `BAKERY`, `FRUIT & VEGETABLES`, `MEAT & POULTRY`, `DELICATESSEN`, `OTHER GROCERY`, `LOCAL PRODUCTS` — 20% Amount columns |
-| GROCERY ZERO (0%) | Same department list — 0% Amount columns |
-| DOMESTIC 5% | Any department, 5% Amount column |
-| ALCOHOL | (Southwater/Culverstone don't split alcohol; leave 0 unless a dept has ALCOHOL/WINE/SPIRIT/BEER label) |
-| NEWSPAPERS | `NEWSPAPERS & MAGAZINES` 0% Amount |
-| VENDING | `VENDING` — from X-Read (Dept VAT rarely lists it separately) |
-| CAR WASH | Sum of `CAR WASH n` + `JET WASH n` — from X-Read |
-| NAT LOTTERY | `Lottery` line in X-Read (not the `NATIONAL LOTTERY` Dept VAT row, which double-counts) |
-| SCRATCHCARDS | `Scratchcards` line in X-Read |
-| PAYPOINT | `Paypoint` line in X-Read |
-| PAYZONE | `Payzone` line in X-Read |
-| LOTTO PAYOUTS | `Lotto Prizes` + `Scratchcard Prizes` from X-Read (negative) |
-| DRIVE OFF | `Drive Off` line from X-Read (negative) |
-| NET 0% / NET 20% / VAT 20% / NET 5% / VAT 5% | Aggregated across all departments — Amount + Vat Amount columns per rate |
+## Technical notes
+- Single migration adds `custom_roles.branch_ids uuid[]` and `branches.vending_split_mode text default 'culverstone'`.
+- No changes to Supabase Storage buckets.
+- No new edge functions.
+- All existing flows preserved (weekly cycle, category alerts, daily 3-file upload UX).
 
-Test against the attached zips + monthly XLS SALE tabs; the parser will only be marked "done" when the weekly sum matches for both stores. (E.g. Culverstone 22 Jun: Fuel 25506.74, Tobacco 751.40, Paypoint 220.00, Nat Lottery 132.00 from X-Read, Newspapers 18.10.)
+Given the size, I'll ship in this order per turn: migration → parser + export cleanup → custom role UI → live preview → uploaded files → formulas viewer.
 
-## 2. 3-file daily/weekly upload flow
-
-Store login → **Daily Sales Upload** page becomes a **checklist** for the current sale date:
-
-```text
-┌─ Today: 15 Jul 2026 ─────────────────────────────┐
-│ 1. X-Read (till report, CSV/TXT)      [Upload]   │  ← required daily
-│ 2. Department VAT (CSV/XLSX)          [Upload]   │  ← required daily
-│ 3. Cash Reconciliation (this week)    [Upload]   │  ← weekly, any day
-└──────────────────────────────────────────────────┘
-```
-
-- Files 1 & 2 are marked complete when uploaded for the selected `sale_date`.
-- File 3 is marked complete when the branch has *any* cash-rec upload covering the ISO week containing `sale_date` (Mon–Sun). Missing weekly file shows a soft amber banner: "Cash Reconciliation for week of dd Mon still to upload."
-- Upload button stays disabled until both daily files are present; weekly file can be uploaded independently at any time.
-- Recent uploads table gets three status columns (X-Read / Dept VAT / Cash Rec) with a green tick or a red cross per day so the store manager can see gaps at a glance.
-
-Storage layout stays the same (`daily-sales` bucket, `branch_id/date/…`), and `daily_sales_uploads.source_format` becomes one of `xread`, `deptvat`, `cashrec` (weekly rows use `sale_date = Monday of the week`).
-
-## 3. Cash Reconciliation weekly reminder
-
-- Home dashboard tile "Cash Reconciliation due" appears from Sunday 00:00 until it is uploaded for the just-finished week.
-- Store admin can dismiss for the current week (session-scoped) but the tile returns next Sunday.
-
-## 4. Historical data / recalculation
-
-- `normalizeCoopParsedTotals` will be re-run automatically whenever an existing daily row is re-viewed in Daily Sales Admin / Xero Export so previously ingested days start showing the corrected numbers without a re-upload.
-- One-off script isn't needed; normalization happens at render time.
-
-## Deliverables
-
-- `src/lib/coopFuelParser.ts` — new department mapping + amount-only aggregation, X-Read wiring for Vending / Nat Lottery / Scratchcards / Paypoint / Payzone / Drive Off / Lotto Prizes / Car+Jet Wash.
-- `src/pages/dashboard/DailySalesUpload.tsx` — 3-file checklist UI, per-file upload buttons, weekly cash-rec status, uploads table with tick/cross columns.
-- Small addition to `src/components/dashboard/EmployeeDashboard.tsx` (or Home tile) for the weekly cash-rec reminder.
-- No DB migration; `source_format` values just get expanded.
-
-## Validation
-
-Before merging, upload both attached zips through the new flow and confirm the resulting per-day rows match the CASH SUM1 columns of the corresponding monthly XLS for **all 7 days** (Fuel, Shop, Vending, Payzone, Lotto, Lotto Prize columns) and the ' SALE ' tab totals for the week for each rate band.
-
-## Open question
-
-Culverstone's paperwork uses only these categories: TOBACCO, GROCERY STD, GROCERY ZERO, NEWS & MAGS, ALCOHOL, LOW RATE (5%). Southwater's may differ slightly. **Please confirm that the mapping table in section 1 above is the split you want us to use for every Co-op branch**, or list any department that should sit in a different bucket. Once you confirm, I'll implement.
+Please approve and I'll start with the migration.
