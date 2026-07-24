@@ -12,14 +12,15 @@ import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
 import {
   parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
-  spreadsheetBufferToCsvText, IMPORT_FORMATS,
-  type ImportFormatId, type UnknownDepartment,
+  spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec,
+  type ImportFormatId, type UnknownDepartment, type VendingSplitMode,
 } from '@/lib/coopFuelParser';
 
 type BranchProfile = {
   branch_id: string | null;
   organization_id: string | null;
   import_format: ImportFormatId | null;
+  vending_split_mode: VendingSplitMode | null;
 };
 
 const mondayOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -81,15 +82,19 @@ export default function DailySalesUpload() {
       const { data: prof } = await supabase
         .from('profiles').select('branch_id, organization_id').eq('id', user.id).maybeSingle();
       let import_format: ImportFormatId | null = null;
+      let vending_split_mode: VendingSplitMode | null = null;
       if (prof?.branch_id) {
         const { data: br } = await supabase
-          .from('branches').select('import_format').eq('id', prof.branch_id).maybeSingle();
+          .from('branches').select('import_format, vending_split_mode').eq('id', prof.branch_id).maybeSingle();
         import_format = (br as any)?.import_format || null;
+        const raw = (br as any)?.vending_split_mode;
+        vending_split_mode = raw === 'houndsmills' ? 'houndsmills' : 'culverstone';
       }
       const p = {
         branch_id: prof?.branch_id || null,
         organization_id: prof?.organization_id || null,
         import_format,
+        vending_split_mode,
       };
       setProfile(p);
       loadRows(p.branch_id);
@@ -157,7 +162,7 @@ export default function DailySalesUpload() {
           readFileText(deptFile!),
         ]);
         const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
-        const breakdown = detailed.totals;
+        const breakdown = applyVendingSplit(detailed.totals, profile.vending_split_mode || 'culverstone');
         await reportUnknowns(detailed.unknownDepartments, deptFile!.name);
         await recordKnownCategories(breakdown);
         const legacy = parseDailySales(txtText);
@@ -168,6 +173,7 @@ export default function DailySalesUpload() {
           fuel: breakdown.FU,
           lottery: breakdown.national_lottery,
           breakdown,
+          vending_split_mode: profile.vending_split_mode || 'culverstone',
           format: 'coop_fuel' as const,
         };
 
@@ -258,6 +264,16 @@ export default function DailySalesUpload() {
     setBusyCash(true);
     try {
       const path = await uploadStorage(cashRecFile, `cashrec/${weekMonday}`);
+      // Try to parse cash rec so the summary can reflect banked figures.
+      let cashRecParsed: any = { week_start: weekMonday, week_end: weekSunday };
+      try {
+        const text = await readFileText(cashRecFile);
+        const p = parseCashRec(text);
+        cashRecParsed = { ...cashRecParsed, ...p, raw_size: text.length };
+      } catch (parseErr) {
+        console.warn('Cash Rec parse failed (kept file only):', parseErr);
+      }
+
       // Remove existing cash-rec row for this week
       await supabase.from('daily_sales_uploads')
         .delete()
@@ -273,7 +289,7 @@ export default function DailySalesUpload() {
         source_format: 'cashrec',
         storage_path: path,
         raw_text: null,
-        parsed_totals: { week_start: weekMonday, week_end: weekSunday } as any,
+        parsed_totals: cashRecParsed as any,
         uploaded_by: user!.id,
       });
       if (error) throw error;
