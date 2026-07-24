@@ -17,6 +17,7 @@ interface CustomRoleData {
   app_access: AppAccess;
   organization_id: string | null;
   branch_id: string | null;
+  branch_ids: string[];
 }
 
 export function useCustomRoleAccess() {
@@ -91,6 +92,7 @@ export function useCustomRoleAccess() {
           app_access,
           organization_id: role.organization_id,
           branch_id: role.branch_id,
+          branch_ids: Array.isArray((role as any).branch_ids) ? ((role as any).branch_ids as string[]) : (role.branch_id ? [role.branch_id] : []),
         });
       } catch (error) {
         console.error('Error fetching custom role:', error);
@@ -138,15 +140,21 @@ export function useCustomRoleAccess() {
     if (user?.role === 'super_admin') return true;
 
     // If custom role has no scope restrictions, allow
-    if (!customRole?.organization_id && !customRole?.branch_id) return true;
+    if (!customRole?.organization_id && !customRole?.branch_id && (!customRole?.branch_ids || customRole.branch_ids.length === 0)) {
+      return true;
+    }
 
     // Check organization scope
-    if (customRole.organization_id && orgId !== customRole.organization_id) {
+    if (customRole?.organization_id && orgId && orgId !== customRole.organization_id) {
       return false;
     }
 
-    // Check branch scope
-    if (customRole.branch_id && branchId !== customRole.branch_id) {
+    // Check branch scope: allow any branch in branch_ids, or the legacy single branch_id.
+    const allowedBranches = (customRole?.branch_ids && customRole.branch_ids.length > 0)
+      ? customRole.branch_ids
+      : (customRole?.branch_id ? [customRole.branch_id] : []);
+
+    if (allowedBranches.length > 0 && branchId && !allowedBranches.includes(branchId)) {
       return false;
     }
 
