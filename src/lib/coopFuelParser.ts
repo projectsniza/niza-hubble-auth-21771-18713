@@ -516,54 +516,16 @@ export async function buildBranchSummaryWorkbook(
     return XLSX.utils.aoa_to_sheet(aoa);
   };
 
-  // SHIFT SHEET — daily tender breakdown extracted from TXT1
-  const shiftHeaders = ['DATE','CASH','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT',
-    'COUPON','PAYPOINT','PAYZONE','CASH LIFTS','GROSS SALES','NET TAKINGS','CASH IN DRAWER'];
-  const shiftRows: any[][] = [...title('Shift Sheet'), shiftHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    shiftRows.push([
-      r.sale_date,
-      t.cash_tender || '', t.visa_mc || '', t.amex || '', t.fuel_card || '',
-      t.customer_account || '', t.coupon || '', t.paypoint || '', t.payzone || '',
-      t.cash_lifts || '', t.gross_sales || '', t.net_takings || '', t.cash_in_drawer || ''
-    ]);
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shiftRows), 'SHIFT SHEET');
-
-  XLSX.utils.book_append_sheet(wb, stub('Counting Summary',
-    ['DATE','PLU NO','ITEM','PRICE','OPEN','ADD','CLOSE','SALE']), 'COUNTING');
-  XLSX.utils.book_append_sheet(wb, stub('Tank Dips',
-    ['DATE','TANK','METER READINGS','TOTAL ISSUE','TODAYS DIP','DELIVERY','GONE FROM TANK','GAIN/LOSS','%']), 'DIPS');
+  // ---- Removed by client request: SHIFT SHEET, COUNTING, DIPS, P&L, BANK,
+  // STOCK CONT, Week Wages, HOURS & WAGES, comp statement.
+  // OBJECTIVE is kept as a skeleton for management notes.
   XLSX.utils.book_append_sheet(wb, stub('Objectives',
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
 
-  // C.CARD — card receipts breakdown from TXT1
+  // C.CARD — client asked for this tab to be an empty plain sheet (headers only).
   const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT','COUPON','OTHER','TOTAL'];
   const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    const total = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0) +
-                  (t.customer_account || 0) + (t.coupon || 0);
-    ccardRows.push([
-      r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '',
-      t.customer_account || '', t.coupon || '', '', total || ''
-    ]);
-  }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccardRows), 'C.CARD');
-
-  // BANK — daily cash banked from CSV (cash lifts)
-  const bankHeadersAuto = ['DATE','CASH BANKED','CHEQUES BANKED','CARD SETTLEMENT','OTHER','TOTAL'];
-  const bankRows: any[][] = [...title('Banking'), bankHeadersAuto];
-  for (const r of rows) {
-    const t = r.totals;
-    const cardSettle = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
-    const cash = t.cash_lifts || 0;
-    bankRows.push([
-      r.sale_date, cash || '', '', cardSettle || '', '',
-      +(cash + cardSettle).toFixed(2) || ''
-    ]);
-  }
 
   // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
   const inv = meta.invoices || [];
@@ -590,7 +552,6 @@ export async function buildBranchSummaryWorkbook(
       ];
       aoa.push(extraPaidBy ? [base[0], base[1], i.category || '', base[3], base[4], base[5], base[6], i.payment_method || ''] : base);
     }
-    // Pad with at least the till-date skeleton if no invoices, so layout matches.
     if (list.length === 0) {
       for (const r of rows) {
         const row = new Array(headers.length).fill('');
@@ -607,17 +568,6 @@ export async function buildBranchSummaryWorkbook(
     ['DATE','PAYEE','DESCRIPTION','CATEGORY','NET','VAT','GROSS','PAID BY'], expenses, true), 'EXPENSES');
   XLSX.utils.book_append_sheet(wb, invoiceSheet('Purchases',
     ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS'], purchases), 'PURCHASE');
-  XLSX.utils.book_append_sheet(wb, stub('Profit & Loss',
-    ['DATE','SALES','COST OF SALES','GROSS PROFIT','EXPENSES','NET PROFIT']), '      P &  L  ');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bankRows), ' BANK ');
-  XLSX.utils.book_append_sheet(wb, stub('Stock Control',
-    ['DATE','OPENING STOCK','PURCHASES','SALES','CLOSING STOCK','VARIANCE']), 'STOCK CONT');
-  XLSX.utils.book_append_sheet(wb, stub('Week Wages',
-    ['WEEK ENDING','EMPLOYEE','HOURS','RATE','GROSS','TAX','NI','NET']), 'Week Wages');
-  XLSX.utils.book_append_sheet(wb, stub('Hours & Wages',
-    ['DATE','EMPLOYEE','HOURS','RATE','AMOUNT']), 'HOURS & WAGES');
-  XLSX.utils.book_append_sheet(wb, stub('Comparative Statement',
-    ['DATE','THIS MONTH','LAST MONTH','VARIANCE','YTD']), 'comp statement');
 
   const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
