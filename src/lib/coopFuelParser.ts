@@ -163,11 +163,37 @@ const splitStoredCoopRawText = (rawText?: string | null): CoopParseInput => {
   return { txt1: rawText };
 };
 
-export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null) {
+export type VendingSplitMode = 'culverstone' | 'houndsmills';
+
+/**
+ * Apply the branch-specific split of the "Fuel dept @ 0% VAT" amount into
+ * Vending Machines vs Car Wash. Mutates a shallow copy and returns it.
+ *
+ * - Culverstone-style: extra fuel-zero-rated amount is Vending only.
+ *   VM += fuel_zero_rated (CW stays as X-Read "Car Wash" total).
+ * - Houndsmills-style: fuel-zero-rated = Car Wash + Vending. Car Wash comes
+ *   from the X-Read, and Vending is the remainder.
+ *   VM = max(0, fuel_zero_rated - CW).
+ */
+export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplitMode | null | undefined): CoopCategoryTotals {
+  const out = { ...totals };
+  const extra = out.fuel_zero_rated || 0;
+  if (!extra) return out;
+  if (mode === 'houndsmills') {
+    const remainder = Math.max(0, extra - (out.CW || 0));
+    out.VM = +((out.VM || 0) + remainder).toFixed(2);
+  } else {
+    // culverstone (default): all extra fuel-zero-rated is vending
+    out.VM = +((out.VM || 0) + extra).toFixed(2);
+  }
+  return out;
+}
+
+export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null, mode?: VendingSplitMode | null) {
   const input = splitStoredCoopRawText(rawText);
   const detailed = parseCoopFuelDetailed(input);
   if (!detailed.knownLabels.length) return parsedTotals || {};
-  const breakdown = detailed.totals;
+  const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
   return {
     ...(parsedTotals || {}),
     shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
@@ -176,6 +202,21 @@ export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | 
     breakdown,
     format: 'coop_fuel' as const,
   };
+}
+
+/**
+ * Parse a weekly Cash Reconciliation CSV/text export. Very tolerant: matches
+ * common label variants and returns the last numeric on each matching line.
+ */
+export function parseCashRec(text: string): {
+  total_banking: number; cash_banked: number; card_banked: number; other: number;
+} {
+  const grab = (kw: RegExp) => findTxtLineLast(text, kw);
+  const total_banking = grab(/Total\s*Banking|Total\s*Banked/i);
+  const cash_banked  = grab(/Cash\s*Banked|Cash\s*Lifts?|Cash\s*Bank/i);
+  const card_banked  = grab(/Card\s*Settlement|Card\s*Bank(?:ed)?|Merchant\s*Settlement/i);
+  const other        = grab(/Other\s*Bank(?:ed)?|Cheque(?:s)?\s*Bank(?:ed)?/i);
+  return { total_banking, cash_banked, card_banked, other };
 }
 
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
