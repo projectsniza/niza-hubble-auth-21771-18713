@@ -365,6 +365,7 @@ export type Database = {
           organization_id: string
           qr_enabled: boolean | null
           updated_at: string | null
+          vending_split_mode: string
         }
         Insert: {
           address?: string | null
@@ -379,6 +380,7 @@ export type Database = {
           organization_id: string
           qr_enabled?: boolean | null
           updated_at?: string | null
+          vending_split_mode?: string
         }
         Update: {
           address?: string | null
@@ -393,6 +395,7 @@ export type Database = {
           organization_id?: string
           qr_enabled?: boolean | null
           updated_at?: string | null
+          vending_split_mode?: string
         }
         Relationships: [
           {
@@ -1406,6 +1409,7 @@ export type Database = {
           app_access: Json
           base_role: string
           branch_id: string | null
+          branch_ids: string[]
           created_at: string | null
           created_by: string | null
           description: string | null
@@ -1420,6 +1424,7 @@ export type Database = {
           app_access?: Json
           base_role: string
           branch_id?: string | null
+          branch_ids?: string[]
           created_at?: string | null
           created_by?: string | null
           description?: string | null
@@ -1434,6 +1439,7 @@ export type Database = {
           app_access?: Json
           base_role?: string
           branch_id?: string | null
+          branch_ids?: string[]
           created_at?: string | null
           created_by?: string | null
           description?: string | null
