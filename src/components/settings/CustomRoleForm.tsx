@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Settings2, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { useState as useFormState } from "react";
@@ -24,21 +25,14 @@ export interface CustomRoleFormData {
   description: string;
   base_role: BaseRole;
   organization_id: string;
-  branch_id: string;
+  branch_id: string;          // kept for backwards compat with existing rows
+  branch_ids: string[];       // new: multi-branch scope. Empty = all branches in org.
   permissions: Record<string, boolean>;
   app_access: AppAccess;
 }
 
-export interface OrganizationOption {
-  id: string;
-  name: string;
-}
-
-export interface BranchOption {
-  id: string;
-  name: string;
-  organization_id: string;
-}
+export interface OrganizationOption { id: string; name: string; }
+export interface BranchOption { id: string; name: string; organization_id: string; }
 
 interface Props {
   isEditMode: boolean;
@@ -46,14 +40,9 @@ interface Props {
   setFormData: React.Dispatch<React.SetStateAction<CustomRoleFormData>>;
   organizations: OrganizationOption[];
   filteredBranches: BranchOption[];
-  // user fields
-  userEmail: string;
-  setUserEmail: (v: string) => void;
-  userPassword: string;
-  setUserPassword: (v: string) => void;
-  userName: string;
-  setUserName: (v: string) => void;
-  // features
+  userEmail: string; setUserEmail: (v: string) => void;
+  userPassword: string; setUserPassword: (v: string) => void;
+  userName: string; setUserName: (v: string) => void;
   features: FeatureGroups;
   toggleAllInGroup: (features: { key: string }[], enable: boolean) => void;
   togglePermission: (key: string) => void;
@@ -65,19 +54,8 @@ function PasswordFieldWithToggle({ label, value, onChange, placeholder }: { labe
     <div className="space-y-2">
       <Label>{label}</Label>
       <div className="relative">
-        <Input
-          type={show ? 'text' : 'password'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          autoComplete="new-password"
-          className="pr-10"
-        />
-        <button
-          type="button"
-          onClick={() => setShow(!show)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-        >
+        <Input type={show ? 'text' : 'password'} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete="new-password" className="pr-10" />
+        <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
@@ -86,60 +64,40 @@ function PasswordFieldWithToggle({ label, value, onChange, placeholder }: { labe
 }
 
 function CustomRoleFormImpl({
-  isEditMode,
-  formData,
-  setFormData,
-  organizations,
-  filteredBranches,
-  userEmail,
-  setUserEmail,
-  userPassword,
-  setUserPassword,
-  userName,
-  setUserName,
-  features,
-  toggleAllInGroup,
-  togglePermission,
+  isEditMode, formData, setFormData, organizations, filteredBranches,
+  userEmail, setUserEmail, userPassword, setUserPassword, userName, setUserName,
+  features, togglePermission,
 }: Props) {
+  const selectedBranchIds = formData.branch_ids || [];
+  const allBranchesSelected = selectedBranchIds.length === 0;
+
+  const toggleBranch = (id: string) => {
+    setFormData(prev => {
+      const cur = prev.branch_ids || [];
+      const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+      return { ...prev, branch_ids: next, branch_id: next.length === 1 ? next[0] : '' };
+    });
+  };
+
+  const setAllBranches = () => {
+    setFormData(prev => ({ ...prev, branch_ids: [], branch_id: '' }));
+  };
+
   return (
     <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2 overscroll-contain">
-      {/* Basic Info */}
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>Role Name *</Label>
-          <Input
-            value={formData.name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g., Store Supervisor"
-            autoComplete="off"
-          />
+          <Input value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))} placeholder="e.g., Store Supervisor" autoComplete="off" />
         </div>
-
         <div className="space-y-2">
           <Label>Description</Label>
-          <Textarea
-            value={formData.description}
-            onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder="Describe the role's responsibilities..."
-            rows={2}
-          />
+          <Textarea value={formData.description} onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))} placeholder="Describe the role's responsibilities..." rows={2} />
         </div>
-
         <div className="space-y-2">
           <Label>Base Role Type *</Label>
-          <Select
-            value={formData.base_role}
-            onValueChange={(v) =>
-              setFormData((prev) => ({
-                ...prev,
-                base_role: v as BaseRole,
-                permissions: {}, // Reset permissions when base role changes
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+          <Select value={formData.base_role} onValueChange={(v) => setFormData((p) => ({ ...p, base_role: v as BaseRole, permissions: {} }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent className="z-[200]">
               <SelectItem value="manager">Store Account</SelectItem>
               <SelectItem value="hr">HR</SelectItem>
@@ -150,191 +108,117 @@ function CustomRoleFormImpl({
         </div>
       </div>
 
-      {/* User Credentials - Only show in Create mode, positioned after base role */}
       {!isEditMode && (
         <div className="space-y-4 border-t pt-4">
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Email Address *</Label>
-              <Input
-                type="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                placeholder="user@company.com"
-                autoComplete="off"
-              />
+              <Input type="email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="user@company.com" autoComplete="off" />
             </div>
-
-            <PasswordFieldWithToggle
-              label="Password *"
-              value={userPassword}
-              onChange={setUserPassword}
-              placeholder="Minimum 6 characters"
-            />
-
+            <PasswordFieldWithToggle label="Password *" value={userPassword} onChange={setUserPassword} placeholder="Minimum 6 characters" />
             <div className="space-y-2">
               <Label>Full Name *</Label>
-              <Input
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter full name"
-                autoComplete="off"
-              />
+              <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Enter full name" autoComplete="off" />
             </div>
           </div>
         </div>
       )}
 
-      {/* Scope Configuration - Only for Manager/HR */}
       {formData.base_role !== "employee" && (
         <div className="space-y-4 border-t pt-4">
-          <h4 className="font-medium flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            Scope Configuration
-          </h4>
+          <h4 className="font-medium flex items-center gap-2"><Building2 className="h-4 w-4" />Scope Configuration</h4>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Organization</Label>
-              <Select
-                value={formData.organization_id || "all"}
-                onValueChange={(v) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    organization_id: v === "all" ? "" : v,
-                    branch_id: "", // Reset branch when org changes
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select organization" />
-                </SelectTrigger>
-                <SelectContent className="z-[200]">
-                  <SelectItem value="all">All Organizations</SelectItem>
-                  {organizations.map((org) => (
-                    <SelectItem key={org.id} value={org.id}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label>Organization</Label>
+            <Select value={formData.organization_id || "all"} onValueChange={(v) => setFormData((p) => ({ ...p, organization_id: v === "all" ? "" : v, branch_id: "", branch_ids: [] }))}>
+              <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+              <SelectContent className="z-[200]">
+                <SelectItem value="all">All Organizations</SelectItem>
+                {organizations.map((org) => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Branch {formData.organization_id ? `(${filteredBranches.length} available)` : '(select org first)'}</Label>
-              <Select
-                value={formData.branch_id || "all"}
-                onValueChange={(v) => setFormData((prev) => ({ ...prev, branch_id: v === "all" ? "" : v }))}
-                disabled={!formData.organization_id}
-              >
-                <SelectTrigger className={!formData.organization_id ? "opacity-50" : ""}>
-                  <SelectValue placeholder={formData.organization_id ? "Select branch" : "Select organization first"} />
-                </SelectTrigger>
-                <SelectContent className="z-[200]">
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {filteredBranches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>
+                Branches {formData.organization_id
+                  ? `(${filteredBranches.length} available)`
+                  : '(select org first)'}
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                {allBranchesSelected ? 'All branches' : `${selectedBranchIds.length} selected`}
+              </span>
             </div>
+            {!formData.organization_id ? (
+              <div className="text-xs text-muted-foreground border border-dashed rounded-md p-3">
+                Select an organization to pick specific branches.
+              </div>
+            ) : (
+              <div className="space-y-2 border rounded-md p-3 max-h-52 overflow-y-auto">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <Checkbox checked={allBranchesSelected} onCheckedChange={setAllBranches} />
+                  All branches in this organization
+                </label>
+                <div className="border-t pt-2 space-y-1.5">
+                  {filteredBranches.map(b => (
+                    <label key={b.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 rounded px-1 py-0.5">
+                      <Checkbox
+                        checked={selectedBranchIds.includes(b.id)}
+                        onCheckedChange={() => toggleBranch(b.id)}
+                      />
+                      {b.name}
+                    </label>
+                  ))}
+                  {filteredBranches.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No branches in this organization yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Tick multiple branches to give this role oversight of only those branches. Leave everything unticked or tick "All branches" to allow every branch in the organization.
+            </p>
           </div>
         </div>
       )}
 
-      {/* Feature Permissions - Module-level toggles */}
       <div className="space-y-4 border-t pt-4">
-        <h4 className="font-medium flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4" />
-          Feature Permissions
-        </h4>
-
+        <h4 className="font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Feature Permissions</h4>
         <div className="space-y-3">
           {Object.entries(features).map(([groupName, groupFeatures]) => {
             const featureKey = groupFeatures[0]?.key;
             if (!featureKey) return null;
             return (
               <div key={groupName} className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium text-sm">{groupName}</p>
-                </div>
-                <Switch
-                  checked={formData.permissions[featureKey] || false}
-                  onCheckedChange={(checked) => {
-                    togglePermission(featureKey);
-                  }}
-                />
+                <div><p className="font-medium text-sm">{groupName}</p></div>
+                <Switch checked={formData.permissions[featureKey] || false} onCheckedChange={() => togglePermission(featureKey)} />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Extra App Access */}
       <div className="space-y-4 border-t pt-4">
-        <h4 className="font-medium flex items-center gap-2">
-          <Settings2 className="h-4 w-4" />
-          Extra App Access
-        </h4>
-
+        <h4 className="font-medium flex items-center gap-2"><Settings2 className="h-4 w-4" />Extra App Access</h4>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza Safe</p>
-              <p className="text-xs text-muted-foreground">Health & Safety management</p>
-            </div>
-            <Switch
-              checked={formData.app_access.niza_safe}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_safe: checked } }))
-              }
-            />
-          </div>
-
-          {formData.base_role !== 'manager' && (
-            <div className="flex items-center justify-between p-3 border rounded-lg">
+          {([
+            { key: 'niza_safe', label: 'Niza Safe', desc: 'Health & Safety management', show: true },
+            { key: 'niza_finance', label: 'Niza Finance', desc: 'Profit & Loss Calculator', show: formData.base_role !== 'manager' },
+            { key: 'niza_templates', label: 'Niza Templates', desc: 'Templates & Brand Assets', show: formData.base_role !== 'manager' },
+            { key: 'niza_elearning', label: 'Niza E-Learning', desc: 'Training courses & certifications', show: true },
+          ] as const).filter(x => x.show).map(x => (
+            <div key={x.key} className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <p className="font-medium text-sm">Niza Finance</p>
-                <p className="text-xs text-muted-foreground">Profit & Loss Calculator</p>
+                <p className="font-medium text-sm">{x.label}</p>
+                <p className="text-xs text-muted-foreground">{x.desc}</p>
               </div>
               <Switch
-                checked={formData.app_access.niza_finance}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_finance: checked } }))
-                }
+                checked={(formData.app_access as any)[x.key]}
+                onCheckedChange={(checked) => setFormData((p) => ({ ...p, app_access: { ...p.app_access, [x.key]: checked } as AppAccess }))}
               />
             </div>
-          )}
-
-          {formData.base_role !== 'manager' && (
-            <div className="flex items-center justify-between p-3 border rounded-lg">
-              <div>
-                <p className="font-medium text-sm">Niza Templates</p>
-                <p className="text-xs text-muted-foreground">Templates & Brand Assets</p>
-              </div>
-              <Switch
-                checked={formData.app_access.niza_templates}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_templates: checked } }))
-                }
-              />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div>
-              <p className="font-medium text-sm">Niza E-Learning</p>
-              <p className="text-xs text-muted-foreground">Training courses & certifications</p>
-            </div>
-            <Switch
-              checked={formData.app_access.niza_elearning}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, app_access: { ...prev.app_access, niza_elearning: checked } }))
-              }
-            />
-          </div>
+          ))}
         </div>
       </div>
     </div>

@@ -21,6 +21,7 @@ interface CustomRole {
   base_role: BaseRole;
   organization_id: string | null;
   branch_id: string | null;
+  branch_ids: string[];
   permissions: Record<string, boolean>;
   app_access: AppAccess;
   is_active: boolean;
@@ -87,6 +88,7 @@ export default function CustomRolesManagement() {
     base_role: 'manager',
     organization_id: '',
     branch_id: '',
+    branch_ids: [],
     permissions: {},
     app_access: { ...defaultAppAccess },
   });
@@ -144,6 +146,7 @@ export default function CustomRolesManagement() {
           base_role,
           organization_id: role.organization_id,
           branch_id: role.branch_id,
+          branch_ids: Array.isArray((role as any).branch_ids) ? ((role as any).branch_ids as string[]) : [],
           permissions,
           app_access,
           is_active: role.is_active ?? true,
@@ -167,6 +170,7 @@ export default function CustomRolesManagement() {
       base_role: 'manager',
       organization_id: '',
       branch_id: '',
+      branch_ids: [],
       permissions: {},
       app_access: { ...defaultAppAccess },
     });
@@ -189,6 +193,7 @@ export default function CustomRolesManagement() {
       base_role: role.base_role,
       organization_id: role.organization_id || '',
       branch_id: role.branch_id || '',
+      branch_ids: role.branch_ids || (role.branch_id ? [role.branch_id] : []),
       permissions: role.permissions || {},
       app_access: role.app_access || { ...defaultAppAccess },
     });
@@ -216,8 +221,9 @@ export default function CustomRolesManagement() {
       return;
     }
     // Validate required org/branch based on role
-    if (formData.base_role === 'manager' && !formData.branch_id) {
-      toast.error('Store Account users must be assigned to a branch');
+    const effectiveBranchId = formData.branch_id || (formData.branch_ids?.length === 1 ? formData.branch_ids[0] : '');
+    if (formData.base_role === 'manager' && !effectiveBranchId) {
+      toast.error('Store Account users must be assigned to exactly one branch');
       return;
     }
 
@@ -232,11 +238,14 @@ export default function CustomRolesManagement() {
             description: formData.description.trim() || null,
             base_role: formData.base_role,
             organization_id: formData.organization_id || null,
-            branch_id: formData.branch_id || null,
+            branch_id: effectiveBranchId || null,
+            branch_ids: (formData.branch_ids && formData.branch_ids.length > 0)
+              ? formData.branch_ids
+              : (effectiveBranchId ? [effectiveBranchId] : []),
             permissions: formData.permissions as any,
             app_access: formData.app_access as any,
             created_by: user?.id || null,
-          },
+          } as any,
         ])
         .select()
         .single();
@@ -252,7 +261,7 @@ export default function CustomRolesManagement() {
             name: userName.trim(),
             role: formData.base_role,
             organization_id: formData.organization_id || '',
-            branch_id: formData.branch_id || '',
+            branch_id: effectiveBranchId || '',
             custom_role_id: roleData.id,
           },
         });
@@ -285,6 +294,7 @@ export default function CustomRolesManagement() {
 
     setIsSubmitting(true);
     try {
+      const effectiveBranchId = formData.branch_id || (formData.branch_ids?.length === 1 ? formData.branch_ids[0] : '');
       const { error } = await supabase
         .from('custom_roles')
         .update({
@@ -292,10 +302,13 @@ export default function CustomRolesManagement() {
           description: formData.description.trim() || null,
           base_role: formData.base_role,
           organization_id: formData.organization_id || null,
-          branch_id: formData.branch_id || null,
+          branch_id: effectiveBranchId || null,
+          branch_ids: (formData.branch_ids && formData.branch_ids.length > 0)
+            ? formData.branch_ids
+            : (effectiveBranchId ? [effectiveBranchId] : []),
           permissions: formData.permissions as any,
           app_access: formData.app_access as any,
-        })
+        } as any)
         .eq('id', selectedRole.id);
 
       if (error) throw error;
@@ -426,6 +439,15 @@ export default function CustomRolesManagement() {
     return branches.find(b => b.id === branchId)?.name || 'Unknown';
   };
 
+  const getBranchesLabel = (role: CustomRole) => {
+    const ids = (role.branch_ids && role.branch_ids.length > 0)
+      ? role.branch_ids
+      : (role.branch_id ? [role.branch_id] : []);
+    if (ids.length === 0) return 'All Branches';
+    if (ids.length === 1) return getBranchName(ids[0]);
+    return ids.map(id => getBranchName(id)).join(', ');
+  };
+
   const getBaseRoleBadge = (baseRole: string) => {
     switch (baseRole) {
       case 'hr':
@@ -512,9 +534,9 @@ export default function CustomRolesManagement() {
                       {getOrgName(role.organization_id)}
                     </div>
                     {role.organization_id && (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {getBranchName(role.branch_id)}
+                      <div className="flex items-start gap-1">
+                        <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2">{getBranchesLabel(role)}</span>
                       </div>
                     )}
                   </div>

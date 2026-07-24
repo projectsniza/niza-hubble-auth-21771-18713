@@ -18,6 +18,12 @@ export interface CoopCategoryTotals {
   cash_in_drawer: number; gross_sales: number; net_takings: number;
   // VAT splits aggregated across all departments
   vat_20: number; vat_5: number; net_20: number; net_5: number; net_0: number;
+  // Raw "fuel department 0%" amount — before applying the branch's VM/CW split.
+  fuel_zero_rated: number;
+  // Weekly Cash Reconciliation figures (populated at aggregation time — the
+  // CashRec upload sits at the Monday of the week).
+  cashrec_total_banking: number; cashrec_cash_banked: number;
+  cashrec_card_banked: number; cashrec_other: number;
 }
 
 export const emptyCoopTotals = (): CoopCategoryTotals => ({
@@ -28,6 +34,9 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
   coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
   vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
+  fuel_zero_rated: 0,
+  cashrec_total_banking: 0, cashrec_cash_banked: 0,
+  cashrec_card_banked: 0, cashrec_other: 0,
 });
 
 const numFromCell = (s: string | undefined): number => {
@@ -154,11 +163,37 @@ const splitStoredCoopRawText = (rawText?: string | null): CoopParseInput => {
   return { txt1: rawText };
 };
 
-export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null) {
+export type VendingSplitMode = 'culverstone' | 'houndsmills';
+
+/**
+ * Apply the branch-specific split of the "Fuel dept @ 0% VAT" amount into
+ * Vending Machines vs Car Wash. Mutates a shallow copy and returns it.
+ *
+ * - Culverstone-style: extra fuel-zero-rated amount is Vending only.
+ *   VM += fuel_zero_rated (CW stays as X-Read "Car Wash" total).
+ * - Houndsmills-style: fuel-zero-rated = Car Wash + Vending. Car Wash comes
+ *   from the X-Read, and Vending is the remainder.
+ *   VM = max(0, fuel_zero_rated - CW).
+ */
+export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplitMode | null | undefined): CoopCategoryTotals {
+  const out = { ...totals };
+  const extra = out.fuel_zero_rated || 0;
+  if (!extra) return out;
+  if (mode === 'houndsmills') {
+    const remainder = Math.max(0, extra - (out.CW || 0));
+    out.VM = +((out.VM || 0) + remainder).toFixed(2);
+  } else {
+    // culverstone (default): all extra fuel-zero-rated is vending
+    out.VM = +((out.VM || 0) + extra).toFixed(2);
+  }
+  return out;
+}
+
+export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null, mode?: VendingSplitMode | null) {
   const input = splitStoredCoopRawText(rawText);
   const detailed = parseCoopFuelDetailed(input);
   if (!detailed.knownLabels.length) return parsedTotals || {};
-  const breakdown = detailed.totals;
+  const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
   return {
     ...(parsedTotals || {}),
     shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
@@ -167,6 +202,21 @@ export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | 
     breakdown,
     format: 'coop_fuel' as const,
   };
+}
+
+/**
+ * Parse a weekly Cash Reconciliation CSV/text export. Very tolerant: matches
+ * common label variants and returns the last numeric on each matching line.
+ */
+export function parseCashRec(text: string): {
+  total_banking: number; cash_banked: number; card_banked: number; other: number;
+} {
+  const grab = (kw: RegExp) => findTxtLineLast(text, kw);
+  const total_banking = grab(/Total\s*Banking|Total\s*Banked/i);
+  const cash_banked  = grab(/Cash\s*Banked|Cash\s*Lifts?|Cash\s*Bank/i);
+  const card_banked  = grab(/Card\s*Settlement|Card\s*Bank(?:ed)?|Merchant\s*Settlement/i);
+  const other        = grab(/Other\s*Bank(?:ed)?|Cheque(?:s)?\s*Bank(?:ed)?/i);
+  return { total_banking, cash_banked, card_banked, other };
 }
 
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
@@ -218,7 +268,8 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
-        // Fuel department 0% is small/misc — leave it out of shop buckets.
+        // Capture Fuel-department 0% amount for branch-specific VM/CW split.
+        if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
       } else if (code === 'NP') {
         out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
       } else if (code === 'VM' || code === 'CW') {
@@ -465,54 +516,16 @@ export async function buildBranchSummaryWorkbook(
     return XLSX.utils.aoa_to_sheet(aoa);
   };
 
-  // SHIFT SHEET — daily tender breakdown extracted from TXT1
-  const shiftHeaders = ['DATE','CASH','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT',
-    'COUPON','PAYPOINT','PAYZONE','CASH LIFTS','GROSS SALES','NET TAKINGS','CASH IN DRAWER'];
-  const shiftRows: any[][] = [...title('Shift Sheet'), shiftHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    shiftRows.push([
-      r.sale_date,
-      t.cash_tender || '', t.visa_mc || '', t.amex || '', t.fuel_card || '',
-      t.customer_account || '', t.coupon || '', t.paypoint || '', t.payzone || '',
-      t.cash_lifts || '', t.gross_sales || '', t.net_takings || '', t.cash_in_drawer || ''
-    ]);
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shiftRows), 'SHIFT SHEET');
-
-  XLSX.utils.book_append_sheet(wb, stub('Counting Summary',
-    ['DATE','PLU NO','ITEM','PRICE','OPEN','ADD','CLOSE','SALE']), 'COUNTING');
-  XLSX.utils.book_append_sheet(wb, stub('Tank Dips',
-    ['DATE','TANK','METER READINGS','TOTAL ISSUE','TODAYS DIP','DELIVERY','GONE FROM TANK','GAIN/LOSS','%']), 'DIPS');
+  // ---- Removed by client request: SHIFT SHEET, COUNTING, DIPS, P&L, BANK,
+  // STOCK CONT, Week Wages, HOURS & WAGES, comp statement.
+  // OBJECTIVE is kept as a skeleton for management notes.
   XLSX.utils.book_append_sheet(wb, stub('Objectives',
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
 
-  // C.CARD — card receipts breakdown from TXT1
+  // C.CARD — client asked for this tab to be an empty plain sheet (headers only).
   const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT','COUPON','OTHER','TOTAL'];
   const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    const total = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0) +
-                  (t.customer_account || 0) + (t.coupon || 0);
-    ccardRows.push([
-      r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '',
-      t.customer_account || '', t.coupon || '', '', total || ''
-    ]);
-  }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccardRows), 'C.CARD');
-
-  // BANK — daily cash banked from CSV (cash lifts)
-  const bankHeadersAuto = ['DATE','CASH BANKED','CHEQUES BANKED','CARD SETTLEMENT','OTHER','TOTAL'];
-  const bankRows: any[][] = [...title('Banking'), bankHeadersAuto];
-  for (const r of rows) {
-    const t = r.totals;
-    const cardSettle = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
-    const cash = t.cash_lifts || 0;
-    bankRows.push([
-      r.sale_date, cash || '', '', cardSettle || '', '',
-      +(cash + cardSettle).toFixed(2) || ''
-    ]);
-  }
 
   // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
   const inv = meta.invoices || [];
@@ -539,7 +552,6 @@ export async function buildBranchSummaryWorkbook(
       ];
       aoa.push(extraPaidBy ? [base[0], base[1], i.category || '', base[3], base[4], base[5], base[6], i.payment_method || ''] : base);
     }
-    // Pad with at least the till-date skeleton if no invoices, so layout matches.
     if (list.length === 0) {
       for (const r of rows) {
         const row = new Array(headers.length).fill('');
@@ -556,17 +568,6 @@ export async function buildBranchSummaryWorkbook(
     ['DATE','PAYEE','DESCRIPTION','CATEGORY','NET','VAT','GROSS','PAID BY'], expenses, true), 'EXPENSES');
   XLSX.utils.book_append_sheet(wb, invoiceSheet('Purchases',
     ['DATE','SUPPLIER','INVOICE NO','CATEGORY','NET','VAT','GROSS'], purchases), 'PURCHASE');
-  XLSX.utils.book_append_sheet(wb, stub('Profit & Loss',
-    ['DATE','SALES','COST OF SALES','GROSS PROFIT','EXPENSES','NET PROFIT']), '      P &  L  ');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bankRows), ' BANK ');
-  XLSX.utils.book_append_sheet(wb, stub('Stock Control',
-    ['DATE','OPENING STOCK','PURCHASES','SALES','CLOSING STOCK','VARIANCE']), 'STOCK CONT');
-  XLSX.utils.book_append_sheet(wb, stub('Week Wages',
-    ['WEEK ENDING','EMPLOYEE','HOURS','RATE','GROSS','TAX','NI','NET']), 'Week Wages');
-  XLSX.utils.book_append_sheet(wb, stub('Hours & Wages',
-    ['DATE','EMPLOYEE','HOURS','RATE','AMOUNT']), 'HOURS & WAGES');
-  XLSX.utils.book_append_sheet(wb, stub('Comparative Statement',
-    ['DATE','THIS MONTH','LAST MONTH','VARIANCE','YTD']), 'comp statement');
 
   const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

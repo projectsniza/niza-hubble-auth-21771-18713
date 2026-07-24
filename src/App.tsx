@@ -88,6 +88,9 @@ const VarianceDashboard = lazy(() => import("./pages/niza-analysis/VarianceDashb
 const CategoryMappings = lazy(() => import("./pages/niza-analysis/CategoryMappings"));
 const BranchPerformance = lazy(() => import("./pages/niza-analysis/BranchPerformance"));
 const DataFlowchart = lazy(() => import("./pages/niza-analysis/DataFlowchart"));
+const LivePreview = lazy(() => import("./pages/niza-analysis/LivePreview"));
+const UploadedFiles = lazy(() => import("./pages/niza-analysis/UploadedFiles"));
+const Formulas = lazy(() => import("./pages/niza-analysis/Formulas"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -196,6 +199,9 @@ const App = () => (
                 <Route path="category-mappings" element={<CategoryMappings />} />
                 <Route path="branch-performance" element={<BranchPerformance />} />
                 <Route path="data-flow" element={<DataFlowchart />} />
+                <Route path="live-preview" element={<LivePreview />} />
+                <Route path="uploaded-files" element={<UploadedFiles />} />
+                <Route path="formulas" element={<Formulas />} />
               </Route>
               <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
