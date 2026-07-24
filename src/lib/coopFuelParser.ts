@@ -18,6 +18,12 @@ export interface CoopCategoryTotals {
   cash_in_drawer: number; gross_sales: number; net_takings: number;
   // VAT splits aggregated across all departments
   vat_20: number; vat_5: number; net_20: number; net_5: number; net_0: number;
+  // Raw "fuel department 0%" amount — before applying the branch's VM/CW split.
+  fuel_zero_rated: number;
+  // Weekly Cash Reconciliation figures (populated at aggregation time — the
+  // CashRec upload sits at the Monday of the week).
+  cashrec_total_banking: number; cashrec_cash_banked: number;
+  cashrec_card_banked: number; cashrec_other: number;
 }
 
 export const emptyCoopTotals = (): CoopCategoryTotals => ({
@@ -28,6 +34,9 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
   coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
   vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
+  fuel_zero_rated: 0,
+  cashrec_total_banking: 0, cashrec_cash_banked: 0,
+  cashrec_card_banked: 0, cashrec_other: 0,
 });
 
 const numFromCell = (s: string | undefined): number => {
@@ -218,7 +227,8 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
-        // Fuel department 0% is small/misc — leave it out of shop buckets.
+        // Capture Fuel-department 0% amount for branch-specific VM/CW split.
+        if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
       } else if (code === 'NP') {
         out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
       } else if (code === 'VM' || code === 'CW') {
