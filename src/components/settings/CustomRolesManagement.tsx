@@ -439,6 +439,15 @@ export default function CustomRolesManagement() {
     return branches.find(b => b.id === branchId)?.name || 'Unknown';
   };
 
+  const getBranchesLabel = (role: CustomRole) => {
+    const ids = (role.branch_ids && role.branch_ids.length > 0)
+      ? role.branch_ids
+      : (role.branch_id ? [role.branch_id] : []);
+    if (ids.length === 0) return 'All Branches';
+    if (ids.length === 1) return getBranchName(ids[0]);
+    return ids.map(id => getBranchName(id)).join(', ');
+  };
+
   const getBaseRoleBadge = (baseRole: string) => {
     switch (baseRole) {
       case 'hr':
@@ -525,9 +534,9 @@ export default function CustomRolesManagement() {
                       {getOrgName(role.organization_id)}
                     </div>
                     {role.organization_id && (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {getBranchName(role.branch_id)}
+                      <div className="flex items-start gap-1">
+                        <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                        <span className="line-clamp-2">{getBranchesLabel(role)}</span>
                       </div>
                     )}
                   </div>
