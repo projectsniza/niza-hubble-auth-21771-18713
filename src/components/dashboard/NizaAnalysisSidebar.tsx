@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu, AlertTriangle, Bot, Users, GitCompare, Tags, BarChart3, Settings } from 'lucide-react';
+import { Home, Upload, FileSpreadsheet, Settings2, LogOut, Menu, AlertTriangle, Bot, Users, GitCompare, Tags, BarChart3, Settings, Eye, Files, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
@@ -15,8 +15,11 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
 
   const items = [
     { title: 'Home', icon: Home, path: '/niza-analysis' },
+    { title: 'Live Preview', icon: Eye, path: '/niza-analysis/live-preview' },
     { title: 'Xero Export', icon: FileSpreadsheet, path: '/niza-analysis/xero-export' },
     { title: 'Daily Sales', icon: Upload, path: '/niza-analysis/daily-sales' },
+    { title: 'Uploaded Files', icon: Files, path: '/niza-analysis/uploaded-files' },
+    { title: 'Formulas', icon: Calculator, path: '/niza-analysis/formulas' },
     { title: 'Variance Dashboard', icon: GitCompare, path: '/niza-analysis/variance' },
     { title: 'Supplier Ledger', icon: Users, path: '/niza-analysis/supplier-ledger' },
     { title: 'Branch Performance', icon: BarChart3, path: '/niza-analysis/branch-performance' },
