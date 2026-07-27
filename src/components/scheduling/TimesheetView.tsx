@@ -390,19 +390,27 @@ export function TimesheetView() {
       const payroll = getPayrollPeriod(currentMonth);
       const prevPayroll = getPayrollPeriod(subMonths(currentMonth, 1));
 
-      const { data: employeesData } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
-        .in('status', ['active', 'onboarding', 'on_leave'])
-        .order('first_name');
+      const employeesData = await fetchAllPages((from, to) =>
+        supabase
+          .from('employees')
+          .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
+          .in('status', ['active', 'onboarding', 'on_leave'])
+          .order('first_name')
+          .order('id')
+          .range(from, to)
+      );
 
       setEmployees(employeesData || []);
 
 
-      const { data: weekTimesheetsData } = await supabase
-        .from('timesheets')
-        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .eq('week_start_date', weekStartStr);
+      const weekTimesheetsData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .eq('week_start_date', weekStartStr)
+          .order('id')
+          .range(from, to)
+      );
 
       const timesheetsWithEntries = await Promise.all(
         (weekTimesheetsData || []).map(async (ts) => {
@@ -415,6 +423,7 @@ export function TimesheetView() {
         })
       );
       setTimesheets(timesheetsWithEntries);
+
 
       // Use Monday of the week containing the payroll start so partial first
       // week (e.g. Sat 21 / Sun 22 with Mon-start 16) is included.
