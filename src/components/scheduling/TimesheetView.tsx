@@ -307,12 +307,16 @@ export function TimesheetView() {
         const payroll = getPayrollPeriod(currentMonth);
         const startStr = format(payroll.start, 'yyyy-MM-dd');
         const endStr = format(payroll.end, 'yyyy-MM-dd');
-        const { data: entries } = await supabase
-          .from('temporary_timesheet_entries')
-          .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
-          .gte('entry_date', startStr)
-          .lte('entry_date', endStr)
-          .limit(10000);
+        const entries = await fetchAllPages((from, to) =>
+          supabase
+            .from('temporary_timesheet_entries')
+            .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
+            .gte('entry_date', startStr)
+            .lte('entry_date', endStr)
+            .order('id')
+            .range(from, to)
+        );
+
 
         const tempIds = Array.from(new Set((entries || []).map((e: any) => e.temporary_employee_id)));
         if (tempIds.length === 0) { setMonthlyTempByBranch({}); return; }
