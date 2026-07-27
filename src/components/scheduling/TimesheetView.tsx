@@ -74,6 +74,22 @@ interface Timesheet {
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+// PostgREST caps every response at 1000 rows regardless of .limit(), so every
+// month-wide read must be paginated with .range() or totals silently truncate.
+const PAGE_SIZE = 1000;
+const fetchAllPages = async (build: (from: number, to: number) => any): Promise<any[]> => {
+  const out: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = data || [];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+};
+
+
 // Payroll period: 21st of selected month to 20th of next month
 const getPayrollPeriod = (month: Date) => {
   const year = month.getFullYear();
@@ -291,12 +307,16 @@ export function TimesheetView() {
         const payroll = getPayrollPeriod(currentMonth);
         const startStr = format(payroll.start, 'yyyy-MM-dd');
         const endStr = format(payroll.end, 'yyyy-MM-dd');
-        const { data: entries } = await supabase
-          .from('temporary_timesheet_entries')
-          .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
-          .gte('entry_date', startStr)
-          .lte('entry_date', endStr)
-          .limit(10000);
+        const entries = await fetchAllPages((from, to) =>
+          supabase
+            .from('temporary_timesheet_entries')
+            .select('temporary_employee_id, branch_id, entry_date, actual_hours, week_start_date')
+            .gte('entry_date', startStr)
+            .lte('entry_date', endStr)
+            .order('id')
+            .range(from, to)
+        );
+
 
         const tempIds = Array.from(new Set((entries || []).map((e: any) => e.temporary_employee_id)));
         if (tempIds.length === 0) { setMonthlyTempByBranch({}); return; }
@@ -390,19 +410,27 @@ export function TimesheetView() {
       const payroll = getPayrollPeriod(currentMonth);
       const prevPayroll = getPayrollPeriod(subMonths(currentMonth, 1));
 
-      const { data: employeesData } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
-        .in('status', ['active', 'onboarding', 'on_leave'])
-        .order('first_name');
+      const employeesData = await fetchAllPages((from, to) =>
+        supabase
+          .from('employees')
+          .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
+          .in('status', ['active', 'onboarding', 'on_leave'])
+          .order('first_name')
+          .order('id')
+          .range(from, to)
+      );
 
       setEmployees(employeesData || []);
 
 
-      const { data: weekTimesheetsData } = await supabase
-        .from('timesheets')
-        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .eq('week_start_date', weekStartStr);
+      const weekTimesheetsData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .eq('week_start_date', weekStartStr)
+          .order('id')
+          .range(from, to)
+      );
 
       const timesheetsWithEntries = await Promise.all(
         (weekTimesheetsData || []).map(async (ts) => {
@@ -416,17 +444,27 @@ export function TimesheetView() {
       );
       setTimesheets(timesheetsWithEntries);
 
+
       // Use Monday of the week containing the payroll start so partial first
       // week (e.g. Sat 21 / Sun 22 with Mon-start 16) is included.
       const monthRangeStart = startOfWeek(payroll.start, { weekStartsOn: 1 });
       const prevMonthRangeStart = startOfWeek(prevPayroll.start, { weekStartsOn: 1 });
 
-      const { data: monthTimesheetsData } = await supabase
-        .from('timesheets')
-        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
+      // NOTE: PostgREST caps every response at 1000 rows regardless of .limit(),
+      // so all month-wide reads MUST be paginated with .range(). Without this the
+      // monthly consolidation silently loses entries and shows wrong week totals.
+
+
+
+      const monthTimesheetsData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
+          .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
 
       // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
       // before 21st, week 6 extending past 20th) can be summed by date.
@@ -451,32 +489,39 @@ export function TimesheetView() {
       };
 
       if (monthTsIds.length) {
-        const chunkSize = 200;
+        const chunkSize = 100;
         for (let i = 0; i < monthTsIds.length; i += chunkSize) {
-          const { data: allEntries } = await supabase
-            .from('timesheet_entries')
-            .select('*')
-            .in('timesheet_id', monthTsIds.slice(i, i + chunkSize))
-            .limit(10000);
-          (allEntries || []).forEach((e: any) => {
+          const idChunk = monthTsIds.slice(i, i + chunkSize);
+          const allEntries = await fetchAllPages((from, to) =>
+            supabase
+              .from('timesheet_entries')
+              .select('*')
+              .in('timesheet_id', idChunk)
+              .order('id')
+              .range(from, to)
+          );
+          allEntries.forEach((e: any) => {
             addEntryToMonthTimesheet(e.timesheet_id, e);
           });
         }
       }
 
-      const { data: datedEntries, error: datedEntriesError } = await (supabase as any)
-        .from('timesheet_entries')
-        .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
-        .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
-        .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
-      if (datedEntriesError) throw datedEntriesError;
+      const datedEntries = await fetchAllPages((from, to) =>
+        (supabase as any)
+          .from('timesheet_entries')
+          .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
+          .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
+          .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
 
-      (datedEntries || []).forEach((row: any) => {
+      datedEntries.forEach((row: any) => {
         const { timesheet, ...entry } = row;
         if (!timesheet?.id) return;
         addEntryToMonthTimesheet(timesheet.id, entry, timesheet);
       });
+
 
       const monthTsWithEntries = Array.from(monthTsMap.values()).map((t: any) => ({
         ...t,
@@ -486,12 +531,16 @@ export function TimesheetView() {
       setAllMonthTimesheets(monthTsWithEntries);
 
 
-      const { data: prevMonthData } = await supabase
-        .from('timesheets')
-        .select('employee_id, total_adjustment_hours')
-        .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
+      const prevMonthData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('employee_id, total_adjustment_hours')
+          .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
+          .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
+
       
       const adjustments: Record<string, number> = {};
       prevMonthData?.forEach(t => {
@@ -1068,16 +1117,21 @@ export function TimesheetView() {
       const totals = getTsInPeriodTotals(ts, currentMonth);
       const wIdx = getTimesheetPayrollWeekIndex(ts, monthWeeks);
       if (wIdx < 0) return;
-      const total = totals.worked + totals.holiday + totals.sick + totals.adj;
+      // Parity with the Weekly View: it de-duplicates duplicate rows by the
+      // STORED timesheet totals and keeps the busiest one. Monthly must rank
+      // by the exact same value, otherwise the two views can pick different
+      // duplicate timesheets and show different hours for the same week.
+      const total = (Number(ts.total_worked_hours) || 0)
+        + (Number(ts.total_holiday_hours) || 0)
+        + (Number(ts.total_sick_hours) || 0)
+        + (Number(ts.total_adjustment_hours) || 0);
       const dedupeKey = `${rowKey}|${wIdx}`;
       const existing = bestTimesheetByRowWeek.get(dedupeKey);
-      // Weekly view de-duplicates same employee/branch rows and keeps the row
-      // with the most activity. Monthly must do the same per week; otherwise
-      // stale duplicate timesheets create unwanted values.
-      if (!existing || total >= existing.total) {
+      if (!existing || total > existing.total) {
         bestTimesheetByRowWeek.set(dedupeKey, { rowKey, ts, totals, weekIndex: wIdx, total });
       }
     });
+
 
     bestTimesheetByRowWeek.forEach(({ rowKey, totals, weekIndex }) => {
       consolidation[rowKey].weeklyHours[weekIndex] += totals.worked;
