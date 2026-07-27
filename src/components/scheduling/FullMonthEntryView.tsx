@@ -69,15 +69,31 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           'yyyy-MM-dd'
         );
 
+        // PostgREST caps responses at 1000 rows regardless of .limit(), so all
+        // month-wide reads are paginated with .range().
+        const PAGE = 1000;
+        const fetchAllPages = async (build: (from: number, to: number) => any): Promise<any[]> => {
+          const out: any[] = [];
+          for (let from = 0; ; from += PAGE) {
+            const { data, error } = await build(from, from + PAGE - 1);
+            if (error) throw error;
+            const rows = data || [];
+            out.push(...rows);
+            if (rows.length < PAGE) break;
+          }
+          return out;
+        };
+
         // Active employees (scoped)
-        let empQ = supabase
-          .from('employees')
-          .select('id, first_name, last_name, branch_id, organization_id, branch:branches(name)')
-          .in('status', ['active', 'onboarding', 'on_leave'])
-          .limit(5000);
-        if (filterMode === 'organization' && selectedOrg) empQ = empQ.eq('organization_id', selectedOrg);
-        if (filterMode === 'branch' && selectedBranch) empQ = empQ.eq('branch_id', selectedBranch);
-        const { data: emps } = await empQ;
+        const emps = await fetchAllPages((from, to) => {
+          let empQ = supabase
+            .from('employees')
+            .select('id, first_name, last_name, branch_id, organization_id, branch:branches(name)')
+            .in('status', ['active', 'onboarding', 'on_leave']);
+          if (filterMode === 'organization' && selectedOrg) empQ = empQ.eq('organization_id', selectedOrg);
+          if (filterMode === 'branch' && selectedBranch) empQ = empQ.eq('branch_id', selectedBranch);
+          return empQ.order('id').range(from, to);
+        });
         if (cancelled) return;
         const empIds = (emps || []).map((e: any) => e.id);
         if (empIds.length === 0) {
@@ -85,17 +101,25 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           return;
         }
 
-        // Timesheets restricted to these employees + date range (avoid 1000-row limit blowups)
-        const { data: ts } = await supabase
-          .from('timesheets')
-          .select('id, employee_id, week_start_date, total_adjustment_hours')
-          .in('employee_id', empIds)
-          .gte('week_start_date', rangeStart)
-          .lte('week_start_date', rangeEnd)
-          .limit(10000);
-        if (cancelled) return;
+        // Timesheets restricted to these employees + date range
+        const tsList: any[] = [];
+        const empChunk = 100;
+        for (let i = 0; i < empIds.length; i += empChunk) {
+          const ids = empIds.slice(i, i + empChunk);
+          const part = await fetchAllPages((from, to) =>
+            supabase
+              .from('timesheets')
+              .select('id, employee_id, week_start_date, total_adjustment_hours')
+              .in('employee_id', ids)
+              .gte('week_start_date', rangeStart)
+              .lte('week_start_date', rangeEnd)
+              .order('id')
+              .range(from, to)
+          );
+          if (cancelled) return;
+          tsList.push(...part);
+        }
 
-        const tsList = ts || [];
         const tsIds = tsList.map(t => t.id);
 
         // Index timesheet by employee+week, entries by timesheet id (O(1) lookups)
@@ -104,23 +128,26 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
 
         const entriesByTs = new Map<string, any[]>();
         if (tsIds.length) {
-          // Chunked .in() to dodge URL-length / row limits on large months
-          const chunkSize = 200;
+          const chunkSize = 100;
           for (let i = 0; i < tsIds.length; i += chunkSize) {
             const chunk = tsIds.slice(i, i + chunkSize);
-            const { data: ents } = await supabase
-              .from('timesheet_entries')
-              .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
-              .in('timesheet_id', chunk)
-              .limit(10000);
+            const ents = await fetchAllPages((from, to) =>
+              supabase
+                .from('timesheet_entries')
+                .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
+                .in('timesheet_id', chunk)
+                .order('id')
+                .range(from, to)
+            );
             if (cancelled) return;
-            (ents || []).forEach((e: any) => {
+            ents.forEach((e: any) => {
               const arr = entriesByTs.get(e.timesheet_id) || [];
               arr.push(e);
               entriesByTs.set(e.timesheet_id, arr);
             });
           }
         }
+
 
         const out: Record<string, EmpRow[]> = {};
         weeks.forEach(weekStart => {
