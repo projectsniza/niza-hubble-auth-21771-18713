@@ -421,12 +421,31 @@ export function TimesheetView() {
       const monthRangeStart = startOfWeek(payroll.start, { weekStartsOn: 1 });
       const prevMonthRangeStart = startOfWeek(prevPayroll.start, { weekStartsOn: 1 });
 
-      const { data: monthTimesheetsData } = await supabase
-        .from('timesheets')
-        .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
-        .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
+      // NOTE: PostgREST caps every response at 1000 rows regardless of .limit(),
+      // so all month-wide reads MUST be paginated with .range(). Without this the
+      // monthly consolidation silently loses entries and shows wrong week totals.
+      const PAGE = 1000;
+      const fetchAllPages = async (build: (from: number, to: number) => any) => {
+        const out: any[] = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await build(from, from + PAGE - 1);
+          if (error) throw error;
+          const rows = data || [];
+          out.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        return out;
+      };
+
+      const monthTimesheetsData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
+          .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
 
       // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
       // before 21st, week 6 extending past 20th) can be summed by date.
@@ -451,32 +470,39 @@ export function TimesheetView() {
       };
 
       if (monthTsIds.length) {
-        const chunkSize = 200;
+        const chunkSize = 100;
         for (let i = 0; i < monthTsIds.length; i += chunkSize) {
-          const { data: allEntries } = await supabase
-            .from('timesheet_entries')
-            .select('*')
-            .in('timesheet_id', monthTsIds.slice(i, i + chunkSize))
-            .limit(10000);
-          (allEntries || []).forEach((e: any) => {
+          const idChunk = monthTsIds.slice(i, i + chunkSize);
+          const allEntries = await fetchAllPages((from, to) =>
+            supabase
+              .from('timesheet_entries')
+              .select('*')
+              .in('timesheet_id', idChunk)
+              .order('id')
+              .range(from, to)
+          );
+          allEntries.forEach((e: any) => {
             addEntryToMonthTimesheet(e.timesheet_id, e);
           });
         }
       }
 
-      const { data: datedEntries, error: datedEntriesError } = await (supabase as any)
-        .from('timesheet_entries')
-        .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
-        .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
-        .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
-      if (datedEntriesError) throw datedEntriesError;
+      const datedEntries = await fetchAllPages((from, to) =>
+        (supabase as any)
+          .from('timesheet_entries')
+          .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
+          .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
+          .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
 
-      (datedEntries || []).forEach((row: any) => {
+      datedEntries.forEach((row: any) => {
         const { timesheet, ...entry } = row;
         if (!timesheet?.id) return;
         addEntryToMonthTimesheet(timesheet.id, entry, timesheet);
       });
+
 
       const monthTsWithEntries = Array.from(monthTsMap.values()).map((t: any) => ({
         ...t,
