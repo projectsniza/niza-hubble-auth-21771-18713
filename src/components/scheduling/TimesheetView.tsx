@@ -433,18 +433,8 @@ export function TimesheetView() {
       // NOTE: PostgREST caps every response at 1000 rows regardless of .limit(),
       // so all month-wide reads MUST be paginated with .range(). Without this the
       // monthly consolidation silently loses entries and shows wrong week totals.
-      const PAGE = 1000;
-      const fetchAllPages = async (build: (from: number, to: number) => any) => {
-        const out: any[] = [];
-        for (let from = 0; ; from += PAGE) {
-          const { data, error } = await build(from, from + PAGE - 1);
-          if (error) throw error;
-          const rows = data || [];
-          out.push(...rows);
-          if (rows.length < PAGE) break;
-        }
-        return out;
-      };
+
+
 
       const monthTimesheetsData = await fetchAllPages((from, to) =>
         supabase
