@@ -1117,16 +1117,21 @@ export function TimesheetView() {
       const totals = getTsInPeriodTotals(ts, currentMonth);
       const wIdx = getTimesheetPayrollWeekIndex(ts, monthWeeks);
       if (wIdx < 0) return;
-      const total = totals.worked + totals.holiday + totals.sick + totals.adj;
+      // Parity with the Weekly View: it de-duplicates duplicate rows by the
+      // STORED timesheet totals and keeps the busiest one. Monthly must rank
+      // by the exact same value, otherwise the two views can pick different
+      // duplicate timesheets and show different hours for the same week.
+      const total = (Number(ts.total_worked_hours) || 0)
+        + (Number(ts.total_holiday_hours) || 0)
+        + (Number(ts.total_sick_hours) || 0)
+        + (Number(ts.total_adjustment_hours) || 0);
       const dedupeKey = `${rowKey}|${wIdx}`;
       const existing = bestTimesheetByRowWeek.get(dedupeKey);
-      // Weekly view de-duplicates same employee/branch rows and keeps the row
-      // with the most activity. Monthly must do the same per week; otherwise
-      // stale duplicate timesheets create unwanted values.
-      if (!existing || total >= existing.total) {
+      if (!existing || total > existing.total) {
         bestTimesheetByRowWeek.set(dedupeKey, { rowKey, ts, totals, weekIndex: wIdx, total });
       }
     });
+
 
     bestTimesheetByRowWeek.forEach(({ rowKey, totals, weekIndex }) => {
       consolidation[rowKey].weeklyHours[weekIndex] += totals.worked;
