@@ -531,12 +531,16 @@ export function TimesheetView() {
       setAllMonthTimesheets(monthTsWithEntries);
 
 
-      const { data: prevMonthData } = await supabase
-        .from('timesheets')
-        .select('employee_id, total_adjustment_hours')
-        .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
-        .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
-        .limit(10000);
+      const prevMonthData = await fetchAllPages((from, to) =>
+        supabase
+          .from('timesheets')
+          .select('employee_id, total_adjustment_hours')
+          .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
+          .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
+          .order('id')
+          .range(from, to)
+      );
+
       
       const adjustments: Record<string, number> = {};
       prevMonthData?.forEach(t => {
