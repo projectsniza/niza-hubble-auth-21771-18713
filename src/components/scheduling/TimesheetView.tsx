@@ -74,6 +74,22 @@ interface Timesheet {
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+// PostgREST caps every response at 1000 rows regardless of .limit(), so every
+// month-wide read must be paginated with .range() or totals silently truncate.
+const PAGE_SIZE = 1000;
+const fetchAllPages = async (build: (from: number, to: number) => any): Promise<any[]> => {
+  const out: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = data || [];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+};
+
+
 // Payroll period: 21st of selected month to 20th of next month
 const getPayrollPeriod = (month: Date) => {
   const year = month.getFullYear();
