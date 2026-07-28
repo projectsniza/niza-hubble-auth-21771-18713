@@ -7688,6 +7688,7 @@ export type Database = {
           name: string
         }[]
       }
+      get_my_custom_role_branch_ids: { Args: never; Returns: string[] }
       get_my_profile_data: {
         Args: never
         Returns: {
@@ -7709,6 +7710,10 @@ export type Database = {
       }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_in_my_hr_scope: {
+        Args: { _branch_id: string; _organization_id: string }
         Returns: boolean
       }
       is_timesheet_month_locked: {
