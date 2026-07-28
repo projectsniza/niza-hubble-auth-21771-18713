@@ -252,7 +252,8 @@ export function TimesheetView() {
   }>>>({});
 
   
-  const canViewFilters = user?.role === 'super_admin' || (user?.role === 'hr' && user?.hrAccessLevel === 'full');
+  const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
+  const scopedBranchIds = useMemo(() => user?.branchIds?.length ? user.branchIds : [], [user?.branchIds]);
   
   const monthWeeks = useMemo(() => getPayrollWeeks(currentMonth), [currentMonth]);
   const currentWeekStart = monthWeeks[selectedWeekIndex] || monthWeeks[0];
@@ -336,6 +337,7 @@ export function TimesheetView() {
           const t = tempById[e.temporary_employee_id];
           if (!t) return;
           // Apply same scope filters as the consolidation
+          if (scopedBranchIds.length > 0 && !scopedBranchIds.includes(t.branch_id)) return;
           if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
           if (canViewFilters && filterMode === 'branch' && selectedBranch && t.branch_id !== selectedBranch) return;
 
@@ -370,7 +372,7 @@ export function TimesheetView() {
         console.error('Monthly temp consolidation failed', err);
       }
     })();
-  }, [currentMonth, monthWeeks, canViewFilters, filterMode, selectedOrg, selectedBranch]);
+  }, [currentMonth, monthWeeks, canViewFilters, filterMode, selectedOrg, selectedBranch, scopedBranchIds]);
 
 
   // Determine the branch in scope for the lock check
@@ -410,27 +412,31 @@ export function TimesheetView() {
       const payroll = getPayrollPeriod(currentMonth);
       const prevPayroll = getPayrollPeriod(subMonths(currentMonth, 1));
 
-      const employeesData = await fetchAllPages((from, to) =>
-        supabase
+      const employeesData = await fetchAllPages((from, to) => {
+        let query = supabase
           .from('employees')
           .select('id, first_name, last_name, organization_id, branch_id, status, branch:branches(name)')
           .in('status', ['active', 'onboarding', 'on_leave'])
           .order('first_name')
-          .order('id')
-          .range(from, to)
-      );
+          .order('id');
+        if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
+        if (user?.role === 'hr' && scopedBranchIds.length > 0) query = query.in('branch_id', scopedBranchIds);
+        return query.range(from, to);
+      });
 
       setEmployees(employeesData || []);
 
 
-      const weekTimesheetsData = await fetchAllPages((from, to) =>
-        supabase
+      const weekTimesheetsData = await fetchAllPages((from, to) => {
+        let query = supabase
           .from('timesheets')
           .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
           .eq('week_start_date', weekStartStr)
-          .order('id')
-          .range(from, to)
-      );
+          .order('id');
+        if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
+        if (user?.role === 'hr' && scopedBranchIds.length > 0) query = query.in('branch_id', scopedBranchIds);
+        return query.range(from, to);
+      });
 
       const timesheetsWithEntries = await Promise.all(
         (weekTimesheetsData || []).map(async (ts) => {
@@ -456,15 +462,17 @@ export function TimesheetView() {
 
 
 
-      const monthTimesheetsData = await fetchAllPages((from, to) =>
-        supabase
+      const monthTimesheetsData = await fetchAllPages((from, to) => {
+        let query = supabase
           .from('timesheets')
           .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
           .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
           .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
-          .order('id')
-          .range(from, to)
-      );
+          .order('id');
+        if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
+        if (user?.role === 'hr' && scopedBranchIds.length > 0) query = query.in('branch_id', scopedBranchIds);
+        return query.range(from, to);
+      });
 
       // Fetch entries for ALL month timesheets so partial weeks (week 1 starting
       // before 21st, week 6 extending past 20th) can be summed by date.

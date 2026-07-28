@@ -126,6 +126,10 @@ export default function Attendance() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      let employeesQuery = supabase.from('employees').select('id, first_name, last_name, branch_id, organization_id').eq('status', 'active');
+      if (user?.role === 'manager' && user.branchId) employeesQuery = employeesQuery.eq('branch_id', user.branchId);
+      if (user?.role === 'hr' && user.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
+
       const [leaveReqRes, leaveTypesRes, mandatoryRes, employeesRes] = await Promise.all([
         supabase.from('leave_requests').select(`
           *,
@@ -134,7 +138,7 @@ export default function Attendance() {
         `).order('created_at', { ascending: false }),
         supabase.from('leave_types').select('*').order('name'),
         supabase.from('mandatory_leave').select('*').order('start_date'),
-        supabase.from('employees').select('id, first_name, last_name, branch_id, organization_id').eq('status', 'active')
+        employeesQuery
       ]);
 
       setLeaveRequests(leaveReqRes.data || []);

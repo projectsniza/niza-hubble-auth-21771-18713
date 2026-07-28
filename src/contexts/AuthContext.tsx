@@ -14,6 +14,7 @@ export interface AppUser {
   name: string;
   organizationId?: string;
   branchId?: string;
+  branchIds?: string[];
   hrAccessLevel?: HRAccessLevel;
 }
 
@@ -40,7 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const [profileResult, roleResult, employeeByUserResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, email, name, organization_id, branch_id, hr_access_level, is_active')
+          .select('id, email, name, organization_id, branch_id, hr_access_level, is_active, custom_role_id')
           .eq('id', userId)
           .maybeSingle(),
         supabase
@@ -119,6 +120,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return null;
       }
 
+      let branchIds: string[] = [];
+      if (profile.custom_role_id) {
+        const { data: customRole } = await (supabase as any)
+          .from('custom_roles')
+          .select('branch_ids, branch_id, organization_id, is_active')
+          .eq('id', profile.custom_role_id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (customRole) {
+          branchIds = Array.isArray(customRole.branch_ids)
+            ? customRole.branch_ids.filter(Boolean)
+            : customRole.branch_id
+              ? [customRole.branch_id]
+              : [];
+        }
+      }
+
       const appUser: AppUser = {
         id: profile.id,
         email: profile.email,
@@ -126,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: (roleResult.data?.role as UserRole) ?? 'employee',
         organizationId: profile.organization_id || undefined,
         branchId: profile.branch_id || undefined,
+        branchIds,
         hrAccessLevel: (profile.hr_access_level as HRAccessLevel) || 'full',
       };
 

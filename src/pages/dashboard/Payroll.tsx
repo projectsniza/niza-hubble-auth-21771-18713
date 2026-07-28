@@ -333,8 +333,12 @@ export default function Payroll() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      let employeesQuery = supabase.from('employees').select('*').in('status', ['active', 'onboarding']);
+      if (user?.role === 'manager' && user.branchId) employeesQuery = employeesQuery.eq('branch_id', user.branchId);
+      if (user?.role === 'hr' && user.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
+
       const [employeesRes, salaryRes, payrollRes, categoriesRes] = await Promise.all([
-        supabase.from('employees').select('*').in('status', ['active', 'onboarding']),
+        employeesQuery,
         supabase.from('salary_structures').select('*'),
         supabase.from('payroll_records').select('*').order('month', { ascending: false }),
         supabase.from('payroll_categories').select('*').order('name')
