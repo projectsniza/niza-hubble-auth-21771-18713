@@ -253,7 +253,7 @@ export function TimesheetView() {
 
   
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
-  const scopedBranchIds = user?.branchIds?.length ? user.branchIds : [];
+  const scopedBranchIds = useMemo(() => user?.branchIds?.length ? user.branchIds : [], [user?.branchIds]);
   
   const monthWeeks = useMemo(() => getPayrollWeeks(currentMonth), [currentMonth]);
   const currentWeekStart = monthWeeks[selectedWeekIndex] || monthWeeks[0];
