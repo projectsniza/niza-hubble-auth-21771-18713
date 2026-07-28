@@ -327,9 +327,10 @@ export default function ClockIns() {
       const scopedBranchId =
         user?.role === 'employee'
           ? employeeScope?.branchId ?? user.branchId ?? null
-          : user?.role === 'manager' || (user?.role === 'hr' && user.hrAccessLevel === 'branch')
+          : user?.role === 'manager' || (user?.role === 'hr' && user.hrAccessLevel === 'branch' && !user.branchIds?.length)
             ? user.branchId ?? null
             : null;
+      const scopedBranchIds = user?.role === 'hr' && user.branchIds?.length ? user.branchIds : [];
 
       const scopedOrgId =
         user?.role === 'employee'
@@ -345,6 +346,8 @@ export default function ClockIns() {
       let locationsQuery = supabase.from('locations').select('*').order('name');
       if (scopedBranchId) {
         locationsQuery = locationsQuery.eq('branch_id', scopedBranchId);
+      } else if (scopedBranchIds.length > 0) {
+        locationsQuery = locationsQuery.in('branch_id', scopedBranchIds);
       }
 
       let clockInsQuery = supabase
@@ -359,11 +362,15 @@ export default function ClockIns() {
         clockInsQuery = clockInsQuery.eq('user_id', user.id);
       } else if (scopedBranchId) {
         clockInsQuery = clockInsQuery.eq('branch_id', scopedBranchId);
+      } else if (scopedBranchIds.length > 0) {
+        clockInsQuery = clockInsQuery.in('branch_id', scopedBranchIds);
       }
 
       let branchesQuery = supabase.from('branches').select('*, organizations(name)').order('name');
       if (scopedBranchId) {
         branchesQuery = branchesQuery.eq('id', scopedBranchId);
+      } else if (scopedBranchIds.length > 0) {
+        branchesQuery = branchesQuery.in('id', scopedBranchIds);
       } else if (scopedOrgId) {
         branchesQuery = branchesQuery.eq('organization_id', scopedOrgId);
       }

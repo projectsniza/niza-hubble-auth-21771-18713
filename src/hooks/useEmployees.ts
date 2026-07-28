@@ -12,6 +12,7 @@ type ContractApproval = any;
 export function useEmployees(filters?: {
   organizationId?: string;
   branchId?: string;
+  branchIds?: string[];
   managerId?: string;
   status?: string;
   searchQuery?: string;
@@ -26,7 +27,7 @@ export function useEmployees(filters?: {
   const isFetchingRef = useRef(false);
   
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [
-    filters?.organizationId, filters?.branchId, filters?.managerId, filters?.status, filters?.searchQuery
+    filters?.organizationId, filters?.branchId, filters?.branchIds, filters?.managerId, filters?.status, filters?.searchQuery
   ]);
 
   const fetchEmployees = useCallback(async (force = false) => {
@@ -66,7 +67,9 @@ export function useEmployees(filters?: {
       if (filters?.organizationId) {
         query = query.eq('organization_id', filters.organizationId);
       }
-      if (filters?.branchId) {
+      if (filters?.branchIds && filters.branchIds.length > 0) {
+        query = query.in('branch_id', filters.branchIds);
+      } else if (filters?.branchId) {
         query = query.eq('branch_id', filters.branchId);
       }
       if (filters?.managerId) {

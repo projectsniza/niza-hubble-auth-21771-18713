@@ -85,11 +85,14 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   
   const employeeFilters = useMemo(() => {
     const filters: any = { searchQuery };
+    const scopedBranchIds = user?.branchIds?.length ? user.branchIds : [];
     
     if (user?.role === 'manager') {
       filters.branchId = user.branchId;
     } else if (user?.role === 'hr') {
-      if (user.hrAccessLevel === 'branch') {
+      if (scopedBranchIds.length > 0) {
+        filters.branchIds = scopedBranchIds;
+      } else if (user.hrAccessLevel === 'branch') {
         filters.branchId = user.branchId;
       } else if (user.hrAccessLevel === 'organization') {
         filters.organizationId = user.organizationId;
@@ -100,6 +103,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       filters.organizationId = organizationFilter;
     }
     if (branchFilter !== 'all' && !filters.branchId) {
+      delete filters.branchIds;
       filters.branchId = branchFilter;
     }
     if (statusFilter !== 'all') {
@@ -126,9 +130,12 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
   const certMap = useEmployeeCertifications(employeeIds);
 
-  const filteredBranches = organizationFilter !== 'all' 
-    ? branches.filter(b => b.organization_id === organizationFilter)
+  const visibleBranches = user?.branchIds?.length
+    ? branches.filter(b => user.branchIds?.includes(b.id))
     : branches;
+  const filteredBranches = organizationFilter !== 'all' 
+    ? visibleBranches.filter(b => b.organization_id === organizationFilter)
+    : visibleBranches;
 
   const handleDeleteEmployee = async () => {
     if (deleteEmployeeId) {

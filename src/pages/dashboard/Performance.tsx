@@ -139,7 +139,9 @@ export default function Performance() {
 
       // Filter employees by scope for HR/Manager
       if (user?.role === 'hr') {
-        if (user.hrAccessLevel === 'branch') {
+        if (user.branchIds?.length) {
+          employeesQuery = employeesQuery.in('branch_id', user.branchIds);
+        } else if (user.hrAccessLevel === 'branch') {
           employeesQuery = employeesQuery.eq('branch_id', user.branchId);
         } else if (user.hrAccessLevel === 'organization') {
           employeesQuery = employeesQuery.eq('organization_id', user.organizationId);
