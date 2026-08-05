@@ -450,9 +450,9 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<stri
 // monthly cash-summary template (single-tab fallback).
 export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const headers = [
-    'DATE','BRANCH','OPEN BALANCE','OTHER INCOME','DETAILS',
+    'DATE','BRANCH',
     'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
-    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','DRIVE OFF','CREDIT C.SALES','CASH S.TOTAL',
     'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
     'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
   ];
@@ -460,17 +460,28 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const fmt = (n: number) => (n ? Number(n).toFixed(2) : '');
   for (const r of rows) {
     const t = r.totals;
-    const shopSales = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
-                      (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
+    const shopSales = (t.TO || 0) + (t.DR || 0) + (t.AL || 0) + (t.GS || 0) + (t.GZ || 0) +
+                      (t.DO || 0) + (t.NP || 0) + (t.NP20 || 0);
+    const lottoSales = (t.national_lottery || 0) + (t.instant_lottery || 0);
+    const driveOff = t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : 0;
+    const creditCards = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
+    const lottoPrize = Math.abs(t.lottery_payouts || 0);
+    const misc = Math.abs(t.petty_cash || 0);
+    const totalBanking = shopSales + (t.CW || 0) + (t.VM || 0) + (t.payzone || 0) +
+      (t.FU || 0) + lottoSales - lottoPrize + driveOff - creditCards -
+      (t.customer_account || 0) - (t.coupon || 0) - misc;
     const cols = [
       r.sale_date, r.branch_name,
-      '', '', '',
       fmt(shopSales), fmt(t.CW), fmt(t.VM), fmt(t.payzone),
-      fmt(t.FU), fmt(t.national_lottery), fmt(Math.abs(t.lottery_payouts || 0)),
-      '', '', '', '', '', '', '', '', '', ''
+      fmt(t.FU), fmt(lottoSales), fmt(lottoPrize), fmt(driveOff),
+      fmt(creditCards), fmt(t.cash_tender),
+      fmt(t.customer_account), fmt(t.coupon), fmt(misc), '',
+      fmt(totalBanking), fmt(totalBanking), fmt(t.cash_in_drawer),
+      fmt((t.cash_in_drawer || 0) - totalBanking)
     ];
     out.push(cols.map(csvEscape).join(','));
   }
+
   return out.join('\n');
 }
 
