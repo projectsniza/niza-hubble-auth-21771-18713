@@ -793,7 +793,12 @@ export default function Lottery() {
 
   // Save all games data at once
   const saveAllData = async () => {
+    if (isReadOnlyMonth) {
+      toast.error('This lottery month is locked by head office and can no longer be edited.');
+      return;
+    }
     const gamesWithChanges = Object.keys(editingData);
+
     if (gamesWithChanges.length === 0) {
       toast.info('No changes to save');
       return;
