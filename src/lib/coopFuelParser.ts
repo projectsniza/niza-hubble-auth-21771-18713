@@ -493,52 +493,132 @@ export async function buildBranchSummaryWorkbook(
     [label.toUpperCase()], [meta.branch_name], [`Period: ${meta.period_label}`], [],
   ];
 
-  // CASH SUM1
-  const cashHeaders = [
-    'DATE','OPEN BALANCE','OTHER INCOME','DETAILS',
-    'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
-    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
-    'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
-    'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
-  ];
-  const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    const shop = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
-                 (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
-    const creditCardTotal = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
-    const banking = t.cash_lifts || 0;
-    cashRows.push([
-      r.sale_date, '', '', '',
-      shop || '', t.CW || '', t.VM || '', t.payzone || '',
-      t.FU || '', t.national_lottery || '', Math.abs(t.lottery_payouts || 0) || '',
-      creditCardTotal || '', t.cash_tender || '',
-      t.customer_account || '', t.coupon || '',
-      Math.abs(t.petty_cash || 0) || '', '',
-      banking || '', '', '', t.cash_in_drawer || ''
-    ]);
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashRows), 'CASH SUM1');
+  const SALE_SHEET = '  SALE  ';
+  const CCARD_SHEET = 'C.CARD';
+  const SALE_REF = `'${SALE_SHEET}'`;
+  const CCARD_REF = `'${CCARD_SHEET}'`;
+  const HEADER_ROW = 5;            // title() = 4 rows, header on row 5
+  const FIRST_DATA_ROW = HEADER_ROW + 1;
+  const setF = (ws: any, addr: string, f: string) => { ws[addr] = { t: 'n', f }; };
+  const colTotals = (ws: any, cols: string[], lastRow: number, totalRow: number) => {
+    if (lastRow < FIRST_DATA_ROW) return;
+    for (const c of cols) setF(ws, `${c}${totalRow}`, `SUM(${c}${FIRST_DATA_ROW}:${c}${lastRow})`);
+  };
 
-  // SALE — departmental breakdown (now also includes VAT split totals at bottom)
-  const saleHeaders = ['DATE','FUEL','TOBACCO','DRINKS','GROCERY STD','GROCERY ZERO',
-    'DOMESTIC 5%','ALCOHOL','NEWSPAPERS','VENDING','CAR WASH',
-    'NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE','LOTTO PAYOUTS','DRIVE OFF',
-    'NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
+  // ---------------- SALE — departmental breakdown ----------------
+  // A DATE | B FUEL | C FUEL LITRES | D TOBACCO | E DRINKS | F ALCOHOL |
+  // G GROCERY STD | H GROCERY ZERO | I DOMESTIC 5% | J NEWSPAPERS |
+  // K NEWSPAPERS 20% | L VENDING | M CAR WASH | N NAT LOTTERY |
+  // O SCRATCHCARDS | P PAYPOINT | Q PAYZONE | R LOTTO PAYOUTS | S..W VAT split
+  const saleHeaders = ['DATE','FUEL','FUEL SOLD LITRES','TOBACCO','DRINKS','ALCOHOL',
+    'GROCERY STD','GROCERY ZERO','DOMESTIC 5%','NEWSPAPERS','NEWSPAPERS 20%',
+    'VENDING','CAR WASH','NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE',
+    'LOTTO PAYOUTS','NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
   const saleRows: any[][] = [...title('Sales by Department'), saleHeaders];
   for (const r of rows) {
     const t = r.totals;
     saleRows.push([
       r.sale_date,
-      t.FU || '', t.TO || '', t.DR || '', t.GS || '', t.GZ || '',
-      t.DO || '', t.AL || '', t.NP || '', t.VM || '', t.CW || '',
+      t.FU || '', t.fuel_litres || '',
+      t.TO || '', t.DR || '', t.AL || '',
+      t.GS || '', t.GZ || '', t.DO || '',
+      t.NP || '', t.NP20 || '',
+      t.VM || '', t.CW || '',
       t.national_lottery || '', t.instant_lottery || '',
       t.paypoint || '', t.payzone || '',
-      t.lottery_payouts || '', t.fuel_drive_off || '',
+      t.lottery_payouts || '',
       t.net_0 || '', t.net_20 || '', t.vat_20 || '', t.net_5 || '', t.vat_5 || ''
     ]);
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(saleRows), '  SALE  ');
+  const saleWs = XLSX.utils.aoa_to_sheet(saleRows);
+  const saleLastRow = HEADER_ROW + rows.length;
+  const saleTotalRow = saleLastRow + 1;
+  if (rows.length) {
+    saleWs[`A${saleTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(saleWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W'], saleLastRow, saleTotalRow);
+    saleWs['!ref'] = `A1:W${saleTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, saleWs, SALE_SHEET);
+
+  // ---------------- C.CARD — weekly card settlement breakdown ----------------
+  // A DATE | B VISA/MC | C AMEX | D FUEL CARD | E OTHER | F TOTAL
+  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','OTHER','TOTAL'];
+  const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    ccardRows.push([r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '', '', null]);
+  }
+  const ccardWs = XLSX.utils.aoa_to_sheet(ccardRows);
+  const ccardLastRow = HEADER_ROW + rows.length;
+  const ccardTotalRow = ccardLastRow + 1;
+  for (let i = 0; i < rows.length; i++) {
+    const n = FIRST_DATA_ROW + i;
+    setF(ccardWs, `F${n}`, `SUM(B${n}:E${n})`);
+  }
+  if (rows.length) {
+    ccardWs[`A${ccardTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(ccardWs, ['B','C','D','E','F'], ccardLastRow, ccardTotalRow);
+    ccardWs['!ref'] = `A1:F${ccardTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, ccardWs, CCARD_SHEET);
+
+  // ---------------- CASH SUM1 — live formulas off SALE + C.CARD ----------------
+  // A DATE | B SHOP SALES | C CARWASH | D VENDING MACHINES | E PAYZONE |
+  // F FUEL SALES | G LOTTO SALES | H LOTTO PRIZE | I DRIVE OFF |
+  // J CREDIT C.SALES | K CASH S.TOTAL | L ACCOUNT CUSTOMERS |
+  // M VOUCHERS INCOME | N MISC. EXPENCE | O PRODUCTS FOR RESALE |
+  // P TOTAL BANKING | Q CLOSING CASH BAL. | R ACTUAL CASH/CHQ | S CASH DIFFERENT
+  const cashHeaders = [
+    'DATE','SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','DRIVE OFF','CREDIT C.SALES',
+    'CASH S.TOTAL','ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE',
+    'PRODUCTS FOR RESALE','TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ',
+    'CASH DIFFERENT'
+  ];
+  const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    cashRows.push([
+      r.sale_date,
+      null, null, null, null, null, null, null,
+      // Drive-offs always land here as a negative figure (X-Read shows them as
+      // a deduction, whatever sign the report happens to print).
+      t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : '',
+      null,
+      t.cash_tender || '',
+      t.customer_account || '', t.coupon || '',
+      Math.abs(t.petty_cash || 0) || '', '',
+      null, null,
+      t.cash_in_drawer || '',
+      null,
+    ]);
+  }
+  const cashWs = XLSX.utils.aoa_to_sheet(cashRows);
+  const cashLastRow = HEADER_ROW + rows.length;
+  const cashTotalRow = cashLastRow + 1;
+  for (let i = 0; i < rows.length; i++) {
+    const n = FIRST_DATA_ROW + i;
+    setF(cashWs, `B${n}`, `SUM(${SALE_REF}!D${n}:${SALE_REF}!K${n})`);
+    setF(cashWs, `C${n}`, `${SALE_REF}!M${n}`);
+    setF(cashWs, `D${n}`, `${SALE_REF}!L${n}`);
+    setF(cashWs, `E${n}`, `${SALE_REF}!Q${n}`);
+    setF(cashWs, `F${n}`, `${SALE_REF}!B${n}`);
+    // Lotto Sales = National Lottery + Instant Lottery
+    setF(cashWs, `G${n}`, `${SALE_REF}!N${n}+${SALE_REF}!O${n}`);
+    setF(cashWs, `H${n}`, `ABS(${SALE_REF}!R${n})`);
+    // Credit sales pull straight from the C.CARD tab
+    setF(cashWs, `J${n}`, `${CCARD_REF}!F${n}`);
+    // Banking = gross takings less prizes, drive-offs, cards, accounts and payouts
+    setF(cashWs, `P${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}-M${n}-N${n}-O${n}`);
+    setF(cashWs, `Q${n}`, `P${n}`);
+    setF(cashWs, `S${n}`, `R${n}-P${n}`);
+  }
+  if (rows.length) {
+    cashWs[`A${cashTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(cashWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'], cashLastRow, cashTotalRow);
+    cashWs['!ref'] = `A1:S${cashTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, cashWs, 'CASH SUM1');
 
   const stub = (label: string, headers: string[]) => {
     const aoa: any[][] = [...title(label), headers];
@@ -556,10 +636,6 @@ export async function buildBranchSummaryWorkbook(
   XLSX.utils.book_append_sheet(wb, stub('Objectives',
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
 
-  // C.CARD — client asked for this tab to be an empty plain sheet (headers only).
-  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT','COUPON','OTHER','TOTAL'];
-  const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccardRows), 'C.CARD');
 
   // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
   const inv = meta.invoices || [];
