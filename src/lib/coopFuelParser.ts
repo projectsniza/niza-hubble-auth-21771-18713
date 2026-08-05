@@ -9,9 +9,13 @@
 export interface CoopCategoryTotals {
   FU: number; TO: number; DR: number; GS: number; GZ: number; DO: number;
   AL: number; NP: number; VM: number; CW: number;
+  // Newspapers sold at 20% VAT (gaming cards etc.) — kept apart from zero-rated NP.
+  NP20: number;
   national_lottery: number; instant_lottery: number; paypoint: number; payzone: number;
   lottery_payouts: number; newspaper_voucher: number; petty_cash: number;
   bad_debtors: number; fuel_drive_off: number;
+  // Litres of fuel sold (from the X-Read / Cash Reconciliation figures)
+  fuel_litres: number;
   // Extended tender / banking fields extracted from TXT1
   cash_tender: number; visa_mc: number; amex: number; fuel_card: number;
   customer_account: number; coupon: number; cash_lifts: number;
@@ -28,9 +32,11 @@ export interface CoopCategoryTotals {
 
 export const emptyCoopTotals = (): CoopCategoryTotals => ({
   FU: 0, TO: 0, DR: 0, GS: 0, GZ: 0, DO: 0, AL: 0, NP: 0, VM: 0, CW: 0,
+  NP20: 0,
   national_lottery: 0, instant_lottery: 0, paypoint: 0, payzone: 0,
   lottery_payouts: 0, newspaper_voucher: 0, petty_cash: 0, bad_debtors: 0,
   fuel_drive_off: 0,
+  fuel_litres: 0,
   cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
   coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
   vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
@@ -38,6 +44,7 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   cashrec_total_banking: 0, cashrec_cash_banked: 0,
   cashrec_card_banked: 0, cashrec_other: 0,
 });
+
 
 const numFromCell = (s: string | undefined): number => {
   if (!s) return 0;
@@ -70,12 +77,18 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
 // Map a department label (left-side text in DEPARTMENTVAT) to a category code.
 // Amount columns only — VAT is tracked separately and never added into a category.
 // GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
+// FORCE_GZ departments are always reported as Grocery Zero, never Grocery Std
+// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater).
+const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b|GROCERY\s*3\b/i;
+
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
+  // Alcohol must be matched before the generic BEVERAGES rules so that
+  // departments such as "BEVERAGES ALCOHOL" never fall into Drinks.
+  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE/i, 'AL'],
   [/SOFT\s*BEVERAGES/i, 'DR'],
   [/^BEVERAGES\b/i, 'DR'],
-  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
@@ -86,9 +99,11 @@ const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
 ];
 
 const codeForDept = (label: string): (keyof CoopCategoryTotals | 'GROCERY') | null => {
+  if (FORCE_GZ.test(label)) return 'GZ';
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
+
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
@@ -196,7 +211,7 @@ export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | 
   const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
   return {
     ...(parsedTotals || {}),
-    shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+    shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
     fuel: breakdown.FU,
     lottery: breakdown.national_lottery,
     breakdown,
@@ -264,6 +279,14 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         continue;
       }
 
+      // FORCE_GZ departments (Franchise Local, Southwater Grocery 3): the whole
+      // net value belongs to Grocery Zero, deducted from Grocery Std.
+      if (code === 'GZ') {
+        out.GZ = +(out.GZ + r.net0 + r.net20).toFixed(2);
+        if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
+        continue;
+      }
+
       if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
 
       if (code === 'FU') {
@@ -271,7 +294,10 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         // Capture Fuel-department 0% amount for branch-specific VM/CW split.
         if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
       } else if (code === 'NP') {
-        out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
+        // Zero-rated newspapers stay in NP; anything at 20% (gaming cards sold
+        // through the newspapers department) is reported separately at 20% VAT.
+        out.NP = +(out.NP + r.net0).toFixed(2);
+        if (r.net20 > 0) out.NP20 = +(out.NP20 + r.net20).toFixed(2);
       } else if (code === 'VM' || code === 'CW') {
         (out[code] as number) = +((out[code] as number) + r.net0 + r.net20).toFixed(2);
       } else if (code === 'paypoint' || code === 'payzone') {
@@ -280,13 +306,16 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         (out[code] as number) = +((out[code] as number) + r.net20).toFixed(2);
         if (r.net0 > 0) out.GZ = +(out.GZ + r.net0).toFixed(2);
       }
+
     }
   }
 
   if (input.txt1) {
     const t = input.txt1;
-    out.national_lottery   = findTxtLineLast(t, /^\s*Lottery\b(?!\s*Prizes)/im);
-    out.instant_lottery    = findTxtLineLast(t, /Scratchcards/i);
+    out.national_lottery   = findTxtLineLast(t, /^\s*Lottery(?!\s*(Prizes|Payouts?|Commission))\b/im) ||
+                             findTxtLineLast(t, /National\s*Lottery(?!\s*(Prizes|Payouts?|Commission))/i);
+    out.instant_lottery    = findTxtLineLast(t, /Scratchcards?(?!\s*(Prizes|Payouts?|Commission))/i) ||
+                             findTxtLineLast(t, /Instant\s*Lottery/i);
     out.lottery_payouts    = -Math.abs(findTxtLineLast(t, /Lotto\s*Prizes/i)) +
                              -Math.abs(findTxtLineLast(t, /Scratchcard\s*Prizes/i));
     out.paypoint           = findTxtLineLast(t, /^\s*Paypoint\b/im);
@@ -296,6 +325,11 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
+
+    // Fuel litres sold — prefer an explicit total line, otherwise sum the grades.
+    const totalLitres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i);
+    out.fuel_litres = totalLitres || sumTxtLines(t, /\bLitres?\b/i);
+
 
     // ---- Extended tender extraction (TXT1) ----
     out.cash_tender        = findTxtLineLast(t, /^\s*Cash\b(?!\s*(Lifts?|in\s*Drawer))/im);
@@ -379,6 +413,8 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<stri
       { code: 'GZ', description: 'Grocery Zero',      account: '205', taxType: 'Zero Rated Income',   amount: t.GZ },
       { code: 'DO', description: 'Domestic Items',    account: '208', taxType: '5% (VAT on Income)',  amount: t.DO },
       { code: 'NP', description: 'Newspaper',         account: '207', taxType: 'Zero Rated Income',   amount: t.NP },
+      { code: 'NP20', description: 'Newspaper - Standard Rate', account: '207', taxType: '20% (VAT on Income)', amount: t.NP20 },
+
       { code: 'AL', description: 'Alcohol',           account: '206', taxType: '20% (VAT on Income)', amount: t.AL },
       { code: 'VM', description: 'Vending Machines',  account: '209', taxType: '20% (VAT on Income)', amount: t.VM },
       { code: 'FU', description: 'Fuel',              account: '201', taxType: '20% (VAT on Income)', amount: t.FU },
@@ -414,9 +450,9 @@ export function buildCoopXeroCsv(rows: CoopXeroRow[], configuredCodes?: Set<stri
 // monthly cash-summary template (single-tab fallback).
 export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const headers = [
-    'DATE','BRANCH','OPEN BALANCE','OTHER INCOME','DETAILS',
+    'DATE','BRANCH',
     'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
-    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','DRIVE OFF','CREDIT C.SALES','CASH S.TOTAL',
     'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
     'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
   ];
@@ -424,17 +460,28 @@ export function buildDailySummaryCsv(rows: CoopXeroRow[]): string {
   const fmt = (n: number) => (n ? Number(n).toFixed(2) : '');
   for (const r of rows) {
     const t = r.totals;
-    const shopSales = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
-                      (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
+    const shopSales = (t.TO || 0) + (t.DR || 0) + (t.AL || 0) + (t.GS || 0) + (t.GZ || 0) +
+                      (t.DO || 0) + (t.NP || 0) + (t.NP20 || 0);
+    const lottoSales = (t.national_lottery || 0) + (t.instant_lottery || 0);
+    const driveOff = t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : 0;
+    const creditCards = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
+    const lottoPrize = Math.abs(t.lottery_payouts || 0);
+    const misc = Math.abs(t.petty_cash || 0);
+    const totalBanking = shopSales + (t.CW || 0) + (t.VM || 0) + (t.payzone || 0) +
+      (t.FU || 0) + lottoSales - lottoPrize + driveOff - creditCards -
+      (t.customer_account || 0) - (t.coupon || 0) - misc;
     const cols = [
       r.sale_date, r.branch_name,
-      '', '', '',
       fmt(shopSales), fmt(t.CW), fmt(t.VM), fmt(t.payzone),
-      fmt(t.FU), fmt(t.national_lottery), fmt(Math.abs(t.lottery_payouts || 0)),
-      '', '', '', '', '', '', '', '', '', ''
+      fmt(t.FU), fmt(lottoSales), fmt(lottoPrize), fmt(driveOff),
+      fmt(creditCards), fmt(t.cash_tender),
+      fmt(t.customer_account), fmt(t.coupon), fmt(misc), '',
+      fmt(totalBanking), fmt(totalBanking), fmt(t.cash_in_drawer),
+      fmt((t.cash_in_drawer || 0) - totalBanking)
     ];
     out.push(cols.map(csvEscape).join(','));
   }
+
   return out.join('\n');
 }
 
@@ -459,52 +506,132 @@ export async function buildBranchSummaryWorkbook(
     [label.toUpperCase()], [meta.branch_name], [`Period: ${meta.period_label}`], [],
   ];
 
-  // CASH SUM1
-  const cashHeaders = [
-    'DATE','OPEN BALANCE','OTHER INCOME','DETAILS',
-    'SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
-    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT C.SALES','CASH S.TOTAL',
-    'ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE','PRODUCTS FOR RESALE',
-    'TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ','CASH DIFFERENT'
-  ];
-  const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
-  for (const r of rows) {
-    const t = r.totals;
-    const shop = (t.TO || 0) + (t.DR || 0) + (t.GS || 0) + (t.GZ || 0) +
-                 (t.DO || 0) + (t.AL || 0) + (t.NP || 0);
-    const creditCardTotal = (t.visa_mc || 0) + (t.amex || 0) + (t.fuel_card || 0);
-    const banking = t.cash_lifts || 0;
-    cashRows.push([
-      r.sale_date, '', '', '',
-      shop || '', t.CW || '', t.VM || '', t.payzone || '',
-      t.FU || '', t.national_lottery || '', Math.abs(t.lottery_payouts || 0) || '',
-      creditCardTotal || '', t.cash_tender || '',
-      t.customer_account || '', t.coupon || '',
-      Math.abs(t.petty_cash || 0) || '', '',
-      banking || '', '', '', t.cash_in_drawer || ''
-    ]);
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashRows), 'CASH SUM1');
+  const SALE_SHEET = '  SALE  ';
+  const CCARD_SHEET = 'C.CARD';
+  const SALE_REF = `'${SALE_SHEET}'`;
+  const CCARD_REF = `'${CCARD_SHEET}'`;
+  const HEADER_ROW = 5;            // title() = 4 rows, header on row 5
+  const FIRST_DATA_ROW = HEADER_ROW + 1;
+  const setF = (ws: any, addr: string, f: string) => { ws[addr] = { t: 'n', f }; };
+  const colTotals = (ws: any, cols: string[], lastRow: number, totalRow: number) => {
+    if (lastRow < FIRST_DATA_ROW) return;
+    for (const c of cols) setF(ws, `${c}${totalRow}`, `SUM(${c}${FIRST_DATA_ROW}:${c}${lastRow})`);
+  };
 
-  // SALE — departmental breakdown (now also includes VAT split totals at bottom)
-  const saleHeaders = ['DATE','FUEL','TOBACCO','DRINKS','GROCERY STD','GROCERY ZERO',
-    'DOMESTIC 5%','ALCOHOL','NEWSPAPERS','VENDING','CAR WASH',
-    'NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE','LOTTO PAYOUTS','DRIVE OFF',
-    'NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
+  // ---------------- SALE — departmental breakdown ----------------
+  // A DATE | B FUEL | C FUEL LITRES | D TOBACCO | E DRINKS | F ALCOHOL |
+  // G GROCERY STD | H GROCERY ZERO | I DOMESTIC 5% | J NEWSPAPERS |
+  // K NEWSPAPERS 20% | L VENDING | M CAR WASH | N NAT LOTTERY |
+  // O SCRATCHCARDS | P PAYPOINT | Q PAYZONE | R LOTTO PAYOUTS | S..W VAT split
+  const saleHeaders = ['DATE','FUEL','FUEL SOLD LITRES','TOBACCO','DRINKS','ALCOHOL',
+    'GROCERY STD','GROCERY ZERO','DOMESTIC 5%','NEWSPAPERS','NEWSPAPERS 20%',
+    'VENDING','CAR WASH','NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE',
+    'LOTTO PAYOUTS','NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
   const saleRows: any[][] = [...title('Sales by Department'), saleHeaders];
   for (const r of rows) {
     const t = r.totals;
     saleRows.push([
       r.sale_date,
-      t.FU || '', t.TO || '', t.DR || '', t.GS || '', t.GZ || '',
-      t.DO || '', t.AL || '', t.NP || '', t.VM || '', t.CW || '',
+      t.FU || '', t.fuel_litres || '',
+      t.TO || '', t.DR || '', t.AL || '',
+      t.GS || '', t.GZ || '', t.DO || '',
+      t.NP || '', t.NP20 || '',
+      t.VM || '', t.CW || '',
       t.national_lottery || '', t.instant_lottery || '',
       t.paypoint || '', t.payzone || '',
-      t.lottery_payouts || '', t.fuel_drive_off || '',
+      t.lottery_payouts || '',
       t.net_0 || '', t.net_20 || '', t.vat_20 || '', t.net_5 || '', t.vat_5 || ''
     ]);
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(saleRows), '  SALE  ');
+  const saleWs = XLSX.utils.aoa_to_sheet(saleRows);
+  const saleLastRow = HEADER_ROW + rows.length;
+  const saleTotalRow = saleLastRow + 1;
+  if (rows.length) {
+    saleWs[`A${saleTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(saleWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W'], saleLastRow, saleTotalRow);
+    saleWs['!ref'] = `A1:W${saleTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, saleWs, SALE_SHEET);
+
+  // ---------------- C.CARD — weekly card settlement breakdown ----------------
+  // A DATE | B VISA/MC | C AMEX | D FUEL CARD | E OTHER | F TOTAL
+  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','OTHER','TOTAL'];
+  const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    ccardRows.push([r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '', '', null]);
+  }
+  const ccardWs = XLSX.utils.aoa_to_sheet(ccardRows);
+  const ccardLastRow = HEADER_ROW + rows.length;
+  const ccardTotalRow = ccardLastRow + 1;
+  for (let i = 0; i < rows.length; i++) {
+    const n = FIRST_DATA_ROW + i;
+    setF(ccardWs, `F${n}`, `SUM(B${n}:E${n})`);
+  }
+  if (rows.length) {
+    ccardWs[`A${ccardTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(ccardWs, ['B','C','D','E','F'], ccardLastRow, ccardTotalRow);
+    ccardWs['!ref'] = `A1:F${ccardTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, ccardWs, CCARD_SHEET);
+
+  // ---------------- CASH SUM1 — live formulas off SALE + C.CARD ----------------
+  // A DATE | B SHOP SALES | C CARWASH | D VENDING MACHINES | E PAYZONE |
+  // F FUEL SALES | G LOTTO SALES | H LOTTO PRIZE | I DRIVE OFF |
+  // J CREDIT C.SALES | K CASH S.TOTAL | L ACCOUNT CUSTOMERS |
+  // M VOUCHERS INCOME | N MISC. EXPENCE | O PRODUCTS FOR RESALE |
+  // P TOTAL BANKING | Q CLOSING CASH BAL. | R ACTUAL CASH/CHQ | S CASH DIFFERENT
+  const cashHeaders = [
+    'DATE','SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','DRIVE OFF','CREDIT C.SALES',
+    'CASH S.TOTAL','ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE',
+    'PRODUCTS FOR RESALE','TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ',
+    'CASH DIFFERENT'
+  ];
+  const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
+  for (const r of rows) {
+    const t = r.totals;
+    cashRows.push([
+      r.sale_date,
+      null, null, null, null, null, null, null,
+      // Drive-offs always land here as a negative figure (X-Read shows them as
+      // a deduction, whatever sign the report happens to print).
+      t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : '',
+      null,
+      t.cash_tender || '',
+      t.customer_account || '', t.coupon || '',
+      Math.abs(t.petty_cash || 0) || '', '',
+      null, null,
+      t.cash_in_drawer || '',
+      null,
+    ]);
+  }
+  const cashWs = XLSX.utils.aoa_to_sheet(cashRows);
+  const cashLastRow = HEADER_ROW + rows.length;
+  const cashTotalRow = cashLastRow + 1;
+  for (let i = 0; i < rows.length; i++) {
+    const n = FIRST_DATA_ROW + i;
+    setF(cashWs, `B${n}`, `SUM(${SALE_REF}!D${n}:${SALE_REF}!K${n})`);
+    setF(cashWs, `C${n}`, `${SALE_REF}!M${n}`);
+    setF(cashWs, `D${n}`, `${SALE_REF}!L${n}`);
+    setF(cashWs, `E${n}`, `${SALE_REF}!Q${n}`);
+    setF(cashWs, `F${n}`, `${SALE_REF}!B${n}`);
+    // Lotto Sales = National Lottery + Instant Lottery
+    setF(cashWs, `G${n}`, `${SALE_REF}!N${n}+${SALE_REF}!O${n}`);
+    setF(cashWs, `H${n}`, `ABS(${SALE_REF}!R${n})`);
+    // Credit sales pull straight from the C.CARD tab
+    setF(cashWs, `J${n}`, `${CCARD_REF}!F${n}`);
+    // Banking = gross takings less prizes, drive-offs, cards, accounts and payouts
+    setF(cashWs, `P${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}-M${n}-N${n}-O${n}`);
+    setF(cashWs, `Q${n}`, `P${n}`);
+    setF(cashWs, `S${n}`, `R${n}-P${n}`);
+  }
+  if (rows.length) {
+    cashWs[`A${cashTotalRow}`] = { t: 's', v: 'TOTAL' };
+    colTotals(cashWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'], cashLastRow, cashTotalRow);
+    cashWs['!ref'] = `A1:S${cashTotalRow}`;
+  }
+  XLSX.utils.book_append_sheet(wb, cashWs, 'CASH SUM1');
 
   const stub = (label: string, headers: string[]) => {
     const aoa: any[][] = [...title(label), headers];
@@ -522,10 +649,6 @@ export async function buildBranchSummaryWorkbook(
   XLSX.utils.book_append_sheet(wb, stub('Objectives',
     ['DATE','OBJECTIVE','TARGET','ACTUAL','VARIANCE','NOTES']), 'OBJECTIVE');
 
-  // C.CARD — client asked for this tab to be an empty plain sheet (headers only).
-  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','CUST. ACCOUNT','COUPON','OTHER','TOTAL'];
-  const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccardRows), 'C.CARD');
 
   // Invoice-driven tabs (C.PURCH, EXPENSES, PURCHASE) come from niza_invoices.
   const inv = meta.invoices || [];

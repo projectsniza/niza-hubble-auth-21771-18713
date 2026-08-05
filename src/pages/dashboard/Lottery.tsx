@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   Plus, Trash2, Save, Download, Ticket, Calculator, Calendar as CalendarIcon2, TrendingUp, 
   Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
-  LayoutGrid, CalendarDays, FileSpreadsheet
+  LayoutGrid, CalendarDays, FileSpreadsheet, Lock as LockIcon, Unlock as UnlockIcon
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -174,8 +174,9 @@ export default function Lottery() {
     queryKey: ['lottery-daily-records', filteredBranchIds, viewMode, format(selectedMonth, 'yyyy-MM')],
     queryFn: async () => {
       if (filteredBranchIds.length === 0) return [];
-      // Start one day earlier so the last day of the previous month is included
-      const startDate = format(subDays(selectedMonth, 1), 'yyyy-MM-dd');
+      // Start well before the month so a gap at the boundary still carries forward
+      const startDate = format(subDays(selectedMonth, 40), 'yyyy-MM-dd');
+
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
 
       const { data, error } = await supabase
@@ -206,6 +207,56 @@ export default function Lottery() {
     },
     enabled: !!effectiveBranchId,
   });
+
+  // ---- Monthly lock (HR / Super Admin only) ----
+  const canManageLottreyLock = user?.role === 'super_admin' || user?.role === 'hr';
+  const monthKey = format(selectedMonth, 'yyyy-MM-01');
+
+  const { data: monthLock } = useQuery({
+    queryKey: ['lottery-month-lock', effectiveBranchId, monthKey],
+    queryFn: async () => {
+      if (!effectiveBranchId) return null;
+      const { data, error } = await supabase
+        .from('lottery_month_locks')
+        .select('*')
+        .eq('branch_id', effectiveBranchId)
+        .eq('month_year', monthKey)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!effectiveBranchId,
+  });
+
+  const isMonthLocked = !!monthLock;
+  const isReadOnlyMonth = isMonthLocked && !canManageLottreyLock;
+
+  const toggleMonthLockMutation = useMutation({
+    mutationFn: async () => {
+      if (!effectiveBranchId) throw new Error('Select a single branch first');
+      if (monthLock) {
+        const { error } = await supabase
+          .from('lottery_month_locks')
+          .delete()
+          .eq('id', (monthLock as any).id);
+        if (error) throw error;
+        return 'unlocked';
+      }
+      const { error } = await supabase
+        .from('lottery_month_locks')
+        .insert({ branch_id: effectiveBranchId, month_year: monthKey, locked_by: user?.id ?? null });
+      if (error) throw error;
+      return 'locked';
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['lottery-month-lock'] });
+      toast.success(result === 'locked'
+        ? `${format(selectedMonth, 'MMMM yyyy')} locked — store logins can no longer edit it`
+        : `${format(selectedMonth, 'MMMM yyyy')} unlocked`);
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update lock'),
+  });
+
 
   // Fetch till reports (Total Instant Lottery Sales as per Day Report) for the month
   const { data: tillReports = [] } = useQuery({
@@ -347,22 +398,38 @@ export default function Lottery() {
     return map;
   }, [dailyRecords]);
 
-  // Get previous day's closing stock for auto-carry-forward
+  // Get the most recent prior closing stock for auto-carry-forward.
+  // Walks backwards (up to 60 days) so a gap in data entry never breaks the
+  // opening balance chain — e.g. 23rd closing must appear as 24th opening even
+  // if the 23rd row was saved without a closing figure on the first attempt.
   const getPreviousDayClosingStock = useCallback((gameId: string, dateStr: string): number | null => {
-    const currentDate = new Date(dateStr);
-    const previousDate = subDays(currentDate, 1);
-    const prevDateStr = format(previousDate, 'yyyy-MM-dd');
-    
-    // First check if there's edited data for the previous day
-    const editedPrev = editingData[gameId]?.[prevDateStr];
-    if (editedPrev?.stockEnd !== undefined && editedPrev.stockEnd !== null) {
-      return editedPrev.stockEnd;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    let cursor = new Date(y, (m || 1) - 1, d || 1);
+
+    for (let step = 0; step < 60; step++) {
+      cursor = subDays(cursor, 1);
+      const prevDateStr = format(cursor, 'yyyy-MM-dd');
+
+      // Prefer unsaved edits for that day
+      const editedPrev = editingData[gameId]?.[prevDateStr];
+      if (editedPrev?.stockEnd != null && Number(editedPrev.stockEnd) > 0) {
+        return Number(editedPrev.stockEnd);
+      }
+
+      const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
+      if (!prevRecord) continue;
+
+      if (prevRecord.stock_end != null && Number(prevRecord.stock_end) > 0) {
+        return Number(prevRecord.stock_end);
+      }
+      // Closing not entered — fall back to that day's total stock so the chain
+      // keeps running instead of collapsing to blank.
+      const total = Number(prevRecord.stock_begin || 0) + Number(prevRecord.activated_tickets || 0);
+      if (total > 0) return total;
     }
-    
-    // Then check the database record
-    const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
-    return prevRecord?.stock_end ?? null;
+    return null;
   }, [editingData, recordsByGameAndDate]);
+
 
   // Get value for a cell (edited or from DB) with auto-carry-forward for stockBegin
   const getCellValue = useCallback((gameId: string, dateStr: string, field: keyof GameDailyData) => {
@@ -726,7 +793,12 @@ export default function Lottery() {
 
   // Save all games data at once
   const saveAllData = async () => {
+    if (isReadOnlyMonth) {
+      toast.error('This lottery month is locked by head office and can no longer be edited.');
+      return;
+    }
     const gamesWithChanges = Object.keys(editingData);
+
     if (gamesWithChanges.length === 0) {
       toast.info('No changes to save');
       return;
@@ -948,8 +1020,34 @@ export default function Lottery() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          {canManageLottreyLock && effectiveBranchId && (
+            <Button
+              variant={isMonthLocked ? 'destructive' : 'outline'}
+              size="sm"
+              className="gap-2"
+              onClick={() => toggleMonthLockMutation.mutate()}
+              disabled={toggleMonthLockMutation.isPending}
+            >
+              {isMonthLocked ? <LockIcon className="h-4 w-4" /> : <UnlockIcon className="h-4 w-4" />}
+              {isMonthLocked ? 'Unlock Month' : 'Lock Month'}
+            </Button>
+          )}
         </div>
       </div>
+
+      {isMonthLocked && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10 text-sm">
+          <LockIcon className="h-4 w-4 text-destructive flex-shrink-0" />
+          <span>
+            <strong>{format(selectedMonth, 'MMMM yyyy')} is locked by head office.</strong>{' '}
+            {isReadOnlyMonth
+              ? 'Lottery records for this month can no longer be edited.'
+              : 'Store logins cannot edit this month — you can still make corrections.'}
+          </span>
+        </div>
+      )}
+
 
       {/* Org/Branch Filter for Super Admin/HR */}
       {!isManager && (
