@@ -312,8 +312,10 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
 
   if (input.txt1) {
     const t = input.txt1;
-    out.national_lottery   = findTxtLineLast(t, /^\s*Lottery\b(?!\s*Prizes)/im);
-    out.instant_lottery    = findTxtLineLast(t, /Scratchcards/i);
+    out.national_lottery   = findTxtLineLast(t, /^\s*Lottery(?!\s*(Prizes|Payouts?|Commission))\b/im) ||
+                             findTxtLineLast(t, /National\s*Lottery(?!\s*(Prizes|Payouts?|Commission))/i);
+    out.instant_lottery    = findTxtLineLast(t, /Scratchcards?(?!\s*(Prizes|Payouts?|Commission))/i) ||
+                             findTxtLineLast(t, /Instant\s*Lottery/i);
     out.lottery_payouts    = -Math.abs(findTxtLineLast(t, /Lotto\s*Prizes/i)) +
                              -Math.abs(findTxtLineLast(t, /Scratchcard\s*Prizes/i));
     out.paypoint           = findTxtLineLast(t, /^\s*Paypoint\b/im);
@@ -323,6 +325,11 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
     out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
+
+    // Fuel litres sold — prefer an explicit total line, otherwise sum the grades.
+    const totalLitres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i);
+    out.fuel_litres = totalLitres || sumTxtLines(t, /\bLitres?\b/i);
+
 
     // ---- Extended tender extraction (TXT1) ----
     out.cash_tender        = findTxtLineLast(t, /^\s*Cash\b(?!\s*(Lifts?|in\s*Drawer))/im);
