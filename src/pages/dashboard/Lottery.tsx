@@ -1015,8 +1015,34 @@ export default function Lottery() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          {canManageLottreyLock && effectiveBranchId && (
+            <Button
+              variant={isMonthLocked ? 'destructive' : 'outline'}
+              size="sm"
+              className="gap-2"
+              onClick={() => toggleMonthLockMutation.mutate()}
+              disabled={toggleMonthLockMutation.isPending}
+            >
+              {isMonthLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              {isMonthLocked ? 'Unlock Month' : 'Lock Month'}
+            </Button>
+          )}
         </div>
       </div>
+
+      {isMonthLocked && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10 text-sm">
+          <Lock className="h-4 w-4 text-destructive flex-shrink-0" />
+          <span>
+            <strong>{format(selectedMonth, 'MMMM yyyy')} is locked by head office.</strong>{' '}
+            {isReadOnlyMonth
+              ? 'Lottery records for this month can no longer be edited.'
+              : 'Store logins cannot edit this month — you can still make corrections.'}
+          </span>
+        </div>
+      )}
+
 
       {/* Org/Branch Filter for Super Admin/HR */}
       {!isManager && (
