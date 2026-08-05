@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   Plus, Trash2, Save, Download, Ticket, Calculator, Calendar as CalendarIcon2, TrendingUp, 
   Package, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, X, Edit2,
-  LayoutGrid, CalendarDays, FileSpreadsheet
+  LayoutGrid, CalendarDays, FileSpreadsheet, Lock as LockIcon, Unlock as UnlockIcon
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
