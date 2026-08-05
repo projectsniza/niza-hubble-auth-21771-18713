@@ -208,6 +208,56 @@ export default function Lottery() {
     enabled: !!effectiveBranchId,
   });
 
+  // ---- Monthly lock (HR / Super Admin only) ----
+  const canManageLottreyLock = user?.role === 'super_admin' || user?.role === 'hr';
+  const monthKey = format(selectedMonth, 'yyyy-MM-01');
+
+  const { data: monthLock } = useQuery({
+    queryKey: ['lottery-month-lock', effectiveBranchId, monthKey],
+    queryFn: async () => {
+      if (!effectiveBranchId) return null;
+      const { data, error } = await supabase
+        .from('lottery_month_locks')
+        .select('*')
+        .eq('branch_id', effectiveBranchId)
+        .eq('month_year', monthKey)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!effectiveBranchId,
+  });
+
+  const isMonthLocked = !!monthLock;
+  const isReadOnlyMonth = isMonthLocked && !canManageLottreyLock;
+
+  const toggleMonthLockMutation = useMutation({
+    mutationFn: async () => {
+      if (!effectiveBranchId) throw new Error('Select a single branch first');
+      if (monthLock) {
+        const { error } = await supabase
+          .from('lottery_month_locks')
+          .delete()
+          .eq('id', (monthLock as any).id);
+        if (error) throw error;
+        return 'unlocked';
+      }
+      const { error } = await supabase
+        .from('lottery_month_locks')
+        .insert({ branch_id: effectiveBranchId, month_year: monthKey, locked_by: user?.id ?? null });
+      if (error) throw error;
+      return 'locked';
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['lottery-month-lock'] });
+      toast.success(result === 'locked'
+        ? `${format(selectedMonth, 'MMMM yyyy')} locked — store logins can no longer edit it`
+        : `${format(selectedMonth, 'MMMM yyyy')} unlocked`);
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update lock'),
+  });
+
+
   // Fetch till reports (Total Instant Lottery Sales as per Day Report) for the month
   const { data: tillReports = [] } = useQuery({
     queryKey: ['lottery-till-reports', filteredBranchIds, format(selectedMonth, 'yyyy-MM')],
