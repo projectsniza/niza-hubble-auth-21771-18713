@@ -211,7 +211,7 @@ export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | 
   const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
   return {
     ...(parsedTotals || {}),
-    shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+    shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
     fuel: breakdown.FU,
     lottery: breakdown.national_lottery,
     breakdown,
