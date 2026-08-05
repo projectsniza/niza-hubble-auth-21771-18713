@@ -279,6 +279,14 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         continue;
       }
 
+      // FORCE_GZ departments (Franchise Local, Southwater Grocery 3): the whole
+      // net value belongs to Grocery Zero, deducted from Grocery Std.
+      if (code === 'GZ') {
+        out.GZ = +(out.GZ + r.net0 + r.net20).toFixed(2);
+        if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
+        continue;
+      }
+
       if (r.net5 > 0) out.DO = +(out.DO + r.net5).toFixed(2);
 
       if (code === 'FU') {
@@ -286,7 +294,10 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         // Capture Fuel-department 0% amount for branch-specific VM/CW split.
         if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
       } else if (code === 'NP') {
-        out.NP = +(out.NP + r.net0 + r.net20).toFixed(2);
+        // Zero-rated newspapers stay in NP; anything at 20% (gaming cards sold
+        // through the newspapers department) is reported separately at 20% VAT.
+        out.NP = +(out.NP + r.net0).toFixed(2);
+        if (r.net20 > 0) out.NP20 = +(out.NP20 + r.net20).toFixed(2);
       } else if (code === 'VM' || code === 'CW') {
         (out[code] as number) = +((out[code] as number) + r.net0 + r.net20).toFixed(2);
       } else if (code === 'paypoint' || code === 'payzone') {
@@ -295,6 +306,7 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
         (out[code] as number) = +((out[code] as number) + r.net20).toFixed(2);
         if (r.net0 > 0) out.GZ = +(out.GZ + r.net0).toFixed(2);
       }
+
     }
   }
 
