@@ -9,9 +9,13 @@
 export interface CoopCategoryTotals {
   FU: number; TO: number; DR: number; GS: number; GZ: number; DO: number;
   AL: number; NP: number; VM: number; CW: number;
+  // Newspapers sold at 20% VAT (gaming cards etc.) — kept apart from zero-rated NP.
+  NP20: number;
   national_lottery: number; instant_lottery: number; paypoint: number; payzone: number;
   lottery_payouts: number; newspaper_voucher: number; petty_cash: number;
   bad_debtors: number; fuel_drive_off: number;
+  // Litres of fuel sold (from the X-Read / Cash Reconciliation figures)
+  fuel_litres: number;
   // Extended tender / banking fields extracted from TXT1
   cash_tender: number; visa_mc: number; amex: number; fuel_card: number;
   customer_account: number; coupon: number; cash_lifts: number;
@@ -28,9 +32,11 @@ export interface CoopCategoryTotals {
 
 export const emptyCoopTotals = (): CoopCategoryTotals => ({
   FU: 0, TO: 0, DR: 0, GS: 0, GZ: 0, DO: 0, AL: 0, NP: 0, VM: 0, CW: 0,
+  NP20: 0,
   national_lottery: 0, instant_lottery: 0, paypoint: 0, payzone: 0,
   lottery_payouts: 0, newspaper_voucher: 0, petty_cash: 0, bad_debtors: 0,
   fuel_drive_off: 0,
+  fuel_litres: 0,
   cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
   coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
   vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
@@ -38,6 +44,7 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   cashrec_total_banking: 0, cashrec_cash_banked: 0,
   cashrec_card_banked: 0, cashrec_other: 0,
 });
+
 
 const numFromCell = (s: string | undefined): number => {
   if (!s) return 0;
