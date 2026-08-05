@@ -171,8 +171,15 @@ export default function LivePreview() {
               <tbody>
                 {coopRows.map(r => {
                   const t: any = r.totals;
-                  const shop = (t.TO||0)+(t.DR||0)+(t.GS||0)+(t.GZ||0)+(t.DO||0)+(t.AL||0)+(t.NP||0);
+                  const shop = (t.TO||0)+(t.DR||0)+(t.AL||0)+(t.GS||0)+(t.GZ||0)+(t.DO||0)+(t.NP||0)+(t.NP20||0);
                   const cardTotal = (t.visa_mc||0)+(t.amex||0)+(t.fuel_card||0);
+                  const lottoSales = (t.national_lottery||0)+(t.instant_lottery||0);
+                  const lottoPrize = Math.abs(Number(t.lottery_payouts||0));
+                  const driveOff = t.fuel_drive_off ? -Math.abs(Number(t.fuel_drive_off)) : 0;
+                  const misc = Math.abs(Number(t.petty_cash||0));
+                  const totalBanking = shop + (t.CW||0) + (t.VM||0) + (t.payzone||0) + (t.FU||0)
+                    + lottoSales - lottoPrize + driveOff - cardTotal - (t.customer_account||0)
+                    - (t.coupon||0) - misc;
                   return (
                     <tr key={`${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
                       <td className="p-2">{r.sale_date}</td>
@@ -182,11 +189,13 @@ export default function LivePreview() {
                       <td className="text-right p-2">{Number(t.VM||0).toFixed(2)}</td>
                       <td className="text-right p-2">{Number(t.payzone||0).toFixed(2)}</td>
                       <td className="text-right p-2">{Number(t.FU||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.national_lottery||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Math.abs(Number(t.lottery_payouts||0)).toFixed(2)}</td>
+                      <td className="text-right p-2">{lottoSales.toFixed(2)}</td>
+                      <td className="text-right p-2">{lottoPrize.toFixed(2)}</td>
+                      <td className="text-right p-2">{driveOff.toFixed(2)}</td>
                       <td className="text-right p-2">{cardTotal.toFixed(2)}</td>
                       <td className="text-right p-2">{Number(t.cash_tender||0).toFixed(2)}</td>
                       <td className="text-right p-2">{Number(t.customer_account||0).toFixed(2)}</td>
+                      <td className="text-right p-2">{totalBanking.toFixed(2)}</td>
                     </tr>
                   );
                 })}
@@ -199,10 +208,41 @@ export default function LivePreview() {
         </TabsContent>
 
         <TabsContent value="ccard">
-          <Card className="p-6 text-center text-sm text-muted-foreground">
-            C.CARD tab is intentionally empty in the export (client request).
+          <Card className="p-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Date</th>
+                  <th className="text-left p-2">Branch</th>
+                  <th className="text-right p-2">Visa/MC</th>
+                  <th className="text-right p-2">Amex</th>
+                  <th className="text-right p-2">Fuel Card</th>
+                  <th className="text-right p-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coopRows.map(r => {
+                  const t: any = r.totals;
+                  const total = (t.visa_mc||0)+(t.amex||0)+(t.fuel_card||0);
+                  return (
+                    <tr key={`cc-${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
+                      <td className="p-2">{r.sale_date}</td>
+                      <td className="p-2">{r.branch_name}</td>
+                      <td className="text-right p-2">{Number(t.visa_mc||0).toFixed(2)}</td>
+                      <td className="text-right p-2">{Number(t.amex||0).toFixed(2)}</td>
+                      <td className="text-right p-2">{Number(t.fuel_card||0).toFixed(2)}</td>
+                      <td className="text-right p-2 font-semibold">{total.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+                {coopRows.length === 0 && (
+                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Load a range to preview.</td></tr>
+                )}
+              </tbody>
+            </table>
           </Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );
