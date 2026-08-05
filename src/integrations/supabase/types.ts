@@ -4022,6 +4022,47 @@ export type Database = {
           },
         ]
       }
+      lottery_month_locks: {
+        Row: {
+          branch_id: string
+          created_at: string
+          id: string
+          locked_at: string
+          locked_by: string | null
+          month_year: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          month_year: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          month_year?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_month_locks_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lottery_monthly_summaries: {
         Row: {
           branch_id: string
@@ -7714,6 +7755,10 @@ export type Database = {
       }
       is_in_my_hr_scope: {
         Args: { _branch_id: string; _organization_id: string }
+        Returns: boolean
+      }
+      is_lottery_month_locked: {
+        Args: { _branch_id: string; _record_date: string }
         Returns: boolean
       }
       is_timesheet_month_locked: {
