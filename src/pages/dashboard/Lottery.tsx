@@ -1024,7 +1024,7 @@ export default function Lottery() {
               onClick={() => toggleMonthLockMutation.mutate()}
               disabled={toggleMonthLockMutation.isPending}
             >
-              {isMonthLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              {isMonthLocked ? <LockIcon className="h-4 w-4" /> : <UnlockIcon className="h-4 w-4" />}
               {isMonthLocked ? 'Unlock Month' : 'Lock Month'}
             </Button>
           )}
@@ -1033,7 +1033,7 @@ export default function Lottery() {
 
       {isMonthLocked && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10 text-sm">
-          <Lock className="h-4 w-4 text-destructive flex-shrink-0" />
+          <LockIcon className="h-4 w-4 text-destructive flex-shrink-0" />
           <span>
             <strong>{format(selectedMonth, 'MMMM yyyy')} is locked by head office.</strong>{' '}
             {isReadOnlyMonth
