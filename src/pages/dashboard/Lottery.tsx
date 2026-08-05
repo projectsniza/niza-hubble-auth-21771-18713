@@ -347,22 +347,38 @@ export default function Lottery() {
     return map;
   }, [dailyRecords]);
 
-  // Get previous day's closing stock for auto-carry-forward
+  // Get the most recent prior closing stock for auto-carry-forward.
+  // Walks backwards (up to 60 days) so a gap in data entry never breaks the
+  // opening balance chain — e.g. 23rd closing must appear as 24th opening even
+  // if the 23rd row was saved without a closing figure on the first attempt.
   const getPreviousDayClosingStock = useCallback((gameId: string, dateStr: string): number | null => {
-    const currentDate = new Date(dateStr);
-    const previousDate = subDays(currentDate, 1);
-    const prevDateStr = format(previousDate, 'yyyy-MM-dd');
-    
-    // First check if there's edited data for the previous day
-    const editedPrev = editingData[gameId]?.[prevDateStr];
-    if (editedPrev?.stockEnd !== undefined && editedPrev.stockEnd !== null) {
-      return editedPrev.stockEnd;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    let cursor = new Date(y, (m || 1) - 1, d || 1);
+
+    for (let step = 0; step < 60; step++) {
+      cursor = subDays(cursor, 1);
+      const prevDateStr = format(cursor, 'yyyy-MM-dd');
+
+      // Prefer unsaved edits for that day
+      const editedPrev = editingData[gameId]?.[prevDateStr];
+      if (editedPrev?.stockEnd != null && Number(editedPrev.stockEnd) > 0) {
+        return Number(editedPrev.stockEnd);
+      }
+
+      const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
+      if (!prevRecord) continue;
+
+      if (prevRecord.stock_end != null && Number(prevRecord.stock_end) > 0) {
+        return Number(prevRecord.stock_end);
+      }
+      // Closing not entered — fall back to that day's total stock so the chain
+      // keeps running instead of collapsing to blank.
+      const total = Number(prevRecord.stock_begin || 0) + Number(prevRecord.activated_tickets || 0);
+      if (total > 0) return total;
     }
-    
-    // Then check the database record
-    const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
-    return prevRecord?.stock_end ?? null;
+    return null;
   }, [editingData, recordsByGameAndDate]);
+
 
   // Get value for a cell (edited or from DB) with auto-carry-forward for stockBegin
   const getCellValue = useCallback((gameId: string, dateStr: string, field: keyof GameDailyData) => {
