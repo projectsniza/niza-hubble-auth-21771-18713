@@ -77,12 +77,18 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
 // Map a department label (left-side text in DEPARTMENTVAT) to a category code.
 // Amount columns only — VAT is tracked separately and never added into a category.
 // GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
+// FORCE_GZ departments are always reported as Grocery Zero, never Grocery Std
+// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater).
+const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b|GROCERY\s*3\b/i;
+
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
+  // Alcohol must be matched before the generic BEVERAGES rules so that
+  // departments such as "BEVERAGES ALCOHOL" never fall into Drinks.
+  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE/i, 'AL'],
   [/SOFT\s*BEVERAGES/i, 'DR'],
   [/^BEVERAGES\b/i, 'DR'],
-  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
@@ -93,9 +99,11 @@ const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
 ];
 
 const codeForDept = (label: string): (keyof CoopCategoryTotals | 'GROCERY') | null => {
+  if (FORCE_GZ.test(label)) return 'GZ';
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
+
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
