@@ -84,9 +84,10 @@ export default function LivePreview() {
     URL.revokeObjectURL(url);
   };
 
-  const saleCols = ['Fuel','Tobacco','Drinks','Grocery Std','Grocery Zero','Domestic 5%','Alcohol','Newspapers','Vending','Car Wash','Nat Lottery','Scratchcards','Paypoint','Payzone','Lotto Payouts','Drive Off'];
-  const saleKeys: (keyof any)[] = ['FU','TO','DR','GS','GZ','DO','AL','NP','VM','CW','national_lottery','instant_lottery','paypoint','payzone','lottery_payouts','fuel_drive_off'];
-  const cashCols = ['Shop','Carwash','Vending','Payzone','Fuel','Nat Lottery','Lotto Prize','Card Total','Cash Total','Cust. Account'];
+  const saleCols = ['Fuel','Fuel Litres','Tobacco','Drinks','Alcohol','Grocery Std','Grocery Zero','Domestic 5%','Newspapers','Newspapers 20%','Vending','Car Wash','Nat Lottery','Scratchcards','Paypoint','Payzone','Lotto Payouts'];
+  const saleKeys: (keyof any)[] = ['FU','fuel_litres','TO','DR','AL','GS','GZ','DO','NP','NP20','VM','CW','national_lottery','instant_lottery','paypoint','payzone','lottery_payouts'];
+  const cashCols = ['Shop','Carwash','Vending','Payzone','Fuel','Lotto Sales','Lotto Prize','Drive Off','Credit C.Sales','Cash S.Total','Cust. Account','Total Banking'];
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
