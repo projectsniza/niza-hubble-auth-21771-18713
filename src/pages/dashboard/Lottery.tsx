@@ -402,7 +402,11 @@ export default function Lottery() {
   // Walks backwards (up to 60 days) so a gap in data entry never breaks the
   // opening balance chain — e.g. 23rd closing must appear as 24th opening even
   // if the 23rd row was saved without a closing figure on the first attempt.
-  const getPreviousDayClosingStock = useCallback((gameId: string, dateStr: string): number | null => {
+  const getPreviousDayClosingStock = useCallback((
+    gameId: string,
+    dateStr: string,
+    explicitOnly = false,
+  ): number | null => {
     const [y, m, d] = dateStr.split('-').map(Number);
     let cursor = new Date(y, (m || 1) - 1, d || 1);
 
@@ -410,18 +414,19 @@ export default function Lottery() {
       cursor = subDays(cursor, 1);
       const prevDateStr = format(cursor, 'yyyy-MM-dd');
 
-      // Prefer unsaved edits for that day
+      // Prefer unsaved edits for that day (0 is a valid closing stock)
       const editedPrev = editingData[gameId]?.[prevDateStr];
-      if (editedPrev?.stockEnd != null && Number(editedPrev.stockEnd) > 0) {
+      if (editedPrev?.stockEnd != null) {
         return Number(editedPrev.stockEnd);
       }
 
       const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
       if (!prevRecord) continue;
 
-      if (prevRecord.stock_end != null && Number(prevRecord.stock_end) > 0) {
+      if (prevRecord.stock_end != null) {
         return Number(prevRecord.stock_end);
       }
+      if (explicitOnly) return null;
       // Closing not entered — fall back to that day's total stock so the chain
       // keeps running instead of collapsing to blank.
       const total = Number(prevRecord.stock_begin || 0) + Number(prevRecord.activated_tickets || 0);
@@ -442,12 +447,15 @@ export default function Lottery() {
     
     switch (field) {
       case 'stockBegin': {
-        // Use saved value only if it's a meaningful positive number.
-        // (Treat null/undefined/0 as "not set" so carry-forward from previous day's closing kicks in.)
+        // An explicitly entered previous-day closing stock is authoritative —
+        // including 0 (all tickets sold). This keeps the chain correct even when
+        // an older opening figure was saved before the closing was entered.
+        const explicitPrev = getPreviousDayClosingStock(gameId, dateStr, true);
+        if (explicitPrev != null) return explicitPrev;
+
         if (record?.stock_begin != null && Number(record.stock_begin) > 0) {
           return record.stock_begin;
         }
-        // Otherwise, try to auto-populate from previous day's closing stock
         const prevClosing = getPreviousDayClosingStock(gameId, dateStr);
         if (prevClosing != null && prevClosing > 0) return prevClosing;
         return record?.stock_begin ?? null;
@@ -458,6 +466,7 @@ export default function Lottery() {
       default: return null;
     }
   }, [editingData, recordsByGameAndDate, getPreviousDayClosingStock]);
+
 
   // Calculate derived values for a day
   const getDayCalculations = useCallback((gameId: string, dateStr: string, game: LotteryGame) => {
