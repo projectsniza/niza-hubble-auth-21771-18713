@@ -6,15 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Trash2, AlertCircle, CheckCircle2, XCircle, FileText, Receipt, Wallet } from 'lucide-react';
+import { Upload, Trash2, AlertCircle, CheckCircle2, XCircle, FileText, Receipt, Wallet, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
 import {
   parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
   spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec,
+  parseFisCardStatement,
   type ImportFormatId, type UnknownDepartment, type VendingSplitMode,
 } from '@/lib/coopFuelParser';
+
 
 type BranchProfile = {
   branch_id: string | null;
