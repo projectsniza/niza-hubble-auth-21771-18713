@@ -453,7 +453,29 @@ export default function DailySalesUpload() {
               {busyCash ? 'Uploading…' : cashRecUploaded ? 'Replace Cash Rec' : 'Upload Cash Rec'}
             </Button>
           </Card>
+
+          {/* Slot 4: FIS weekly credit-card statement */}
+          <Card className={`p-3 border-2 ${cardUploaded ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">4. Card Statement (FIS)</span>
+              </div>
+              {cardUploaded
+                ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                : <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase">Weekly</span>}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              Weekly FIS settlement (CSV/XLSX). Maps Visa/MC, Amex and fuel cards per day into the C.CARD tab.
+            </p>
+            <Input id="fiscard-file" type="file" accept="*/*" onChange={(e) => setCardFile(e.target.files?.[0] || null)} />
+            {cardFile && <p className="text-xs text-primary mt-1 truncate">{cardFile.name}</p>}
+            <Button size="sm" className="w-full mt-2" onClick={handleCardUpload} disabled={busyCard || !cardFile}>
+              {busyCard ? 'Uploading…' : cardUploaded ? 'Replace Card Statement' : 'Upload Card Statement'}
+            </Button>
+          </Card>
         </div>
+
 
         <div className="mt-4">
           <Button onClick={handleDailyUpload}
