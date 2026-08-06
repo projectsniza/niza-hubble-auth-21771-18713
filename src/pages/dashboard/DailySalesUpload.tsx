@@ -6,15 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Trash2, AlertCircle, CheckCircle2, XCircle, FileText, Receipt, Wallet } from 'lucide-react';
+import { Upload, Trash2, AlertCircle, CheckCircle2, XCircle, FileText, Receipt, Wallet, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
 import {
   parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
   spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec,
+  parseFisCardStatement,
   type ImportFormatId, type UnknownDepartment, type VendingSplitMode,
 } from '@/lib/coopFuelParser';
+
 
 type BranchProfile = {
   branch_id: string | null;
@@ -33,11 +35,15 @@ export default function DailySalesUpload() {
   const [xreadFile, setXreadFile] = useState<File | null>(null);
   const [deptFile, setDeptFile] = useState<File | null>(null);
   const [cashRecFile, setCashRecFile] = useState<File | null>(null);
+  const [cardFile, setCardFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyCash, setBusyCash] = useState(false);
+  const [busyCard, setBusyCard] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [weekStatus, setWeekStatus] = useState<Record<string, { xread: boolean; deptvat: boolean }>>({});
   const [cashRecUploaded, setCashRecUploaded] = useState<boolean>(false);
+  const [cardUploaded, setCardUploaded] = useState<boolean>(false);
+
 
   const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
   const isCoop = profile?.import_format === 'coop_fuel';
@@ -64,9 +70,11 @@ export default function DailySalesUpload() {
       status[d] = { xread: false, deptvat: false };
     }
     let cash = false;
+    let card = false;
     for (const r of data || []) {
       const f = (r.source_format || '').toLowerCase();
       if (f === 'cashrec' && r.sale_date === monday) cash = true;
+      if (f === 'fiscard' && r.sale_date === monday) card = true;
       if (status[r.sale_date]) {
         if (f === 'xread' || f === 'coop_fuel' || f === 'charfield_shift') status[r.sale_date].xread = true;
         if (f === 'deptvat' || f === 'coop_fuel') status[r.sale_date].deptvat = true;
@@ -74,7 +82,9 @@ export default function DailySalesUpload() {
     }
     setWeekStatus(status);
     setCashRecUploaded(cash);
+    setCardUploaded(card);
   };
+
 
   useEffect(() => {
     if (!user?.id) return;
@@ -304,6 +314,55 @@ export default function DailySalesUpload() {
     }
   };
 
+  const handleCardUpload = async () => {
+    if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
+    if (!cardFile) return toast.error('Please select the weekly FIS credit-card statement');
+    setBusyCard(true);
+    try {
+      const path = await uploadStorage(cardFile, `fiscard/${weekMonday}`);
+      const text = await readFileText(cardFile);
+      const parsed = parseFisCardStatement(text);
+      if (parsed.matchedLines === 0) {
+        toast.warning('No dated card lines were recognised — the file is stored, but C.CARD will keep using till tenders.');
+      }
+
+      await supabase.from('daily_sales_uploads')
+        .delete()
+        .eq('branch_id', profile.branch_id)
+        .eq('sale_date', weekMonday)
+        .eq('source_format', 'fiscard');
+
+      const { error } = await supabase.from('daily_sales_uploads').insert({
+        organization_id: profile.organization_id,
+        branch_id: profile.branch_id,
+        sale_date: weekMonday,
+        source_filename: cardFile.name,
+        source_format: 'fiscard',
+        storage_path: path,
+        raw_text: text.slice(0, 200000),
+        parsed_totals: {
+          format: 'fiscard',
+          week_start: weekMonday,
+          week_end: weekSunday,
+          by_date: parsed.byDate,
+          week_totals: parsed.weekTotals,
+          matched_lines: parsed.matchedLines,
+        } as any,
+        uploaded_by: user!.id,
+      });
+      if (error) throw error;
+      toast.success(`Card statement uploaded (${Object.keys(parsed.byDate).length} day(s) mapped)`);
+      setCardFile(null);
+      loadRows(profile.branch_id);
+    } catch (e: any) {
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setBusyCard(false);
+    }
+  };
+
+
+
   const remove = async (id: string) => {
     if (!confirm('Delete this upload?')) return;
     const { error } = await supabase.from('daily_sales_uploads').delete().eq('id', id);
@@ -344,7 +403,7 @@ export default function DailySalesUpload() {
         </div>
 
         {/* Daily slots */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Slot 1: X-Read */}
           <Card className={`p-3 border-2 ${todayXread ? 'border-green-500/40 bg-green-500/5' : 'border-dashed'}`}>
             <div className="flex items-center justify-between mb-2">
@@ -394,7 +453,29 @@ export default function DailySalesUpload() {
               {busyCash ? 'Uploading…' : cashRecUploaded ? 'Replace Cash Rec' : 'Upload Cash Rec'}
             </Button>
           </Card>
+
+          {/* Slot 4: FIS weekly credit-card statement */}
+          <Card className={`p-3 border-2 ${cardUploaded ? 'border-green-500/40 bg-green-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">4. Card Statement (FIS)</span>
+              </div>
+              {cardUploaded
+                ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                : <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase">Weekly</span>}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              Weekly FIS settlement (CSV/XLSX). Maps Visa/MC, Amex and fuel cards per day into the C.CARD tab.
+            </p>
+            <Input id="fiscard-file" type="file" accept="*/*" onChange={(e) => setCardFile(e.target.files?.[0] || null)} />
+            {cardFile && <p className="text-xs text-primary mt-1 truncate">{cardFile.name}</p>}
+            <Button size="sm" className="w-full mt-2" onClick={handleCardUpload} disabled={busyCard || !cardFile}>
+              {busyCard ? 'Uploading…' : cardUploaded ? 'Replace Card Statement' : 'Upload Card Statement'}
+            </Button>
+          </Card>
         </div>
+
 
         <div className="mt-4">
           <Button onClick={handleDailyUpload}

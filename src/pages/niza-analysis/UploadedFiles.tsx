@@ -25,6 +25,8 @@ const label = (f: string | null) => {
   if (s === 'xread' || s === 'charfield_shift') return 'X-Read (Till)';
   if (s === 'deptvat') return 'Department VAT';
   if (s === 'cashrec') return 'Cash Reconciliation';
+  if (s === 'fiscard') return 'FIS Card Statement (weekly)';
+
   return f || '—';
 };
 

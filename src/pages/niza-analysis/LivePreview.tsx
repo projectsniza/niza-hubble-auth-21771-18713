@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Download, Eye } from 'lucide-react';
+import { Download, Eye, Save, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -17,9 +17,14 @@ interface Row {
   id: string;
   sale_date: string;
   parsed_totals: any;
+  original_totals?: any;
   raw_text?: string | null;
   branch?: { id: string; name: string; vending_split_mode?: string | null } | null;
 }
+
+type FisDay = { visa_mc: number; amex: number; fuel_card: number; other: number; total: number };
+
+const num = (v: any) => Number(v || 0);
 
 export default function LivePreview() {
   const today = new Date();
@@ -28,7 +33,10 @@ export default function LivePreview() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchId, setBranchId] = useState<string>('all');
   const [rows, setRows] = useState<Row[]>([]);
+  const [cardByKey, setCardByKey] = useState<Record<string, FisDay>>({});
+  const [edits, setEdits] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     supabase.from('branches').select('id,name').order('name').then(({ data }) => setBranches((data as any) || []));
@@ -37,36 +45,108 @@ export default function LivePreview() {
   const load = async () => {
     setLoading(true);
     let q = supabase.from('daily_sales_uploads')
-      .select('id, sale_date, parsed_totals, raw_text, branch:branches(id, name, vending_split_mode)')
+      .select('id, branch_id, sale_date, source_format, parsed_totals, raw_text, branch:branches(id, name, vending_split_mode)')
       .gte('sale_date', from).lte('sale_date', to)
       .order('sale_date');
     if (branchId !== 'all') q = q.eq('branch_id', branchId);
-    const { data, error } = await q;
+
+    // FIS card statements are stored on the week's Monday, so widen the window a
+    // little to catch statements whose week starts before the selected range.
+    let cq = supabase.from('daily_sales_uploads')
+      .select('branch_id, sale_date, parsed_totals')
+      .eq('source_format', 'fiscard')
+      .gte('sale_date', format(new Date(new Date(from).getTime() - 8 * 864e5), 'yyyy-MM-dd'))
+      .lte('sale_date', to);
+    if (branchId !== 'all') cq = cq.eq('branch_id', branchId);
+
+    const [{ data, error }, { data: cardData }] = await Promise.all([q, cq]);
     setLoading(false);
     if (error) return toast.error(error.message);
-    setRows(((data as any) || []).map((r: Row) => ({
-      ...r,
-      parsed_totals: normalizeCoopParsedTotals(
-        r.parsed_totals,
-        r.raw_text,
-        (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
-      ),
-    })));
+
+    const cards: Record<string, FisDay> = {};
+    for (const c of (cardData as any[]) || []) {
+      const byDate = c.parsed_totals?.by_date || {};
+      for (const [d, v] of Object.entries<any>(byDate)) {
+        cards[`${c.branch_id}|${d}`] = {
+          visa_mc: num(v.visa_mc), amex: num(v.amex), fuel_card: num(v.fuel_card),
+          other: num(v.other), total: num(v.total),
+        };
+      }
+    }
+    setCardByKey(cards);
+
+    const daily = ((data as any[]) || []).filter(r => !['cashrec', 'fiscard'].includes((r.source_format || '').toLowerCase()));
+    const loadedEdits: Record<string, Record<string, number>> = {};
+    setRows(daily.map((r: any) => {
+      if (r.parsed_totals?.manual_overrides) loadedEdits[r.id] = { ...r.parsed_totals.manual_overrides };
+      return {
+        ...r,
+        original_totals: r.parsed_totals,
+        parsed_totals: normalizeCoopParsedTotals(
+          r.parsed_totals,
+          r.raw_text,
+          (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
+        ),
+      };
+    }));
+    setEdits(loadedEdits);
   };
 
-  const coopRows = useMemo<CoopXeroRow[]>(() => {
+  const coopRows = useMemo<(CoopXeroRow & { row_id: string })[]>(() => {
     let seq = 3651;
     return rows
       .filter(r => r.branch && r.parsed_totals?.format === 'coop_fuel')
-      .map(r => ({
-        sale_date: r.sale_date,
-        invoice_number: `INV-${seq++}`,
-        branch_name: r.branch!.name,
-        contact_name: `${r.branch!.name} Stores-Customers`,
-        reference: `${r.branch!.name}-${format(new Date(r.sale_date), 'MMM yy')}`,
-        totals: { ...emptyCoopTotals(), ...(r.parsed_totals?.breakdown || {}) },
-      }));
-  }, [rows]);
+      .map(r => {
+        const fis = cardByKey[`${(r as any).branch_id}|${r.sale_date}`];
+        return {
+          row_id: r.id,
+          sale_date: r.sale_date,
+          invoice_number: `INV-${seq++}`,
+          branch_name: r.branch!.name,
+          contact_name: `${r.branch!.name} Stores-Customers`,
+          reference: `${r.branch!.name}-${format(new Date(r.sale_date), 'MMM yy')}`,
+          totals: {
+            ...emptyCoopTotals(),
+            ...(r.parsed_totals?.breakdown || {}),
+            ...(fis ? { visa_mc: fis.visa_mc, amex: fis.amex, fuel_card: fis.fuel_card } : {}),
+            ...(edits[r.id] || {}),
+          },
+        };
+      });
+  }, [rows, cardByKey, edits]);
+
+  const cell = (rowId: string, key: string, fallback: any) =>
+    edits[rowId]?.[key] !== undefined ? edits[rowId][key] : num(fallback);
+
+  const setCell = (rowId: string, key: string, value: string) => {
+    setEdits(prev => {
+      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}) } };
+      if (value === '') delete next[rowId][key];
+      else next[rowId][key] = Number(value);
+      return next;
+    });
+  };
+
+  const saveEdits = async () => {
+    const ids = Object.keys(edits).filter(id => Object.keys(edits[id] || {}).length > 0);
+    if (ids.length === 0) return toast.info('No edits to save');
+    setSaving(true);
+    try {
+      for (const id of ids) {
+        const row = rows.find(r => r.id === id);
+        const base = row?.original_totals || {};
+        const { error } = await supabase.from('daily_sales_uploads')
+          .update({ parsed_totals: { ...base, manual_overrides: edits[id] } as any })
+          .eq('id', id);
+        if (error) throw error;
+      }
+      toast.success(`Saved edits for ${ids.length} day(s)`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const download = async () => {
     if (coopRows.length === 0) return toast.error('No Co-op rows in range');
@@ -85,9 +165,18 @@ export default function LivePreview() {
   };
 
   const saleCols = ['Fuel','Fuel Litres','Tobacco','Drinks','Alcohol','Grocery Std','Grocery Zero','Domestic 5%','Newspapers','Newspapers 20%','Vending','Car Wash','Nat Lottery','Scratchcards','Paypoint','Payzone','Lotto Payouts'];
-  const saleKeys: (keyof any)[] = ['FU','fuel_litres','TO','DR','AL','GS','GZ','DO','NP','NP20','VM','CW','national_lottery','instant_lottery','paypoint','payzone','lottery_payouts'];
+  const saleKeys = ['FU','fuel_litres','TO','DR','AL','GS','GZ','DO','NP','NP20','VM','CW','national_lottery','instant_lottery','paypoint','payzone','lottery_payouts'];
   const cashCols = ['Shop','Carwash','Vending','Payzone','Fuel','Lotto Sales','Lotto Prize','Drive Off','Credit C.Sales','Cash S.Total','Cust. Account','Total Banking'];
 
+  const editInput = (rowId: string, key: string, fallback: any) => (
+    <Input
+      type="number"
+      step="0.01"
+      className="h-7 w-24 text-right text-xs px-1"
+      value={String(cell(rowId, key, fallback) ?? '')}
+      onChange={e => setCell(rowId, key, e.target.value)}
+    />
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -95,12 +184,12 @@ export default function LivePreview() {
         <span className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><Eye className="h-5 w-5" /></span>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Live Preview</h1>
-          <p className="text-sm text-muted-foreground">Every output tab computed live before you export the workbook.</p>
+          <p className="text-sm text-muted-foreground">Every output tab computed live — edit any cell before you export the workbook.</p>
         </div>
       </div>
 
       <Card className="p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
           <div><Label>From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} /></div>
           <div><Label>To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} /></div>
           <div>
@@ -114,10 +203,16 @@ export default function LivePreview() {
             </Select>
           </div>
           <Button onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Load'}</Button>
+          <Button variant="secondary" onClick={saveEdits} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save Edits'}
+          </Button>
           <Button variant="outline" onClick={download} disabled={coopRows.length === 0}>
             <Download className="h-4 w-4 mr-2" /> Download XLSX
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+          <CreditCard className="h-3 w-3" /> C.CARD uses the weekly FIS statement when one has been uploaded for that week; otherwise till card tenders are shown.
+        </p>
       </Card>
 
       <Tabs defaultValue="sale">
@@ -142,10 +237,10 @@ export default function LivePreview() {
                   const t: any = r.totals;
                   return (
                     <tr key={`${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
-                      <td className="p-2">{r.sale_date}</td>
-                      <td className="p-2">{r.branch_name}</td>
+                      <td className="p-2 whitespace-nowrap">{r.sale_date}</td>
+                      <td className="p-2 whitespace-nowrap">{r.branch_name}</td>
                       {saleKeys.map(k => (
-                        <td key={String(k)} className="text-right p-2">{Number(t[k] || 0).toFixed(2)}</td>
+                        <td key={k} className="text-right p-1">{editInput(r.row_id, k, t[k])}</td>
                       ))}
                     </tr>
                   );
@@ -171,31 +266,31 @@ export default function LivePreview() {
               <tbody>
                 {coopRows.map(r => {
                   const t: any = r.totals;
-                  const shop = (t.TO||0)+(t.DR||0)+(t.AL||0)+(t.GS||0)+(t.GZ||0)+(t.DO||0)+(t.NP||0)+(t.NP20||0);
-                  const cardTotal = (t.visa_mc||0)+(t.amex||0)+(t.fuel_card||0);
-                  const lottoSales = (t.national_lottery||0)+(t.instant_lottery||0);
-                  const lottoPrize = Math.abs(Number(t.lottery_payouts||0));
-                  const driveOff = t.fuel_drive_off ? -Math.abs(Number(t.fuel_drive_off)) : 0;
-                  const misc = Math.abs(Number(t.petty_cash||0));
-                  const totalBanking = shop + (t.CW||0) + (t.VM||0) + (t.payzone||0) + (t.FU||0)
-                    + lottoSales - lottoPrize + driveOff - cardTotal - (t.customer_account||0)
-                    - (t.coupon||0) - misc;
+                  const shop = num(t.TO)+num(t.DR)+num(t.AL)+num(t.GS)+num(t.GZ)+num(t.DO)+num(t.NP)+num(t.NP20);
+                  const cardTotal = num(t.visa_mc)+num(t.amex)+num(t.fuel_card);
+                  const lottoSales = num(t.national_lottery)+num(t.instant_lottery);
+                  const lottoPrize = Math.abs(num(t.lottery_payouts));
+                  const driveOff = t.fuel_drive_off ? -Math.abs(num(t.fuel_drive_off)) : 0;
+                  const misc = Math.abs(num(t.petty_cash));
+                  const totalBanking = shop + num(t.CW) + num(t.VM) + num(t.payzone) + num(t.FU)
+                    + lottoSales - lottoPrize + driveOff - cardTotal - num(t.customer_account)
+                    - num(t.coupon) - misc;
                   return (
                     <tr key={`${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
-                      <td className="p-2">{r.sale_date}</td>
-                      <td className="p-2">{r.branch_name}</td>
+                      <td className="p-2 whitespace-nowrap">{r.sale_date}</td>
+                      <td className="p-2 whitespace-nowrap">{r.branch_name}</td>
                       <td className="text-right p-2">{shop.toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.CW||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.VM||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.payzone||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.FU||0).toFixed(2)}</td>
+                      <td className="text-right p-2">{num(t.CW).toFixed(2)}</td>
+                      <td className="text-right p-2">{num(t.VM).toFixed(2)}</td>
+                      <td className="text-right p-2">{num(t.payzone).toFixed(2)}</td>
+                      <td className="text-right p-2">{num(t.FU).toFixed(2)}</td>
                       <td className="text-right p-2">{lottoSales.toFixed(2)}</td>
                       <td className="text-right p-2">{lottoPrize.toFixed(2)}</td>
-                      <td className="text-right p-2">{driveOff.toFixed(2)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'fuel_drive_off', t.fuel_drive_off)}</td>
                       <td className="text-right p-2">{cardTotal.toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.cash_tender||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.customer_account||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{totalBanking.toFixed(2)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'cash_tender', t.cash_tender)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'customer_account', t.customer_account)}</td>
+                      <td className="text-right p-2 font-semibold">{totalBanking.toFixed(2)}</td>
                     </tr>
                   );
                 })}
@@ -218,25 +313,28 @@ export default function LivePreview() {
                   <th className="text-right p-2">Amex</th>
                   <th className="text-right p-2">Fuel Card</th>
                   <th className="text-right p-2">Total</th>
+                  <th className="text-left p-2">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {coopRows.map(r => {
                   const t: any = r.totals;
-                  const total = (t.visa_mc||0)+(t.amex||0)+(t.fuel_card||0);
+                  const total = num(t.visa_mc)+num(t.amex)+num(t.fuel_card);
+                  const hasFis = !!cardByKey[`${(rows.find(x => x.id === r.row_id) as any)?.branch_id}|${r.sale_date}`];
                   return (
                     <tr key={`cc-${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
-                      <td className="p-2">{r.sale_date}</td>
-                      <td className="p-2">{r.branch_name}</td>
-                      <td className="text-right p-2">{Number(t.visa_mc||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.amex||0).toFixed(2)}</td>
-                      <td className="text-right p-2">{Number(t.fuel_card||0).toFixed(2)}</td>
+                      <td className="p-2 whitespace-nowrap">{r.sale_date}</td>
+                      <td className="p-2 whitespace-nowrap">{r.branch_name}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'visa_mc', t.visa_mc)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'amex', t.amex)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'fuel_card', t.fuel_card)}</td>
                       <td className="text-right p-2 font-semibold">{total.toFixed(2)}</td>
+                      <td className="p-2 text-muted-foreground">{hasFis ? 'FIS statement' : 'Till tenders'}</td>
                     </tr>
                   );
                 })}
                 {coopRows.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Load a range to preview.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Load a range to preview.</td></tr>
                 )}
               </tbody>
             </table>

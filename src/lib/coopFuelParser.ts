@@ -234,6 +234,79 @@ export function parseCashRec(text: string): {
   return { total_banking, cash_banked, card_banked, other };
 }
 
+/**
+ * Weekly FIS credit-card settlement export (CSV / XLSX-converted-to-CSV).
+ *
+ * The FIS files differ slightly per acquirer, so this parser is deliberately
+ * tolerant: every line that contains a date and a numeric amount is attributed
+ * to a card scheme by keyword, and amounts are accumulated per transaction date.
+ */
+export interface FisCardDay {
+  visa_mc: number; amex: number; fuel_card: number; other: number; total: number;
+}
+export interface FisCardParseResult {
+  byDate: Record<string, FisCardDay>;
+  weekTotals: FisCardDay;
+  matchedLines: number;
+}
+
+const emptyFisDay = (): FisCardDay => ({ visa_mc: 0, amex: 0, fuel_card: 0, other: 0, total: 0 });
+
+const normaliseFisDate = (raw: string): string | null => {
+  let m = raw.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = raw.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
+  if (m) {
+    const yr = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${yr}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  }
+  return null;
+};
+
+export function parseFisCardStatement(text: string): FisCardParseResult {
+  const byDate: Record<string, FisCardDay> = {};
+  const weekTotals = emptyFisDay();
+  let matchedLines = 0;
+
+  for (const rawLine of (text || '').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/total|summary|grand/i.test(line) && !/\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(line)) continue;
+
+    const dateStr = normaliseFisDate(line);
+    if (!dateStr) continue;
+
+    // Collect numbers, ignoring the date digits themselves.
+    const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
+    const nums = (withoutDate.match(/-?\d[\d,]*\.\d{2}|-?\d[\d,]*(?=\s|,|$)/g) || [])
+      .map(n => Number(n.replace(/,/g, '')))
+      .filter(n => Number.isFinite(n) && n !== 0);
+    if (!nums.length) continue;
+
+    // Prefer a decimal money value; otherwise take the largest magnitude.
+    const decimals = (withoutDate.match(/-?\d[\d,]*\.\d{2}/g) || []).map(n => Number(n.replace(/,/g, '')));
+    const amount = decimals.length
+      ? decimals[decimals.length - 1]
+      : nums.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), nums[0]);
+    if (!amount) continue;
+
+    let key: keyof FisCardDay = 'other';
+    if (/amex|american\s*express/i.test(line)) key = 'amex';
+    else if (/all\s*star|allstar|uk\s*fuels|key\s*fuels|fuel\s*card|routex|fleet|texaco|shell|bp\b|esso|keyfuels/i.test(line)) key = 'fuel_card';
+    else if (/visa|master(?:card)?|maestro|debit|credit|v\/mc|vmc|contactless/i.test(line)) key = 'visa_mc';
+
+    if (!byDate[dateStr]) byDate[dateStr] = emptyFisDay();
+    byDate[dateStr][key] = +(byDate[dateStr][key] + amount).toFixed(2);
+    byDate[dateStr].total = +(byDate[dateStr].total + amount).toFixed(2);
+    weekTotals[key] = +(weekTotals[key] + amount).toFixed(2);
+    weekTotals.total = +(weekTotals.total + amount).toFixed(2);
+    matchedLines++;
+  }
+
+  return { byDate, weekTotals, matchedLines };
+}
+
+
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'array' });
