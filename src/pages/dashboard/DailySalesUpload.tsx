@@ -70,9 +70,11 @@ export default function DailySalesUpload() {
       status[d] = { xread: false, deptvat: false };
     }
     let cash = false;
+    let card = false;
     for (const r of data || []) {
       const f = (r.source_format || '').toLowerCase();
       if (f === 'cashrec' && r.sale_date === monday) cash = true;
+      if (f === 'fiscard' && r.sale_date === monday) card = true;
       if (status[r.sale_date]) {
         if (f === 'xread' || f === 'coop_fuel' || f === 'charfield_shift') status[r.sale_date].xread = true;
         if (f === 'deptvat' || f === 'coop_fuel') status[r.sale_date].deptvat = true;
@@ -80,7 +82,9 @@ export default function DailySalesUpload() {
     }
     setWeekStatus(status);
     setCashRecUploaded(cash);
+    setCardUploaded(card);
   };
+
 
   useEffect(() => {
     if (!user?.id) return;
