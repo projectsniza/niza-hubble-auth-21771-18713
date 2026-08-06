@@ -314,6 +314,55 @@ export default function DailySalesUpload() {
     }
   };
 
+  const handleCardUpload = async () => {
+    if (!profile?.branch_id) return toast.error('Your account is not linked to a branch');
+    if (!cardFile) return toast.error('Please select the weekly FIS credit-card statement');
+    setBusyCard(true);
+    try {
+      const path = await uploadStorage(cardFile, `fiscard/${weekMonday}`);
+      const text = await readFileText(cardFile);
+      const parsed = parseFisCardStatement(text);
+      if (parsed.matchedLines === 0) {
+        toast.warning('No dated card lines were recognised — the file is stored, but C.CARD will keep using till tenders.');
+      }
+
+      await supabase.from('daily_sales_uploads')
+        .delete()
+        .eq('branch_id', profile.branch_id)
+        .eq('sale_date', weekMonday)
+        .eq('source_format', 'fiscard');
+
+      const { error } = await supabase.from('daily_sales_uploads').insert({
+        organization_id: profile.organization_id,
+        branch_id: profile.branch_id,
+        sale_date: weekMonday,
+        source_filename: cardFile.name,
+        source_format: 'fiscard',
+        storage_path: path,
+        raw_text: text.slice(0, 200000),
+        parsed_totals: {
+          format: 'fiscard',
+          week_start: weekMonday,
+          week_end: weekSunday,
+          by_date: parsed.byDate,
+          week_totals: parsed.weekTotals,
+          matched_lines: parsed.matchedLines,
+        } as any,
+        uploaded_by: user!.id,
+      });
+      if (error) throw error;
+      toast.success(`Card statement uploaded (${Object.keys(parsed.byDate).length} day(s) mapped)`);
+      setCardFile(null);
+      loadRows(profile.branch_id);
+    } catch (e: any) {
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setBusyCard(false);
+    }
+  };
+
+
+
   const remove = async (id: string) => {
     if (!confirm('Delete this upload?')) return;
     const { error } = await supabase.from('daily_sales_uploads').delete().eq('id', id);
