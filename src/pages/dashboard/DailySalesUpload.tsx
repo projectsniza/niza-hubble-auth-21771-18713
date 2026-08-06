@@ -35,11 +35,15 @@ export default function DailySalesUpload() {
   const [xreadFile, setXreadFile] = useState<File | null>(null);
   const [deptFile, setDeptFile] = useState<File | null>(null);
   const [cashRecFile, setCashRecFile] = useState<File | null>(null);
+  const [cardFile, setCardFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyCash, setBusyCash] = useState(false);
+  const [busyCard, setBusyCard] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const [weekStatus, setWeekStatus] = useState<Record<string, { xread: boolean; deptvat: boolean }>>({});
   const [cashRecUploaded, setCashRecUploaded] = useState<boolean>(false);
+  const [cardUploaded, setCardUploaded] = useState<boolean>(false);
+
 
   const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
   const isCoop = profile?.import_format === 'coop_fuel';
