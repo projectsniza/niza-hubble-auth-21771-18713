@@ -403,7 +403,7 @@ export default function DailySalesUpload() {
         </div>
 
         {/* Daily slots */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Slot 1: X-Read */}
           <Card className={`p-3 border-2 ${todayXread ? 'border-green-500/40 bg-green-500/5' : 'border-dashed'}`}>
             <div className="flex items-center justify-between mb-2">
