@@ -370,7 +370,7 @@ export default function IncidentManagement() {
       toast({ title: 'Pop-up blocked', description: 'Please allow pop-ups to print.', variant: 'destructive' });
       return;
     }
-    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd">${value}</td></tr>` : '';
+    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd;white-space:pre-wrap;word-break:break-word">${value}</td></tr>` : '';
     const sectionTitle = (t: string) => `<tr><td colspan="2" style="padding:8px 10px;background:#222;color:#fff;font-weight:600;letter-spacing:0.5px;font-size:12px;text-transform:uppercase">${t}</td></tr>`;
     const personType = md.person_type === 'other' ? `Other${md.person_type_other ? ' — ' + md.person_type_other : ''}` : (md.person_type ? md.person_type.charAt(0).toUpperCase() + md.person_type.slice(1) : '');
     const actionsTaken = [
@@ -769,7 +769,10 @@ export default function IncidentManagement() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe what happened"
+                rows={8}
+                className="min-h-[160px] max-h-[50vh]"
               />
+
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
@@ -1073,7 +1076,7 @@ export default function IncidentManagement() {
               </div>
               <div>
                 <Label className="text-muted-foreground">Description</Label>
-                <p>{selectedIncident.description || '-'}</p>
+                <p className="whitespace-pre-wrap break-words">{selectedIncident.description || '-'}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

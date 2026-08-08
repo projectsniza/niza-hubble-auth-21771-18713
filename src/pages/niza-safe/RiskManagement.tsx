@@ -665,9 +665,9 @@ export default function RiskManagement() {
             {dialogType === 'risk' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} placeholder="Risk assessment title" /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Hazard Description</Label><Textarea value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Control Measures</Label><Textarea value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Hazard Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Control Measures</Label><Textarea rows={6} className="min-h-[120px]" value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Risk Level</Label>
                   <Select value={formData.risk_level} onValueChange={(v) => setFormData({...formData, risk_level: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -680,7 +680,7 @@ export default function RiskManagement() {
             {dialogType === 'coshh' && (
               <>
                 <div className="space-y-2"><Label>Chemical Name</Label><Input value={formData.chemical_name} onChange={(e) => setFormData({...formData, chemical_name: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea rows={6} className="min-h-[120px]" value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Exposure Limits</Label><Input value={formData.exposure_limits} onChange={(e) => setFormData({...formData, exposure_limits: e.target.value})} /></div>
               </>
             )}
@@ -688,7 +688,7 @@ export default function RiskManagement() {
             {dialogType === 'hazard' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Location</Label><Input value={formData.location_details} onChange={(e) => setFormData({...formData, location_details: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Priority</Label>
                   <Select value={formData.priority} onValueChange={(v) => setFormData({...formData, priority: v})}>
@@ -702,7 +702,7 @@ export default function RiskManagement() {
             {dialogType === 'method' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Responsibilities</Label><Textarea value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Responsibilities</Label><Textarea rows={6} className="min-h-[120px]" value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
               </>
             )}
 
@@ -792,9 +792,9 @@ export default function RiskManagement() {
             {dialogType === 'risk' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Hazard Description</Label><Textarea value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Control Measures</Label><Textarea value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Hazard Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.hazard_description} onChange={(e) => setFormData({...formData, hazard_description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Control Measures</Label><Textarea rows={6} className="min-h-[120px]" value={formData.control_measures} onChange={(e) => setFormData({...formData, control_measures: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Risk Level</Label>
                   <Select value={formData.risk_level} onValueChange={(v) => setFormData({...formData, risk_level: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -806,14 +806,14 @@ export default function RiskManagement() {
             {dialogType === 'coshh' && (
               <>
                 <div className="space-y-2"><Label>Chemical Name</Label><Input value={formData.chemical_name} onChange={(e) => setFormData({...formData, chemical_name: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Storage Requirements</Label><Textarea rows={6} className="min-h-[120px]" value={formData.storage_requirements} onChange={(e) => setFormData({...formData, storage_requirements: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Exposure Limits</Label><Input value={formData.exposure_limits} onChange={(e) => setFormData({...formData, exposure_limits: e.target.value})} /></div>
               </>
             )}
             {dialogType === 'hazard' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea rows={6} className="min-h-[120px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Location</Label><Input value={formData.location_details} onChange={(e) => setFormData({...formData, location_details: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Priority</Label>
                   <Select value={formData.priority} onValueChange={(v) => setFormData({...formData, priority: v})}>
@@ -826,7 +826,7 @@ export default function RiskManagement() {
             {dialogType === 'method' && (
               <>
                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Responsibilities</Label><Textarea value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Responsibilities</Label><Textarea rows={6} className="min-h-[120px]" value={formData.responsibilities} onChange={(e) => setFormData({...formData, responsibilities: e.target.value})} /></div>
               </>
             )}
             {renderFileAttachmentForm()}

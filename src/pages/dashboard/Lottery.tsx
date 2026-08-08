@@ -447,19 +447,18 @@ export default function Lottery() {
     
     switch (field) {
       case 'stockBegin': {
-        // An explicitly entered previous-day closing stock is authoritative —
-        // including 0 (all tickets sold). This keeps the chain correct even when
-        // an older opening figure was saved before the closing was entered.
+        // A saved opening figure is authoritative (including 0) — never override
+        // what the store actually recorded, otherwise sold/sales/variance shift.
+        if (record?.stock_begin != null) return record.stock_begin;
+
+        // No opening saved for this day — carry forward the previous closing.
         const explicitPrev = getPreviousDayClosingStock(gameId, dateStr, true);
         if (explicitPrev != null) return explicitPrev;
-
-        if (record?.stock_begin != null && Number(record.stock_begin) > 0) {
-          return record.stock_begin;
-        }
         const prevClosing = getPreviousDayClosingStock(gameId, dateStr);
         if (prevClosing != null && prevClosing > 0) return prevClosing;
-        return record?.stock_begin ?? null;
+        return null;
       }
+
 
       case 'activatedTickets': return record?.activated_tickets ?? null;
       case 'stockEnd': return record?.stock_end ?? null;
