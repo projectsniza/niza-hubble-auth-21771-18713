@@ -44,11 +44,14 @@ export function FileAttachment({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const MAX_MB = 50;
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length || disabled) return;
-    
+
     const uploadedFiles = Array.from(e.target.files);
-    
+    e.target.value = '';
+
     if (files.length + uploadedFiles.length > maxFiles) {
       toast({
         title: "Too many files",
@@ -58,41 +61,57 @@ export function FileAttachment({
       return;
     }
 
+    const tooBig = uploadedFiles.filter(f => f.size > MAX_MB * 1024 * 1024);
+    const toUpload = uploadedFiles.filter(f => f.size <= MAX_MB * 1024 * 1024);
+    if (tooBig.length) {
+      toast({
+        title: "File too large",
+        description: `${tooBig.map(f => f.name).join(', ')} — each file must be under ${MAX_MB}MB. Please compress the video/photo and try again.`,
+        variant: "destructive",
+      });
+    }
+    if (!toUpload.length) return;
+
     setIsUploading(true);
     const newFiles: FileInfo[] = [];
 
-    for (const file of uploadedFiles) {
-      try {
-        const fileExt = file.name.split('.').pop() || 'bin';
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
+    try {
+      for (let i = 0; i < toUpload.length; i++) {
+        const file = toUpload[i];
+        setProgress(`Uploading ${file.name} (${i + 1}/${toUpload.length})…`);
+        try {
+          const fileExt = file.name.split('.').pop() || 'bin';
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
 
-        const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file);
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        newFiles.push({
-          name: file.name,
-          path: filePath,
-          size: file.size,
-          type: file.type,
-        });
-      } catch (error: any) {
-        console.error('Upload error:', error);
-        toast({
-          title: "Upload failed",
-          description: error.message || `Failed to upload ${file.name}`,
-          variant: "destructive",
-        });
+          newFiles.push({
+            name: file.name,
+            path: filePath,
+            size: file.size,
+            type: file.type,
+          });
+        } catch (error: any) {
+          console.error('Upload error:', error);
+          toast({
+            title: "Upload failed",
+            description: error?.message || `Failed to upload ${file.name}`,
+            variant: "destructive",
+          });
+        }
       }
+    } finally {
+      if (newFiles.length) onFilesChange([...files, ...newFiles]);
+      setIsUploading(false);
+      setProgress(null);
     }
-
-    onFilesChange([...files, ...newFiles]);
-    setIsUploading(false);
-    e.target.value = '';
   };
+
 
   const handleRemoveFile = async (index: number) => {
     if (disabled) return;
