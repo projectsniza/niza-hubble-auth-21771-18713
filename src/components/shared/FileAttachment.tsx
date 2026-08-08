@@ -42,6 +42,8 @@ export function FileAttachment({
   const [isUploading, setIsUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+
   const { toast } = useToast();
 
   const MAX_MB = 50;
