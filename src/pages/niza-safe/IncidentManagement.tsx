@@ -769,7 +769,10 @@ export default function IncidentManagement() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe what happened"
+                rows={8}
+                className="min-h-[160px] max-h-[50vh]"
               />
+
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
