@@ -199,8 +199,9 @@ export function FileAttachment({
           ) : (
             <Upload className="h-4 w-4 mr-2" />
           )}
-          {isUploading ? 'Uploading...' : 'Upload Files'}
+          {isUploading ? (progress || 'Uploading...') : 'Upload Files'}
         </Button>
+
         <input
           id={`file-input-${bucket}`}
           type="file"
