@@ -1073,7 +1073,7 @@ export default function IncidentManagement() {
               </div>
               <div>
                 <Label className="text-muted-foreground">Description</Label>
-                <p>{selectedIncident.description || '-'}</p>
+                <p className="whitespace-pre-wrap break-words">{selectedIncident.description || '-'}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
