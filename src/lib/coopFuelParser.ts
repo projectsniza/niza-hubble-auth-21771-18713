@@ -55,11 +55,24 @@ const numFromCell = (s: string | undefined): number => {
 
 const lineMatches = (line: string, kw: RegExp) => kw.test(line);
 
+// The till X-Read is a CSV grid: "Lottery,31,105.50,6,31.50,0,0.00,37,137.00,".
+// Numbers must therefore be read per CSV cell — a plain regex over the whole line
+// reads "37,137.00" as thirty-seven thousand and corrupts lottery / car wash /
+// drive-off figures. Always split on the delimiter first and take the LAST
+// numeric cell (the consolidated "Total" column).
+const lastNumberOnLine = (line: string): number | null => {
+  const cells = line.split(/[,\t;]/).map(c => c.trim()).filter(c => c !== '');
+  for (let i = cells.length - 1; i >= 0; i--) {
+    if (/^-?\d+(?:\.\d+)?$/.test(cells[i])) return numFromCell(cells[i]);
+  }
+  return null;
+};
+
 const findTxtLineLast = (text: string, kw: RegExp): number => {
   for (const line of text.split(/\r?\n/)) {
     if (!lineMatches(line, kw)) continue;
-    const m = line.match(/-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+\.\d+/g);
-    if (m && m.length) return numFromCell(m[m.length - 1]);
+    const n = lastNumberOnLine(line);
+    if (n !== null) return n;
   }
   return 0;
 };
@@ -68,41 +81,48 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
   let total = 0;
   for (const line of text.split(/\r?\n/)) {
     if (!lineMatches(line, kw)) continue;
-    const m = line.match(/-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+\.\d+/g);
-    if (m && m.length) total += numFromCell(m[m.length - 1]);
+    const n = lastNumberOnLine(line);
+    if (n !== null) total += n;
   }
-  return total;
+  return +total.toFixed(2);
 };
 
 // Map a department label (left-side text in DEPARTMENTVAT) to a category code.
 // Amount columns only — VAT is tracked separately and never added into a category.
 // GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
 // FORCE_GZ departments are always reported as Grocery Zero, never Grocery Std
-// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater).
-const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b|GROCERY\s*3\b/i;
+// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater
+// only — GROCERY 3 stays a normal grocery department at every other shop).
+const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b/i;
+const FORCE_GZ_SOUTHWATER = /GROCERY\s*3\b/i;
 
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
-  // Alcohol must be matched before the generic BEVERAGES rules so that
-  // departments such as "BEVERAGES ALCOHOL" never fall into Drinks.
-  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE/i, 'AL'],
-  [/SOFT\s*BEVERAGES/i, 'DR'],
-  [/^BEVERAGES\b/i, 'DR'],
+  // "SOFT BEVERAGES" is Drinks. Plain "BEVERAGES" (and any explicit alcohol
+  // wording) is the licensed range and belongs in Alcohol Sales — this is the
+  // Drinks / Alcohol split the client asked for.
+  [/SOFT\s*BEVERAGES|SOFT\s*DRINKS|\bDRINKS\b/i, 'DR'],
+  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE|BWS|^BEVERAGES\b/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
   [/VENDING/i, 'VM'],
-  [/CAR\s*WASH|JET\s*WASH/i, 'CW'],
+  [/CAR\s*WASH|JET\s*WASH|CRA\s*WASH/i, 'CW'],
   // Everything below is grocery family — always split by VAT rate.
   [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|CONCESSION|SEASONAL|STORE\s*EXPENSES|BAKERY|INSTORE\s*BKRY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|FRANCHISE|LOCAL\s*PRODUCTS|PHONECARDS|\bDEPT\b/i, 'GROCERY'],
 ];
 
-const codeForDept = (label: string): (keyof CoopCategoryTotals | 'GROCERY') | null => {
+const codeForDept = (label: string, southwater = false): (keyof CoopCategoryTotals | 'GROCERY') | null => {
   if (FORCE_GZ.test(label)) return 'GZ';
+  if (southwater && FORCE_GZ_SOUTHWATER.test(label)) return 'GZ';
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
+
+// Southwater is the only shop where GROCERY 3 moves into Grocery Zero.
+export const isSouthwaterBranch = (branchName?: string | null) => /southwater/i.test(branchName || '');
+
 
 
 interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
