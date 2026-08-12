@@ -343,7 +343,10 @@ export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<s
     .join('\n');
 }
 
-export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
+export interface CoopParseOptions { southwater?: boolean }
+
+export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOptions = {}): CoopParseResult {
+
   const out = emptyCoopTotals();
   const knownLabels: string[] = [];
   const unknownDepartments: UnknownDepartment[] = [];
