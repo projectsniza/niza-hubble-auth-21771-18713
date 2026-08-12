@@ -428,15 +428,21 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
                              -Math.abs(findTxtLineLast(t, /Scratchcard\s*Prizes/i));
     out.paypoint           = findTxtLineLast(t, /^\s*Paypoint\b/im);
     out.payzone            = findTxtLineLast(t, /^\s*Payzone\b/im);
-    const carWash          = sumTxtLines(t, /CAR\s*WASH/i);
-    const jetWash          = sumTxtLines(t, /JET\s*WASH/i);
+    // Car/Jet wash: every numbered wash line on the X-Read, including the
+    // "CRA WASH 1" typo that some stores' tills print.
+    const carWash          = sumTxtLines(t, /^\s*(CAR|CRA)\s*WASH\b/im);
+    const jetWash          = sumTxtLines(t, /^\s*JET\s*WASH\b/im);
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
-    out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
+    out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /^\s*Drive\s*Off/im));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
 
-    // Fuel litres sold — prefer an explicit total line, otherwise sum the grades.
-    const totalLitres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i);
-    out.fuel_litres = totalLitres || sumTxtLines(t, /\bLitres?\b/i);
+    // Fuel litres sold — the department report is authoritative (set above). Fall
+    // back to an explicit litres line on the X-Read / Cash Reconciliation.
+    if (!out.fuel_litres) {
+      out.fuel_litres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i) ||
+                        sumTxtLines(t, /\bLitres?\b/i);
+    }
+
 
 
     // ---- Extended tender extraction (TXT1) ----
