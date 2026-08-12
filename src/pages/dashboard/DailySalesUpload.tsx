@@ -12,7 +12,7 @@ import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { parseDailySales } from '@/lib/dailySalesParser';
 import {
   parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
-  spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec,
+  spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec, isSouthwaterBranch,
   parseFisCardStatement,
   type ImportFormatId, type UnknownDepartment, type VendingSplitMode,
 } from '@/lib/coopFuelParser';
@@ -23,6 +23,7 @@ type BranchProfile = {
   organization_id: string | null;
   import_format: ImportFormatId | null;
   vending_split_mode: VendingSplitMode | null;
+  branch_name: string | null;
 };
 
 const mondayOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -93,10 +94,12 @@ export default function DailySalesUpload() {
         .from('profiles').select('branch_id, organization_id').eq('id', user.id).maybeSingle();
       let import_format: ImportFormatId | null = null;
       let vending_split_mode: VendingSplitMode | null = null;
+      let branch_name: string | null = null;
       if (prof?.branch_id) {
         const { data: br } = await supabase
-          .from('branches').select('import_format, vending_split_mode').eq('id', prof.branch_id).maybeSingle();
+          .from('branches').select('name, import_format, vending_split_mode').eq('id', prof.branch_id).maybeSingle();
         import_format = (br as any)?.import_format || null;
+        branch_name = (br as any)?.name || null;
         const raw = (br as any)?.vending_split_mode;
         vending_split_mode = raw === 'houndsmills' ? 'houndsmills' : 'culverstone';
       }
@@ -105,6 +108,7 @@ export default function DailySalesUpload() {
         organization_id: prof?.organization_id || null,
         import_format,
         vending_split_mode,
+        branch_name,
       };
       setProfile(p);
       loadRows(p.branch_id);
@@ -171,7 +175,10 @@ export default function DailySalesUpload() {
           readFileText(xreadFile!),
           readFileText(deptFile!),
         ]);
-        const detailed = parseCoopFuelDetailed({ txt1: txtText, deptVat: deptText });
+        const detailed = parseCoopFuelDetailed(
+          { txt1: txtText, deptVat: deptText },
+          { southwater: isSouthwaterBranch(profile.branch_name) },
+        );
         const breakdown = applyVendingSplit(detailed.totals, profile.vending_split_mode || 'culverstone');
         await reportUnknowns(detailed.unknownDepartments, deptFile!.name);
         await recordKnownCategories(breakdown);
@@ -179,7 +186,7 @@ export default function DailySalesUpload() {
         const combinedTotals = {
           ...legacy,
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ +
-                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,
           lottery: breakdown.national_lottery,
           breakdown,
@@ -218,7 +225,7 @@ export default function DailySalesUpload() {
         await recordKnownCategories(breakdown);
         const combinedTotals = {
           shop: +(breakdown.TO + breakdown.DR + breakdown.GS + breakdown.GZ +
-                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.VM).toFixed(2),
+                  breakdown.DO + breakdown.AL + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
           fuel: breakdown.FU,
           lottery: breakdown.national_lottery,
           breakdown,
