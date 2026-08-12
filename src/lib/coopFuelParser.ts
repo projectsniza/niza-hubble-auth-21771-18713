@@ -226,11 +226,17 @@ export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplit
   return out;
 }
 
-export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null, mode?: VendingSplitMode | null) {
+export function normalizeCoopParsedTotals(
+  parsedTotals: any,
+  rawText?: string | null,
+  mode?: VendingSplitMode | null,
+  branchName?: string | null,
+) {
   const input = splitStoredCoopRawText(rawText);
-  const detailed = parseCoopFuelDetailed(input);
+  const detailed = parseCoopFuelDetailed(input, { southwater: isSouthwaterBranch(branchName) });
   if (!detailed.knownLabels.length) return parsedTotals || {};
   const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
+
   return {
     ...(parsedTotals || {}),
     shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
