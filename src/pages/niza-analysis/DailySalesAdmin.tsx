@@ -36,7 +36,7 @@ export default function DailySalesAdmin() {
       .order('sale_date', { ascending: false })
       .limit(500);
     if (error) toast.error(error.message);
-    setRows(((data as any) || []).map((r: Row) => ({ ...r, parsed_totals: normalizeCoopParsedTotals(r.parsed_totals, r.raw_text) })));
+    setRows(((data as any) || []).map((r: Row) => ({ ...r, parsed_totals: normalizeCoopParsedTotals(r.parsed_totals, r.raw_text, null, (r as any).branch?.name) })));
     setLoading(false);
   };
 
