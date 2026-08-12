@@ -161,12 +161,14 @@ const parseDepartmentVat = (text: string): DeptRow[] => {
     const get = (i: number) => (i < nums.length ? nums[i] : 0);
     rows.push({
       label,
+      qty20: get(3),   // num sold @20% — used as fuel litres for the FUEL dept
       net0:  get(1),   // amt0
       net20: get(4),   // amt20
       vat20: get(5),   // vat20
       net5:  get(7),   // amt5
       vat5:  get(8),   // vat5
     });
+
   }
   return rows;
 };
