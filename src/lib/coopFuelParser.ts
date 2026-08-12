@@ -712,10 +712,11 @@ export async function buildBranchSummaryWorkbook(
       // a deduction, whatever sign the report happens to print).
       t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : '',
       null,
-      t.cash_tender || '',
+      null,
       t.customer_account || '', t.coupon || '',
       Math.abs(t.petty_cash || 0) || '', '',
-      null, null,
+      null,
+      t.cash_in_drawer || '',
       t.cash_in_drawer || '',
       null,
     ]);
@@ -735,11 +736,14 @@ export async function buildBranchSummaryWorkbook(
     setF(cashWs, `H${n}`, `ABS(${SALE_REF}!R${n})`);
     // Credit sales pull straight from the C.CARD tab
     setF(cashWs, `J${n}`, `${CCARD_REF}!F${n}`);
-    // Banking = gross takings less prizes, drive-offs, cards, accounts and payouts
-    setF(cashWs, `P${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}-M${n}-N${n}-O${n}`);
-    setF(cashWs, `Q${n}`, `P${n}`);
-    setF(cashWs, `S${n}`, `R${n}-P${n}`);
+    // Cash sub-total = takings less prizes, drive-offs, card sales and accounts
+    setF(cashWs, `K${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}`);
+    // Total banking = cash sub-total less vouchers, payouts, resale purchases
+    // and the cash left in the drawer at close.
+    setF(cashWs, `P${n}`, `K${n}-M${n}-N${n}-O${n}-Q${n}`);
+    setF(cashWs, `S${n}`, `R${n}-Q${n}`);
   }
+
   if (rows.length) {
     cashWs[`A${cashTotalRow}`] = { t: 's', v: 'TOTAL' };
     colTotals(cashWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'], cashLastRow, cashTotalRow);
