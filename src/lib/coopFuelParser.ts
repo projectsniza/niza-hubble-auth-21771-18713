@@ -354,7 +354,7 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
   const deptSource = input.deptVat || input.txt1 || '';
   if (deptSource) {
     for (const r of parseDepartmentVat(deptSource)) {
-      const code = codeForDept(r.label);
+      const code = codeForDept(r.label, !!opts.southwater);
       const totalNet = +(r.net20 + r.net5 + r.net0).toFixed(2);
       // Aggregate VAT/net splits regardless of mapping success
       out.vat_20 = +(out.vat_20 + r.vat20).toFixed(2);
