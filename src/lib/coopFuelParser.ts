@@ -55,11 +55,24 @@ const numFromCell = (s: string | undefined): number => {
 
 const lineMatches = (line: string, kw: RegExp) => kw.test(line);
 
+// The till X-Read is a CSV grid: "Lottery,31,105.50,6,31.50,0,0.00,37,137.00,".
+// Numbers must therefore be read per CSV cell — a plain regex over the whole line
+// reads "37,137.00" as thirty-seven thousand and corrupts lottery / car wash /
+// drive-off figures. Always split on the delimiter first and take the LAST
+// numeric cell (the consolidated "Total" column).
+const lastNumberOnLine = (line: string): number | null => {
+  const cells = line.split(/[,\t;]/).map(c => c.trim()).filter(c => c !== '');
+  for (let i = cells.length - 1; i >= 0; i--) {
+    if (/^-?\d+(?:\.\d+)?$/.test(cells[i])) return numFromCell(cells[i]);
+  }
+  return null;
+};
+
 const findTxtLineLast = (text: string, kw: RegExp): number => {
   for (const line of text.split(/\r?\n/)) {
     if (!lineMatches(line, kw)) continue;
-    const m = line.match(/-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+\.\d+/g);
-    if (m && m.length) return numFromCell(m[m.length - 1]);
+    const n = lastNumberOnLine(line);
+    if (n !== null) return n;
   }
   return 0;
 };
@@ -68,44 +81,51 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
   let total = 0;
   for (const line of text.split(/\r?\n/)) {
     if (!lineMatches(line, kw)) continue;
-    const m = line.match(/-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+\.\d+/g);
-    if (m && m.length) total += numFromCell(m[m.length - 1]);
+    const n = lastNumberOnLine(line);
+    if (n !== null) total += n;
   }
-  return total;
+  return +total.toFixed(2);
 };
 
 // Map a department label (left-side text in DEPARTMENTVAT) to a category code.
 // Amount columns only — VAT is tracked separately and never added into a category.
 // GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
 // FORCE_GZ departments are always reported as Grocery Zero, never Grocery Std
-// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater).
-const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b|GROCERY\s*3\b/i;
+// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater
+// only — GROCERY 3 stays a normal grocery department at every other shop).
+const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b/i;
+const FORCE_GZ_SOUTHWATER = /GROCERY\s*3\b/i;
 
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
   [/^FUEL\b/i, 'FU'],
   [/CIGARETTES|TOBACCO/i, 'TO'],
-  // Alcohol must be matched before the generic BEVERAGES rules so that
-  // departments such as "BEVERAGES ALCOHOL" never fall into Drinks.
-  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE/i, 'AL'],
-  [/SOFT\s*BEVERAGES/i, 'DR'],
-  [/^BEVERAGES\b/i, 'DR'],
+  // "SOFT BEVERAGES" is Drinks. Plain "BEVERAGES" (and any explicit alcohol
+  // wording) is the licensed range and belongs in Alcohol Sales — this is the
+  // Drinks / Alcohol split the client asked for.
+  [/SOFT\s*BEVERAGES|SOFT\s*DRINKS|\bDRINKS\b/i, 'DR'],
+  [/ALCOHOL|\bWINE\b|SPIRIT|\bBEER\b|\bCIDER\b|OFF\s*LICENCE|BWS|^BEVERAGES\b/i, 'AL'],
   [/NEWSPAPERS?|MAGAZINES?/i, 'NP'],
   [/PAYPOINT/i, 'paypoint'],
   [/PAYZONE/i, 'payzone'],
   [/VENDING/i, 'VM'],
-  [/CAR\s*WASH|JET\s*WASH/i, 'CW'],
+  [/CAR\s*WASH|JET\s*WASH|CRA\s*WASH/i, 'CW'],
   // Everything below is grocery family — always split by VAT rate.
   [/GROCERY|FROZEN|PROVISIONS|CAR\s*CARE|CONCESSION|SEASONAL|STORE\s*EXPENSES|BAKERY|INSTORE\s*BKRY|FRUIT|VEGETABLES|MEAT|POULTRY|DELICATESSEN|FRANCHISE|LOCAL\s*PRODUCTS|PHONECARDS|\bDEPT\b/i, 'GROCERY'],
 ];
 
-const codeForDept = (label: string): (keyof CoopCategoryTotals | 'GROCERY') | null => {
+const codeForDept = (label: string, southwater = false): (keyof CoopCategoryTotals | 'GROCERY') | null => {
   if (FORCE_GZ.test(label)) return 'GZ';
+  if (southwater && FORCE_GZ_SOUTHWATER.test(label)) return 'GZ';
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
 
+// Southwater is the only shop where GROCERY 3 moves into Grocery Zero.
+export const isSouthwaterBranch = (branchName?: string | null) => /southwater/i.test(branchName || '');
 
-interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
+
+
+interface DeptRow { label: string; qty20: number; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
 // Tolerant department parser:
 // - splits on comma / tab / semicolon
@@ -141,12 +161,14 @@ const parseDepartmentVat = (text: string): DeptRow[] => {
     const get = (i: number) => (i < nums.length ? nums[i] : 0);
     rows.push({
       label,
+      qty20: get(3),   // num sold @20% — used as fuel litres for the FUEL dept
       net0:  get(1),   // amt0
       net20: get(4),   // amt20
       vat20: get(5),   // vat20
       net5:  get(7),   // amt5
       vat5:  get(8),   // vat5
     });
+
   }
   return rows;
 };
@@ -204,11 +226,17 @@ export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplit
   return out;
 }
 
-export function normalizeCoopParsedTotals(parsedTotals: any, rawText?: string | null, mode?: VendingSplitMode | null) {
+export function normalizeCoopParsedTotals(
+  parsedTotals: any,
+  rawText?: string | null,
+  mode?: VendingSplitMode | null,
+  branchName?: string | null,
+) {
   const input = splitStoredCoopRawText(rawText);
-  const detailed = parseCoopFuelDetailed(input);
+  const detailed = parseCoopFuelDetailed(input, { southwater: isSouthwaterBranch(branchName) });
   if (!detailed.knownLabels.length) return parsedTotals || {};
   const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
+
   return {
     ...(parsedTotals || {}),
     shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
@@ -315,7 +343,10 @@ export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<s
     .join('\n');
 }
 
-export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
+export interface CoopParseOptions { southwater?: boolean }
+
+export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOptions = {}): CoopParseResult {
+
   const out = emptyCoopTotals();
   const knownLabels: string[] = [];
   const unknownDepartments: UnknownDepartment[] = [];
@@ -323,7 +354,7 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
   const deptSource = input.deptVat || input.txt1 || '';
   if (deptSource) {
     for (const r of parseDepartmentVat(deptSource)) {
-      const code = codeForDept(r.label);
+      const code = codeForDept(r.label, !!opts.southwater);
       const totalNet = +(r.net20 + r.net5 + r.net0).toFixed(2);
       // Aggregate VAT/net splits regardless of mapping success
       out.vat_20 = +(out.vat_20 + r.vat20).toFixed(2);
@@ -364,8 +395,12 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
+        // "Num Sold" against the fuel department at 20% is the litres sold, so
+        // the Fuel Sold Litres column is populated for every single date.
+        if (r.qty20 > 0) out.fuel_litres = +(out.fuel_litres + r.qty20).toFixed(2);
         // Capture Fuel-department 0% amount for branch-specific VM/CW split.
         if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
+
       } else if (code === 'NP') {
         // Zero-rated newspapers stay in NP; anything at 20% (gaming cards sold
         // through the newspapers department) is reported separately at 20% VAT.
@@ -393,15 +428,21 @@ export function parseCoopFuelDetailed(input: CoopParseInput): CoopParseResult {
                              -Math.abs(findTxtLineLast(t, /Scratchcard\s*Prizes/i));
     out.paypoint           = findTxtLineLast(t, /^\s*Paypoint\b/im);
     out.payzone            = findTxtLineLast(t, /^\s*Payzone\b/im);
-    const carWash          = sumTxtLines(t, /CAR\s*WASH/i);
-    const jetWash          = sumTxtLines(t, /JET\s*WASH/i);
+    // Car/Jet wash: every numbered wash line on the X-Read, including the
+    // "CRA WASH 1" typo that some stores' tills print.
+    const carWash          = sumTxtLines(t, /^\s*(CAR|CRA)\s*WASH\b/im);
+    const jetWash          = sumTxtLines(t, /^\s*JET\s*WASH\b/im);
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
-    out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /Drive\s*Off/i));
+    out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /^\s*Drive\s*Off/im));
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
 
-    // Fuel litres sold — prefer an explicit total line, otherwise sum the grades.
-    const totalLitres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i);
-    out.fuel_litres = totalLitres || sumTxtLines(t, /\bLitres?\b/i);
+    // Fuel litres sold — the department report is authoritative (set above). Fall
+    // back to an explicit litres line on the X-Read / Cash Reconciliation.
+    if (!out.fuel_litres) {
+      out.fuel_litres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i) ||
+                        sumTxtLines(t, /\bLitres?\b/i);
+    }
+
 
 
     // ---- Extended tender extraction (TXT1) ----
@@ -671,10 +712,11 @@ export async function buildBranchSummaryWorkbook(
       // a deduction, whatever sign the report happens to print).
       t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : '',
       null,
-      t.cash_tender || '',
+      null,
       t.customer_account || '', t.coupon || '',
       Math.abs(t.petty_cash || 0) || '', '',
-      null, null,
+      null,
+      t.cash_in_drawer || '',
       t.cash_in_drawer || '',
       null,
     ]);
@@ -694,11 +736,14 @@ export async function buildBranchSummaryWorkbook(
     setF(cashWs, `H${n}`, `ABS(${SALE_REF}!R${n})`);
     // Credit sales pull straight from the C.CARD tab
     setF(cashWs, `J${n}`, `${CCARD_REF}!F${n}`);
-    // Banking = gross takings less prizes, drive-offs, cards, accounts and payouts
-    setF(cashWs, `P${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}-M${n}-N${n}-O${n}`);
-    setF(cashWs, `Q${n}`, `P${n}`);
-    setF(cashWs, `S${n}`, `R${n}-P${n}`);
+    // Cash sub-total = takings less prizes, drive-offs, card sales and accounts
+    setF(cashWs, `K${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}`);
+    // Total banking = cash sub-total less vouchers, payouts, resale purchases
+    // and the cash left in the drawer at close.
+    setF(cashWs, `P${n}`, `K${n}-M${n}-N${n}-O${n}-Q${n}`);
+    setF(cashWs, `S${n}`, `R${n}-Q${n}`);
   }
+
   if (rows.length) {
     cashWs[`A${cashTotalRow}`] = { t: 's', v: 'TOTAL' };
     colTotals(cashWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'], cashLastRow, cashTotalRow);

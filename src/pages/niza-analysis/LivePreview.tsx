@@ -86,7 +86,9 @@ export default function LivePreview() {
           r.parsed_totals,
           r.raw_text,
           (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
+          r.branch?.name,
         ),
+
       };
     }));
     setEdits(loadedEdits);
@@ -166,7 +168,7 @@ export default function LivePreview() {
 
   const saleCols = ['Fuel','Fuel Litres','Tobacco','Drinks','Alcohol','Grocery Std','Grocery Zero','Domestic 5%','Newspapers','Newspapers 20%','Vending','Car Wash','Nat Lottery','Scratchcards','Paypoint','Payzone','Lotto Payouts'];
   const saleKeys = ['FU','fuel_litres','TO','DR','AL','GS','GZ','DO','NP','NP20','VM','CW','national_lottery','instant_lottery','paypoint','payzone','lottery_payouts'];
-  const cashCols = ['Shop','Carwash','Vending','Payzone','Fuel','Lotto Sales','Lotto Prize','Drive Off','Credit C.Sales','Cash S.Total','Cust. Account','Total Banking'];
+  const cashCols = ['Shop','Carwash','Vending','Payzone','Fuel','Lotto Sales','Lotto Prize','Drive Off','Credit C.Sales','Cash S.Total','Cust. Account','Vouchers','Misc. Expence','Closing Cash Bal.','Total Banking'];
 
   const editInput = (rowId: string, key: string, fallback: any) => (
     <Input
@@ -272,9 +274,10 @@ export default function LivePreview() {
                   const lottoPrize = Math.abs(num(t.lottery_payouts));
                   const driveOff = t.fuel_drive_off ? -Math.abs(num(t.fuel_drive_off)) : 0;
                   const misc = Math.abs(num(t.petty_cash));
-                  const totalBanking = shop + num(t.CW) + num(t.VM) + num(t.payzone) + num(t.FU)
-                    + lottoSales - lottoPrize + driveOff - cardTotal - num(t.customer_account)
-                    - num(t.coupon) - misc;
+                  const cashSubTotal = shop + num(t.CW) + num(t.VM) + num(t.payzone) + num(t.FU)
+                    + lottoSales - lottoPrize + driveOff - cardTotal - num(t.customer_account);
+                  const drawer = num(t.cash_in_drawer);
+                  const totalBanking = cashSubTotal - num(t.coupon) - misc - drawer;
                   return (
                     <tr key={`${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
                       <td className="p-2 whitespace-nowrap">{r.sale_date}</td>
@@ -288,8 +291,11 @@ export default function LivePreview() {
                       <td className="text-right p-2">{lottoPrize.toFixed(2)}</td>
                       <td className="text-right p-1">{editInput(r.row_id, 'fuel_drive_off', t.fuel_drive_off)}</td>
                       <td className="text-right p-2">{cardTotal.toFixed(2)}</td>
-                      <td className="text-right p-1">{editInput(r.row_id, 'cash_tender', t.cash_tender)}</td>
+                      <td className="text-right p-2">{cashSubTotal.toFixed(2)}</td>
                       <td className="text-right p-1">{editInput(r.row_id, 'customer_account', t.customer_account)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'coupon', t.coupon)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'petty_cash', t.petty_cash)}</td>
+                      <td className="text-right p-1">{editInput(r.row_id, 'cash_in_drawer', t.cash_in_drawer)}</td>
                       <td className="text-right p-2 font-semibold">{totalBanking.toFixed(2)}</td>
                     </tr>
                   );
