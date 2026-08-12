@@ -179,14 +179,25 @@ export default function Lottery() {
 
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
-        .from('lottery_daily_records')
-        .select('*')
-        .in('branch_id', filteredBranchIds)
-        .gte('record_date', startDate)
-        .lte('record_date', endDate);
-      if (error) throw error;
-      return data as DailyRecord[];
+      // PostgREST caps a response at 1000 rows; a 70+ day window across many
+      // games easily exceeds that, so page through until the range is complete.
+      const PAGE = 1000;
+      const all: DailyRecord[] = [];
+      for (let page = 0; ; page++) {
+        const { data, error } = await supabase
+          .from('lottery_daily_records')
+          .select('*')
+          .in('branch_id', filteredBranchIds)
+          .gte('record_date', startDate)
+          .lte('record_date', endDate)
+          .order('record_date')
+          .range(page * PAGE, page * PAGE + PAGE - 1);
+        if (error) throw error;
+        const batch = (data || []) as DailyRecord[];
+        all.push(...batch);
+        if (batch.length < PAGE) break;
+      }
+      return all;
     },
     enabled: filteredBranchIds.length > 0,
   });
