@@ -86,7 +86,9 @@ export default function LivePreview() {
           r.parsed_totals,
           r.raw_text,
           (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
+          r.branch?.name,
         ),
+
       };
     }));
     setEdits(loadedEdits);
