@@ -395,8 +395,12 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
+        // "Num Sold" against the fuel department at 20% is the litres sold, so
+        // the Fuel Sold Litres column is populated for every single date.
+        if (r.qty20 > 0) out.fuel_litres = +(out.fuel_litres + r.qty20).toFixed(2);
         // Capture Fuel-department 0% amount for branch-specific VM/CW split.
         if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
+
       } else if (code === 'NP') {
         // Zero-rated newspapers stay in NP; anything at 20% (gaming cards sold
         // through the newspapers department) is reported separately at 20% VAT.
