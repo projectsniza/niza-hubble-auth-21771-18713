@@ -125,7 +125,7 @@ export const isSouthwaterBranch = (branchName?: string | null) => /southwater/i.
 
 
 
-interface DeptRow { label: string; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
+interface DeptRow { label: string; qty20: number; net0: number; net20: number; vat20: number; net5: number; vat5: number; }
 
 // Tolerant department parser:
 // - splits on comma / tab / semicolon
