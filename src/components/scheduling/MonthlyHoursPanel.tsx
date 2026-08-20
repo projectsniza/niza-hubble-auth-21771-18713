@@ -54,6 +54,9 @@ export function MonthlyHoursPanel() {
         if (user?.role === 'manager' && user?.branchId) {
           empQ = empQ.eq('branch_id', user.branchId);
         }
+        if (user?.role === 'hr' && user.branchIds?.length) {
+          empQ = empQ.in('branch_id', user.branchIds);
+        }
         if (user?.role === 'employee') {
           empQ = empQ.eq('user_id', user.id);
         }
@@ -153,7 +156,7 @@ export function MonthlyHoursPanel() {
         setLoading(false);
       }
     })();
-  }, [month, user?.id, user?.role, user?.branchId]);
+  }, [month, user?.id, user?.role, user?.branchId, user?.branchIds]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

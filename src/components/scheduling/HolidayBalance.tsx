@@ -193,14 +193,17 @@ export function HolidayBalance() {
         dateMap.set(e.entry_date, cur);
       });
 
-      const { data: contracts } = await supabase
-        .from('employee_contracts')
-        .select('employee_id, weekly_contracted_hours, holiday_entitlement_days, contract_type')
-        .is('effective_to', null);
-
-      const { data: holidayBalances } = await supabase
-        .from('holiday_balances')
-        .select('employee_id, carry_forward_hours');
+      const employeeIds = employees.map(employee => employee.id);
+      const contracts: any[] = [];
+      const holidayBalances: any[] = [];
+      for (const employeeIdChunk of chunkValues(employeeIds)) {
+        contracts.push(...await fetchAllPages((from, to) => supabase.from('employee_contracts')
+          .select('employee_id, weekly_contracted_hours, holiday_entitlement_days, contract_type')
+          .in('employee_id', employeeIdChunk).is('effective_to', null).order('id').range(from, to)));
+        holidayBalances.push(...await fetchAllPages((from, to) => supabase.from('holiday_balances')
+          .select('employee_id, carry_forward_hours').in('employee_id', employeeIdChunk)
+          .order('id').range(from, to)));
+      }
 
       const contractMap = new Map(contracts?.map(c => [c.employee_id, c]) || []);
       const carryForwardMap = new Map(holidayBalances?.map(h => [h.employee_id, h.carry_forward_hours || 0]) || []);
