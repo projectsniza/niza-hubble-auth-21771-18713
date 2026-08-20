@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Download, FileSpreadsheet } from 'lucide-rea
 import { addMonths, eachDayOfInterval, endOfWeek, format, startOfWeek, subMonths } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { toast } from 'sonner';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 const getPayrollPeriod = (m: Date) => ({
   start: new Date(m.getFullYear(), m.getMonth(), 21),
@@ -56,56 +57,49 @@ export function ShopTargetHoursReport() {
         const endStr = format(end, 'yyyy-MM-dd');
         const rangeStart = format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-        const { data: branches } = await supabase
-          .from('branches')
+        const branches = await fetchAllPages<any>((from, to) => supabase.from('branches')
           .select('id, name, organization_id, organization:organizations(name)')
-          .order('name');
+          .order('id').range(from, to));
 
-        const { data: targets } = await supabase
-          .from('branch_weekly_hour_targets')
-          .select('branch_id, target_hours');
+        const targets = await fetchAllPages<any>((from, to) => supabase.from('branch_weekly_hour_targets')
+          .select('branch_id, target_hours').order('id').range(from, to));
         const targetMap: Record<string, number> = {};
         (targets || []).forEach((t: any) => { targetMap[t.branch_id] = Number(t.target_hours) || 0; });
 
-        const { data: ts } = await supabase
-          .from('timesheets')
-          .select('id, branch_id, week_start_date')
-          .gte('week_start_date', rangeStart)
-          .lte('week_start_date', endStr);
-        const tsIds = (ts || []).map(t => t.id);
+        const ts = await fetchAllPages<any>((from, to) => supabase.from('timesheets')
+          .select('id, branch_id, week_start_date').gte('week_start_date', rangeStart)
+          .lte('week_start_date', endStr).order('id').range(from, to));
+        const tsIds = ts.map(t => t.id);
         const tsMeta: Record<string, { branch_id: string }> = {};
         (ts || []).forEach(t => { tsMeta[t.id] = { branch_id: t.branch_id }; });
 
         let entries: any[] = [];
         if (tsIds.length) {
-          const { data: ents } = await supabase
-            .from('timesheet_entries')
-            .select('timesheet_id, entry_date, actual_hours')
-            .in('timesheet_id', tsIds)
-            .gte('entry_date', startStr)
-            .lte('entry_date', endStr);
-          entries = ents || [];
+          for (const idChunk of chunkValues(tsIds)) entries.push(...await fetchAllPages((from, to) => supabase
+            .from('timesheet_entries').select('timesheet_id, entry_date, actual_hours')
+            .in('timesheet_id', idChunk).gte('entry_date', startStr).lte('entry_date', endStr)
+            .order('id').range(from, to)));
         }
 
         // Optional: temporary staff
-        const { data: tempEnts } = await supabase
-          .from('temporary_timesheet_entries')
-          .select('branch_id, entry_date, actual_hours')
-          .gte('entry_date', startStr)
-          .lte('entry_date', endStr);
+        const tempEnts = await fetchAllPages<any>((from, to) => supabase.from('temporary_timesheet_entries')
+          .select('branch_id, entry_date, actual_hours').gte('entry_date', startStr)
+          .lte('entry_date', endStr).order('id').range(from, to));
 
         const built: ShopRow[] = (branches || []).map((b: any) => {
           const weekly = weeks.map(() => 0);
           entries.forEach((e: any) => {
             const meta = tsMeta[e.timesheet_id];
             if (!meta || meta.branch_id !== b.id) return;
-            const d = new Date(e.entry_date);
+            const [year, monthNumber, day] = String(e.entry_date).split('-').map(Number);
+            const d = new Date(year, monthNumber - 1, day);
             const wi = weeks.findIndex(w => d >= w.start && d <= w.end);
             if (wi >= 0) weekly[wi] += Number(e.actual_hours) || 0;
           });
           (tempEnts || []).forEach((e: any) => {
             if (e.branch_id !== b.id) return;
-            const d = new Date(e.entry_date);
+            const [year, monthNumber, day] = String(e.entry_date).split('-').map(Number);
+            const d = new Date(year, monthNumber - 1, day);
             const wi = weeks.findIndex(w => d >= w.start && d <= w.end);
             if (wi >= 0) weekly[wi] += Number(e.actual_hours) || 0;
           });

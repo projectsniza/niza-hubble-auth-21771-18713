@@ -28,6 +28,7 @@ import { TempStaffSection } from './TempStaffSection';
 import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 interface Employee {
   id: string;
@@ -76,20 +77,6 @@ const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 // PostgREST caps every response at 1000 rows regardless of .limit(), so every
 // month-wide read must be paginated with .range() or totals silently truncate.
-const PAGE_SIZE = 1000;
-const fetchAllPages = async (build: (from: number, to: number) => any): Promise<any[]> => {
-  const out: any[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await build(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const rows = data || [];
-    out.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
-  }
-  return out;
-};
-
-
 // Payroll period: 21st of selected month to 20th of next month
 const getPayrollPeriod = (month: Date) => {
   const year = month.getFullYear();
@@ -135,14 +122,12 @@ const isDateStringInPayrollPeriod = (dateString: string | null | undefined, payr
 
 const getEmployeeMonthlyKey = (employee?: Employee | null) => {
   const branchName = employee?.branch?.name || 'Unassigned';
-  const fullName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim().toUpperCase();
-  return `${branchName}::${fullName}`;
+  return `${branchName}::${employee?.id || 'missing'}`;
 };
 
 const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
   const branchName = timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
-  const fullName = `${timesheet?.employee?.first_name || ''} ${timesheet?.employee?.last_name || ''}`.trim().toUpperCase();
-  return `${branchName}::${fullName}`;
+  return `${branchName}::${timesheet?.employee_id || timesheet?.employee?.id || 'missing'}`;
 };
 
 const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
@@ -322,10 +307,16 @@ export function TimesheetView() {
         const tempIds = Array.from(new Set((entries || []).map((e: any) => e.temporary_employee_id)));
         if (tempIds.length === 0) { setMonthlyTempByBranch({}); return; }
 
-        const { data: temps } = await supabase
-          .from('temporary_employees')
-          .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
-          .in('id', tempIds);
+        const temps: any[] = [];
+        for (const ids of chunkValues(tempIds)) {
+          const part = await fetchAllPages((from, to) => supabase
+            .from('temporary_employees')
+            .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
+            .in('id', ids)
+            .order('id')
+            .range(from, to));
+          temps.push(...part);
+        }
 
         const tempById: Record<string, any> = {};
         (temps || []).forEach((t: any) => { tempById[t.id] = t; });
@@ -362,7 +353,17 @@ export function TimesheetView() {
           row.totalHours += h;
         });
 
+        // Legacy imports can contain duplicate temp engagements for the same
+        // person/source. Keep the most complete engagement instead of adding a
+        // second row (and its hours) to payroll totals.
+        const bestTempByIdentity = new Map<string, [string, typeof tempRows[string]]>();
         Object.entries(tempRows).forEach(([id, r]) => {
+          const t = tempById[id];
+          const identity = `${t?.branch_id || r.branchName}|${r.name}|${t?.source_branch_id || ''}|${String(t?.source_name || '').trim().toUpperCase()}`;
+          const existing = bestTempByIdentity.get(identity);
+          if (!existing || r.totalHours > existing[1].totalHours) bestTempByIdentity.set(identity, [id, r]);
+        });
+        bestTempByIdentity.forEach(([id, r]) => {
           (grouped[r.branchName] ||= []).push({
             id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
           });
@@ -1097,12 +1098,11 @@ export function TimesheetView() {
       return true;
     });
 
-    // Monthly must mirror the Weekly View: each Week 1–6 column is the sum of
-    // that week's visible HOURS, with only first/last week dates outside the
-    // 21st–20th payroll period excluded. Do not re-bucket by entry date here —
-    // edited/legacy rows can have imperfect entry dates, while the Weekly View
-    // is driven by the parent timesheet's week_start_date.
-    const bestTimesheetByRowWeek = new Map<string, { rowKey: string; ts: Timesheet; totals: ReturnType<typeof getTsInPeriodTotals>; weekIndex: number; total: number }>();
+    // The dated entry is the authoritative source. Parent week_start_date can
+    // be stale on legacy rows and previously pushed several weeks into Week 5.
+    // Pick one best entry per employee/date so duplicate parent timesheets do
+    // not double payroll, then bucket that date into its real Week 1–6 column.
+    const bestEntryByRowDate = new Map<string, { rowKey: string; entry: TimesheetEntry; total: number }>();
 
     scopedMonthTs.forEach(ts => {
       if (!ts.employee || !getTimesheetBranchName(ts) || getTimesheetBranchName(ts) === 'Unassigned') return;
@@ -1122,29 +1122,22 @@ export function TimesheetView() {
         };
       }
 
-      const totals = getTsInPeriodTotals(ts, currentMonth);
-      const wIdx = getTimesheetPayrollWeekIndex(ts, monthWeeks);
-      if (wIdx < 0) return;
-      // Parity with the Weekly View: it de-duplicates duplicate rows by the
-      // STORED timesheet totals and keeps the busiest one. Monthly must rank
-      // by the exact same value, otherwise the two views can pick different
-      // duplicate timesheets and show different hours for the same week.
-      const total = (Number(ts.total_worked_hours) || 0)
-        + (Number(ts.total_holiday_hours) || 0)
-        + (Number(ts.total_sick_hours) || 0)
-        + (Number(ts.total_adjustment_hours) || 0);
-      const dedupeKey = `${rowKey}|${wIdx}`;
-      const existing = bestTimesheetByRowWeek.get(dedupeKey);
-      if (!existing || total > existing.total) {
-        bestTimesheetByRowWeek.set(dedupeKey, { rowKey, ts, totals, weekIndex: wIdx, total });
-      }
+      (ts.entries || []).forEach(entry => {
+        if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) return;
+        const total = entryTotal(entry);
+        const key = `${rowKey}|${entry.entry_date}`;
+        const existing = bestEntryByRowDate.get(key);
+        if (!existing || total > existing.total) bestEntryByRowDate.set(key, { rowKey, entry, total });
+      });
     });
 
-
-    bestTimesheetByRowWeek.forEach(({ rowKey, totals, weekIndex }) => {
-      consolidation[rowKey].weeklyHours[weekIndex] += totals.worked;
-      consolidation[rowKey].holidayHrs += totals.holiday;
-      consolidation[rowKey].sickHrs += totals.sick;
+    bestEntryByRowDate.forEach(({ rowKey, entry }) => {
+      const date = parseLocalDate(entry.entry_date);
+      const weekIndex = monthWeeks.findIndex(week => date >= week && date <= endOfWeek(week, { weekStartsOn: 1 }));
+      if (weekIndex < 0) return;
+      consolidation[rowKey].weeklyHours[weekIndex] += Number(entry.actual_hours) || 0;
+      consolidation[rowKey].holidayHrs += Number(entry.holiday_hours) || 0;
+      consolidation[rowKey].sickHrs += Number(entry.sick_hours) || 0;
     });
 
     Object.values(consolidation).forEach(emp => {

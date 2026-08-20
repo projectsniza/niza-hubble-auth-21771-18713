@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { addMonths, format, subMonths } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 const ABNORMAL_HOUR_THRESHOLD = 16;
 
@@ -48,7 +49,8 @@ export function AbnormalBehaviourReport() {
         if (user?.role === 'manager' && user?.branchId) {
           empQ = empQ.eq('branch_id', user.branchId);
         }
-        const { data: emps } = await empQ;
+        if (user?.role === 'hr' && user.branchIds?.length) empQ = empQ.in('branch_id', user.branchIds);
+        const emps = await fetchAllPages<any>((from, to) => empQ.order('id').range(from, to));
         const empMap: Record<string, { name: string; branch: string }> = {};
         (emps || []).forEach((e: any) => {
           empMap[e.id] = { name: `${e.first_name} ${e.last_name}`, branch: e.branch?.name || '—' };
@@ -56,24 +58,21 @@ export function AbnormalBehaviourReport() {
         const ids = (emps || []).map((e: any) => e.id);
         if (!ids.length) { setRows([]); setLoading(false); return; }
 
-        const { data: ts } = await supabase
-          .from('timesheets')
-          .select('id, employee_id')
-          .in('employee_id', ids)
+        const ts: any[] = [];
+        for (const idChunk of chunkValues(ids)) ts.push(...await fetchAllPages((from, to) => supabase
+          .from('timesheets').select('id, employee_id').in('employee_id', idChunk)
           .gte('week_start_date', format(new Date(start.getFullYear(), start.getMonth(), 1), 'yyyy-MM-dd'))
-          .lte('week_start_date', endStr);
+          .lte('week_start_date', endStr).order('id').range(from, to)));
         const tsIds = (ts || []).map(t => t.id);
         const empByTs: Record<string, string> = {};
         (ts || []).forEach(t => { empByTs[t.id] = t.employee_id; });
         if (!tsIds.length) { setRows([]); setLoading(false); return; }
 
-        const { data: ents } = await supabase
-          .from('timesheet_entries')
-          .select('timesheet_id, entry_date, actual_hours')
-          .in('timesheet_id', tsIds)
-          .gte('entry_date', startStr)
-          .lte('entry_date', endStr)
-          .gt('actual_hours', ABNORMAL_HOUR_THRESHOLD);
+        const ents: any[] = [];
+        for (const tsChunk of chunkValues(tsIds)) ents.push(...await fetchAllPages((from, to) => supabase
+          .from('timesheet_entries').select('timesheet_id, entry_date, actual_hours')
+          .in('timesheet_id', tsChunk).gte('entry_date', startStr).lte('entry_date', endStr)
+          .gt('actual_hours', ABNORMAL_HOUR_THRESHOLD).order('id').range(from, to)));
 
         const built: FlagRow[] = (ents || []).map((e: any) => {
           const eid = empByTs[e.timesheet_id];
@@ -92,7 +91,7 @@ export function AbnormalBehaviourReport() {
         setLoading(false);
       }
     })();
-  }, [month, user?.role, user?.branchId]);
+  }, [month, user?.role, user?.branchId, user?.branchIds]);
 
   const { start, end } = getPayrollPeriod(month);
 
