@@ -19,6 +19,7 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, parseISO, addMonths, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 interface Employee {
   id: string;
@@ -136,13 +137,14 @@ export function HolidayBalance() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: employees, error: empError } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
-        .eq('status', 'active')
-        .order('first_name');
-
-      if (empError) throw empError;
+      const employees = await fetchAllPages<any>((from, to) => {
+        let query = supabase.from('employees')
+          .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
+          .eq('status', 'active');
+        if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
+        if (user?.role === 'hr' && user.branchIds?.length) query = query.in('branch_id', user.branchIds);
+        return query.order('id').range(from, to);
+      });
       if (!employees || employees.length === 0) {
         setBalances([]);
         setLoading(false);
@@ -157,13 +159,12 @@ export function HolidayBalance() {
       // straddle into the fiscal year (and the upper bound similarly forward).
       const fetchStart = new Date(yearStart.getFullYear(), yearStart.getMonth(), yearStart.getDate() - 10);
       const fetchEnd = new Date(yearEnd.getFullYear(), yearEnd.getMonth(), yearEnd.getDate() + 10);
-      const { data: timesheets, error: tsError } = await supabase
+      const timesheets = await fetchAllPages<any>((from, to) => supabase
         .from('timesheets')
         .select('id, employee_id, week_start_date')
         .gte('week_start_date', format(fetchStart, 'yyyy-MM-dd'))
-        .lt('week_start_date', format(fetchEnd, 'yyyy-MM-dd'));
-
-      if (tsError) throw tsError;
+        .lt('week_start_date', format(fetchEnd, 'yyyy-MM-dd'))
+        .order('id').range(from, to));
 
       // Per-day entries — bucket by entry_date so weeks straddling the 21st
       // (payroll cycle boundary) split correctly between cycles.
@@ -173,15 +174,10 @@ export function HolidayBalance() {
 
       let entries: Array<{ timesheet_id: string; entry_date: string; actual_hours: number | null; holiday_hours: number | null }> = [];
       if (tsIds.length) {
-        const chunkSize = 500;
-        for (let i = 0; i < tsIds.length; i += chunkSize) {
-          const slice = tsIds.slice(i, i + chunkSize);
-          const { data: ents, error: entError } = await supabase
-            .from('timesheet_entries')
+        for (const slice of chunkValues(tsIds)) {
+          entries = entries.concat(await fetchAllPages((from, to) => supabase.from('timesheet_entries')
             .select('timesheet_id, entry_date, actual_hours, holiday_hours')
-            .in('timesheet_id', slice);
-          if (entError) throw entError;
-          if (ents) entries = entries.concat(ents as any);
+            .in('timesheet_id', slice).order('id').range(from, to)) as any);
         }
       }
 

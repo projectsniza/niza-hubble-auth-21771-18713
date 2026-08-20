@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ChevronLeft, ChevronRight, CalendarDays, Search } from 'lucide-react';
 import { addMonths, format, subMonths } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 // Payroll month: 21st of month M → 20th of month M+1.
 const getPayrollPeriod = (m: Date) => ({
@@ -56,30 +57,29 @@ export function MonthlyHoursPanel() {
         if (user?.role === 'employee') {
           empQ = empQ.eq('user_id', user.id);
         }
-        const { data: emps } = await empQ;
-        const empList = emps || [];
+        const empList = await fetchAllPages((from, to) => empQ.order('id').range(from, to));
         const ids = empList.map(e => e.id);
         if (!ids.length) { setRows([]); setLoading(false); return; }
 
         // Timesheets in month (by week_start_date overlap)
-        const { data: ts } = await supabase
-          .from('timesheets')
-          .select('id, employee_id')
-          .in('employee_id', ids)
-          .gte('week_start_date', format(new Date(start.getFullYear(), start.getMonth(), 1), 'yyyy-MM-dd'))
-          .lte('week_start_date', endStr);
-        const tsIds = (ts || []).map(t => t.id);
+        const ts: any[] = [];
+        for (const idChunk of chunkValues(ids)) {
+          ts.push(...await fetchAllPages((from, to) => supabase.from('timesheets')
+            .select('id, employee_id').in('employee_id', idChunk)
+            .gte('week_start_date', format(new Date(start.getFullYear(), start.getMonth(), 1), 'yyyy-MM-dd'))
+            .lte('week_start_date', endStr).order('id').range(from, to)));
+        }
+        const tsIds = ts.map(t => t.id);
         const tsByEmp: Record<string, string[]> = {};
         (ts || []).forEach(t => { (tsByEmp[t.employee_id] ||= []).push(t.id); });
 
         let entriesByEmp: Record<string, { w: number; h: number; s: number }> = {};
         if (tsIds.length) {
-          const { data: ents } = await supabase
-            .from('timesheet_entries')
-            .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
-            .in('timesheet_id', tsIds)
-            .gte('entry_date', startStr)
-            .lte('entry_date', endStr);
+          const ents: any[] = [];
+          for (const tsChunk of chunkValues(tsIds)) ents.push(...await fetchAllPages((from, to) => supabase
+            .from('timesheet_entries').select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
+            .in('timesheet_id', tsChunk).gte('entry_date', startStr).lte('entry_date', endStr)
+            .order('id').range(from, to)));
           const empByTs: Record<string, string> = {};
           (ts || []).forEach(t => { empByTs[t.id] = t.employee_id; });
           (ents || []).forEach((e: any) => {
@@ -98,18 +98,17 @@ export function MonthlyHoursPanel() {
         const hyStart = end < yearStart ? new Date(end.getFullYear() - 1, 3, 1) : yearStart;
         const hyStartStr = format(hyStart, 'yyyy-MM-dd');
 
-        const { data: allTs } = await supabase
-          .from('timesheets')
-          .select('id, employee_id, total_worked_hours, total_holiday_hours, week_start_date')
-          .in('employee_id', ids)
-          .gte('week_start_date', hyStartStr)
-          .lte('week_start_date', endStr);
+        const allTs: any[] = [];
+        for (const idChunk of chunkValues(ids)) allTs.push(...await fetchAllPages((from, to) => supabase
+          .from('timesheets').select('id, employee_id, total_worked_hours, total_holiday_hours, week_start_date')
+          .in('employee_id', idChunk).gte('week_start_date', hyStartStr).lte('week_start_date', endStr)
+          .order('id').range(from, to)));
 
         // We need contract data for earned-to-date pro-rata.
-        const { data: contracts } = await supabase
-          .from('employee_contracts')
-          .select('employee_id, weekly_contracted_hours, holiday_entitlement_days, effective_from, effective_to')
-          .in('employee_id', ids);
+        const contracts: any[] = [];
+        for (const idChunk of chunkValues(ids)) contracts.push(...await fetchAllPages((from, to) => supabase
+          .from('employee_contracts').select('employee_id, weekly_contracted_hours, holiday_entitlement_days, effective_from, effective_to')
+          .in('employee_id', idChunk).order('id').range(from, to)));
         const contractByEmp: Record<string, any> = {};
         (contracts || []).forEach((c: any) => {
           const prior = contractByEmp[c.employee_id];
@@ -133,9 +132,9 @@ export function MonthlyHoursPanel() {
           const hoursPerDay = weekly / 5;
           const annual = hoursPerDay * days;
           const worked = workedToDate[e.id] || 0;
-          const weeksWorked = weekly ? worked / weekly : 0;
-          const earned = (annual / 52) * weeksWorked;
           const taken = takenToDate[e.id] || 0;
+          const weeksWorked = weekly ? (worked + taken) / weekly : 0;
+          const earned = (annual / 52) * weeksWorked;
           return {
             employee_id: e.id,
             name: `${e.first_name} ${e.last_name}`,
