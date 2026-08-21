@@ -307,6 +307,7 @@ export function TimesheetView() {
 
         const grouped: Record<string, Array<{ id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }>> = {};
         const tempRows: Record<string, { branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+        const bestTempEntryByIdentityDate = new Map<string, { id: string; temp: any; entry: any; branchName: string; name: string; source: string | null; hours: number }>();
 
         (entries || []).forEach((e: any) => {
           const t = tempById[e.temporary_employee_id];
@@ -324,32 +325,35 @@ export function TimesheetView() {
             return dd >= w && dd <= wEnd;
           });
           if (wIdx < 0) return;
-
-          const row = (tempRows[t.id] ||= {
-            branchName,
-            name: `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase(),
-            source: t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null),
-            weeklyHours: monthWeeks.map(() => 0),
-            totalHours: 0,
-          });
+          const name = `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase();
+          const source = t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null);
           const h = Number(e.actual_hours) || 0;
-          row.weeklyHours[wIdx] += h;
-          row.totalHours += h;
+          const identity = `${t.branch_id || branchName}|${name}|${t.source_branch_id || ''}|${String(t.source_name || '').trim().toUpperCase()}`;
+          const key = `${identity}|${e.entry_date}`;
+          const existing = bestTempEntryByIdentityDate.get(key);
+          if (!existing || h > existing.hours) {
+            bestTempEntryByIdentityDate.set(key, { id: t.id, temp: t, entry: e, branchName, name, source, hours: h });
+          }
         });
 
-        // Legacy imports can contain duplicate temp engagements for the same
-        // person/source. Keep the most complete engagement instead of adding a
-        // second row (and its hours) to payroll totals.
-        const bestTempByIdentity = new Map<string, [string, typeof tempRows[string]]>();
-        Object.entries(tempRows).forEach(([id, r]) => {
-          const t = tempById[id];
-          const identity = `${t?.branch_id || r.branchName}|${r.name}|${t?.source_branch_id || ''}|${String(t?.source_name || '').trim().toUpperCase()}`;
-          const existing = bestTempByIdentity.get(identity);
-          if (!existing || r.totalHours > existing[1].totalHours) bestTempByIdentity.set(identity, [id, r]);
+        // Merge duplicate legacy engagements by person/source, but de-duplicate
+        // per date so legitimate shifts spread across old records are retained.
+        bestTempEntryByIdentityDate.forEach(({ id, temp, entry, branchName, name, source, hours }) => {
+          const identity = `${temp.branch_id || branchName}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+          const row = (tempRows[identity] ||= {
+            branchName, name, source, weeklyHours: monthWeeks.map(() => 0), totalHours: 0,
+          });
+          const date = parseLocalDate(entry.entry_date);
+          const weekIndex = monthWeeks.findIndex(w => date >= w && date <= endOfWeek(w, { weekStartsOn: 1 }));
+          if (weekIndex < 0) return;
+          row.weeklyHours[weekIndex] += hours;
+          row.totalHours += hours;
+          if (!row.source && source) row.source = source;
+          if (!(row as any).id) (row as any).id = id;
         });
-        bestTempByIdentity.forEach(([id, r]) => {
+        Object.values(tempRows).forEach(r => {
           (grouped[r.branchName] ||= []).push({
-            id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
+            id: (r as any).id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
           });
         });
         setMonthlyTempByBranch(grouped);
