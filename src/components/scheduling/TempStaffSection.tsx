@@ -16,6 +16,7 @@ import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { snapToHalfHour, isHalfHourAligned, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 interface TempEmployee {
   id: string;
@@ -83,23 +84,31 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
   const fetchData = useCallback(async () => {
     if (!branchId) { setTemps([]); setEntries([]); return; }
 
-    const { data: tempsData } = await supabase
+    const tempsData = await fetchAllPages<TempEmployee>((from, to) => supabase
       .from('temporary_employees')
       .select('*')
       .eq('branch_id', branchId)
       .lte('start_date', weekEndStr)
-      .or(`end_date.is.null,end_date.gte.${weekStartStr}`);
+      .or(`end_date.is.null,end_date.gte.${weekStartStr}`)
+      .order('id')
+      .range(from, to));
 
-    const list = (tempsData || []) as TempEmployee[];
+    const list = tempsData;
     setTemps(list);
 
     if (list.length > 0) {
-      const { data: entriesData } = await supabase
-        .from('temporary_timesheet_entries')
-        .select('*')
-        .in('temporary_employee_id', list.map(t => t.id))
-        .eq('week_start_date', weekStartStr);
-      setEntries((entriesData || []) as TempEntry[]);
+      const entriesData: TempEntry[] = [];
+      for (const ids of chunkValues(list.map(t => t.id))) {
+        const part = await fetchAllPages<TempEntry>((from, to) => supabase
+          .from('temporary_timesheet_entries')
+          .select('*')
+          .in('temporary_employee_id', ids)
+          .eq('week_start_date', weekStartStr)
+          .order('id')
+          .range(from, to));
+        entriesData.push(...part);
+      }
+      setEntries(entriesData);
     } else {
       setEntries([]);
     }
@@ -107,10 +116,12 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
 
   // Fetch branches for the source-branch dropdown
   const fetchBranches = useCallback(async () => {
-    let q = supabase.from('branches').select('id, name').order('name');
-    if (organizationId) q = q.eq('organization_id', organizationId);
-    const { data } = await q;
-    setBranches((data || []) as BranchOption[]);
+    const data = await fetchAllPages<BranchOption>((from, to) => {
+      let query = supabase.from('branches').select('id, name').order('name');
+      if (organizationId) query = query.eq('organization_id', organizationId);
+      return query.range(from, to);
+    });
+    setBranches(data);
   }, [organizationId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -143,9 +154,26 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
       return;
     }
 
+    const firstName = newTemp.first_name.trim();
+    const lastName = newTemp.last_name.trim();
+    const { data: possibleDuplicates, error: duplicateCheckError } = await supabase
+      .from('temporary_employees')
+      .select('id, first_name, last_name, start_date, end_date')
+      .eq('branch_id', branchId)
+      .ilike('first_name', firstName)
+      .ilike('last_name', lastName || '')
+      .lte('start_date', newTemp.end_date || '9999-12-31')
+      .or(`end_date.is.null,end_date.gte.${newTemp.start_date}`)
+      .limit(1);
+    if (duplicateCheckError) { toast.error(`Could not check for duplicates: ${duplicateCheckError.message}`); return; }
+    if (possibleDuplicates?.length) {
+      toast.error(`${firstName} ${lastName}`.trim() + ' already has an overlapping temporary engagement at this branch');
+      return;
+    }
+
     const { error } = await supabase.from('temporary_employees').insert({
-      first_name: newTemp.first_name.trim(),
-      last_name: newTemp.last_name.trim(),
+      first_name: firstName,
+      last_name: lastName,
       role: newTemp.role.trim() || null,
       start_date: newTemp.start_date,
       end_date: newTemp.end_date || null,

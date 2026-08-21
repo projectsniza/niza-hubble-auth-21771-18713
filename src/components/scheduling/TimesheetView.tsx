@@ -133,24 +133,6 @@ const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
 const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
   timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
 
-const getTimesheetPayrollWeekIndex = (timesheet: Partial<Timesheet>, monthWeeks: Date[]) => {
-  if (timesheet.week_start_date) {
-    const tsWeekStart = startOfWeek(parseLocalDate(timesheet.week_start_date), { weekStartsOn: 1 });
-    const idx = monthWeeks.findIndex(mw => format(mw, 'yyyy-MM-dd') === format(tsWeekStart, 'yyyy-MM-dd'));
-    if (idx >= 0) return idx;
-  }
-
-  const entries = (timesheet.entries || []) as Array<Partial<TimesheetEntry>>;
-  const firstDatedEntry = entries.find(e => e.entry_date);
-  if (!firstDatedEntry?.entry_date) return -1;
-
-  const entryDate = parseLocalDate(firstDatedEntry.entry_date);
-  return monthWeeks.findIndex(mw => {
-    const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
-    return entryDate >= mw && entryDate <= wEnd;
-  });
-};
-
 // Sum a timesheet's hours restricted to dates within the payroll period
 // (21st → 20th). Falls back to stored totals only when entries aren't loaded.
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
@@ -273,10 +255,12 @@ export function TimesheetView() {
     if (!currentWeekStart) return;
     (async () => {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-      const { data } = await supabase
+      const data = await fetchAllPages((from, to) => supabase
         .from('temporary_timesheet_entries')
         .select('branch_id, actual_hours')
-        .eq('week_start_date', weekStartStr);
+        .eq('week_start_date', weekStartStr)
+        .order('id')
+        .range(from, to));
       const map: Record<string, number> = {};
       (data || []).forEach((row: any) => {
         map[row.branch_id] = (map[row.branch_id] || 0) + (Number(row.actual_hours) || 0);
@@ -311,7 +295,7 @@ export function TimesheetView() {
         for (const ids of chunkValues(tempIds)) {
           const part = await fetchAllPages((from, to) => supabase
             .from('temporary_employees')
-            .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
+            .select('id, first_name, last_name, start_date, end_date, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
             .in('id', ids)
             .order('id')
             .range(from, to));
@@ -322,11 +306,14 @@ export function TimesheetView() {
         (temps || []).forEach((t: any) => { tempById[t.id] = t; });
 
         const grouped: Record<string, Array<{ id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }>> = {};
-        const tempRows: Record<string, { branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+        const tempRows: Record<string, { id: string; branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+        const bestTempEntryByIdentityDate = new Map<string, { id: string; temp: any; entry: any; branchName: string; name: string; source: string | null; hours: number }>();
 
         (entries || []).forEach((e: any) => {
           const t = tempById[e.temporary_employee_id];
           if (!t) return;
+          if (t.start_date && e.entry_date < t.start_date) return;
+          if (t.end_date && e.entry_date > t.end_date) return;
           // Apply same scope filters as the consolidation
           if (scopedBranchIds.length > 0 && !scopedBranchIds.includes(t.branch_id)) return;
           if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
@@ -340,32 +327,34 @@ export function TimesheetView() {
             return dd >= w && dd <= wEnd;
           });
           if (wIdx < 0) return;
-
-          const row = (tempRows[t.id] ||= {
-            branchName,
-            name: `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase(),
-            source: t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null),
-            weeklyHours: monthWeeks.map(() => 0),
-            totalHours: 0,
-          });
+          const name = `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase();
+          const source = t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null);
           const h = Number(e.actual_hours) || 0;
-          row.weeklyHours[wIdx] += h;
-          row.totalHours += h;
+          const identity = `${t.branch_id || branchName}|${name}|${t.source_branch_id || ''}|${String(t.source_name || '').trim().toUpperCase()}`;
+          const key = `${identity}|${e.entry_date}`;
+          const existing = bestTempEntryByIdentityDate.get(key);
+          if (!existing || h > existing.hours) {
+            bestTempEntryByIdentityDate.set(key, { id: t.id, temp: t, entry: e, branchName, name, source, hours: h });
+          }
         });
 
-        // Legacy imports can contain duplicate temp engagements for the same
-        // person/source. Keep the most complete engagement instead of adding a
-        // second row (and its hours) to payroll totals.
-        const bestTempByIdentity = new Map<string, [string, typeof tempRows[string]]>();
-        Object.entries(tempRows).forEach(([id, r]) => {
-          const t = tempById[id];
-          const identity = `${t?.branch_id || r.branchName}|${r.name}|${t?.source_branch_id || ''}|${String(t?.source_name || '').trim().toUpperCase()}`;
-          const existing = bestTempByIdentity.get(identity);
-          if (!existing || r.totalHours > existing[1].totalHours) bestTempByIdentity.set(identity, [id, r]);
+        // Merge duplicate legacy engagements by person/source, but de-duplicate
+        // per date so legitimate shifts spread across old records are retained.
+        bestTempEntryByIdentityDate.forEach(({ id, temp, entry, branchName, name, source, hours }) => {
+          const identity = `${temp.branch_id || branchName}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+          const row = (tempRows[identity] ||= {
+            id, branchName, name, source, weeklyHours: monthWeeks.map(() => 0), totalHours: 0,
+          });
+          const date = parseLocalDate(entry.entry_date);
+          const weekIndex = monthWeeks.findIndex(w => date >= w && date <= endOfWeek(w, { weekStartsOn: 1 }));
+          if (weekIndex < 0) return;
+          row.weeklyHours[weekIndex] += hours;
+          row.totalHours += hours;
+          if (!row.source && source) row.source = source;
         });
-        bestTempByIdentity.forEach(([id, r]) => {
+        Object.values(tempRows).forEach(r => {
           (grouped[r.branchName] ||= []).push({
-            id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
+            id: r.id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
           });
         });
         setMonthlyTempByBranch(grouped);
@@ -1196,23 +1185,28 @@ export function TimesheetView() {
 
       try {
         // Get temps for all branches we currently view (filter by branch name match later)
-        const { data: allTemps } = await supabase
+        const temps = await fetchAllPages<any>((from, to) => supabase
           .from('temporary_employees')
           .select('*')
           .lte('start_date', weekEndStr)
-          .or(`end_date.is.null,end_date.gte.${weekStartStr}`);
-        const temps = (allTemps || []) as any[];
+          .or(`end_date.is.null,end_date.gte.${weekStartStr}`)
+          .order('id')
+          .range(from, to));
 
         if (temps.length > 0) {
           const tempIds = temps.map(t => t.id);
-          const { data: tEntries } = await supabase
-            .from('temporary_timesheet_entries')
-            .select('*')
-            .in('temporary_employee_id', tempIds)
-            .eq('week_start_date', weekStartStr);
-          (tEntries || []).forEach((e: any) => {
-            (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
-          });
+          for (const ids of chunkValues(tempIds)) {
+            const tEntries = await fetchAllPages<any>((from, to) => supabase
+              .from('temporary_timesheet_entries')
+              .select('*')
+              .in('temporary_employee_id', ids)
+              .eq('week_start_date', weekStartStr)
+              .order('id')
+              .range(from, to));
+            tEntries.forEach((e: any) => {
+              (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
+            });
+          }
 
           // Resolve source branch names
           const srcIds = Array.from(new Set(temps.map(t => t.source_branch_id).filter(Boolean)));

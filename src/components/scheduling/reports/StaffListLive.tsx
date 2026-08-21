@@ -13,6 +13,7 @@ import { Users, RefreshCw, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 
 interface ActiveStaff {
   user_id: string;
@@ -44,24 +45,29 @@ export function StaffListLive() {
     setLoading(true);
     try {
       // Currently clocked-in
-      let ciQ = supabase
-        .from('clock_ins')
-        .select('user_id, branch_id, clock_in_time, branch:branches(name)')
-        .is('clock_out_time', null);
-      if (user?.role === 'manager' && user?.branchId) {
-        ciQ = ciQ.eq('branch_id', user.branchId);
-      }
-      const { data: cis } = await ciQ;
+      const cis = await fetchAllPages<any>((from, to) => {
+        let query = supabase
+          .from('clock_ins')
+          .select('user_id, branch_id, clock_in_time, branch:branches(name)')
+          .is('clock_out_time', null)
+          .order('id');
+        if (user?.role === 'manager' && user?.branchId) query = query.eq('branch_id', user.branchId);
+        return query.range(from, to);
+      });
 
       // Resolve names from profiles
       const userIds = Array.from(new Set((cis || []).map(c => c.user_id)));
       let profilesByUser: Record<string, string> = {};
       if (userIds.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .in('id', userIds);
-        (profs || []).forEach((p: any) => { profilesByUser[p.id] = p.name || p.email; });
+        for (const ids of chunkValues(userIds)) {
+          const profs = await fetchAllPages<any>((from, to) => supabase
+            .from('profiles')
+            .select('id, name, email')
+            .in('id', ids)
+            .order('id')
+            .range(from, to));
+          profs.forEach((p: any) => { profilesByUser[p.id] = p.name || p.email; });
+        }
       }
 
       const byBranch: Record<string, BranchGroup> = {};
@@ -81,21 +87,24 @@ export function StaffListLive() {
       setGroups(Object.values(byBranch).sort((a, b) => a.branch.localeCompare(b.branch)));
 
       // All employees + separations
-      let empQ = supabase
-        .from('employees')
-        .select('id, first_name, last_name, branch_id, branch:branches(name), organization_id, status')
-        .in('status', ['active', 'onboarding', 'on_leave']);
-      if (user?.role === 'manager' && user?.branchId) {
-        empQ = empQ.eq('branch_id', user.branchId);
-      }
-      const { data: emps } = await empQ;
-      setAllEmployees(emps || []);
+      const emps = await fetchAllPages<any>((from, to) => {
+        let query = supabase
+          .from('employees')
+          .select('id, first_name, last_name, branch_id, branch:branches(name), organization_id, status')
+          .in('status', ['active', 'onboarding', 'on_leave'])
+          .order('id');
+        if (user?.role === 'manager' && user?.branchId) query = query.eq('branch_id', user.branchId);
+        return query.range(from, to);
+      });
+      setAllEmployees(emps);
 
-      const { data: seps } = await supabase
+      const seps = await fetchAllPages<any>((from, to) => supabase
         .from('employee_separations')
-        .select('employee_id, left_on, reason');
+        .select('id, employee_id, left_on, reason')
+        .order('id')
+        .range(from, to));
       const sepMap: Record<string, { left_on: string; reason: string | null }> = {};
-      (seps || []).forEach((s: any) => { sepMap[s.employee_id] = { left_on: s.left_on, reason: s.reason }; });
+      seps.forEach((s: any) => { sepMap[s.employee_id] = { left_on: s.left_on, reason: s.reason }; });
       setSeparated(sepMap);
     } finally {
       setLoading(false);
