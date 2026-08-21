@@ -133,24 +133,6 @@ const getTimesheetMonthlyKey = (timesheet?: Timesheet | null) => {
 const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
   timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
 
-const getTimesheetPayrollWeekIndex = (timesheet: Partial<Timesheet>, monthWeeks: Date[]) => {
-  if (timesheet.week_start_date) {
-    const tsWeekStart = startOfWeek(parseLocalDate(timesheet.week_start_date), { weekStartsOn: 1 });
-    const idx = monthWeeks.findIndex(mw => format(mw, 'yyyy-MM-dd') === format(tsWeekStart, 'yyyy-MM-dd'));
-    if (idx >= 0) return idx;
-  }
-
-  const entries = (timesheet.entries || []) as Array<Partial<TimesheetEntry>>;
-  const firstDatedEntry = entries.find(e => e.entry_date);
-  if (!firstDatedEntry?.entry_date) return -1;
-
-  const entryDate = parseLocalDate(firstDatedEntry.entry_date);
-  return monthWeeks.findIndex(mw => {
-    const wEnd = endOfWeek(mw, { weekStartsOn: 1 });
-    return entryDate >= mw && entryDate <= wEnd;
-  });
-};
-
 // Sum a timesheet's hours restricted to dates within the payroll period
 // (21st → 20th). Falls back to stored totals only when entries aren't loaded.
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
@@ -273,10 +255,12 @@ export function TimesheetView() {
     if (!currentWeekStart) return;
     (async () => {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-      const { data } = await supabase
+      const data = await fetchAllPages((from, to) => supabase
         .from('temporary_timesheet_entries')
         .select('branch_id, actual_hours')
-        .eq('week_start_date', weekStartStr);
+        .eq('week_start_date', weekStartStr)
+        .order('id')
+        .range(from, to));
       const map: Record<string, number> = {};
       (data || []).forEach((row: any) => {
         map[row.branch_id] = (map[row.branch_id] || 0) + (Number(row.actual_hours) || 0);
@@ -1196,23 +1180,28 @@ export function TimesheetView() {
 
       try {
         // Get temps for all branches we currently view (filter by branch name match later)
-        const { data: allTemps } = await supabase
+        const temps = await fetchAllPages<any>((from, to) => supabase
           .from('temporary_employees')
           .select('*')
           .lte('start_date', weekEndStr)
-          .or(`end_date.is.null,end_date.gte.${weekStartStr}`);
-        const temps = (allTemps || []) as any[];
+          .or(`end_date.is.null,end_date.gte.${weekStartStr}`)
+          .order('id')
+          .range(from, to));
 
         if (temps.length > 0) {
           const tempIds = temps.map(t => t.id);
-          const { data: tEntries } = await supabase
-            .from('temporary_timesheet_entries')
-            .select('*')
-            .in('temporary_employee_id', tempIds)
-            .eq('week_start_date', weekStartStr);
-          (tEntries || []).forEach((e: any) => {
-            (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
-          });
+          for (const ids of chunkValues(tempIds)) {
+            const tEntries = await fetchAllPages<any>((from, to) => supabase
+              .from('temporary_timesheet_entries')
+              .select('*')
+              .in('temporary_employee_id', ids)
+              .eq('week_start_date', weekStartStr)
+              .order('id')
+              .range(from, to));
+            tEntries.forEach((e: any) => {
+              (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
+            });
+          }
 
           // Resolve source branch names
           const srcIds = Array.from(new Set(temps.map(t => t.source_branch_id).filter(Boolean)));
