@@ -306,12 +306,14 @@ export function TimesheetView() {
         (temps || []).forEach((t: any) => { tempById[t.id] = t; });
 
         const grouped: Record<string, Array<{ id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }>> = {};
-        const tempRows: Record<string, { branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
+        const tempRows: Record<string, { id: string; branchName: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number; }> = {};
         const bestTempEntryByIdentityDate = new Map<string, { id: string; temp: any; entry: any; branchName: string; name: string; source: string | null; hours: number }>();
 
         (entries || []).forEach((e: any) => {
           const t = tempById[e.temporary_employee_id];
           if (!t) return;
+          if (t.start_date && e.entry_date < t.start_date) return;
+          if (t.end_date && e.entry_date > t.end_date) return;
           // Apply same scope filters as the consolidation
           if (scopedBranchIds.length > 0 && !scopedBranchIds.includes(t.branch_id)) return;
           if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
@@ -341,7 +343,7 @@ export function TimesheetView() {
         bestTempEntryByIdentityDate.forEach(({ id, temp, entry, branchName, name, source, hours }) => {
           const identity = `${temp.branch_id || branchName}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
           const row = (tempRows[identity] ||= {
-            branchName, name, source, weeklyHours: monthWeeks.map(() => 0), totalHours: 0,
+            id, branchName, name, source, weeklyHours: monthWeeks.map(() => 0), totalHours: 0,
           });
           const date = parseLocalDate(entry.entry_date);
           const weekIndex = monthWeeks.findIndex(w => date >= w && date <= endOfWeek(w, { weekStartsOn: 1 }));
@@ -349,11 +351,10 @@ export function TimesheetView() {
           row.weeklyHours[weekIndex] += hours;
           row.totalHours += hours;
           if (!row.source && source) row.source = source;
-          if (!(row as any).id) (row as any).id = id;
         });
         Object.values(tempRows).forEach(r => {
           (grouped[r.branchName] ||= []).push({
-            id: (r as any).id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
+            id: r.id, name: r.name, source: r.source, weeklyHours: r.weeklyHours, totalHours: r.totalHours,
           });
         });
         setMonthlyTempByBranch(grouped);
