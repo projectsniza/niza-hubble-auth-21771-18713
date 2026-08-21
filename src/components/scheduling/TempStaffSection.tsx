@@ -116,10 +116,12 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
 
   // Fetch branches for the source-branch dropdown
   const fetchBranches = useCallback(async () => {
-    let q = supabase.from('branches').select('id, name').order('name');
-    if (organizationId) q = q.eq('organization_id', organizationId);
-    const { data } = await q;
-    setBranches((data || []) as BranchOption[]);
+    const data = await fetchAllPages<BranchOption>((from, to) => {
+      let query = supabase.from('branches').select('id, name').order('name');
+      if (organizationId) query = query.eq('organization_id', organizationId);
+      return query.range(from, to);
+    });
+    setBranches(data);
   }, [organizationId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
