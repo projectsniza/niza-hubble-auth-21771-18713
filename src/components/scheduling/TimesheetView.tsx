@@ -295,7 +295,7 @@ export function TimesheetView() {
         for (const ids of chunkValues(tempIds)) {
           const part = await fetchAllPages((from, to) => supabase
             .from('temporary_employees')
-            .select('id, first_name, last_name, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
+            .select('id, first_name, last_name, start_date, end_date, branch_id, organization_id, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name), source_branch:branches!temporary_employees_source_branch_id_fkey(name)')
             .in('id', ids)
             .order('id')
             .range(from, to));
