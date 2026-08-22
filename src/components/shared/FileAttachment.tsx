@@ -180,6 +180,12 @@ export function FileAttachment({
     return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   };
 
+  const isVideoFile = (file: FileInfo) => {
+    const videoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo'];
+    return (file.type && videoTypes.includes(file.type)) ||
+           !!file.name.toLowerCase().match(/\.(mp4|webm|ogg|mov|avi|m4v|3gp)$/);
+  };
+
   return (
     <div className="space-y-3">
       <Label>{label}</Label>
@@ -293,6 +299,15 @@ export function FileAttachment({
                     title={previewFile.name}
                     className="w-full h-[70vh] rounded-lg"
                   />
+                ) : isVideoFile(previewFile) ? (
+                  <video
+                    src={previewUrl}
+                    controls
+                    playsInline
+                    className="max-w-full max-h-[70vh] mx-auto rounded-lg"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
                 ) : (
                   <div className="text-center py-12">
                     <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />

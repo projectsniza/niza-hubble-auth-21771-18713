@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2, X, Paperclip } from "lucide-react";
+import { FileText, AlertTriangle, AlertCircle, Clipboard, Plus, Search, Eye, Edit, Trash2, X, Paperclip, Printer } from "lucide-react";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -428,6 +428,45 @@ export default function RiskManagement() {
     { icon: Clipboard, title: "Method Statements", key: 'methods', count: methodStatements.length, gradient: "from-accent/80 to-primary/80" }
   ];
 
+  const printItem = (item: any, type: string) => {
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) {
+      toast({ title: 'Pop-up blocked', description: 'Please allow pop-ups to print.', variant: 'destructive' });
+      return;
+    }
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const row = (label: string, value: any) => value
+      ? `<tr><td class="lbl"><b>${esc(label)}</b></td><td class="val">${esc(value)}</td></tr>`
+      : '';
+    const titles: Record<string, string> = { risk: 'Risk Assessment', coshh: 'COSHH Assessment', hazard: 'Hazard Report', method: 'Method Statement' };
+    const rows = type === 'risk'
+      ? [row('Title', item.title), row('Description', item.description), row('Hazard', item.hazard_description), row('Control Measures', item.control_measures), row('Risk Level', item.risk_level), row('Status', item.status), row('Review Date', item.review_date ? format(new Date(item.review_date), 'PPP') : '')]
+      : type === 'coshh'
+      ? [row('Chemical Name', item.chemical_name), row('Description', item.description), row('Hazards', item.hazards), row('Storage Requirements', item.storage_requirements), row('Exposure Limits', item.exposure_limits), row('Control Measures', item.control_measures), row('First Aid Measures', item.first_aid_measures), row('Status', item.status)]
+      : type === 'hazard'
+      ? [row('Title', item.title), row('Description', item.description), row('Location', item.location_details), row('Priority', item.priority), row('Status', item.status)]
+      : [row('Title', item.title), row('Description', item.description), row('Method Steps', item.method_steps), row('Responsibilities', item.responsibilities), row('PPE Required', item.ppe_required), row('Status', item.status)];
+    win.document.write(`<!doctype html><html><head><title>${titles[type] || 'Report'} - ${esc(item.title || item.chemical_name || '')}</title>
+      <style>
+        @page{margin:14mm}
+        body{font-family:Arial,sans-serif;color:#222;padding:0;max-width:800px;margin:auto}
+        h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;color:#666;margin:0 0 18px;font-weight:normal}
+        table{width:100%;border-collapse:collapse;font-size:13px;page-break-inside:auto}
+        tr{page-break-inside:auto;page-break-after:auto}
+        td{border:1px solid #ddd;padding:6px 10px;vertical-align:top;white-space:pre-wrap;word-break:break-word;overflow:visible;max-height:none}
+        td.lbl{background:#f7f7f7;width:32%}
+        .sig{margin-top:36px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}
+      </style></head><body>
+      <h1>${titles[type] || 'Report'}</h1>
+      <h2>Reference: ${esc(item.id?.slice(0, 8) || '-')} &bull; Generated: ${esc(format(new Date(), 'PPP p'))}</h2>
+      <table>${rows.join('')}</table>
+      <div class="sig">Signature</div>
+      <p style="font-size:11px;color:#888;margin-top:24px">Generated from Niza Safe Risk Management.</p>
+      <script>window.onload=function(){setTimeout(function(){window.print();},250);}</script>
+      </body></html>`);
+    win.document.close();
+  };
+
   const renderFileAttachmentForm = () => {
     const labels: Record<string, string> = {
       risk: 'Evidence Files',
@@ -719,16 +758,23 @@ export default function RiskManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>View Details</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span>View Details</span>
+              {selectedItem && (
+                <Button variant="outline" size="sm" onClick={() => printItem(selectedItem, dialogType)}>
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+              )}
+            </DialogTitle>
           </DialogHeader>
           {selectedItem && (
             <div className="space-y-4 py-4">
               {dialogType === 'risk' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Hazard</Label><p className="mt-1">{selectedItem.hazard_description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Control Measures</Label><p className="mt-1">{selectedItem.control_measures || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Hazard</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.hazard_description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Control Measures</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.control_measures || '-'}</p></div>
                   <div className="flex gap-4">
                     <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.risk_level)}`}>{selectedItem.risk_level}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
@@ -746,17 +792,17 @@ export default function RiskManagement() {
               )}
               {dialogType === 'coshh' && (
                 <>
-                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="mt-1 font-medium">{selectedItem.chemical_name}</p></div>
-                  <div><Label className="text-muted-foreground">Storage</Label><p className="mt-1">{selectedItem.storage_requirements || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p className="mt-1">{selectedItem.exposure_limits || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.chemical_name}</p></div>
+                  <div><Label className="text-muted-foreground">Storage</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.storage_requirements || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.exposure_limits || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
               )}
               {dialogType === 'hazard' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Location</Label><p className="mt-1">{selectedItem.location_details || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Location</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.location_details || '-'}</p></div>
                   <div className="flex gap-4">
                     <div><Label className="text-muted-foreground">Priority</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.priority)}`}>{selectedItem.priority}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
@@ -765,8 +811,8 @@ export default function RiskManagement() {
               )}
               {dialogType === 'method' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Responsibilities</Label><p className="mt-1">{selectedItem.responsibilities || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Responsibilities</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.responsibilities || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
               )}
