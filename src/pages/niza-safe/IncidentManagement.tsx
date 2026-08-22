@@ -381,7 +381,7 @@ export default function IncidentManagement() {
       md.action_other && `Other${md.action_other_text ? ' — ' + md.action_other_text : ''}`,
     ].filter(Boolean).join(', ');
     win.document.write(`<!doctype html><html><head><title>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report - ${incident.title || ''}</title>
-      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
+      <style>@page{margin:14mm}body{font-family:Arial,sans-serif;color:#222;padding:0;max-width:800px;margin:auto}table,tr,td{page-break-inside:auto}td{vertical-align:top;overflow:visible;max-height:none}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
       </head><body>
       <h1>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report</h1>
       <h2>Reference: ${incident.id?.slice(0, 8) || '-'} • Generated: ${format(new Date(), 'PPP p')}</h2>
