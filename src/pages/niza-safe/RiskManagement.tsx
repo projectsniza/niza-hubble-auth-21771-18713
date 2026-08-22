@@ -753,17 +753,17 @@ export default function RiskManagement() {
               )}
               {dialogType === 'coshh' && (
                 <>
-                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="mt-1 font-medium">{selectedItem.chemical_name}</p></div>
-                  <div><Label className="text-muted-foreground">Storage</Label><p className="mt-1">{selectedItem.storage_requirements || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p className="mt-1">{selectedItem.exposure_limits || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Chemical Name</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.chemical_name}</p></div>
+                  <div><Label className="text-muted-foreground">Storage</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.storage_requirements || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Exposure Limits</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.exposure_limits || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
               )}
               {dialogType === 'hazard' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Location</Label><p className="mt-1">{selectedItem.location_details || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Location</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.location_details || '-'}</p></div>
                   <div className="flex gap-4">
                     <div><Label className="text-muted-foreground">Priority</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.priority)}`}>{selectedItem.priority}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
@@ -772,8 +772,8 @@ export default function RiskManagement() {
               )}
               {dialogType === 'method' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Responsibilities</Label><p className="mt-1">{selectedItem.responsibilities || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Responsibilities</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.responsibilities || '-'}</p></div>
                   <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
                 </>
               )}
