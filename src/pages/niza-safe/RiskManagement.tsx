@@ -719,16 +719,23 @@ export default function RiskManagement() {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>View Details</DialogTitle>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span>View Details</span>
+              {selectedItem && (
+                <Button variant="outline" size="sm" onClick={() => printItem(selectedItem, dialogType)}>
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+              )}
+            </DialogTitle>
           </DialogHeader>
           {selectedItem && (
             <div className="space-y-4 py-4">
               {dialogType === 'risk' && (
                 <>
-                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium">{selectedItem.title}</p></div>
-                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1">{selectedItem.description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Hazard</Label><p className="mt-1">{selectedItem.hazard_description || '-'}</p></div>
-                  <div><Label className="text-muted-foreground">Control Measures</Label><p className="mt-1">{selectedItem.control_measures || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Title</Label><p className="mt-1 font-medium whitespace-pre-wrap break-words">{selectedItem.title}</p></div>
+                  <div><Label className="text-muted-foreground">Description</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Hazard</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.hazard_description || '-'}</p></div>
+                  <div><Label className="text-muted-foreground">Control Measures</Label><p className="mt-1 whitespace-pre-wrap break-words">{selectedItem.control_measures || '-'}</p></div>
                   <div className="flex gap-4">
                     <div><Label className="text-muted-foreground">Risk Level</Label><Badge className={`mt-1 ${getRiskBadgeColor(selectedItem.risk_level)}`}>{selectedItem.risk_level}</Badge></div>
                     <div><Label className="text-muted-foreground">Status</Label><Badge className={`mt-1 ${getStatusBadgeColor(selectedItem.status)}`}>{selectedItem.status}</Badge></div>
