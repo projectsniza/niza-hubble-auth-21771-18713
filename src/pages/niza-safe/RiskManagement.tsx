@@ -18,6 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { FileAttachment, FileViewer } from '@/components/shared/FileAttachment';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { isAdminOrHR } from '@/lib/roles';
+import { fetchAllPages } from '@/lib/supabasePagination';
 
 interface FileInfo {
   name: string;
@@ -161,14 +162,17 @@ export default function RiskManagement() {
       hazardQuery = applyFilter(hazardQuery);
       methodQuery = applyFilter(methodQuery);
 
-      const [riskRes, coshhRes, hazardRes, methodRes] = await Promise.all([
-        riskQuery, coshhQuery, hazardQuery, methodQuery
+      const [riskRows, coshhRows, hazardRows, methodRows] = await Promise.all([
+        fetchAllPages<any>((from, to) => riskQuery.range(from, to)),
+        fetchAllPages<any>((from, to) => coshhQuery.range(from, to)),
+        fetchAllPages<any>((from, to) => hazardQuery.range(from, to)),
+        fetchAllPages<any>((from, to) => methodQuery.range(from, to)),
       ]);
 
-      if (riskRes.data) setRiskAssessments(riskRes.data);
-      if (coshhRes.data) setCoshhAssessments(coshhRes.data);
-      if (hazardRes.data) setHazardReports(hazardRes.data);
-      if (methodRes.data) setMethodStatements(methodRes.data);
+      setRiskAssessments(riskRows);
+      setCoshhAssessments(coshhRows);
+      setHazardReports(hazardRows);
+      setMethodStatements(methodRows);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

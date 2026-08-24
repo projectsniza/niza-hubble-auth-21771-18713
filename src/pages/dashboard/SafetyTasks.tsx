@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { fetchAllPages } from '@/lib/supabasePagination';
 
 interface TaskAttachment {
   name: string;
@@ -102,8 +103,7 @@ export default function SafetyTasks() {
           *,
           branch:branches(name)
         `)
-        .order('created_at', { ascending: false })
-        .limit(100);
+        .order('created_at', { ascending: false });
 
       // Filter based on role
       if (user.role === 'employee') {
@@ -118,8 +118,7 @@ export default function SafetyTasks() {
         }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllPages<any>((from, to) => query.range(from, to));
 
       // Fetch assigner profiles
       if (data && data.length > 0) {
@@ -373,7 +372,7 @@ export default function SafetyTasks() {
                     <div>
                       <p className="font-medium">{task.title}</p>
                       {task.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">{task.description}</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">{task.description}</p>
                       )}
                     </div>
                   </TableCell>

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, isPast, isWithinInterval, addDays } from 'date-fns';
+import { fetchAllPages } from '@/lib/supabasePagination';
 
 export default function NizaSafeHome() {
   const { user } = useAuth();
@@ -35,15 +36,19 @@ export default function NizaSafeHome() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [riskRes, incidentRes, taskRes] = await Promise.all([
+      const [riskRes, incidentRows, taskRows] = await Promise.all([
         supabase.from('risk_assessments').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('incidents').select('*').order('created_at', { ascending: false }),
-        supabase.from('safety_tasks').select('*').order('due_date', { ascending: true }),
+        fetchAllPages<any>((from, to) =>
+          supabase.from('incidents').select('*').order('created_at', { ascending: false }).range(from, to)
+        ),
+        fetchAllPages<any>((from, to) =>
+          supabase.from('safety_tasks').select('*').order('due_date', { ascending: true }).range(from, to)
+        ),
       ]);
 
       if (riskRes.data) setRiskAssessments(riskRes.data);
-      if (incidentRes.data) setIncidents(incidentRes.data);
-      if (taskRes.data) setTasks(taskRes.data);
+      setIncidents(incidentRows);
+      setTasks(taskRows);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

@@ -25,6 +25,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from '@/lib/utils';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { isAdminOrHR } from '@/lib/roles';
+import { fetchAllPages } from '@/lib/supabasePagination';
 
 interface TaskAttachment {
   name: string;
@@ -130,7 +131,7 @@ export default function Tasks() {
   const fetchTasks = async () => {
     setIsLoading(true);
     try {
-      let query = supabase.from('safety_tasks').select('*, branch:branches(name)').order('created_at', { ascending: false }).limit(100);
+      let query = supabase.from('safety_tasks').select('*, branch:branches(name)').order('created_at', { ascending: false });
 
       // Apply scope filter
       if (user?.role === 'manager' && user?.branchId) {
@@ -147,8 +148,7 @@ export default function Tasks() {
         }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllPages<any>((from, to) => query.range(from, to));
       setTasks((data || []) as SafetyTask[]);
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -512,7 +512,7 @@ export default function Tasks() {
                     <div>
                       <p className="font-medium">{task.title}</p>
                       {task.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">{task.description}</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">{task.description}</p>
                       )}
                     </div>
                   </TableCell>
