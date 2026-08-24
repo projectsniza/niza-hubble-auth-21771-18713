@@ -58,9 +58,11 @@ export default function ContractApprovalDialog({
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [edits, setEdits] = useState<Record<string, any>>({});
+  const [empEdits, setEmpEdits] = useState<Record<string, any>>({});
 
   useEffect(() => {
     setEdits({});
+    setEmpEdits({});
     setIsEditing(false);
   }, [approval?.id]);
 
@@ -71,33 +73,49 @@ export default function ContractApprovalDialog({
 
   const baseContent = (approval.contract_content as any) || {};
   const contractContent = { ...baseContent, ...edits };
+  const employeeData = { ...employee, ...empEdits };
 
   const updateField = (key: string, value: any) =>
     setEdits((p) => ({ ...p, [key]: value }));
 
+  const updateEmpField = (key: string, value: any) =>
+    setEmpEdits((p) => ({ ...p, [key]: value }));
+
   const handleSaveEdits = async () => {
-    if (Object.keys(edits).length === 0) {
+    if (Object.keys(edits).length === 0 && Object.keys(empEdits).length === 0) {
       setIsEditing(false);
       return;
     }
     setIsSavingEdits(true);
     try {
       const merged = { ...baseContent, ...edits };
-      const { error } = await supabase
-        .from('contract_approvals')
-        .update({ contract_content: merged })
-        .eq('id', approval.id);
-      if (error) throw error;
-      approval.contract_content = merged;
+      if (Object.keys(edits).length > 0) {
+        const { error } = await supabase
+          .from('contract_approvals')
+          .update({ contract_content: merged })
+          .eq('id', approval.id);
+        if (error) throw error;
+        approval.contract_content = merged;
+      }
+      if (Object.keys(empEdits).length > 0) {
+        const { error: empError } = await supabase
+          .from('employees')
+          .update(empEdits)
+          .eq('id', employee.id);
+        if (empError) throw empError;
+        Object.assign(approval.employee, empEdits);
+      }
       setEdits({});
+      setEmpEdits({});
       setIsEditing(false);
-      toast.success('Contract details updated');
+      toast.success('Details updated');
     } catch (e: any) {
       toast.error(e.message || 'Failed to save edits');
     } finally {
       setIsSavingEdits(false);
     }
   };
+
 
   const handleDownloadContract = async () => {
     if (approval.contract_file_path) {
@@ -226,7 +244,7 @@ export default function ContractApprovalDialog({
   };
 
   const handleApprove = async () => {
-    if (isEditing || Object.keys(edits).length > 0) {
+    if (isEditing || Object.keys(edits).length > 0 || Object.keys(empEdits).length > 0) {
       toast.error('Please save or cancel your contract edits before approving');
       return;
     }
@@ -328,35 +346,79 @@ export default function ContractApprovalDialog({
 
             {isEditing && (
               <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded p-2">
-                Edits update the contract content used for signing & download. Employee name, email, organization and branch are not editable here.
+                You can correct the details submitted by the store. Employee fields update the employee record; contract fields update the contract used for signing & download. Organization and branch are not editable here.
               </p>
             )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Employee Name</Label>
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{employee.first_name} {employee.last_name}</span>
-                </div>
+                <Label className="text-muted-foreground">First Name</Label>
+                {isEditing ? (
+                  <Input value={employeeData.first_name ?? ''} onChange={(e) => updateEmpField('first_name', e.target.value)} />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{employeeData.first_name}</span>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Last Name</Label>
+                {isEditing ? (
+                  <Input value={employeeData.last_name ?? ''} onChange={(e) => updateEmpField('last_name', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{employeeData.last_name}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Email</Label>
-                <p className="font-medium">{employee.email}</p>
+                <p className="font-medium">{employeeData.email}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Phone</Label>
+                {isEditing ? (
+                  <Input value={employeeData.phone ?? ''} onChange={(e) => updateEmpField('phone', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{employeeData.phone || 'Not specified'}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Date of Birth</Label>
+                {isEditing ? (
+                  <Input type="date" value={employeeData.date_of_birth ?? ''} onChange={(e) => updateEmpField('date_of_birth', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{employeeData.date_of_birth || 'Not specified'}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Address</Label>
+                {isEditing ? (
+                  <Input value={employeeData.address ?? ''} onChange={(e) => updateEmpField('address', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{employeeData.address || 'Not specified'}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Job Title</Label>
                 {isEditing ? (
-                  <Input value={contractContent?.job_title ?? ''} onChange={(e) => updateField('job_title', e.target.value)} />
+                  <Input
+                    value={contractContent?.job_title ?? employeeData.job_title ?? ''}
+                    onChange={(e) => { updateField('job_title', e.target.value); updateEmpField('job_title', e.target.value); }}
+                  />
                 ) : (
-                  <p className="font-medium">{contractContent?.job_title || employee.job_title || 'Not specified'}</p>
+                  <p className="font-medium">{contractContent?.job_title || employeeData.job_title || 'Not specified'}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Department</Label>
-                <p className="font-medium">{employee.department || 'Not specified'}</p>
+                {isEditing ? (
+                  <Input value={employeeData.department ?? ''} onChange={(e) => updateEmpField('department', e.target.value)} />
+                ) : (
+                  <p className="font-medium">{employeeData.department || 'Not specified'}</p>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Organization</Label>
                 <div className="flex items-center gap-2">
