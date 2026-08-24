@@ -244,7 +244,7 @@ export default function ContractApprovalDialog({
   };
 
   const handleApprove = async () => {
-    if (isEditing || Object.keys(edits).length > 0) {
+    if (isEditing || Object.keys(edits).length > 0 || Object.keys(empEdits).length > 0) {
       toast.error('Please save or cancel your contract edits before approving');
       return;
     }
