@@ -58,9 +58,11 @@ export default function ContractApprovalDialog({
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [edits, setEdits] = useState<Record<string, any>>({});
+  const [empEdits, setEmpEdits] = useState<Record<string, any>>({});
 
   useEffect(() => {
     setEdits({});
+    setEmpEdits({});
     setIsEditing(false);
   }, [approval?.id]);
 
@@ -71,33 +73,49 @@ export default function ContractApprovalDialog({
 
   const baseContent = (approval.contract_content as any) || {};
   const contractContent = { ...baseContent, ...edits };
+  const employeeData = { ...employee, ...empEdits };
 
   const updateField = (key: string, value: any) =>
     setEdits((p) => ({ ...p, [key]: value }));
 
+  const updateEmpField = (key: string, value: any) =>
+    setEmpEdits((p) => ({ ...p, [key]: value }));
+
   const handleSaveEdits = async () => {
-    if (Object.keys(edits).length === 0) {
+    if (Object.keys(edits).length === 0 && Object.keys(empEdits).length === 0) {
       setIsEditing(false);
       return;
     }
     setIsSavingEdits(true);
     try {
       const merged = { ...baseContent, ...edits };
-      const { error } = await supabase
-        .from('contract_approvals')
-        .update({ contract_content: merged })
-        .eq('id', approval.id);
-      if (error) throw error;
-      approval.contract_content = merged;
+      if (Object.keys(edits).length > 0) {
+        const { error } = await supabase
+          .from('contract_approvals')
+          .update({ contract_content: merged })
+          .eq('id', approval.id);
+        if (error) throw error;
+        approval.contract_content = merged;
+      }
+      if (Object.keys(empEdits).length > 0) {
+        const { error: empError } = await supabase
+          .from('employees')
+          .update(empEdits)
+          .eq('id', employee.id);
+        if (empError) throw empError;
+        Object.assign(approval.employee, empEdits);
+      }
       setEdits({});
+      setEmpEdits({});
       setIsEditing(false);
-      toast.success('Contract details updated');
+      toast.success('Details updated');
     } catch (e: any) {
       toast.error(e.message || 'Failed to save edits');
     } finally {
       setIsSavingEdits(false);
     }
   };
+
 
   const handleDownloadContract = async () => {
     if (approval.contract_file_path) {
