@@ -296,7 +296,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       const { data: existingDocs } = await supabase
         .from('documents')
         .select('title')
-        .eq('folder_id', folderId)
+        .eq('employee_id', employeeId)
         .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
       const existingTitles = new Set((existingDocs || []).map((d: any) => d.title));
 
