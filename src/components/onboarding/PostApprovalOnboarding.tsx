@@ -266,14 +266,24 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
   const generateAndSaveOnboardingPdfs = async () => {
     try {
-      // Fetch employee folder
-      const { data: employeeFolder } = await supabase
+      // Fetch employee folder (fall back to any folder linked to the employee)
+      let { data: employeeFolder } = await supabase
         .from('folders')
         .select('id')
         .eq('employee_id', employeeId)
         .eq('folder_type', 'employee')
         .maybeSingle();
-      if (!employeeFolder) return;
+      if (!employeeFolder) {
+        const { data: anyFolder } = await supabase
+          .from('folders')
+          .select('id')
+          .eq('employee_id', employeeId)
+          .limit(1)
+          .maybeSingle();
+        employeeFolder = anyFolder || null;
+      }
+      const folderId = employeeFolder?.id ?? null;
+
 
       // Fetch all 3 form responses in parallel
       const [appRes, starterRes, bankRes] = await Promise.all([
@@ -286,7 +296,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       const { data: existingDocs } = await supabase
         .from('documents')
         .select('title')
-        .eq('folder_id', employeeFolder.id)
+        .eq('employee_id', employeeId)
         .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
       const existingTitles = new Set((existingDocs || []).map((d: any) => d.title));
 
@@ -325,7 +335,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
           file_type: 'application/pdf',
           file_size: blob.size,
           employee_id: employeeId,
-          folder_id: employeeFolder.id,
+          folder_id: folderId,
           uploaded_by: user?.id,
         });
       }
