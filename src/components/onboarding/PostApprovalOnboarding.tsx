@@ -296,7 +296,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       const { data: existingDocs } = await supabase
         .from('documents')
         .select('title')
-        .eq('folder_id', employeeFolder.id)
+        .eq('folder_id', folderId)
         .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
       const existingTitles = new Set((existingDocs || []).map((d: any) => d.title));
 
@@ -335,7 +335,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
           file_type: 'application/pdf',
           file_size: blob.size,
           employee_id: employeeId,
-          folder_id: employeeFolder.id,
+          folder_id: folderId,
           uploaded_by: user?.id,
         });
       }
