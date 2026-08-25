@@ -59,10 +59,12 @@ export default function ContractApprovalDialog({
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [edits, setEdits] = useState<Record<string, any>>({});
   const [empEdits, setEmpEdits] = useState<Record<string, any>>({});
+  const [baseOverride, setBaseOverride] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     setEdits({});
     setEmpEdits({});
+    setBaseOverride(null);
     setIsEditing(false);
   }, [approval?.id]);
 
@@ -71,8 +73,9 @@ export default function ContractApprovalDialog({
   const employee = approval.employee;
   if (!employee) return null;
 
-  const baseContent = (approval.contract_content as any) || {};
+  const baseContent = baseOverride || (approval.contract_content as any) || {};
   const contractContent = { ...baseContent, ...edits };
+
   const employeeData = { ...employee, ...empEdits };
 
   const updateField = (key: string, value: any) =>
