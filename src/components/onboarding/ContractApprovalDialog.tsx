@@ -88,14 +88,27 @@ export default function ContractApprovalDialog({
     }
     setIsSavingEdits(true);
     try {
-      const merged = { ...baseContent, ...edits };
-      if (Object.keys(edits).length > 0) {
+      // Mirror employee-record edits into the contract content so the
+      // CONTRACT OF EMPLOYMENT preview / PDF reflects the corrections.
+      const emp = { ...employee, ...empEdits };
+      const mirrored: Record<string, any> = {};
+      if ('first_name' in empEdits || 'last_name' in empEdits) {
+        mirrored.employee_name = `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
+      }
+      if ('address' in empEdits) mirrored.employee_address = emp.address || '';
+      if ('job_title' in empEdits && !('job_title' in edits)) mirrored.job_title = emp.job_title || '';
+      if ('join_date' in empEdits && !('commencement_date' in edits)) mirrored.commencement_date = emp.join_date || '';
+
+      const merged = { ...baseContent, ...edits, ...mirrored };
+      if (Object.keys(edits).length > 0 || Object.keys(mirrored).length > 0) {
         const { error } = await supabase
           .from('contract_approvals')
           .update({ contract_content: merged })
           .eq('id', approval.id);
         if (error) throw error;
         approval.contract_content = merged;
+        setEdits({});
+        setBaseOverride(merged);
       }
       if (Object.keys(empEdits).length > 0) {
         const { error: empError } = await supabase
@@ -105,6 +118,7 @@ export default function ContractApprovalDialog({
         if (empError) throw empError;
         Object.assign(approval.employee, empEdits);
       }
+
       setEdits({});
       setEmpEdits({});
       setIsEditing(false);
