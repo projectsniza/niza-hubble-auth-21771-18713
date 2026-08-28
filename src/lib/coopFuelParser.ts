@@ -14,8 +14,15 @@ export interface CoopCategoryTotals {
   national_lottery: number; instant_lottery: number; paypoint: number; payzone: number;
   lottery_payouts: number; newspaper_voucher: number; petty_cash: number;
   bad_debtors: number; fuel_drive_off: number;
+  // Drive-off exactly as printed on the day report (sign preserved).
+  fuel_drive_off_raw: number;
   // Litres of fuel sold (from the X-Read / Cash Reconciliation figures)
   fuel_litres: number;
+  // Litres reclassified by fuel type (from the weekly Cash Reconciliation)
+  fuel_litres_diesel: number; fuel_litres_unleaded: number; fuel_litres_super: number;
+  // Card settlement split by scheme/brand (from the weekly card statement)
+  card_brands?: Record<string, number>;
+
   // Extended tender / banking fields extracted from TXT1
   cash_tender: number; visa_mc: number; amex: number; fuel_card: number;
   customer_account: number; coupon: number; cash_lifts: number;
@@ -35,8 +42,11 @@ export const emptyCoopTotals = (): CoopCategoryTotals => ({
   NP20: 0,
   national_lottery: 0, instant_lottery: 0, paypoint: 0, payzone: 0,
   lottery_payouts: 0, newspaper_voucher: 0, petty_cash: 0, bad_debtors: 0,
-  fuel_drive_off: 0,
+  fuel_drive_off: 0, fuel_drive_off_raw: 0,
   fuel_litres: 0,
+  fuel_litres_diesel: 0, fuel_litres_unleaded: 0, fuel_litres_super: 0,
+  card_brands: {},
+
   cash_tender: 0, visa_mc: 0, amex: 0, fuel_card: 0, customer_account: 0,
   coupon: 0, cash_lifts: 0, cash_in_drawer: 0, gross_sales: 0, net_takings: 0,
   vat_20: 0, vat_5: 0, net_20: 0, net_5: 0, net_0: 0,
@@ -251,16 +261,53 @@ export function normalizeCoopParsedTotals(
  * Parse a weekly Cash Reconciliation CSV/text export. Very tolerant: matches
  * common label variants and returns the last numeric on each matching line.
  */
+export interface FuelLitreSplit { diesel: number; unleaded: number; super: number; total: number }
+
 export function parseCashRec(text: string): {
   total_banking: number; cash_banked: number; card_banked: number; other: number;
+  litres: FuelLitreSplit; litres_by_date: Record<string, FuelLitreSplit>;
 } {
   const grab = (kw: RegExp) => findTxtLineLast(text, kw);
   const total_banking = grab(/Total\s*Banking|Total\s*Banked/i);
   const cash_banked  = grab(/Cash\s*Banked|Cash\s*Lifts?|Cash\s*Bank/i);
   const card_banked  = grab(/Card\s*Settlement|Card\s*Bank(?:ed)?|Merchant\s*Settlement/i);
   const other        = grab(/Other\s*Bank(?:ed)?|Cheque(?:s)?\s*Bank(?:ed)?/i);
-  return { total_banking, cash_banked, card_banked, other };
+
+  // ---- Fuel litres reclassified by grade (DIESEL / UNLEADED / SUPER UNLEADED) ----
+  const empty = (): FuelLitreSplit => ({ diesel: 0, unleaded: 0, super: 0, total: 0 });
+  const litres = empty();
+  const litres_by_date: Record<string, FuelLitreSplit> = {};
+  let currentDate: string | null = null;
+
+  for (const rawLine of (text || '').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const d = normaliseFisDate(line);
+    if (d) currentDate = d;
+
+    let grade: keyof FuelLitreSplit | null = null;
+    if (/super\s*(unleaded|plus)|premium\s*unleaded|\bSUL\b/i.test(line)) grade = 'super';
+    else if (/unleaded|\bULSP\b|\bPETROL\b/i.test(line)) grade = 'unleaded';
+    else if (/diesel|\bULSD\b|\bgas\s*oil\b/i.test(line)) grade = 'diesel';
+    if (!grade) continue;
+
+    const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
+    const nums = (withoutDate.match(/-?\d[\d,]*\.\d{1,3}/g) || []).map(n => Number(n.replace(/,/g, '')));
+    const qty = nums.find(n => Number.isFinite(n) && n !== 0);
+    if (!qty) continue;
+
+    litres[grade] = +(litres[grade] + qty).toFixed(2);
+    litres.total = +(litres.total + qty).toFixed(2);
+    if (currentDate) {
+      if (!litres_by_date[currentDate]) litres_by_date[currentDate] = empty();
+      litres_by_date[currentDate][grade] = +(litres_by_date[currentDate][grade] + qty).toFixed(2);
+      litres_by_date[currentDate].total = +(litres_by_date[currentDate].total + qty).toFixed(2);
+    }
+  }
+
+  return { total_banking, cash_banked, card_banked, other, litres, litres_by_date };
 }
+
 
 /**
  * Weekly FIS credit-card settlement export (CSV / XLSX-converted-to-CSV).
@@ -271,14 +318,17 @@ export function parseCashRec(text: string): {
  */
 export interface FisCardDay {
   visa_mc: number; amex: number; fuel_card: number; other: number; total: number;
+  // Amount per card brand exactly as required on the C.CARD tab.
+  brands: Record<string, number>;
 }
 export interface FisCardParseResult {
   byDate: Record<string, FisCardDay>;
   weekTotals: FisCardDay;
+  brandNames: string[];
   matchedLines: number;
 }
 
-const emptyFisDay = (): FisCardDay => ({ visa_mc: 0, amex: 0, fuel_card: 0, other: 0, total: 0 });
+const emptyFisDay = (): FisCardDay => ({ visa_mc: 0, amex: 0, fuel_card: 0, other: 0, total: 0, brands: {} });
 
 const normaliseFisDate = (raw: string): string | null => {
   let m = raw.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
@@ -289,6 +339,28 @@ const normaliseFisDate = (raw: string): string | null => {
     return `${yr}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   }
   return null;
+};
+
+// Brand headings requested by the client. Anything unrecognised keeps its own
+// name so new card schemes automatically get their own C.CARD column.
+const CARD_BRAND_RULES: Array<[RegExp, string]> = [
+  [/american\s*express|\bamex\b/i, 'Amex'],
+  [/master\s*card|mastercard|\bvisa\b|maestro/i, 'Visa/Master'],
+  [/all\s*star|allstar/i, 'All Star'],
+  [/fast\s*fuel|fastfuel|texaco/i, 'Texaco/Fast Fuel'],
+  [/uk\s*fuels?/i, 'UK Fuel'],
+  [/bp\s*fuel|^bp\b/i, 'BP'],
+  [/euro\s*shell|euroshell|shell|routex/i, 'Euroshell'],
+];
+
+const titleCase = (s: string) => s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).trim();
+
+const brandForLine = (line: string): string => {
+  for (const [re, label] of CARD_BRAND_RULES) if (re.test(line)) return label;
+  // Fall back to the longest alphabetic cell on the row (usually the Brand column).
+  const cells = line.split(',').map(c => c.trim()).filter(c => /[a-z]{3,}/i.test(c) && !/^\d/.test(c));
+  const best = cells.sort((a, b) => b.length - a.length)[0];
+  return best ? titleCase(best).slice(0, 24) : 'Other';
 };
 
 export function parseFisCardStatement(text: string): FisCardParseResult {
@@ -302,7 +374,6 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
     if (/total|summary|grand/i.test(line) && !/\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(line)) continue;
 
     const dateStr = normaliseFisDate(line);
-    if (!dateStr) continue;
 
     // Collect numbers, ignoring the date digits themselves.
     const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
@@ -318,21 +389,30 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
       : nums.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), nums[0]);
     if (!amount) continue;
 
-    let key: keyof FisCardDay = 'other';
+    let key: keyof Omit<FisCardDay, 'brands'> = 'other';
     if (/amex|american\s*express/i.test(line)) key = 'amex';
-    else if (/all\s*star|allstar|uk\s*fuels|key\s*fuels|fuel\s*card|routex|fleet|texaco|shell|bp\b|esso|keyfuels/i.test(line)) key = 'fuel_card';
+    else if (/all\s*star|allstar|uk\s*fuels|key\s*fuels|fuel\s*card|routex|fleet|texaco|shell|bp\b|esso|keyfuels|fastfuel/i.test(line)) key = 'fuel_card';
     else if (/visa|master(?:card)?|maestro|debit|credit|v\/mc|vmc|contactless/i.test(line)) key = 'visa_mc';
 
-    if (!byDate[dateStr]) byDate[dateStr] = emptyFisDay();
-    byDate[dateStr][key] = +(byDate[dateStr][key] + amount).toFixed(2);
-    byDate[dateStr].total = +(byDate[dateStr].total + amount).toFixed(2);
+    const brand = brandForLine(line);
+
+    if (dateStr) {
+      if (!byDate[dateStr]) byDate[dateStr] = emptyFisDay();
+      const day = byDate[dateStr];
+      day[key] = +(day[key] + amount).toFixed(2);
+      day.total = +(day.total + amount).toFixed(2);
+      day.brands[brand] = +((day.brands[brand] || 0) + amount).toFixed(2);
+    }
     weekTotals[key] = +(weekTotals[key] + amount).toFixed(2);
     weekTotals.total = +(weekTotals.total + amount).toFixed(2);
+    weekTotals.brands[brand] = +((weekTotals.brands[brand] || 0) + amount).toFixed(2);
     matchedLines++;
   }
 
-  return { byDate, weekTotals, matchedLines };
+  const brandNames = Object.keys(weekTotals.brands).sort();
+  return { byDate, weekTotals, brandNames, matchedLines };
 }
+
 
 
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
@@ -433,7 +513,9 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
     const carWash          = sumTxtLines(t, /^\s*(CAR|CRA)\s*WASH\b/im);
     const jetWash          = sumTxtLines(t, /^\s*JET\s*WASH\b/im);
     if (out.CW === 0) out.CW = +(carWash + jetWash).toFixed(2);
-    out.fuel_drive_off     = -Math.abs(findTxtLineLast(t, /^\s*Drive\s*Off/im));
+    out.fuel_drive_off_raw = findTxtLineLast(t, /^\s*Drive\s*Off/im);
+    out.fuel_drive_off     = -Math.abs(out.fuel_drive_off_raw);
+
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
 
     // Fuel litres sold — the department report is authoritative (set above). Fall
@@ -633,11 +715,13 @@ export async function buildBranchSummaryWorkbook(
   };
 
   // ---------------- SALE — departmental breakdown ----------------
-  // A DATE | B FUEL | C FUEL LITRES | D TOBACCO | E DRINKS | F ALCOHOL |
-  // G GROCERY STD | H GROCERY ZERO | I DOMESTIC 5% | J NEWSPAPERS |
-  // K NEWSPAPERS 20% | L VENDING | M CAR WASH | N NAT LOTTERY |
-  // O SCRATCHCARDS | P PAYPOINT | Q PAYZONE | R LOTTO PAYOUTS | S..W VAT split
-  const saleHeaders = ['DATE','FUEL','FUEL SOLD LITRES','TOBACCO','DRINKS','ALCOHOL',
+  // A DATE | B FUEL SOLD LITRES | C DIESEL L | D UNLEADED L | E SUPER UNLEADED L |
+  // F FUEL | G TOBACCO | H DRINKS | I ALCOHOL | J GROCERY STD | K GROCERY ZERO |
+  // L DOMESTIC 5% | M NEWSPAPERS | N NEWSPAPERS 20% | O VENDING | P CAR WASH |
+  // Q NAT LOTTERY | R SCRATCHCARDS | S PAYPOINT | T PAYZONE | U LOTTO PAYOUTS |
+  // V..Z VAT split
+  const saleHeaders = ['DATE','FUEL SOLD LITRES','DIESEL LITRES','UNLEADED LITRES',
+    'SUPER UNLEADED LITRES','FUEL','TOBACCO','DRINKS','ALCOHOL',
     'GROCERY STD','GROCERY ZERO','DOMESTIC 5%','NEWSPAPERS','NEWSPAPERS 20%',
     'VENDING','CAR WASH','NAT LOTTERY','SCRATCHCARDS','PAYPOINT','PAYZONE',
     'LOTTO PAYOUTS','NET 0%','NET 20%','VAT 20%','NET 5%','VAT 5%'];
@@ -646,7 +730,9 @@ export async function buildBranchSummaryWorkbook(
     const t = r.totals;
     saleRows.push([
       r.sale_date,
-      t.FU || '', t.fuel_litres || '',
+      t.fuel_litres || '',
+      t.fuel_litres_diesel || '', t.fuel_litres_unleaded || '', t.fuel_litres_super || '',
+      t.FU || '',
       t.TO || '', t.DR || '', t.AL || '',
       t.GS || '', t.GZ || '', t.DO || '',
       t.NP || '', t.NP20 || '',
@@ -660,65 +746,94 @@ export async function buildBranchSummaryWorkbook(
   const saleWs = XLSX.utils.aoa_to_sheet(saleRows);
   const saleLastRow = HEADER_ROW + rows.length;
   const saleTotalRow = saleLastRow + 1;
+  const saleCols = saleHeaders.slice(1).map((_, i) => XLSX.utils.encode_col(i + 1));
   if (rows.length) {
     saleWs[`A${saleTotalRow}`] = { t: 's', v: 'TOTAL' };
-    colTotals(saleWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W'], saleLastRow, saleTotalRow);
-    saleWs['!ref'] = `A1:W${saleTotalRow}`;
+    colTotals(saleWs, saleCols, saleLastRow, saleTotalRow);
+    saleWs['!ref'] = `A1:${XLSX.utils.encode_col(saleHeaders.length - 1)}${saleTotalRow}`;
   }
   XLSX.utils.book_append_sheet(wb, saleWs, SALE_SHEET);
 
-  // ---------------- C.CARD — weekly card settlement breakdown ----------------
-  // A DATE | B VISA/MC | C AMEX | D FUEL CARD | E OTHER | F TOTAL
-  const ccardHeaders = ['DATE','VISA/MC','AMEX','FUEL CARD','OTHER','TOTAL'];
+  // ---------------- C.CARD — weekly card settlement, one column per brand ------
+  // Brands come from the weekly card statement (Visa/Master, All Star,
+  // Texaco/Fast Fuel, UK Fuel, BP, Euroshell, Amex, …). Any new brand seen in a
+  // statement automatically gets its own column.
+  const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell'];
+  const seenBrands = new Set<string>();
+  for (const r of rows) Object.keys(r.totals.card_brands || {}).forEach(b => { if (b) seenBrands.add(b); });
+  const brandCols = [
+    ...DEFAULT_BRANDS.filter(b => seenBrands.has(b) || seenBrands.size === 0),
+    ...Array.from(seenBrands).filter(b => !DEFAULT_BRANDS.includes(b)).sort(),
+  ];
+  const ccardHeaders = ['DATE', ...brandCols, 'TOTAL'];
+  const totalColIdx = ccardHeaders.length - 1;
+  const totalCol = XLSX.utils.encode_col(totalColIdx);
+  const lastBrandCol = XLSX.utils.encode_col(totalColIdx - 1);
   const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
   for (const r of rows) {
     const t = r.totals;
-    ccardRows.push([r.sale_date, t.visa_mc || '', t.amex || '', t.fuel_card || '', '', null]);
+    const brands = t.card_brands || {};
+    const hasStatement = Object.keys(brands).length > 0;
+    const cells = brandCols.map(b => {
+      if (hasStatement) return brands[b] || '';
+      // No statement yet — fall back to the till tender split so the tab still
+      // reconciles against the day report.
+      if (b === 'Visa/Master') return t.visa_mc || '';
+      if (b === 'Amex') return t.amex || '';
+      if (b === 'UK Fuel') return t.fuel_card || '';
+      return '';
+    });
+    ccardRows.push([r.sale_date, ...cells, null]);
   }
   const ccardWs = XLSX.utils.aoa_to_sheet(ccardRows);
   const ccardLastRow = HEADER_ROW + rows.length;
   const ccardTotalRow = ccardLastRow + 1;
   for (let i = 0; i < rows.length; i++) {
     const n = FIRST_DATA_ROW + i;
-    setF(ccardWs, `F${n}`, `SUM(B${n}:E${n})`);
+    setF(ccardWs, `${totalCol}${n}`, `SUM(B${n}:${lastBrandCol}${n})`);
   }
   if (rows.length) {
     ccardWs[`A${ccardTotalRow}`] = { t: 's', v: 'TOTAL' };
-    colTotals(ccardWs, ['B','C','D','E','F'], ccardLastRow, ccardTotalRow);
-    ccardWs['!ref'] = `A1:F${ccardTotalRow}`;
+    colTotals(ccardWs, ccardHeaders.slice(1).map((_, i) => XLSX.utils.encode_col(i + 1)), ccardLastRow, ccardTotalRow);
+    ccardWs['!ref'] = `A1:${totalCol}${ccardTotalRow}`;
   }
   XLSX.utils.book_append_sheet(wb, ccardWs, CCARD_SHEET);
 
   // ---------------- CASH SUM1 — live formulas off SALE + C.CARD ----------------
   // A DATE | B SHOP SALES | C CARWASH | D VENDING MACHINES | E PAYZONE |
-  // F FUEL SALES | G LOTTO SALES | H LOTTO PRIZE | I DRIVE OFF |
-  // J CREDIT C.SALES | K CASH S.TOTAL | L ACCOUNT CUSTOMERS |
-  // M VOUCHERS INCOME | N MISC. EXPENCE | O PRODUCTS FOR RESALE |
-  // P TOTAL BANKING | Q CLOSING CASH BAL. | R ACTUAL CASH/CHQ | S CASH DIFFERENT
+  // F FUEL SALES | G LOTTO SALES | H LOTTO PRIZE | I CREDIT CARD SALES |
+  // J CASH NEED TO DEPOSIT | K ACCOUNT CUSTOMERS | L VOUCHERS INCOME |
+  // M DRIVE OFF | N CUSTOMER ACCOUNTS | O MISC. EXPENCE |
+  // P PRODUCTS FOR RESALE | Q TOTAL BANKING | R CLOSING CASH BAL. |
+  // S ACTUAL CASH SHORT/EXCESS AS PER DAY REPORT | T NET DIFFERENCES
   const cashHeaders = [
     'DATE','SHOP SALES','CARWASH','VENDING MACHINES','PAYZONE',
-    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','DRIVE OFF','CREDIT C.SALES',
-    'CASH S.TOTAL','ACCOUNT CUSTOMERS','VOUCHERS INCOME','MISC. EXPENCE',
-    'PRODUCTS FOR RESALE','TOTAL BANKING','CLOSING CASH BAL.','ACTUAL CASH/CHQ',
-    'CASH DIFFERENT'
+    'FUEL SALES','LOTTO SALES','LOTTO PRIZE','CREDIT CARD SALES',
+    'CASH NEED TO DEPOSIT','ACCOUNT CUSTOMERS','VOUCHERS INCOME','DRIVE OFF',
+    'CUSTOMER ACCOUNTS','MISC. EXPENCE','PRODUCTS FOR RESALE','TOTAL BANKING',
+    'CLOSING CASH BAL.','ACTUAL CASH SHORT/EXCESS AS PER DAY REPORT',
+    'NET DIFFERENCES'
   ];
   const cashRows: any[][] = [...title('Cash Summary (CASH SUM1)'), cashHeaders];
   for (const r of rows) {
     const t = r.totals;
     cashRows.push([
       r.sale_date,
-      null, null, null, null, null, null, null,
-      // Drive-offs always land here as a negative figure (X-Read shows them as
-      // a deduction, whatever sign the report happens to print).
-      t.fuel_drive_off ? -Math.abs(t.fuel_drive_off) : '',
-      null,
-      null,
-      t.customer_account || '', t.coupon || '',
-      Math.abs(t.petty_cash || 0) || '', '',
-      null,
-      t.cash_in_drawer || '',
-      t.cash_in_drawer || '',
-      null,
+      null, null, null, null, null, null, null, null,
+      null,                                   // J cash need to deposit (formula)
+      '',                                     // K account customers — kept empty by client request
+      t.coupon || '',                         // L vouchers income (coupon + gift voucher only)
+      // M Drive off — sign exactly as printed on the day report.
+      t.fuel_drive_off_raw || t.fuel_drive_off || '',
+      t.customer_account || '',               // N customer accounts (day report)
+      Math.abs(t.petty_cash || 0) || '',      // O misc expence
+      '',                                     // P products for resale (manual)
+      t.cash_lifts || '',                     // Q total banking = Minus Cash Lifts
+      null,                                   // R closing cash bal (formula)
+      // S actual cash short/excess as per day report — X-Read prints an excess
+      // as a negative "Cash in Drawer" figure, so invert the sign.
+      t.cash_in_drawer ? -t.cash_in_drawer : '',
+      null,                                   // T net differences (formula)
     ]);
   }
   const cashWs = XLSX.utils.aoa_to_sheet(cashRows);
@@ -726,30 +841,34 @@ export async function buildBranchSummaryWorkbook(
   const cashTotalRow = cashLastRow + 1;
   for (let i = 0; i < rows.length; i++) {
     const n = FIRST_DATA_ROW + i;
-    setF(cashWs, `B${n}`, `SUM(${SALE_REF}!D${n}:${SALE_REF}!K${n})`);
-    setF(cashWs, `C${n}`, `${SALE_REF}!M${n}`);
-    setF(cashWs, `D${n}`, `${SALE_REF}!L${n}`);
-    setF(cashWs, `E${n}`, `${SALE_REF}!Q${n}`);
-    setF(cashWs, `F${n}`, `${SALE_REF}!B${n}`);
+    // Shop sales = Tobacco … Newspapers 20% on the SALE tab (G..N)
+    setF(cashWs, `B${n}`, `SUM(${SALE_REF}!G${n}:${SALE_REF}!N${n})`);
+    setF(cashWs, `C${n}`, `${SALE_REF}!P${n}`);
+    setF(cashWs, `D${n}`, `${SALE_REF}!O${n}`);
+    setF(cashWs, `E${n}`, `${SALE_REF}!T${n}`);
+    setF(cashWs, `F${n}`, `${SALE_REF}!F${n}`);
     // Lotto Sales = National Lottery + Instant Lottery
-    setF(cashWs, `G${n}`, `${SALE_REF}!N${n}+${SALE_REF}!O${n}`);
-    setF(cashWs, `H${n}`, `ABS(${SALE_REF}!R${n})`);
-    // Credit sales pull straight from the C.CARD tab
-    setF(cashWs, `J${n}`, `${CCARD_REF}!F${n}`);
-    // Cash sub-total = takings less prizes, drive-offs, card sales and accounts
-    setF(cashWs, `K${n}`, `SUM(B${n}:G${n})-H${n}+I${n}-J${n}-L${n}`);
-    // Total banking = cash sub-total less vouchers, payouts, resale purchases
-    // and the cash left in the drawer at close.
-    setF(cashWs, `P${n}`, `K${n}-M${n}-N${n}-O${n}-Q${n}`);
-    setF(cashWs, `S${n}`, `R${n}-Q${n}`);
+    setF(cashWs, `G${n}`, `${SALE_REF}!Q${n}+${SALE_REF}!R${n}`);
+    // Lotto prize is a payout, carried as a negative figure.
+    setF(cashWs, `H${n}`, `-ABS(${SALE_REF}!U${n})`);
+    // Credit card sales pull straight from the C.CARD tab total
+    setF(cashWs, `I${n}`, `${CCARD_REF}!${totalCol}${n}`);
+    // Cash need to deposit = shop + car wash + vending + payzone + fuel
+    //                        + lotto sales + lotto prize - credit card sales
+    setF(cashWs, `J${n}`, `SUM(B${n}:H${n})-I${n}`);
+    // Closing cash balance
+    setF(cashWs, `R${n}`, `J${n}-K${n}-L${n}-M${n}-N${n}-O${n}-P${n}-Q${n}`);
+    // Net differences vs the day report
+    setF(cashWs, `T${n}`, `R${n}-S${n}`);
   }
 
   if (rows.length) {
     cashWs[`A${cashTotalRow}`] = { t: 's', v: 'TOTAL' };
-    colTotals(cashWs, ['B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S'], cashLastRow, cashTotalRow);
-    cashWs['!ref'] = `A1:S${cashTotalRow}`;
+    colTotals(cashWs, cashHeaders.slice(1).map((_, i) => XLSX.utils.encode_col(i + 1)), cashLastRow, cashTotalRow);
+    cashWs['!ref'] = `A1:${XLSX.utils.encode_col(cashHeaders.length - 1)}${cashTotalRow}`;
   }
   XLSX.utils.book_append_sheet(wb, cashWs, 'CASH SUM1');
+
 
   const stub = (label: string, headers: string[]) => {
     const aoa: any[][] = [...title(label), headers];
