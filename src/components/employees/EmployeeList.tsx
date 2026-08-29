@@ -308,6 +308,27 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Employees', value: employees.length, icon: Users, tone: 'text-primary bg-primary/10' },
+          { label: 'Active', value: employees.filter(e => e.status === 'active').length, icon: CheckCircle, tone: 'text-emerald-600 bg-emerald-500/10' },
+          { label: 'Deactivated', value: employees.filter(e => e.status === 'inactive' || e.status === 'terminated').length, icon: Ban, tone: 'text-destructive bg-destructive/10' },
+          { label: 'Branches Covered', value: new Set(employees.map(e => e.branch_id).filter(Boolean)).size, icon: UserCog, tone: 'text-amber-600 bg-amber-500/10' },
+        ].map(card => (
+          <Card key={card.label} className="p-4 flex items-center gap-3">
+            <span className={`h-10 w-10 rounded-xl flex items-center justify-center ${card.tone}`}>
+              <card.icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-2xl font-bold leading-none">{card.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{card.label}</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+
+
       {employees.length === 0 ? (
         <Card className="p-12 text-center">
           <div className="flex flex-col items-center gap-4">
