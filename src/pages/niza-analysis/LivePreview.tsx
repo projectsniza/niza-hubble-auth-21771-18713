@@ -168,15 +168,37 @@ export default function LivePreview() {
     if (ids.length === 0) return toast.info('No edits to save');
     setSaving(true);
     try {
+      const auditRows: any[] = [];
       for (const id of ids) {
         const row = rows.find(r => r.id === id);
         const base = row?.original_totals || {};
+        const previous = (base as any)?.manual_overrides || {};
+        const breakdown = row?.parsed_totals?.breakdown || {};
+        for (const [key, value] of Object.entries(edits[id])) {
+          const before = previous[key] !== undefined ? Number(previous[key]) : num((breakdown as any)[key]);
+          if (Number(before) === Number(value)) continue;
+          auditRows.push({
+            upload_id: id,
+            branch_id: (row as any)?.branch_id || null,
+            sale_date: row?.sale_date || null,
+            field_key: key,
+            old_value: before,
+            new_value: Number(value),
+            changed_by: user?.id || null,
+            changed_by_name: user?.name || null,
+            changed_by_email: user?.email || null,
+          });
+        }
         const { error } = await supabase.from('daily_sales_uploads')
           .update({ parsed_totals: { ...base, manual_overrides: edits[id] } as any })
           .eq('id', id);
         if (error) throw error;
       }
-      toast.success(`Saved edits for ${ids.length} day(s)`);
+      if (auditRows.length) {
+        await (supabase as any).from('niza_output_edit_audit').insert(auditRows);
+      }
+      setAuditRefresh(k => k + 1);
+      toast.success(`Saved ${auditRows.length} change(s) across ${ids.length} day(s)`);
     } catch (e: any) {
       toast.error(e?.message || 'Save failed');
     } finally {
@@ -186,7 +208,10 @@ export default function LivePreview() {
 
   const download = async () => {
     if (coopRows.length === 0) return toast.error('No Co-op rows in range');
-    const blob = await buildBranchSummaryWorkbook(coopRows, {
+    if (reviewStatus !== 'approved') {
+      return toast.error('Output must be approved by the Accounts Assistant before download');
+    }
+
       branch_name: branchId === 'all' ? 'All Branches' : (branches.find(b => b.id === branchId)?.name || 'Branch'),
       period_label: `${from}_to_${to}`,
       invoices: [],
