@@ -268,7 +268,7 @@ export default function LivePreview() {
           <Button variant="secondary" onClick={saveEdits} disabled={saving}>
             <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save Edits'}
           </Button>
-          <Button variant="outline" onClick={download} disabled={coopRows.length === 0}>
+          <Button variant="outline" onClick={download} disabled={coopRows.length === 0 || reviewStatus !== 'approved'}>
             <Download className="h-4 w-4 mr-2" /> Download XLSX
           </Button>
         </div>
@@ -277,12 +277,46 @@ export default function LivePreview() {
         </p>
       </Card>
 
+      <OutputReviewPanel
+        branchId={branchId === 'all' ? null : branchId}
+        from={from}
+        to={to}
+        refreshKey={auditRefresh}
+        onStatusChange={setReviewStatus}
+      />
+
       <Tabs defaultValue="sale">
         <TabsList>
           <TabsTrigger value="sale">SALE</TabsTrigger>
           <TabsTrigger value="cash">CASH SUM1</TabsTrigger>
           <TabsTrigger value="ccard">C.CARD</TabsTrigger>
+          <TabsTrigger value="input">MY INPUT</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="input">
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground mb-3">
+              The exact daily/period input received from the store — shown next to the output so you can verify before approving.
+            </p>
+            <div className="space-y-3 max-h-[32rem] overflow-y-auto">
+              {rows.length === 0 && <div className="text-sm text-muted-foreground py-6 text-center">Load a range to see the source input.</div>}
+              {rows.map(r => (
+                <div key={`in-${r.id}`} className="rounded-lg border">
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/40 text-xs font-medium">
+                    <span className="flex items-center gap-2"><FileText className="h-3 w-3" /> {r.sale_date} · {r.branch?.name}</span>
+                    <span className="text-muted-foreground">
+                      {Object.keys(edits[r.id] || {}).length > 0 ? `${Object.keys(edits[r.id]).length} field(s) modified` : 'unmodified'}
+                    </span>
+                  </div>
+                  <pre className="p-3 text-[11px] whitespace-pre-wrap max-h-56 overflow-y-auto">
+{r.raw_text || JSON.stringify(r.original_totals, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </TabsContent>
+
 
         <TabsContent value="sale">
           <Card className="p-3 overflow-x-auto">
