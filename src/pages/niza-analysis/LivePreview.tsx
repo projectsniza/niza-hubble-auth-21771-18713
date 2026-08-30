@@ -6,12 +6,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Download, Eye, Save, CreditCard } from 'lucide-react';
+import { Download, Eye, Save, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
   emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook, type CoopXeroRow,
 } from '@/lib/coopFuelParser';
+import OutputReviewPanel from '@/components/niza-analysis/OutputReviewPanel';
+import { useAuth } from '@/contexts/AuthContext';
+
 
 interface Row {
   id: string;
@@ -30,6 +33,7 @@ const num = (v: any) => Number(v || 0);
 
 export default function LivePreview() {
   const today = new Date();
+  const { user } = useAuth();
   const [from, setFrom] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [to, setTo] = useState(format(endOfMonth(today), 'yyyy-MM-dd'));
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -37,6 +41,8 @@ export default function LivePreview() {
   const [rows, setRows] = useState<Row[]>([]);
   const [cardByKey, setCardByKey] = useState<Record<string, FisDay>>({});
   const [litresByKey, setLitresByKey] = useState<Record<string, LitreDay>>({});
+  const [reviewStatus, setReviewStatus] = useState<string>('pending');
+  const [auditRefresh, setAuditRefresh] = useState(0);
 
   const [edits, setEdits] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(false);
@@ -45,6 +51,7 @@ export default function LivePreview() {
   useEffect(() => {
     supabase.from('branches').select('id,name').order('name').then(({ data }) => setBranches((data as any) || []));
   }, []);
+
 
   const load = async () => {
     setLoading(true);
@@ -161,15 +168,37 @@ export default function LivePreview() {
     if (ids.length === 0) return toast.info('No edits to save');
     setSaving(true);
     try {
+      const auditRows: any[] = [];
       for (const id of ids) {
         const row = rows.find(r => r.id === id);
         const base = row?.original_totals || {};
+        const previous = (base as any)?.manual_overrides || {};
+        const breakdown = row?.parsed_totals?.breakdown || {};
+        for (const [key, value] of Object.entries(edits[id])) {
+          const before = previous[key] !== undefined ? Number(previous[key]) : num((breakdown as any)[key]);
+          if (Number(before) === Number(value)) continue;
+          auditRows.push({
+            upload_id: id,
+            branch_id: (row as any)?.branch_id || null,
+            sale_date: row?.sale_date || null,
+            field_key: key,
+            old_value: before,
+            new_value: Number(value),
+            changed_by: user?.id || null,
+            changed_by_name: user?.name || null,
+            changed_by_email: user?.email || null,
+          });
+        }
         const { error } = await supabase.from('daily_sales_uploads')
           .update({ parsed_totals: { ...base, manual_overrides: edits[id] } as any })
           .eq('id', id);
         if (error) throw error;
       }
-      toast.success(`Saved edits for ${ids.length} day(s)`);
+      if (auditRows.length) {
+        await (supabase as any).from('niza_output_edit_audit').insert(auditRows);
+      }
+      setAuditRefresh(k => k + 1);
+      toast.success(`Saved ${auditRows.length} change(s) across ${ids.length} day(s)`);
     } catch (e: any) {
       toast.error(e?.message || 'Save failed');
     } finally {
@@ -179,6 +208,9 @@ export default function LivePreview() {
 
   const download = async () => {
     if (coopRows.length === 0) return toast.error('No Co-op rows in range');
+    if (reviewStatus !== 'approved') {
+      return toast.error('Output must be approved by the Accounts Assistant before download');
+    }
     const blob = await buildBranchSummaryWorkbook(coopRows, {
       branch_name: branchId === 'all' ? 'All Branches' : (branches.find(b => b.id === branchId)?.name || 'Branch'),
       period_label: `${from}_to_${to}`,
@@ -236,7 +268,7 @@ export default function LivePreview() {
           <Button variant="secondary" onClick={saveEdits} disabled={saving}>
             <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save Edits'}
           </Button>
-          <Button variant="outline" onClick={download} disabled={coopRows.length === 0}>
+          <Button variant="outline" onClick={download} disabled={coopRows.length === 0 || reviewStatus !== 'approved'}>
             <Download className="h-4 w-4 mr-2" /> Download XLSX
           </Button>
         </div>
@@ -245,12 +277,46 @@ export default function LivePreview() {
         </p>
       </Card>
 
+      <OutputReviewPanel
+        branchId={branchId === 'all' ? null : branchId}
+        from={from}
+        to={to}
+        refreshKey={auditRefresh}
+        onStatusChange={setReviewStatus}
+      />
+
       <Tabs defaultValue="sale">
         <TabsList>
           <TabsTrigger value="sale">SALE</TabsTrigger>
           <TabsTrigger value="cash">CASH SUM1</TabsTrigger>
           <TabsTrigger value="ccard">C.CARD</TabsTrigger>
+          <TabsTrigger value="input">MY INPUT</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="input">
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground mb-3">
+              The exact daily/period input received from the store — shown next to the output so you can verify before approving.
+            </p>
+            <div className="space-y-3 max-h-[32rem] overflow-y-auto">
+              {rows.length === 0 && <div className="text-sm text-muted-foreground py-6 text-center">Load a range to see the source input.</div>}
+              {rows.map(r => (
+                <div key={`in-${r.id}`} className="rounded-lg border">
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/40 text-xs font-medium">
+                    <span className="flex items-center gap-2"><FileText className="h-3 w-3" /> {r.sale_date} · {r.branch?.name}</span>
+                    <span className="text-muted-foreground">
+                      {Object.keys(edits[r.id] || {}).length > 0 ? `${Object.keys(edits[r.id]).length} field(s) modified` : 'unmodified'}
+                    </span>
+                  </div>
+                  <pre className="p-3 text-[11px] whitespace-pre-wrap max-h-56 overflow-y-auto">
+{r.raw_text || JSON.stringify(r.original_totals, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </TabsContent>
+
 
         <TabsContent value="sale">
           <Card className="p-3 overflow-x-auto">
