@@ -211,7 +211,7 @@ export default function LivePreview() {
     if (reviewStatus !== 'approved') {
       return toast.error('Output must be approved by the Accounts Assistant before download');
     }
-
+    const blob = await buildBranchSummaryWorkbook(coopRows, {
       branch_name: branchId === 'all' ? 'All Branches' : (branches.find(b => b.id === branchId)?.name || 'Branch'),
       period_label: `${from}_to_${to}`,
       invoices: [],
