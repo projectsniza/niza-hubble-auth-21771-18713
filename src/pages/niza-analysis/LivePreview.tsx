@@ -33,6 +33,7 @@ const num = (v: any) => Number(v || 0);
 
 export default function LivePreview() {
   const today = new Date();
+  const { user } = useAuth();
   const [from, setFrom] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [to, setTo] = useState(format(endOfMonth(today), 'yyyy-MM-dd'));
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -40,6 +41,8 @@ export default function LivePreview() {
   const [rows, setRows] = useState<Row[]>([]);
   const [cardByKey, setCardByKey] = useState<Record<string, FisDay>>({});
   const [litresByKey, setLitresByKey] = useState<Record<string, LitreDay>>({});
+  const [reviewStatus, setReviewStatus] = useState<string>('pending');
+  const [auditRefresh, setAuditRefresh] = useState(0);
 
   const [edits, setEdits] = useState<Record<string, Record<string, number>>>({});
   const [loading, setLoading] = useState(false);
@@ -48,6 +51,7 @@ export default function LivePreview() {
   useEffect(() => {
     supabase.from('branches').select('id,name').order('name').then(({ data }) => setBranches((data as any) || []));
   }, []);
+
 
   const load = async () => {
     setLoading(true);
