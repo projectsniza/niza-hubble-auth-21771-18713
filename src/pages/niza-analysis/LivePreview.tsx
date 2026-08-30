@@ -6,12 +6,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Download, Eye, Save, CreditCard } from 'lucide-react';
+import { Download, Eye, Save, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
   emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook, type CoopXeroRow,
 } from '@/lib/coopFuelParser';
+import OutputReviewPanel from '@/components/niza-analysis/OutputReviewPanel';
+import { useAuth } from '@/contexts/AuthContext';
+
 
 interface Row {
   id: string;
