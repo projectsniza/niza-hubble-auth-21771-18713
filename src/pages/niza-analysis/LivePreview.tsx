@@ -151,6 +151,16 @@ export default function LivePreview() {
   }, [rows, cardByKey, litresByKey, edits]);
 
 
+  const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell', 'Shell/Routex'];
+  const brandCols = useMemo(() => {
+    const seen = new Set<string>();
+    coopRows.forEach(r => Object.keys((r.totals as any).card_brands || {}).forEach(b => b && seen.add(b)));
+    return [
+      ...DEFAULT_BRANDS.filter(b => seen.has(b) || seen.size === 0),
+      ...Array.from(seen).filter(b => !DEFAULT_BRANDS.includes(b)).sort(),
+    ];
+  }, [coopRows]);
+
   const cell = (rowId: string, key: string, fallback: any) =>
     edits[rowId]?.[key] !== undefined ? edits[rowId][key] : num(fallback);
 
@@ -273,7 +283,7 @@ export default function LivePreview() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-          <CreditCard className="h-3 w-3" /> C.CARD uses the weekly FIS statement when one has been uploaded for that week; otherwise till card tenders are shown.
+          <CreditCard className="h-3 w-3" /> C.CARD is built only from the Weekly Card Report upload — one column per card type. Fuel litres come only from the weekly Cash Reconciliation.
         </p>
       </Card>
 
