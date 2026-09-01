@@ -5043,6 +5043,140 @@ export type Database = {
           },
         ]
       }
+      niza_output_edit_audit: {
+        Row: {
+          branch_id: string | null
+          changed_at: string
+          changed_by: string | null
+          changed_by_email: string | null
+          changed_by_name: string | null
+          field_key: string
+          id: string
+          new_value: number | null
+          old_value: number | null
+          sale_date: string | null
+          upload_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          field_key: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          sale_date?: string | null
+          upload_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          field_key?: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          sale_date?: string | null
+          upload_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_output_edit_audit_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "niza_output_edit_audit_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "daily_sales_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      niza_output_reviews: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          flag_reason: string | null
+          flagged_at: string | null
+          flagged_by: string | null
+          flagged_by_email: string | null
+          flagged_by_name: string | null
+          id: string
+          notes: string | null
+          period_from: string
+          period_to: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_by_name: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_email: string | null
+          reviewed_by_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          flag_reason?: string | null
+          flagged_at?: string | null
+          flagged_by?: string | null
+          flagged_by_email?: string | null
+          flagged_by_name?: string | null
+          id?: string
+          notes?: string | null
+          period_from: string
+          period_to: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_email?: string | null
+          reviewed_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          flag_reason?: string | null
+          flagged_at?: string | null
+          flagged_by?: string | null
+          flagged_by_email?: string | null
+          flagged_by_name?: string | null
+          id?: string
+          notes?: string | null
+          period_from?: string
+          period_to?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_email?: string | null
+          reviewed_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "niza_output_reviews_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_custom_pages: {
         Row: {
           branch_id: string | null
