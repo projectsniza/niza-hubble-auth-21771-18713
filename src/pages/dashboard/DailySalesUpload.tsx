@@ -44,6 +44,8 @@ export default function DailySalesUpload() {
   const [weekStatus, setWeekStatus] = useState<Record<string, { xread: boolean; deptvat: boolean }>>({});
   const [cashRecUploaded, setCashRecUploaded] = useState<boolean>(false);
   const [cardUploaded, setCardUploaded] = useState<boolean>(false);
+  // Weekly Card Report can be uploaded for any past week, not just the current one.
+  const [cardWeek, setCardWeek] = useState<string>('');
 
 
   const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
@@ -52,6 +54,11 @@ export default function DailySalesUpload() {
 
   const weekMonday = useMemo(() => mondayOf(date), [date]);
   const weekSunday = useMemo(() => sundayOf(date), [date]);
+  const cardWeekMonday = cardWeek || mondayOf(date);
+  const cardWeekOptions = useMemo(() => {
+    const base = mondayOf(format(new Date(), 'yyyy-MM-dd'));
+    return Array.from({ length: 16 }, (_, i) => format(addDays(new Date(base), -7 * i), 'yyyy-MM-dd'));
+  }, []);
 
   const loadRows = async (branchId: string | null) => {
     if (!branchId) return;
@@ -326,31 +333,31 @@ export default function DailySalesUpload() {
     if (!cardFile) return toast.error('Please select the weekly FIS credit-card statement');
     setBusyCard(true);
     try {
-      const path = await uploadStorage(cardFile, `fiscard/${weekMonday}`);
+      const path = await uploadStorage(cardFile, `fiscard/${cardWeekMonday}`);
       const text = await readFileText(cardFile);
       const parsed = parseFisCardStatement(text);
       if (parsed.matchedLines === 0) {
-        toast.warning('No dated card lines were recognised — the file is stored, but C.CARD will keep using till tenders.');
+        toast.warning('No dated card lines were recognised — the file is stored, but no card values will appear on C.CARD for that week.');
       }
 
       await supabase.from('daily_sales_uploads')
         .delete()
         .eq('branch_id', profile.branch_id)
-        .eq('sale_date', weekMonday)
+        .eq('sale_date', cardWeekMonday)
         .eq('source_format', 'fiscard');
 
       const { error } = await supabase.from('daily_sales_uploads').insert({
         organization_id: profile.organization_id,
         branch_id: profile.branch_id,
-        sale_date: weekMonday,
+        sale_date: cardWeekMonday,
         source_filename: cardFile.name,
         source_format: 'fiscard',
         storage_path: path,
         raw_text: text.slice(0, 200000),
         parsed_totals: {
           format: 'fiscard',
-          week_start: weekMonday,
-          week_end: weekSunday,
+          week_start: cardWeekMonday,
+          week_end: sundayOf(cardWeekMonday),
           by_date: parsed.byDate,
           week_totals: parsed.weekTotals,
           matched_lines: parsed.matchedLines,
@@ -466,19 +473,35 @@ export default function DailySalesUpload() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-primary" />
-                <span className="font-semibold text-sm">4. Card Statement (FIS)</span>
+                <span className="font-semibold text-sm">4. Weekly Card Report</span>
               </div>
               {cardUploaded
                 ? <CheckCircle2 className="h-4 w-4 text-green-600" />
                 : <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase">Weekly</span>}
             </div>
+            <div className="mb-2">
+              <Label className="text-xs">Report week</Label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs"
+                value={cardWeekMonday}
+                onChange={(e) => setCardWeek(e.target.value)}
+              >
+                {cardWeekOptions.map(w => (
+                  <option key={w} value={w}>
+                    {format(new Date(w), 'dd MMM')} – {format(new Date(sundayOf(w)), 'dd MMM yyyy')}
+                  </option>
+                ))}
+              </select>
+            </div>
             <p className="text-xs text-muted-foreground mb-2">
-              Weekly FIS settlement (CSV/XLSX). Maps Visa/MC, Amex and fuel cards per day into the C.CARD tab.
+              Weekly card report (CSV/XLSX) — the only source of C.CARD values. Each card type gets its own column
+              (Visa/Master, All Star, Amex, UK Fuel, Texaco/Fast Fuel, BP, Euroshell, Shell/Routex, plus any new card).
+              Upload after the week ends.
             </p>
             <Input id="fiscard-file" type="file" accept="*/*" onChange={(e) => setCardFile(e.target.files?.[0] || null)} />
             {cardFile && <p className="text-xs text-primary mt-1 truncate">{cardFile.name}</p>}
             <Button size="sm" className="w-full mt-2" onClick={handleCardUpload} disabled={busyCard || !cardFile}>
-              {busyCard ? 'Uploading…' : cardUploaded ? 'Replace Card Statement' : 'Upload Card Statement'}
+              {busyCard ? 'Uploading…' : 'Upload Weekly Card Report'}
             </Button>
           </Card>
         </div>
