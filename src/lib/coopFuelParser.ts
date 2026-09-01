@@ -232,10 +232,9 @@ export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplit
     return out;
   }
   if (!extra) return out;
-  if (false) {
-    // culverstone (default): all extra fuel-zero-rated is vending
-    out.VM = +((out.VM || 0) + extra).toFixed(2);
-  }
+  // culverstone (default): all extra fuel-zero-rated is vending
+  out.VM = +((out.VM || 0) + extra).toFixed(2);
+
   return out;
 }
 
