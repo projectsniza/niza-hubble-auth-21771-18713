@@ -225,14 +225,16 @@ export type VendingSplitMode = 'culverstone' | 'houndsmills';
 export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplitMode | null | undefined): CoopCategoryTotals {
   const out = { ...totals };
   const extra = out.fuel_zero_rated || 0;
-  if (!extra) return out;
   if (mode === 'houndsmills') {
-    const remainder = Math.max(0, extra - (out.CW || 0));
-    out.VM = +((out.VM || 0) + remainder).toFixed(2);
-  } else {
-    // culverstone (default): all extra fuel-zero-rated is vending
-    out.VM = +((out.VM || 0) + extra).toFixed(2);
+    // X-Read Vending is the gross figure (vending + car wash), so the car wash
+    // total is always deducted to leave the net vending sales.
+    out.VM = +Math.max(0, (out.VM || 0) + extra - (out.CW || 0)).toFixed(2);
+    return out;
   }
+  if (!extra) return out;
+  // culverstone (default): all extra fuel-zero-rated is vending
+  out.VM = +((out.VM || 0) + extra).toFixed(2);
+
   return out;
 }
 
@@ -345,12 +347,13 @@ const normaliseFisDate = (raw: string): string | null => {
 // name so new card schemes automatically get their own C.CARD column.
 const CARD_BRAND_RULES: Array<[RegExp, string]> = [
   [/american\s*express|\bamex\b/i, 'Amex'],
-  [/master\s*card|mastercard|\bvisa\b|maestro/i, 'Visa/Master'],
   [/all\s*star|allstar/i, 'All Star'],
-  [/fast\s*fuel|fastfuel|texaco/i, 'Texaco/Fast Fuel'],
   [/uk\s*fuels?/i, 'UK Fuel'],
+  [/fast\s*fuel|fastfuel|texaco/i, 'Texaco/Fast Fuel'],
   [/bp\s*fuel|^bp\b/i, 'BP'],
-  [/euro\s*shell|euroshell|shell|routex/i, 'Euroshell'],
+  [/euro\s*shell|euroshell/i, 'Euroshell'],
+  [/shell|routex/i, 'Shell/Routex'],
+  [/master\s*card|mastercard|\bvisa\b|maestro|\bdebit\b|\bcredit\s*card\b/i, 'Visa/Master'],
 ];
 
 const titleCase = (s: string) => s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).trim();
@@ -475,9 +478,8 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
 
       if (code === 'FU') {
         out.FU = +(out.FU + r.net20).toFixed(2);
-        // "Num Sold" against the fuel department at 20% is the litres sold, so
-        // the Fuel Sold Litres column is populated for every single date.
-        if (r.qty20 > 0) out.fuel_litres = +(out.fuel_litres + r.qty20).toFixed(2);
+        // NOTE: litres are NEVER taken from the Department VAT report — the
+        // weekly Cash Reconciliation is the only source for Fuel Sold Litres.
         // Capture Fuel-department 0% amount for branch-specific VM/CW split.
         if (r.net0 > 0) out.fuel_zero_rated = +(out.fuel_zero_rated + r.net0).toFixed(2);
 
@@ -518,12 +520,7 @@ export function parseCoopFuelDetailed(input: CoopParseInput, opts: CoopParseOpti
 
     out.petty_cash         = -Math.abs(findTxtLineLast(t, /^\s*Payouts\b/im));
 
-    // Fuel litres sold — the department report is authoritative (set above). Fall
-    // back to an explicit litres line on the X-Read / Cash Reconciliation.
-    if (!out.fuel_litres) {
-      out.fuel_litres = findTxtLineLast(t, /(Total\s*Litres|Litres\s*Total|Volume\s*Total)/i) ||
-                        sumTxtLines(t, /\bLitres?\b/i);
-    }
+    // Fuel litres sold come from the weekly Cash Reconciliation upload only.
 
 
 
@@ -730,17 +727,17 @@ export async function buildBranchSummaryWorkbook(
     const t = r.totals;
     saleRows.push([
       r.sale_date,
-      t.fuel_litres || '',
-      t.fuel_litres_diesel || '', t.fuel_litres_unleaded || '', t.fuel_litres_super || '',
-      t.FU || '',
-      t.TO || '', t.DR || '', t.AL || '',
-      t.GS || '', t.GZ || '', t.DO || '',
-      t.NP || '', t.NP20 || '',
-      t.VM || '', t.CW || '',
-      t.national_lottery || '', t.instant_lottery || '',
-      t.paypoint || '', t.payzone || '',
-      t.lottery_payouts || '',
-      t.net_0 || '', t.net_20 || '', t.vat_20 || '', t.net_5 || '', t.vat_5 || ''
+      t.fuel_litres || 0,
+      t.fuel_litres_diesel || 0, t.fuel_litres_unleaded || 0, t.fuel_litres_super || 0,
+      t.FU || 0,
+      t.TO || 0, t.DR || 0, t.AL || 0,
+      t.GS || 0, t.GZ || 0, t.DO || 0,
+      t.NP || 0, t.NP20 || 0,
+      t.VM || 0, t.CW || 0,
+      t.national_lottery || 0, t.instant_lottery || 0,
+      t.paypoint || 0, t.payzone || 0,
+      t.lottery_payouts || 0,
+      t.net_0 || 0, t.net_20 || 0, t.vat_20 || 0, t.net_5 || 0, t.vat_5 || 0
     ]);
   }
   const saleWs = XLSX.utils.aoa_to_sheet(saleRows);
@@ -773,16 +770,9 @@ export async function buildBranchSummaryWorkbook(
   for (const r of rows) {
     const t = r.totals;
     const brands = t.card_brands || {};
-    const hasStatement = Object.keys(brands).length > 0;
-    const cells = brandCols.map(b => {
-      if (hasStatement) return brands[b] || '';
-      // No statement yet — fall back to the till tender split so the tab still
-      // reconciles against the day report.
-      if (b === 'Visa/Master') return t.visa_mc || '';
-      if (b === 'Amex') return t.amex || '';
-      if (b === 'UK Fuel') return t.fuel_card || '';
-      return '';
-    });
+    // Card values come exclusively from the weekly card report upload. No
+    // X-Read till-tender fallback: an unuploaded week simply shows 0.
+    const cells = brandCols.map(b => Number(brands[b] || 0));
     ccardRows.push([r.sale_date, ...cells, null]);
   }
   const ccardWs = XLSX.utils.aoa_to_sheet(ccardRows);
@@ -821,18 +811,18 @@ export async function buildBranchSummaryWorkbook(
       r.sale_date,
       null, null, null, null, null, null, null, null,
       null,                                   // J cash need to deposit (formula)
-      '',                                     // K account customers — kept empty by client request
-      t.coupon || '',                         // L vouchers income (coupon + gift voucher only)
+      0,                                      // K account customers
+      t.coupon || 0,                         // L vouchers income (coupon + gift voucher only)
       // M Drive off — sign exactly as printed on the day report.
-      t.fuel_drive_off_raw || t.fuel_drive_off || '',
-      t.customer_account || '',               // N customer accounts (day report)
-      Math.abs(t.petty_cash || 0) || '',      // O misc expence
-      '',                                     // P products for resale (manual)
-      t.cash_lifts || '',                     // Q total banking = Minus Cash Lifts
+      t.fuel_drive_off_raw || t.fuel_drive_off || 0,
+      t.customer_account || 0,               // N customer accounts (day report)
+      Math.abs(t.petty_cash || 0) || 0,      // O misc expence
+      0,                                      // P products for resale (manual)
+      t.cash_lifts || 0,                     // Q total banking = Minus Cash Lifts
       null,                                   // R closing cash bal (formula)
       // S actual cash short/excess as per day report — X-Read prints an excess
       // as a negative "Cash in Drawer" figure, so invert the sign.
-      t.cash_in_drawer ? -t.cash_in_drawer : '',
+      t.cash_in_drawer ? -t.cash_in_drawer : 0,
       null,                                   // T net differences (formula)
     ]);
   }

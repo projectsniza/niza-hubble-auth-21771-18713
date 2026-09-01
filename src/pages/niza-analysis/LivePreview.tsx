@@ -151,6 +151,16 @@ export default function LivePreview() {
   }, [rows, cardByKey, litresByKey, edits]);
 
 
+  const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell', 'Shell/Routex'];
+  const brandCols = useMemo(() => {
+    const seen = new Set<string>();
+    coopRows.forEach(r => Object.keys((r.totals as any).card_brands || {}).forEach(b => b && seen.add(b)));
+    return [
+      ...DEFAULT_BRANDS.filter(b => seen.has(b) || seen.size === 0),
+      ...Array.from(seen).filter(b => !DEFAULT_BRANDS.includes(b)).sort(),
+    ];
+  }, [coopRows]);
+
   const cell = (rowId: string, key: string, fallback: any) =>
     edits[rowId]?.[key] !== undefined ? edits[rowId][key] : num(fallback);
 
@@ -273,7 +283,7 @@ export default function LivePreview() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-          <CreditCard className="h-3 w-3" /> C.CARD uses the weekly FIS statement when one has been uploaded for that week; otherwise till card tenders are shown.
+          <CreditCard className="h-3 w-3" /> C.CARD is built only from the Weekly Card Report upload — one column per card type. Fuel litres come only from the weekly Cash Reconciliation.
         </p>
       </Card>
 
@@ -411,42 +421,44 @@ export default function LivePreview() {
 
         <TabsContent value="ccard">
           <Card className="p-3 overflow-x-auto">
+            <p className="text-xs text-muted-foreground mb-2">
+              Values come only from the Weekly Card Report upload — one column per card type. Weeks with no report show 0.
+            </p>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b">
                   <th className="text-left p-2">Date</th>
                   <th className="text-left p-2">Branch</th>
-                  <th className="text-right p-2">Visa/MC</th>
-                  <th className="text-right p-2">Amex</th>
-                  <th className="text-right p-2">Fuel Card</th>
+                  {brandCols.map(b => <th key={b} className="text-right p-2">{b}</th>)}
                   <th className="text-right p-2">Total</th>
                   <th className="text-left p-2">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {coopRows.map(r => {
-                  const t: any = r.totals;
-                  const total = num(t.visa_mc)+num(t.amex)+num(t.fuel_card);
-                  const hasFis = !!cardByKey[`${(rows.find(x => x.id === r.row_id) as any)?.branch_id}|${r.sale_date}`];
+                  const brands: Record<string, number> = (r.totals as any).card_brands || {};
+                  const hasReport = Object.keys(brands).length > 0;
+                  const total = brandCols.reduce((a, b) => a + num(brands[b]), 0);
                   return (
                     <tr key={`cc-${r.sale_date}-${r.branch_name}`} className="border-b hover:bg-muted/30">
                       <td className="p-2 whitespace-nowrap">{r.sale_date}</td>
                       <td className="p-2 whitespace-nowrap">{r.branch_name}</td>
-                      <td className="text-right p-1">{editInput(r.row_id, 'visa_mc', t.visa_mc)}</td>
-                      <td className="text-right p-1">{editInput(r.row_id, 'amex', t.amex)}</td>
-                      <td className="text-right p-1">{editInput(r.row_id, 'fuel_card', t.fuel_card)}</td>
+                      {brandCols.map(b => (
+                        <td key={b} className="text-right p-2">{num(brands[b]).toFixed(2)}</td>
+                      ))}
                       <td className="text-right p-2 font-semibold">{total.toFixed(2)}</td>
-                      <td className="p-2 text-muted-foreground">{hasFis ? 'FIS statement' : 'Till tenders'}</td>
+                      <td className="p-2 text-muted-foreground">{hasReport ? 'Weekly card report' : 'Not uploaded'}</td>
                     </tr>
                   );
                 })}
                 {coopRows.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Load a range to preview.</td></tr>
+                  <tr><td colSpan={brandCols.length + 4} className="text-center py-8 text-muted-foreground">Load a range to preview.</td></tr>
                 )}
               </tbody>
             </table>
           </Card>
         </TabsContent>
+
 
       </Tabs>
     </div>
