@@ -26,8 +26,9 @@ type BranchProfile = {
   branch_name: string | null;
 };
 
-const mondayOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-const sundayOf = (iso: string) => format(endOfWeek(new Date(iso), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+// Weekly reports (Cash Reconciliation + Weekly Card Report) run Saturday → Friday.
+const mondayOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 6 }), 'yyyy-MM-dd');
+const sundayOf = (iso: string) => format(endOfWeek(new Date(iso), { weekStartsOn: 6 }), 'yyyy-MM-dd');
 
 export default function DailySalesUpload() {
   const { user } = useAuth();

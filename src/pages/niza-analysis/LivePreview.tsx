@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, Eye, Save, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek } from 'date-fns';
 import {
   emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook, type CoopXeroRow,
 } from '@/lib/coopFuelParser';
@@ -31,6 +31,9 @@ type LitreDay = { diesel: number; unleaded: number; super: number; total: number
 
 const num = (v: any) => Number(v || 0);
 
+// Weekly reports (Cash Rec + Weekly Card Report) run Saturday → Friday.
+const weekStartOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 6 }), 'yyyy-MM-dd');
+
 export default function LivePreview() {
   const today = new Date();
   const { user } = useAuth();
@@ -41,6 +44,8 @@ export default function LivePreview() {
   const [rows, setRows] = useState<Row[]>([]);
   const [cardByKey, setCardByKey] = useState<Record<string, FisDay>>({});
   const [litresByKey, setLitresByKey] = useState<Record<string, LitreDay>>({});
+  const [weekCards, setWeekCards] = useState<Record<string, FisDay>>({});
+  const [weekLitres, setWeekLitres] = useState<Record<string, LitreDay>>({});
   const [reviewStatus, setReviewStatus] = useState<string>('pending');
   const [auditRefresh, setAuditRefresh] = useState(0);
 
@@ -77,14 +82,25 @@ export default function LivePreview() {
 
     const cards: Record<string, FisDay> = {};
     const litres: Record<string, LitreDay> = {};
+    const wkCards: Record<string, FisDay> = {};
+    const wkLitres: Record<string, LitreDay> = {};
     for (const c of (cardData as any[]) || []) {
       const fmt = (c.source_format || '').toLowerCase();
+      const weekKey = `${c.branch_id}|${weekStartOf(c.parsed_totals?.week_start || c.sale_date)}`;
       if (fmt === 'fiscard') {
         const byDate = c.parsed_totals?.by_date || {};
         for (const [d, v] of Object.entries<any>(byDate)) {
           cards[`${c.branch_id}|${d}`] = {
             visa_mc: num(v.visa_mc), amex: num(v.amex), fuel_card: num(v.fuel_card),
             other: num(v.other), total: num(v.total), brands: v.brands || {},
+          };
+        }
+        // Statements without usable per-day dates still carry weekly totals.
+        if (Object.keys(byDate).length === 0 && c.parsed_totals?.week_totals) {
+          const w = c.parsed_totals.week_totals;
+          wkCards[weekKey] = {
+            visa_mc: num(w.visa_mc), amex: num(w.amex), fuel_card: num(w.fuel_card),
+            other: num(w.other), total: num(w.total), brands: w.brands || {},
           };
         }
       } else {
@@ -95,10 +111,19 @@ export default function LivePreview() {
             super: num(v.super), total: num(v.total),
           };
         }
+        if (Object.keys(byDate).length === 0 && c.parsed_totals?.litres) {
+          const l = c.parsed_totals.litres;
+          wkLitres[weekKey] = {
+            diesel: num(l.diesel), unleaded: num(l.unleaded),
+            super: num(l.super), total: num(l.total),
+          };
+        }
       }
     }
     setCardByKey(cards);
     setLitresByKey(litres);
+    setWeekCards(wkCards);
+    setWeekLitres(wkLitres);
 
     const daily = ((data as any[]) || []).filter(r => !['cashrec', 'fiscard'].includes((r.source_format || '').toLowerCase()));
     const loadedEdits: Record<string, Record<string, number>> = {};
@@ -122,12 +147,24 @@ export default function LivePreview() {
 
   const coopRows = useMemo<(CoopXeroRow & { row_id: string })[]>(() => {
     let seq = 3651;
+    const usedWeekCard = new Set<string>();
+    const usedWeekLitre = new Set<string>();
     return rows
       .filter(r => r.branch && r.parsed_totals?.format === 'coop_fuel')
       .map(r => {
-        const key = `${(r as any).branch_id}|${r.sale_date}`;
-        const fis = cardByKey[key];
-        const lit = litresByKey[key];
+        const bid = (r as any).branch_id;
+        const key = `${bid}|${r.sale_date}`;
+        const wkKey = `${bid}|${weekStartOf(r.sale_date)}`;
+        let fis = cardByKey[key];
+        if (!fis && weekCards[wkKey] && !usedWeekCard.has(wkKey)) {
+          usedWeekCard.add(wkKey);
+          fis = weekCards[wkKey];
+        }
+        let lit = litresByKey[key];
+        if (!lit && weekLitres[wkKey] && !usedWeekLitre.has(wkKey)) {
+          usedWeekLitre.add(wkKey);
+          lit = weekLitres[wkKey];
+        }
         return {
           row_id: r.id,
           sale_date: r.sale_date,
@@ -148,7 +185,7 @@ export default function LivePreview() {
           },
         };
       });
-  }, [rows, cardByKey, litresByKey, edits]);
+  }, [rows, cardByKey, litresByKey, weekCards, weekLitres, edits]);
 
 
   const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell', 'Shell/Routex'];
