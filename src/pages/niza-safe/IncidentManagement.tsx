@@ -495,8 +495,19 @@ export default function IncidentManagement() {
     setShowCreateDialog(true);
   };
 
-  const accidents = incidents.filter(i => i.incident_type === 'accident');
-  const nearMisses = incidents.filter(i => i.incident_type === 'near_miss');
+  const q = searchTerm.trim().toLowerCase();
+  const matchesSearch = (i: any) => {
+    if (!q) return true;
+    const md = (i.medical_documents || {}) as any;
+    return [
+      i.title, i.description, i.location_details, i.status, i.incident_type,
+      i.severity, i.reported_by_name, md.person_name, md.witness1_name, md.witness2_name,
+      i.incident_date,
+    ].some((v: any) => typeof v === 'string' && v.toLowerCase().includes(q));
+  };
+  const searchedIncidents = incidents.filter(matchesSearch);
+  const accidents = searchedIncidents.filter(i => i.incident_type === 'accident');
+  const nearMisses = searchedIncidents.filter(i => i.incident_type === 'near_miss');
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
