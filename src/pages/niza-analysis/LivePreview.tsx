@@ -77,14 +77,25 @@ export default function LivePreview() {
 
     const cards: Record<string, FisDay> = {};
     const litres: Record<string, LitreDay> = {};
+    const wkCards: Record<string, FisDay> = {};
+    const wkLitres: Record<string, LitreDay> = {};
     for (const c of (cardData as any[]) || []) {
       const fmt = (c.source_format || '').toLowerCase();
+      const weekKey = `${c.branch_id}|${weekStartOf(c.parsed_totals?.week_start || c.sale_date)}`;
       if (fmt === 'fiscard') {
         const byDate = c.parsed_totals?.by_date || {};
         for (const [d, v] of Object.entries<any>(byDate)) {
           cards[`${c.branch_id}|${d}`] = {
             visa_mc: num(v.visa_mc), amex: num(v.amex), fuel_card: num(v.fuel_card),
             other: num(v.other), total: num(v.total), brands: v.brands || {},
+          };
+        }
+        // Statements without usable per-day dates still carry weekly totals.
+        if (Object.keys(byDate).length === 0 && c.parsed_totals?.week_totals) {
+          const w = c.parsed_totals.week_totals;
+          wkCards[weekKey] = {
+            visa_mc: num(w.visa_mc), amex: num(w.amex), fuel_card: num(w.fuel_card),
+            other: num(w.other), total: num(w.total), brands: w.brands || {},
           };
         }
       } else {
@@ -95,10 +106,19 @@ export default function LivePreview() {
             super: num(v.super), total: num(v.total),
           };
         }
+        if (Object.keys(byDate).length === 0 && c.parsed_totals?.litres) {
+          const l = c.parsed_totals.litres;
+          wkLitres[weekKey] = {
+            diesel: num(l.diesel), unleaded: num(l.unleaded),
+            super: num(l.super), total: num(l.total),
+          };
+        }
       }
     }
     setCardByKey(cards);
     setLitresByKey(litres);
+    setWeekCards(wkCards);
+    setWeekLitres(wkLitres);
 
     const daily = ((data as any[]) || []).filter(r => !['cashrec', 'fiscard'].includes((r.source_format || '').toLowerCase()));
     const loadedEdits: Record<string, Record<string, number>> = {};
