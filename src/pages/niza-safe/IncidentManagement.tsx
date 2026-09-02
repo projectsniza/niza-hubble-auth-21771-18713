@@ -370,7 +370,8 @@ export default function IncidentManagement() {
       toast({ title: 'Pop-up blocked', description: 'Please allow pop-ups to print.', variant: 'destructive' });
       return;
     }
-    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd;white-space:pre-wrap;word-break:break-word">${value}</td></tr>` : '';
+    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere">${value}</td></tr>` : '';
+    const longRow = (label: string, value: any) => value ? `<tr><td colspan="2" style="padding:6px 10px;border:1px solid #ddd"><div style="font-weight:700;margin-bottom:4px">${label}</div><div class="longtext">${value}</div></td></tr>` : '';
     const sectionTitle = (t: string) => `<tr><td colspan="2" style="padding:8px 10px;background:#222;color:#fff;font-weight:600;letter-spacing:0.5px;font-size:12px;text-transform:uppercase">${t}</td></tr>`;
     const personType = md.person_type === 'other' ? `Other${md.person_type_other ? ' — ' + md.person_type_other : ''}` : (md.person_type ? md.person_type.charAt(0).toUpperCase() + md.person_type.slice(1) : '');
     const actionsTaken = [
