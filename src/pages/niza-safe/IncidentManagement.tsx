@@ -370,7 +370,8 @@ export default function IncidentManagement() {
       toast({ title: 'Pop-up blocked', description: 'Please allow pop-ups to print.', variant: 'destructive' });
       return;
     }
-    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd;white-space:pre-wrap;word-break:break-word">${value}</td></tr>` : '';
+    const row = (label: string, value: any) => value ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f7f7f7;width:35%"><b>${label}</b></td><td style="padding:6px 10px;border:1px solid #ddd;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere">${value}</td></tr>` : '';
+    const longRow = (label: string, value: any) => value ? `<tr><td colspan="2" style="padding:6px 10px;border:1px solid #ddd"><div style="font-weight:700;margin-bottom:4px">${label}</div><div class="longtext">${value}</div></td></tr>` : '';
     const sectionTitle = (t: string) => `<tr><td colspan="2" style="padding:8px 10px;background:#222;color:#fff;font-weight:600;letter-spacing:0.5px;font-size:12px;text-transform:uppercase">${t}</td></tr>`;
     const personType = md.person_type === 'other' ? `Other${md.person_type_other ? ' — ' + md.person_type_other : ''}` : (md.person_type ? md.person_type.charAt(0).toUpperCase() + md.person_type.slice(1) : '');
     const actionsTaken = [
@@ -381,7 +382,7 @@ export default function IncidentManagement() {
       md.action_other && `Other${md.action_other_text ? ' — ' + md.action_other_text : ''}`,
     ].filter(Boolean).join(', ');
     win.document.write(`<!doctype html><html><head><title>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report - ${incident.title || ''}</title>
-      <style>@page{margin:14mm}body{font-family:Arial,sans-serif;color:#222;padding:0;max-width:800px;margin:auto}table,tr,td{page-break-inside:auto}td{vertical-align:top;overflow:visible;max-height:none}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
+      <style>@page{margin:14mm}body{font-family:Arial,sans-serif;color:#222;padding:0;max-width:800px;margin:auto}table,tr,td{page-break-inside:auto}td{vertical-align:top;overflow:visible;max-height:none}h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#666;margin:0 0 18px;font-weight:normal}table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;background:#fee;color:#c00;font-size:12px;font-weight:600}.longtext{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;display:block;max-height:none;overflow:visible;-webkit-line-clamp:unset;line-height:1.5}.sig{margin-top:30px;border-top:1px solid #999;width:240px;padding-top:4px;font-size:11px;color:#666}</style>
       </head><body>
       <h1>${incident.incident_type === 'accident' ? 'Accident' : 'Incident'} Report</h1>
       <h2>Reference: ${incident.id?.slice(0, 8) || '-'} • Generated: ${format(new Date(), 'PPP p')}</h2>
@@ -394,7 +395,7 @@ export default function IncidentManagement() {
         ${row('Incident Time', md.incident_time)}
         ${row('Location', incident.location_details)}
         ${row('Date &amp; Time Reported', md.reported_datetime ? format(new Date(md.reported_datetime), 'PPP p') : '')}
-        ${row('Description', incident.description)}
+        ${longRow('Description', incident.description)}
 
         ${sectionTitle('Person Injured')}
         ${row('Type', personType)}
@@ -405,7 +406,7 @@ export default function IncidentManagement() {
         ${row('Job Title', md.victim_job_title)}
 
         ${sectionTitle('Incident Details')}
-        ${row('Details of Accident / Incident', incident.description)}
+        ${longRow('Details of Accident / Incident', incident.description)}
         ${row('Nature &amp; Extent of Injuries', md.nature_of_injuries)}
         ${row('Injury Type', incident.injury_type)}
         ${row('Body Part Injured', md.body_part_injured)}
@@ -495,8 +496,19 @@ export default function IncidentManagement() {
     setShowCreateDialog(true);
   };
 
-  const accidents = incidents.filter(i => i.incident_type === 'accident');
-  const nearMisses = incidents.filter(i => i.incident_type === 'near_miss');
+  const q = searchTerm.trim().toLowerCase();
+  const matchesSearch = (i: any) => {
+    if (!q) return true;
+    const md = (i.medical_documents || {}) as any;
+    return [
+      i.title, i.description, i.location_details, i.status, i.incident_type,
+      i.severity, i.reported_by_name, md.person_name, md.witness1_name, md.witness2_name,
+      i.incident_date,
+    ].some((v: any) => typeof v === 'string' && v.toLowerCase().includes(q));
+  };
+  const searchedIncidents = incidents.filter(matchesSearch);
+  const accidents = searchedIncidents.filter(i => i.incident_type === 'accident');
+  const nearMisses = searchedIncidents.filter(i => i.incident_type === 'near_miss');
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -1063,7 +1075,7 @@ export default function IncidentManagement() {
           <DialogHeader>
             <div className="flex items-center justify-between gap-2">
               <DialogTitle>{selectedIncident?.incident_type === 'accident' ? 'Accident' : 'Incident'} Details</DialogTitle>
-              <Button variant="outline" size="sm" onClick={() => printIncident(selectedIncident)} className="mr-6">
+              <Button variant="outline" size="sm" onClick={() => printIncident(selectedIncident)} className="mr-10">
                 <Printer className="h-4 w-4 mr-1" /> Print
               </Button>
             </div>
