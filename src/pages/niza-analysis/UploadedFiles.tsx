@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, FileText, Files } from 'lucide-react';
+import { Download, FileText, Files, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Row {
   id: string;
@@ -32,6 +33,8 @@ const label = (f: string | null) => {
 
 export default function UploadedFiles() {
   const today = new Date();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [from, setFrom] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [to, setTo] = useState(format(endOfMonth(today), 'yyyy-MM-dd'));
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -68,13 +71,25 @@ export default function UploadedFiles() {
     a.click();
   };
 
+  const remove = async (row: Row) => {
+    if (!isSuperAdmin) return;
+    if (!confirm(`Delete ${label(row.source_format)} for ${row.sale_date}? The store can then upload it again.`)) return;
+    if (row.storage_path) {
+      await supabase.storage.from('daily-sales').remove([row.storage_path]);
+    }
+    const { error } = await supabase.from('daily_sales_uploads').delete().eq('id', row.id);
+    if (error) return toast.error(error.message);
+    setRows(prev => prev.filter(r => r.id !== row.id));
+    toast.success('Input file deleted — it can be uploaded again');
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex items-center gap-3">
         <span className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><Files className="h-5 w-5" /></span>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Uploaded Files</h1>
-          <p className="text-sm text-muted-foreground">X-Read, Department VAT, and Cash Reconciliation files uploaded by each store.</p>
+          <p className="text-sm text-muted-foreground">X-Read, Department VAT, Cash Reconciliation and Weekly Card Report files uploaded by each store. Super Admins can delete any input so the store can upload it again.</p>
         </div>
       </div>
 
@@ -120,9 +135,16 @@ export default function UploadedFiles() {
                   <td className="p-2 max-w-[280px] truncate" title={r.source_filename || ''}>{r.source_filename || '—'}</td>
                   <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{format(new Date(r.created_at), 'dd MMM yyyy HH:mm')}</td>
                   <td className="p-2 text-right">
-                    <Button size="sm" variant="outline" onClick={() => download(r.storage_path, r.source_filename)} disabled={!r.storage_path}>
-                      <Download className="h-4 w-4 mr-1" /> Download
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => download(r.storage_path, r.source_filename)} disabled={!r.storage_path}>
+                        <Download className="h-4 w-4 mr-1" /> Download
+                      </Button>
+                      {isSuperAdmin && (
+                        <Button size="sm" variant="destructive" onClick={() => remove(r)}>
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
