@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, Eye, Save, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek } from 'date-fns';
 import {
   emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook, type CoopXeroRow,
 } from '@/lib/coopFuelParser';
@@ -44,6 +44,8 @@ export default function LivePreview() {
   const [rows, setRows] = useState<Row[]>([]);
   const [cardByKey, setCardByKey] = useState<Record<string, FisDay>>({});
   const [litresByKey, setLitresByKey] = useState<Record<string, LitreDay>>({});
+  const [weekCards, setWeekCards] = useState<Record<string, FisDay>>({});
+  const [weekLitres, setWeekLitres] = useState<Record<string, LitreDay>>({});
   const [reviewStatus, setReviewStatus] = useState<string>('pending');
   const [auditRefresh, setAuditRefresh] = useState(0);
 
@@ -145,12 +147,24 @@ export default function LivePreview() {
 
   const coopRows = useMemo<(CoopXeroRow & { row_id: string })[]>(() => {
     let seq = 3651;
+    const usedWeekCard = new Set<string>();
+    const usedWeekLitre = new Set<string>();
     return rows
       .filter(r => r.branch && r.parsed_totals?.format === 'coop_fuel')
       .map(r => {
-        const key = `${(r as any).branch_id}|${r.sale_date}`;
-        const fis = cardByKey[key];
-        const lit = litresByKey[key];
+        const bid = (r as any).branch_id;
+        const key = `${bid}|${r.sale_date}`;
+        const wkKey = `${bid}|${weekStartOf(r.sale_date)}`;
+        let fis = cardByKey[key];
+        if (!fis && weekCards[wkKey] && !usedWeekCard.has(wkKey)) {
+          usedWeekCard.add(wkKey);
+          fis = weekCards[wkKey];
+        }
+        let lit = litresByKey[key];
+        if (!lit && weekLitres[wkKey] && !usedWeekLitre.has(wkKey)) {
+          usedWeekLitre.add(wkKey);
+          lit = weekLitres[wkKey];
+        }
         return {
           row_id: r.id,
           sale_date: r.sale_date,
@@ -171,7 +185,7 @@ export default function LivePreview() {
           },
         };
       });
-  }, [rows, cardByKey, litresByKey, edits]);
+  }, [rows, cardByKey, litresByKey, weekCards, weekLitres, edits]);
 
 
   const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell', 'Shell/Routex'];
