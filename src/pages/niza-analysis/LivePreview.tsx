@@ -31,6 +31,9 @@ type LitreDay = { diesel: number; unleaded: number; super: number; total: number
 
 const num = (v: any) => Number(v || 0);
 
+// Weekly reports (Cash Rec + Weekly Card Report) run Saturday → Friday.
+const weekStartOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 6 }), 'yyyy-MM-dd');
+
 export default function LivePreview() {
   const today = new Date();
   const { user } = useAuth();
