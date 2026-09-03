@@ -733,12 +733,19 @@ export default function ChatArea({
                                   <Reply className="h-4 w-4 mr-2" />
                                   Reply
                                 </DropdownMenuItem>
+                                {onRaiseAction && (
+                                  <DropdownMenuItem onClick={() => onRaiseAction(msg)}>
+                                    <ClipboardList className="h-4 w-4 mr-2" />
+                                    Raise action item
+                                  </DropdownMenuItem>
+                                )}
                                 {isSuperAdmin && (
                                   <DropdownMenuItem onClick={() => onTogglePin(msg.id, !msg.is_pinned)}>
                                     <Pin className="h-4 w-4 mr-2" />
                                     {msg.is_pinned ? 'Unpin' : 'Pin'}
                                   </DropdownMenuItem>
                                 )}
+
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
