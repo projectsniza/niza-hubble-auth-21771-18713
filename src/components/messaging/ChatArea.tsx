@@ -31,6 +31,7 @@ import {
   Trash2,
   CheckSquare,
   AtSign,
+  ClipboardList,
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +56,7 @@ interface ChatAreaProps {
   ) => Promise<boolean>;
   onTogglePin: (messageId: string, pinned: boolean) => void;
   settings: Record<string, string>;
+  onRaiseAction?: (message: Message) => void;
 }
 
 export default function ChatArea({
@@ -68,6 +70,7 @@ export default function ChatArea({
   onSendMessage,
   onTogglePin,
   settings,
+  onRaiseAction,
 }: ChatAreaProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
@@ -733,12 +736,19 @@ export default function ChatArea({
                                   <Reply className="h-4 w-4 mr-2" />
                                   Reply
                                 </DropdownMenuItem>
+                                {onRaiseAction && (
+                                  <DropdownMenuItem onClick={() => onRaiseAction(msg)}>
+                                    <ClipboardList className="h-4 w-4 mr-2" />
+                                    Raise action item
+                                  </DropdownMenuItem>
+                                )}
                                 {isSuperAdmin && (
                                   <DropdownMenuItem onClick={() => onTogglePin(msg.id, !msg.is_pinned)}>
                                     <Pin className="h-4 w-4 mr-2" />
                                     {msg.is_pinned ? 'Unpin' : 'Pin'}
                                   </DropdownMenuItem>
                                 )}
+
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>

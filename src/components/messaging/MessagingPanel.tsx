@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
-import { MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { MessageSquare, ClipboardList } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,10 +11,15 @@ import { toast } from 'sonner';
 import ConversationList from './ConversationList';
 import ChatArea from './ChatArea';
 import NewConversationDialog from './NewConversationDialog';
+import ActionItemsPanel from './ActionItemsPanel';
+import RaiseActionItemDialog from './RaiseActionItemDialog';
+import ActionRequiredPopup from './ActionRequiredPopup';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { usePresence } from './hooks/usePresence';
+import { useActionItems, ACTION_MODULES } from './hooks/useActionItems';
 import type { Conversation, UserProfile } from './types';
+
 
 export default function MessagingPanel() {
   const { user } = useAuth();
@@ -21,6 +28,13 @@ export default function MessagingPanel() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [raiseOpen, setRaiseOpen] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{
+    id: string;
+    content: string | null;
+    senderId: string;
+  } | null>(null);
 
   const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, deleteConversation } =
     useConversations();
@@ -29,6 +43,12 @@ export default function MessagingPanel() {
     useMessages(selectedConversationId);
 
   const { typingUsers, setTyping } = usePresence(selectedConversationId);
+
+  const { items: actionItems, myOpenItems, createActionItem, updateStatus } =
+    useActionItems(selectedConversationId);
+
+  const openActionCount = actionItems.filter(i => i.status !== 'closed').length;
+
 
   const isEmployee = user?.role === 'employee';
   const canUseMessaging = !isEmployee || settings['employee_messaging_enabled'] === 'true';
@@ -182,6 +202,24 @@ export default function MessagingPanel() {
 
   return (
     <>
+      {selectedConversation && (
+        <div className="flex justify-end mb-2">
+          <Button
+            variant={actionsOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActionsOpen(v => !v)}
+          >
+            <ClipboardList className="h-4 w-4 mr-2" />
+            Action Items
+            {openActionCount > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {openActionCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      )}
+
       <div className="h-[calc(100vh-12rem)] flex border rounded-xl overflow-hidden bg-card shadow-sm">
         <ConversationList
           conversations={conversations}
@@ -203,8 +241,52 @@ export default function MessagingPanel() {
           onSendMessage={handleSendMessage}
           onTogglePin={togglePin}
           settings={settings}
+          onRaiseAction={msg => {
+            setActionMessage({ id: msg.id, content: msg.content, senderId: msg.sender_id });
+            setRaiseOpen(true);
+          }}
         />
+
+        {actionsOpen && selectedConversation && (
+          <ActionItemsPanel
+            items={actionItems}
+            participants={participants}
+            onRaise={() => setRaiseOpen(true)}
+            onUpdateStatus={updateStatus}
+            onClose={() => setActionsOpen(false)}
+          />
+        )}
       </div>
+
+      <RaiseActionItemDialog
+        open={raiseOpen}
+        onOpenChange={open => {
+          setRaiseOpen(open);
+          if (!open) setActionMessage(null);
+        }}
+        participants={participants.filter(p => p.id !== user?.id)}
+        defaultAssignee={actionMessage?.senderId !== user?.id ? actionMessage?.senderId : undefined}
+        quotedMessage={actionMessage?.content ?? null}
+        onSubmit={async payload => {
+          if (!selectedConversationId) return false;
+          const mod = ACTION_MODULES.find(m => m.key === payload.moduleKey) || ACTION_MODULES[0];
+          return createActionItem({
+            conversation_id: selectedConversationId,
+            message_id: actionMessage?.id ?? null,
+            assigned_to: payload.assigned_to,
+            title: payload.title,
+            details: payload.details,
+            module: mod,
+            reference_date: payload.reference_date,
+            due_date: payload.due_date,
+          });
+        }}
+      />
+
+      <ActionRequiredPopup
+        items={myOpenItems}
+        onAcknowledge={id => updateStatus(id, 'acknowledged')}
+      />
 
       <NewConversationDialog
         open={newDmOpen}
@@ -213,4 +295,5 @@ export default function MessagingPanel() {
       />
     </>
   );
+
 }
