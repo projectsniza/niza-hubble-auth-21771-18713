@@ -197,6 +197,24 @@ export default function MessagingPanel() {
 
   return (
     <>
+      {selectedConversation && (
+        <div className="flex justify-end mb-2">
+          <Button
+            variant={actionsOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActionsOpen(v => !v)}
+          >
+            <ClipboardList className="h-4 w-4 mr-2" />
+            Action Items
+            {openActionCount > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {openActionCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      )}
+
       <div className="h-[calc(100vh-12rem)] flex border rounded-xl overflow-hidden bg-card shadow-sm">
         <ConversationList
           conversations={conversations}
@@ -219,7 +237,41 @@ export default function MessagingPanel() {
           onTogglePin={togglePin}
           settings={settings}
         />
+
+        {actionsOpen && selectedConversation && (
+          <ActionItemsPanel
+            items={actionItems}
+            participants={participants}
+            onRaise={() => setRaiseOpen(true)}
+            onUpdateStatus={updateStatus}
+            onClose={() => setActionsOpen(false)}
+          />
+        )}
       </div>
+
+      <RaiseActionItemDialog
+        open={raiseOpen}
+        onOpenChange={setRaiseOpen}
+        participants={participants.filter(p => p.id !== user?.id)}
+        onSubmit={async payload => {
+          if (!selectedConversationId) return false;
+          const mod = ACTION_MODULES.find(m => m.key === payload.moduleKey) || ACTION_MODULES[0];
+          return createActionItem({
+            conversation_id: selectedConversationId,
+            assigned_to: payload.assigned_to,
+            title: payload.title,
+            details: payload.details,
+            module: mod,
+            reference_date: payload.reference_date,
+            due_date: payload.due_date,
+          });
+        }}
+      />
+
+      <ActionRequiredPopup
+        items={myOpenItems}
+        onAcknowledge={id => updateStatus(id, 'acknowledged')}
+      />
 
       <NewConversationDialog
         open={newDmOpen}
@@ -228,4 +280,5 @@ export default function MessagingPanel() {
       />
     </>
   );
+
 }
