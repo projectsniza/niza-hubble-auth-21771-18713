@@ -28,6 +28,8 @@ export default function MessagingPanel() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [raiseOpen, setRaiseOpen] = useState(false);
 
   const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, deleteConversation } =
     useConversations();
@@ -36,6 +38,12 @@ export default function MessagingPanel() {
     useMessages(selectedConversationId);
 
   const { typingUsers, setTyping } = usePresence(selectedConversationId);
+
+  const { items: actionItems, myOpenItems, createActionItem, updateStatus } =
+    useActionItems(selectedConversationId);
+
+  const openActionCount = actionItems.filter(i => i.status !== 'closed').length;
+
 
   const isEmployee = user?.role === 'employee';
   const canUseMessaging = !isEmployee || settings['employee_messaging_enabled'] === 'true';
