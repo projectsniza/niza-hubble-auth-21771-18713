@@ -30,6 +30,11 @@ export default function MessagingPanel() {
   const [participants, setParticipants] = useState<UserProfile[]>([]);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{
+    id: string;
+    content: string | null;
+    senderId: string;
+  } | null>(null);
 
   const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, deleteConversation } =
     useConversations();
@@ -236,6 +241,10 @@ export default function MessagingPanel() {
           onSendMessage={handleSendMessage}
           onTogglePin={togglePin}
           settings={settings}
+          onRaiseAction={msg => {
+            setActionMessage({ id: msg.id, content: msg.content, senderId: msg.sender_id });
+            setRaiseOpen(true);
+          }}
         />
 
         {actionsOpen && selectedConversation && (
@@ -251,13 +260,19 @@ export default function MessagingPanel() {
 
       <RaiseActionItemDialog
         open={raiseOpen}
-        onOpenChange={setRaiseOpen}
+        onOpenChange={open => {
+          setRaiseOpen(open);
+          if (!open) setActionMessage(null);
+        }}
         participants={participants.filter(p => p.id !== user?.id)}
+        defaultAssignee={actionMessage?.senderId !== user?.id ? actionMessage?.senderId : undefined}
+        quotedMessage={actionMessage?.content ?? null}
         onSubmit={async payload => {
           if (!selectedConversationId) return false;
           const mod = ACTION_MODULES.find(m => m.key === payload.moduleKey) || ACTION_MODULES[0];
           return createActionItem({
             conversation_id: selectedConversationId,
+            message_id: actionMessage?.id ?? null,
             assigned_to: payload.assigned_to,
             title: payload.title,
             details: payload.details,
