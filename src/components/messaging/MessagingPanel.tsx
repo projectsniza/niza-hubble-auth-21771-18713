@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
-import { MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { MessageSquare, ClipboardList } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,10 +11,15 @@ import { toast } from 'sonner';
 import ConversationList from './ConversationList';
 import ChatArea from './ChatArea';
 import NewConversationDialog from './NewConversationDialog';
+import ActionItemsPanel from './ActionItemsPanel';
+import RaiseActionItemDialog from './RaiseActionItemDialog';
+import ActionRequiredPopup from './ActionRequiredPopup';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { usePresence } from './hooks/usePresence';
+import { useActionItems, ACTION_MODULES } from './hooks/useActionItems';
 import type { Conversation, UserProfile } from './types';
+
 
 export default function MessagingPanel() {
   const { user } = useAuth();
