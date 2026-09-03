@@ -31,6 +31,7 @@ import {
   Trash2,
   CheckSquare,
   AtSign,
+  ClipboardList,
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +56,7 @@ interface ChatAreaProps {
   ) => Promise<boolean>;
   onTogglePin: (messageId: string, pinned: boolean) => void;
   settings: Record<string, string>;
+  onRaiseAction?: (message: Message) => void;
 }
 
 export default function ChatArea({
@@ -68,6 +70,7 @@ export default function ChatArea({
   onSendMessage,
   onTogglePin,
   settings,
+  onRaiseAction,
 }: ChatAreaProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
