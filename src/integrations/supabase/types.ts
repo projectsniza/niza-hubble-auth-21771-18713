@@ -4249,6 +4249,93 @@ export type Database = {
           },
         ]
       }
+      message_action_items: {
+        Row: {
+          acknowledged_at: string | null
+          assigned_to: string
+          closed_at: string | null
+          closed_by: string | null
+          completed_at: string | null
+          completed_by: string | null
+          completion_note: string | null
+          conversation_id: string
+          created_at: string
+          details: string | null
+          due_date: string | null
+          id: string
+          message_id: string | null
+          module_key: string
+          module_label: string
+          module_route: string
+          raised_by: string
+          reference_date: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          assigned_to: string
+          closed_at?: string | null
+          closed_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          completion_note?: string | null
+          conversation_id: string
+          created_at?: string
+          details?: string | null
+          due_date?: string | null
+          id?: string
+          message_id?: string | null
+          module_key?: string
+          module_label?: string
+          module_route?: string
+          raised_by: string
+          reference_date?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          assigned_to?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          completion_note?: string | null
+          conversation_id?: string
+          created_at?: string
+          details?: string | null
+          due_date?: string | null
+          id?: string
+          message_id?: string | null
+          module_key?: string
+          module_label?: string
+          module_route?: string
+          raised_by?: string
+          reference_date?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_action_items_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_action_items_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_mentions: {
         Row: {
           created_at: string | null
