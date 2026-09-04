@@ -43,8 +43,13 @@ export function OrgBranchProvider({ children }: { children: ReactNode }) {
         supabase.from('branches').select('id, name, organization_id').order('name')
       ]);
       
-      setOrganizations(orgsRes.data || []);
-      setBranches(branchesRes.data || []);
+      const scoped = user.branchIds && user.branchIds.length > 0 ? user.branchIds : null;
+      const allBranches = branchesRes.data || [];
+      const visibleBranches = scoped ? allBranches.filter(b => scoped.includes(b.id)) : allBranches;
+      const allowedOrgIds = new Set(visibleBranches.map(b => b.organization_id));
+
+      setOrganizations(scoped ? (orgsRes.data || []).filter(o => allowedOrgIds.has(o.id)) : (orgsRes.data || []));
+      setBranches(visibleBranches);
     } catch (error) {
       console.error('Error fetching org/branch data:', error);
     } finally {
