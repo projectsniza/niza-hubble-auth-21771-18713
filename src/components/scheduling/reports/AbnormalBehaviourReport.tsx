@@ -49,7 +49,7 @@ export function AbnormalBehaviourReport() {
         if (user?.role === 'manager' && user?.branchId) {
           empQ = empQ.eq('branch_id', user.branchId);
         }
-        if (user?.role === 'hr' && user.branchIds?.length) empQ = empQ.in('branch_id', user.branchIds);
+        if (user.branchIds?.length) empQ = empQ.in('branch_id', user.branchIds);
         const emps = await fetchAllPages<any>((from, to) => empQ.order('id').range(from, to));
         const empMap: Record<string, { name: string; branch: string }> = {};
         (emps || []).forEach((e: any) => {

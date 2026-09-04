@@ -335,7 +335,7 @@ export default function Payroll() {
     try {
       let employeesQuery = supabase.from('employees').select('*').in('status', ['active', 'onboarding']);
       if (user?.role === 'manager' && user.branchId) employeesQuery = employeesQuery.eq('branch_id', user.branchId);
-      if (user?.role === 'hr' && user.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
+      if (user.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
 
       const [employeesRes, salaryRes, payrollRes, categoriesRes] = await Promise.all([
         employeesQuery,
