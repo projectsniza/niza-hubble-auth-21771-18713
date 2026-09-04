@@ -89,7 +89,9 @@ export default function AssignedCourses() {
     const [assignRes, courseRes, empRes] = await Promise.all([
       supabase.from('course_assignments').select('*, courses(title)').order('created_at', { ascending: false }).limit(100),
       supabase.from('courses').select('id, title').eq('status', 'published'),
-      supabase.from('employees').select('id, first_name, last_name, branch_id, department').eq('status', 'active').limit(200),
+      (user?.branchIds?.length
+        ? supabase.from('employees').select('id, first_name, last_name, branch_id, department').eq('status', 'active').in('branch_id', user.branchIds).limit(200)
+        : supabase.from('employees').select('id, first_name, last_name, branch_id, department').eq('status', 'active').limit(200)),
     ]);
     setAssignments(assignRes.data || []);
     setCourses(courseRes.data || []);

@@ -330,7 +330,7 @@ export default function ClockIns() {
           : user?.role === 'manager' || (user?.role === 'hr' && user.hrAccessLevel === 'branch' && !user.branchIds?.length)
             ? user.branchId ?? null
             : null;
-      const scopedBranchIds = user?.role === 'hr' && user.branchIds?.length ? user.branchIds : [];
+      const scopedBranchIds = user?.branchIds?.length ? user.branchIds : [];
 
       const scopedOrgId =
         user?.role === 'employee'

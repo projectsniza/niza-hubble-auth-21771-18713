@@ -142,7 +142,7 @@ export function HolidayBalance() {
           .select('id, first_name, last_name, organization_id, branch_id, branch:branches(name)')
           .eq('status', 'active');
         if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
-        if (user?.role === 'hr' && user.branchIds?.length) query = query.in('branch_id', user.branchIds);
+        if (user?.branchIds?.length) query = query.in('branch_id', user.branchIds);
         return query.order('id').range(from, to);
       });
       if (!employees || employees.length === 0) {
