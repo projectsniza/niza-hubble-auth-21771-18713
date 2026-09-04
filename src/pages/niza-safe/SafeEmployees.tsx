@@ -91,6 +91,8 @@ export default function SafeEmployees() {
         query = query.eq('branch_id', filterBranch);
       } else if (viewMode === 'organization' && filterOrg) {
         query = query.eq('organization_id', filterOrg);
+      } else if (user?.branchIds?.length) {
+        query = query.in('branch_id', user.branchIds);
       } else if (user?.role === 'hr') {
         if (user.hrAccessLevel === 'branch' && user.branchId) {
           query = query.eq('branch_id', user.branchId);
