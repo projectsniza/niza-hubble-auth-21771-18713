@@ -128,7 +128,7 @@ export default function Attendance() {
     try {
       let employeesQuery = supabase.from('employees').select('id, first_name, last_name, branch_id, organization_id').eq('status', 'active');
       if (user?.role === 'manager' && user.branchId) employeesQuery = employeesQuery.eq('branch_id', user.branchId);
-      if (user.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
+      if (user?.branchIds?.length) employeesQuery = employeesQuery.in('branch_id', user.branchIds);
 
       const [leaveReqRes, leaveTypesRes, mandatoryRes, employeesRes] = await Promise.all([
         supabase.from('leave_requests').select(`
