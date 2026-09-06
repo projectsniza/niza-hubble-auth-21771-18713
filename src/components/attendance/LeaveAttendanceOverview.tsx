@@ -76,9 +76,8 @@ export default function LeaveAttendanceOverview() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [leaveToDelete, setLeaveToDelete] = useState<LeaveRequest | null>(null);
   
-  // Org/Branch filters
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  // Org/Branch filters (scoped to the branches this user is allowed to see)
+  const { organizations, branches } = useOrgBranch();
   const [filterOrg, setFilterOrg] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
 
@@ -87,17 +86,8 @@ export default function LeaveAttendanceOverview() {
 
   useEffect(() => {
     fetchData();
-    fetchOrgsAndBranches();
   }, [selectedMonth, selectedYear]);
 
-  const fetchOrgsAndBranches = async () => {
-    const [orgsRes, branchesRes] = await Promise.all([
-      supabase.from('organizations').select('id, name').order('name'),
-      supabase.from('branches').select('id, name, organization_id').order('name')
-    ]);
-    setOrganizations(orgsRes.data || []);
-    setBranches(branchesRes.data || []);
-  };
 
   const fetchData = async () => {
     setLoading(true);
