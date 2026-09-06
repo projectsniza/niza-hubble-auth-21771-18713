@@ -11,6 +11,8 @@ import { Users, Search, Timer, CalendarDays, FileText, Trash2, LayoutGrid, Clock
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgBranch } from '@/contexts/OrgBranchContext';
+
 import { toast } from 'sonner';
 import { format, differenceInMinutes, startOfMonth, endOfMonth, parseISO, eachDayOfInterval, isWithinInterval, isSameDay } from 'date-fns';
 
