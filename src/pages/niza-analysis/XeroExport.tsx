@@ -9,11 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildXeroCsv, DailySalesTotals } from '@/lib/dailySalesParser';
-import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, normalizeCoopParsedTotals, type CoopXeroRow } from '@/lib/coopFuelParser';
+import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, normalizeCoopParsedTotals, attachWeeklyExtras, type WeeklyExtraUpload, type CoopXeroRow } from '@/lib/coopFuelParser';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 interface UploadRow {
   id: string;
+  branch_id?: string | null;
   sale_date: string;
   parsed_totals: any;
   raw_text?: string | null;
@@ -30,6 +31,7 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchId, setBranchId] = useState<string>('all');
   const [rows, setRows] = useState<UploadRow[]>([]);
+  const [weekly, setWeekly] = useState<WeeklyExtraUpload[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,13 +43,26 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     const f = single || from;
     const t = single || to;
     let q = supabase.from('daily_sales_uploads')
-      .select('id, sale_date, parsed_totals, raw_text, branch:branches(id, name, import_format, vending_split_mode)')
+      .select('id, branch_id, sale_date, source_format, parsed_totals, raw_text, branch:branches(id, name, import_format, vending_split_mode)')
       .gte('sale_date', f).lte('sale_date', t)
       .order('sale_date');
     if (branchId !== 'all') q = q.eq('branch_id', branchId);
-    const { data, error } = await q;
+
+    // Weekly Cash Reconciliation (fuel litres) and weekly card statements sit on
+    // one row per week, so widen the window to catch weeks starting earlier.
+    let wq = supabase.from('daily_sales_uploads')
+      .select('branch_id, sale_date, source_format, parsed_totals')
+      .in('source_format', ['cashrec', 'fiscard'])
+      .gte('sale_date', format(new Date(new Date(f).getTime() - 8 * 864e5), 'yyyy-MM-dd'))
+      .lte('sale_date', t);
+    if (branchId !== 'all') wq = wq.eq('branch_id', branchId);
+
+    const [{ data, error }, { data: weeklyData }] = await Promise.all([q, wq]);
     if (error) { toast.error(error.message); setLoading(false); return; }
-    setRows(((data as any) || []).map((r: UploadRow) => ({
+    setWeekly((weeklyData as any) || []);
+    setRows(((data as any) || [])
+      .filter((r: any) => !['cashrec', 'fiscard'].includes((r.source_format || '').toLowerCase()))
+      .map((r: UploadRow) => ({
       ...r,
       parsed_totals: normalizeCoopParsedTotals(
         r.parsed_totals,
@@ -61,9 +76,9 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
   };
 
   // Build the rows used for both Xero CSV and Daily Summary CSV.
-  const coopRows = useMemo<CoopXeroRow[]>(() => {
+  const coopRows = useMemo<(CoopXeroRow & { branch_id?: string | null })[]>(() => {
     let seq = 3651;
-    return rows
+    const base = rows
       .filter(r => r.branch && (
         r.branch.import_format === 'coop_fuel' ||
         r.branch.import_format === 'charfield_shift' ||
@@ -76,6 +91,7 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
         const branchName = r.branch?.name || '';
         const refMonth = format(new Date(r.sale_date), 'MMM yy');
         return {
+          branch_id: r.branch_id || r.branch?.id || null,
           sale_date: r.sale_date,
           invoice_number: `INV-${seq++}`,
           branch_name: branchName,
@@ -84,7 +100,9 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
           totals: { ...emptyCoopTotals(), ...breakdown },
         };
       });
-  }, [rows]);
+    // Fuel litres (weekly Cash Rec) + card brands (weekly card statement).
+    return attachWeeklyExtras(base, weekly);
+  }, [rows, weekly]);
 
   const legacyRows = useMemo(() => {
     return rows

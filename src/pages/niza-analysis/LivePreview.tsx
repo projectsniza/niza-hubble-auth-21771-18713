@@ -177,6 +177,7 @@ export default function LivePreview() {
             ...(r.parsed_totals?.breakdown || {}),
             ...(fis ? { visa_mc: fis.visa_mc, amex: fis.amex, fuel_card: fis.fuel_card, card_brands: fis.brands } : {}),
             ...(lit ? {
+              fuel_litres: lit.total || +(lit.diesel + lit.unleaded + lit.super).toFixed(2),
               fuel_litres_diesel: lit.diesel,
               fuel_litres_unleaded: lit.unleaded,
               fuel_litres_super: lit.super,
