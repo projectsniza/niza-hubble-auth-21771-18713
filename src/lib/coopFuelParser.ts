@@ -418,6 +418,84 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
 
 
 
+// ---------------------------------------------------------------------------
+// Weekly extras (Cash Reconciliation litres + weekly card statement brands)
+// attached onto the daily coop rows used by the Branch Cash Summary / Xero CSV.
+// Weekly reports run Saturday → Friday and are stored on one row per week.
+// ---------------------------------------------------------------------------
+export interface WeeklyExtraUpload {
+  branch_id?: string | null;
+  sale_date: string;
+  source_format?: string | null;
+  parsed_totals: any;
+}
+
+export const weekStartSaturday = (iso: string): string => {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  if (isNaN(d.getTime())) return String(iso).slice(0, 10);
+  const back = (d.getUTCDay() + 1) % 7; // Saturday = 0 offset
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+};
+
+export function attachWeeklyExtras<T extends CoopXeroRow & { branch_id?: string | null }>(
+  rows: T[],
+  weekly: WeeklyExtraUpload[],
+): T[] {
+  const n = (v: any) => Number(v || 0);
+  const cardByDay: Record<string, any> = {};
+  const litreByDay: Record<string, any> = {};
+  const cardByWeek: Record<string, any> = {};
+  const litreByWeek: Record<string, any> = {};
+
+  for (const u of weekly || []) {
+    const bid = u.branch_id || '';
+    const pt = u.parsed_totals || {};
+    const wk = `${bid}|${weekStartSaturday(pt.week_start || u.sale_date)}`;
+    if ((u.source_format || '').toLowerCase() === 'fiscard') {
+      const byDate = pt.by_date || {};
+      for (const [d, v] of Object.entries<any>(byDate)) cardByDay[`${bid}|${d}`] = v;
+      if (!Object.keys(byDate).length && pt.week_totals) cardByWeek[wk] = pt.week_totals;
+    } else {
+      const byDate = pt.litres_by_date || {};
+      for (const [d, v] of Object.entries<any>(byDate)) litreByDay[`${bid}|${d}`] = v;
+      if (!Object.keys(byDate).length && pt.litres) litreByWeek[wk] = pt.litres;
+    }
+  }
+
+  const usedCardWeek = new Set<string>();
+  const usedLitreWeek = new Set<string>();
+
+  return rows.map(r => {
+    const bid = r.branch_id || '';
+    const key = `${bid}|${r.sale_date}`;
+    const wk = `${bid}|${weekStartSaturday(r.sale_date)}`;
+
+    let card = cardByDay[key];
+    if (!card && cardByWeek[wk] && !usedCardWeek.has(wk)) { usedCardWeek.add(wk); card = cardByWeek[wk]; }
+
+    let lit = litreByDay[key];
+    if (!lit && litreByWeek[wk] && !usedLitreWeek.has(wk)) { usedLitreWeek.add(wk); lit = litreByWeek[wk]; }
+
+    if (!card && !lit) return r;
+
+    const totals: CoopCategoryTotals = { ...r.totals };
+    if (card) {
+      totals.visa_mc = n(card.visa_mc);
+      totals.amex = n(card.amex);
+      totals.fuel_card = n(card.fuel_card);
+      totals.card_brands = card.brands || {};
+    }
+    if (lit) {
+      totals.fuel_litres_diesel = n(lit.diesel);
+      totals.fuel_litres_unleaded = n(lit.unleaded);
+      totals.fuel_litres_super = n(lit.super);
+      totals.fuel_litres = n(lit.total) || +(n(lit.diesel) + n(lit.unleaded) + n(lit.super)).toFixed(2);
+    }
+    return { ...r, totals };
+  });
+}
+
 export async function spreadsheetBufferToCsvText(buffer: ArrayBuffer): Promise<string> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buffer, { type: 'array' });
