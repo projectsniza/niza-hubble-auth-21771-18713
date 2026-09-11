@@ -459,7 +459,7 @@ export default function ContractApprovalDialog({
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Hours Per Week</Label>
                 {isEditing ? (
-                  <Input type="number" min={0} step="0.5" value={contractContent?.hours_per_week ?? ''} onChange={(e) => updateField('hours_per_week', e.target.value)} />
+                  <Input type="text" value={contractContent?.hours_per_week ?? ''} onChange={(e) => updateField('hours_per_week', e.target.value)} placeholder="e.g. 40 or Zero" />
                 ) : (
                   <p className="font-medium">{contractContent?.hours_per_week || 'Not specified'}</p>
                 )}
@@ -468,7 +468,7 @@ export default function ContractApprovalDialog({
                 <Label className="text-muted-foreground">Salary Rate</Label>
                 {isEditing ? (
                   <div className="flex gap-2">
-                    <Input type="number" min={0} step="0.01" placeholder="0.00" value={contractContent?.salary_rate ?? ''} onChange={(e) => updateField('salary_rate', e.target.value)} />
+                    <Input type="text" placeholder="e.g. 12.50 or Basic per hour" value={contractContent?.salary_rate ?? ''} onChange={(e) => updateField('salary_rate', e.target.value)} />
                     <select
                       className="border rounded-md px-2 text-sm bg-background"
                       value={contractContent?.salary_type || 'hourly'}
@@ -493,7 +493,7 @@ export default function ContractApprovalDialog({
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Holiday Entitlement (days/year)</Label>
                 {isEditing ? (
-                  <Input type="number" min={0} value={contractContent?.holiday_days ?? ''} onChange={(e) => updateField('holiday_days', e.target.value)} placeholder="28" />
+                  <Input type="text" value={contractContent?.holiday_days ?? ''} onChange={(e) => updateField('holiday_days', e.target.value)} placeholder="e.g. 28 or Pro rata" />
                 ) : (
                   <p className="font-medium">{contractContent?.holiday_days || '28'} days</p>
                 )}

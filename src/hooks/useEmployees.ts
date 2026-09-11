@@ -265,7 +265,9 @@ export function usePendingApprovals() {
 
       const updatedContent = {
         ...((existing?.contract_content as any) || {}),
-        employer_name: employerName || ''
+        employer_name: employerName || '',
+        // The contract is made on the day the Super Admin signs it
+        contract_date: signatureDate
       };
 
       const { data, error } = await supabase
