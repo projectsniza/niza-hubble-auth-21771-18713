@@ -117,6 +117,25 @@ export default function ApprovedContractsTab() {
     }
   };
 
+  const handleDeleteContract = async () => {
+    if (!deletingContract) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', deletingContract.id);
+      if (error) throw error;
+      toast.success('Approved contract deleted');
+      setDeletingContract(null);
+      fetchApprovedContracts();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete contract');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleViewContract = async (contract: ApprovedContract) => {
     if (contract.contract_content || contract.employee) {
       setViewEmployeeData(contract.employee);
