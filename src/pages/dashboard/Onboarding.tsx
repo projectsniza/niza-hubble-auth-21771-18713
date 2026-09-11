@@ -154,6 +154,7 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -194,6 +195,16 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
             </TableCell>
             <TableCell>
               <div className="flex gap-2">
+                {isSuperAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingContract(contract)}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -209,6 +220,16 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
                   >
                     <Upload className="h-4 w-4 mr-1" />
                     Continue
+                  </Button>
+                )}
+                {isSuperAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeletingContract(contract)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
                   </Button>
                 )}
               </div>
