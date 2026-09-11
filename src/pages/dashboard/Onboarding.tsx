@@ -71,11 +71,15 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
           employer_signed_date,
           signed_contract_path,
           contract_file_path,
+          contract_content,
           employee:employees!contract_approvals_employee_id_fkey(
             id,
             first_name,
             last_name,
             status,
+            address,
+            job_title,
+            join_date,
             branch:branches(name),
             organization:organizations(name)
           )
@@ -89,6 +93,25 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
       console.error('Error fetching contracts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteContract = async () => {
+    if (!deletingContract) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', deletingContract.id);
+      if (error) throw error;
+      toast.success('Approved contract deleted');
+      setDeletingContract(null);
+      fetchApprovedContracts();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete contract');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
