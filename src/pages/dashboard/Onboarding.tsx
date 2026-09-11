@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, FileCheck, Upload, Users, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { Download, FileCheck, Upload, Users, CheckCircle2, Clock, FileText, Pencil, Trash2 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -13,6 +13,17 @@ import { toast } from 'sonner';
 import OnboardingApprovals from '@/components/onboarding/OnboardingApprovals';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
+import EditApprovedContractDialog from '@/components/onboarding/EditApprovedContractDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ApprovedContract {
   id: string;
@@ -21,17 +32,26 @@ interface ApprovedContract {
   employer_signed_date: string | null;
   signed_contract_path: string | null;
   contract_file_path: string | null;
+  contract_content?: any;
   employee: {
     id: string;
     first_name: string;
     last_name: string;
     status: string;
+    address?: string | null;
+    job_title?: string | null;
+    join_date?: string | null;
     branch: { name: string } | null;
     organization: { name: string } | null;
   } | null;
 }
 
 function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: string) => void }) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [editingContract, setEditingContract] = useState<ApprovedContract | null>(null);
+  const [deletingContract, setDeletingContract] = useState<ApprovedContract | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [contracts, setContracts] = useState<ApprovedContract[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,11 +71,15 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
           employer_signed_date,
           signed_contract_path,
           contract_file_path,
+          contract_content,
           employee:employees!contract_approvals_employee_id_fkey(
             id,
             first_name,
             last_name,
             status,
+            address,
+            job_title,
+            join_date,
             branch:branches(name),
             organization:organizations(name)
           )
@@ -69,6 +93,25 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
       console.error('Error fetching contracts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteContract = async () => {
+    if (!deletingContract) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', deletingContract.id);
+      if (error) throw error;
+      toast.success('Approved contract deleted');
+      setDeletingContract(null);
+      fetchApprovedContracts();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete contract');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -111,6 +154,7 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -151,6 +195,16 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
             </TableCell>
             <TableCell>
               <div className="flex gap-2">
+                {isSuperAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingContract(contract)}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -168,12 +222,47 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
                     Continue
                   </Button>
                 )}
+                {isSuperAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeletingContract(contract)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </Button>
+                )}
               </div>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+
+    <EditApprovedContractDialog
+      open={!!editingContract}
+      onOpenChange={(open) => !open && setEditingContract(null)}
+      contract={editingContract}
+      onSaved={fetchApprovedContracts}
+    />
+
+    <AlertDialog open={!!deletingContract} onOpenChange={(open) => !open && setDeletingContract(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this approved contract?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The signed contract record for {deletingContract?.employee?.first_name} {deletingContract?.employee?.last_name} will be removed and can no longer be viewed or downloaded. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDeleteContract} disabled={isDeleting}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

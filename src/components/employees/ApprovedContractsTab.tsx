@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileCheck, Upload, CheckCircle2, Clock, Eye, Download, Search } from 'lucide-react';
+import { FileCheck, Upload, CheckCircle2, Clock, Eye, Download, Search, Pencil, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +13,18 @@ import { jsPDF } from 'jspdf';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
+import EditApprovedContractDialog from '@/components/onboarding/EditApprovedContractDialog';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface ApprovedContract {
@@ -41,6 +53,11 @@ interface ApprovedContract {
 }
 
 export default function ApprovedContractsTab() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [editingContract, setEditingContract] = useState<ApprovedContract | null>(null);
+  const [deletingContract, setDeletingContract] = useState<ApprovedContract | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [contracts, setContracts] = useState<ApprovedContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
@@ -97,6 +114,25 @@ export default function ApprovedContractsTab() {
       console.error('Error fetching contracts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteContract = async () => {
+    if (!deletingContract) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', deletingContract.id);
+      if (error) throw error;
+      toast.success('Approved contract deleted');
+      setDeletingContract(null);
+      fetchApprovedContracts();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete contract');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -659,6 +695,16 @@ export default function ApprovedContractsTab() {
                       <Eye className="h-4 w-4 mr-1" />
                       View
                     </Button>
+                    {isSuperAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingContract(contract)}
+                      >
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                    )}
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -676,6 +722,16 @@ export default function ApprovedContractsTab() {
                         Continue
                       </Button>
                     )}
+                    {isSuperAdmin && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeletingContract(contract)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -683,6 +739,32 @@ export default function ApprovedContractsTab() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Super Admin: edit approved contract */}
+      <EditApprovedContractDialog
+        open={!!editingContract}
+        onOpenChange={(open) => !open && setEditingContract(null)}
+        contract={editingContract}
+        onSaved={fetchApprovedContracts}
+      />
+
+      {/* Super Admin: delete approved contract */}
+      <AlertDialog open={!!deletingContract} onOpenChange={(open) => !open && setDeletingContract(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this approved contract?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The signed contract record for {deletingContract?.employee?.first_name} {deletingContract?.employee?.last_name} will be removed and can no longer be viewed or downloaded. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteContract} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Contract View Dialog */}
       <Dialog open={!!viewingContract} onOpenChange={(open) => !open && setViewingContract(null)}>
