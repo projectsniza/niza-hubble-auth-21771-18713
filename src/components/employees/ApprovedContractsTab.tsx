@@ -676,6 +676,16 @@ export default function ApprovedContractsTab() {
                       <Eye className="h-4 w-4 mr-1" />
                       View
                     </Button>
+                    {isSuperAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingContract(contract)}
+                      >
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                    )}
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -691,6 +701,16 @@ export default function ApprovedContractsTab() {
                       >
                         <Upload className="h-4 w-4 mr-1" />
                         Continue
+                      </Button>
+                    )}
+                    {isSuperAdmin && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeletingContract(contract)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
                       </Button>
                     )}
                   </div>
