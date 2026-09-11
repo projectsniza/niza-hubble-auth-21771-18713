@@ -740,6 +740,32 @@ export default function ApprovedContractsTab() {
         </Table>
       </Card>
 
+      {/* Super Admin: edit approved contract */}
+      <EditApprovedContractDialog
+        open={!!editingContract}
+        onOpenChange={(open) => !open && setEditingContract(null)}
+        contract={editingContract}
+        onSaved={fetchApprovedContracts}
+      />
+
+      {/* Super Admin: delete approved contract */}
+      <AlertDialog open={!!deletingContract} onOpenChange={(open) => !open && setDeletingContract(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this approved contract?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The signed contract record for {deletingContract?.employee?.first_name} {deletingContract?.employee?.last_name} will be removed and can no longer be viewed or downloaded. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteContract} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Contract View Dialog */}
       <Dialog open={!!viewingContract} onOpenChange={(open) => !open && setViewingContract(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
