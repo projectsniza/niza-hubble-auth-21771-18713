@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, FileCheck, Upload, Users, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { Download, FileCheck, Upload, Users, CheckCircle2, Clock, FileText, Pencil, Trash2 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -13,6 +13,17 @@ import { toast } from 'sonner';
 import OnboardingApprovals from '@/components/onboarding/OnboardingApprovals';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
+import EditApprovedContractDialog from '@/components/onboarding/EditApprovedContractDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ApprovedContract {
   id: string;
@@ -21,17 +32,26 @@ interface ApprovedContract {
   employer_signed_date: string | null;
   signed_contract_path: string | null;
   contract_file_path: string | null;
+  contract_content?: any;
   employee: {
     id: string;
     first_name: string;
     last_name: string;
     status: string;
+    address?: string | null;
+    job_title?: string | null;
+    join_date?: string | null;
     branch: { name: string } | null;
     organization: { name: string } | null;
   } | null;
 }
 
 function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: string) => void }) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [editingContract, setEditingContract] = useState<ApprovedContract | null>(null);
+  const [deletingContract, setDeletingContract] = useState<ApprovedContract | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [contracts, setContracts] = useState<ApprovedContract[]>([]);
   const [loading, setLoading] = useState(true);
 
