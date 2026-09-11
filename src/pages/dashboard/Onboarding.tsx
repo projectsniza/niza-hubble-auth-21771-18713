@@ -238,6 +238,31 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
         ))}
       </TableBody>
     </Table>
+
+    <EditApprovedContractDialog
+      open={!!editingContract}
+      onOpenChange={(open) => !open && setEditingContract(null)}
+      contract={editingContract}
+      onSaved={fetchApprovedContracts}
+    />
+
+    <AlertDialog open={!!deletingContract} onOpenChange={(open) => !open && setDeletingContract(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this approved contract?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The signed contract record for {deletingContract?.employee?.first_name} {deletingContract?.employee?.last_name} will be removed and can no longer be viewed or downloaded. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDeleteContract} disabled={isDeleting}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
