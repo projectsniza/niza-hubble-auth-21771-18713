@@ -704,9 +704,9 @@ export default function ContractTemplate({
       return `${day}/${month}/${year}`;
     };
 
-    // Signatures
-    checkPageBreak(90);
+    // Signatures — keep the heading with the whole employee block on one page
     y += 10;
+    checkPageBreak(75);
     addSectionTitle('AGREED by the parties');
     
     doc.setFontSize(10);
