@@ -505,16 +505,18 @@ export default function ApprovedContractsTab() {
     // 3. Signed: EMPLOYEE NAME (bold)
     doc.setFont('helvetica', 'normal');
     doc.text('Signed: ', margin, y);
+    const signedLabelWidth = doc.getTextWidth('Signed: ');
     doc.setFont('helvetica', 'bold');
     const empFullName = (contractData.employee_name || `${contract.employee?.first_name} ${contract.employee?.last_name}`).toUpperCase();
-    doc.text(empFullName, margin + doc.getTextWidth('Signed: '), y);
+    doc.text(empFullName, margin + signedLabelWidth, y);
     doc.setFont('helvetica', 'normal');
     y += 7;
     // 4. Date
     doc.text(`Date: ${formatDateDD(contractData.employee_signed_date)}`, margin, y);
     y += 25;
 
-    // --- EMPLOYER SECTION ---
+    // --- EMPLOYER SECTION --- keep the whole block together on one page
+    checkPageBreak(60);
     // 1. Employer signature (handwritten above line)
     if (contract.employer_signature) {
       if (contract.employer_signature_type === 'drawn' || contract.employer_signature_type === 'uploaded') {
