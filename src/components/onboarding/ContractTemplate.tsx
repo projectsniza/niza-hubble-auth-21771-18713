@@ -745,8 +745,10 @@ export default function ContractTemplate({
     // 4. Date
     doc.text(`Date: ${formatDateDDMMYYYY(contractData.employee_signed_date)}`, margin, y);
     y += 25;
-    
-    // ── Employer Section ──
+
+    // ── Employer Section ── keep the whole block together on one page
+    checkPageBreak(60);
+
     // 1. Employer signature (drawn or typed) - ABOVE the line
     if (contractApproval?.employer_signature && (contractApproval.employer_signature_type === 'drawn' || contractApproval.employer_signature_type === 'uploaded') && contractApproval.employer_signature.startsWith('data:image')) {
       try {
