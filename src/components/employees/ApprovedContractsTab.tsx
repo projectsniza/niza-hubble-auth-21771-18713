@@ -470,9 +470,9 @@ export default function ApprovedContractsTab() {
     addText('19.1. This contract is the entire agreement between you and the Employer in relation to its subject matter and replaces all previous agreements and arrangements.');
     addText('19.2. The information contained in this contract contains the particulars required for a written statement under Section 1 of the Employment Rights Act 1996.');
 
-    // Signatures
-    checkPageBreak(80);
+    // Signatures — keep the heading with the whole employee block on one page
     y += 10;
+    checkPageBreak(80);
     addSectionTitle('AGREED by the parties');
     y += 5;
     
