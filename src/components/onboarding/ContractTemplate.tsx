@@ -739,8 +739,9 @@ export default function ContractTemplate({
     // 3. Signed: EMPLOYEE NAME
     doc.setFont('helvetica', 'normal');
     doc.text('Signed: ', margin, y);
+    const signedLabelWidth = doc.getTextWidth('Signed: ');
     doc.setFont('helvetica', 'bold');
-    doc.text(contractData.employee_name?.toUpperCase() || '______________________________', margin + doc.getTextWidth('Signed: '), y);
+    doc.text(contractData.employee_name?.toUpperCase() || '______________________________', margin + signedLabelWidth, y);
     doc.setFont('helvetica', 'normal');
     y += 7;
     
