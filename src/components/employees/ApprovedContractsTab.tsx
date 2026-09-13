@@ -247,14 +247,15 @@ export default function ApprovedContractsTab() {
       doc.setFontSize(fontSize);
       doc.setFont('helvetica', isBold ? 'bold' : 'normal');
       const lines = doc.splitTextToSize(text, contentWidth - indent);
-      checkPageBreak(lines.length * lineHeight);
-      doc.text(lines, margin + indent, y);
+      checkPageBreak(lines.length * lineHeight + 2);
+      doc.text(lines, margin + indent, y, { align: 'left' });
       y += lines.length * lineHeight + 2;
     };
 
     const addSectionTitle = (title: string) => {
-      checkPageBreak(12);
       y += 3;
+      // Keep the heading with at least two lines of its section (avoid orphan headings)
+      checkPageBreak(7 + lineHeight * 2);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
@@ -262,7 +263,7 @@ export default function ApprovedContractsTab() {
     };
 
     const addSubTitle = (title: string) => {
-      checkPageBreak(10);
+      checkPageBreak(6 + lineHeight * 2);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
