@@ -407,6 +407,8 @@ export default function ContractTemplate({
 
   const handleDownloadPDF = async () => {
     const doc = new jsPDF();
+    // Match wrapped-line spacing to the 5mm we advance per line so paragraphs sit evenly
+    doc.setLineHeightFactor(1.42);
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
