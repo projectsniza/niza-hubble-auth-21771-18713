@@ -191,6 +191,8 @@ export default function ApprovedContractsTab() {
     const orgName = contract.employee?.organization?.name || 'NIZA GROUP';
     
     const doc = new jsPDF();
+    // Match wrapped-line spacing to the 5mm we advance per line so paragraphs sit evenly
+    doc.setLineHeightFactor(1.42);
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
@@ -247,14 +249,15 @@ export default function ApprovedContractsTab() {
       doc.setFontSize(fontSize);
       doc.setFont('helvetica', isBold ? 'bold' : 'normal');
       const lines = doc.splitTextToSize(text, contentWidth - indent);
-      checkPageBreak(lines.length * lineHeight);
-      doc.text(lines, margin + indent, y);
+      checkPageBreak(lines.length * lineHeight + 2);
+      doc.text(lines, margin + indent, y, { align: 'left' });
       y += lines.length * lineHeight + 2;
     };
 
     const addSectionTitle = (title: string) => {
-      checkPageBreak(12);
       y += 3;
+      // Keep the heading with at least two lines of its section (avoid orphan headings)
+      checkPageBreak(7 + lineHeight * 2);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
@@ -262,7 +265,7 @@ export default function ApprovedContractsTab() {
     };
 
     const addSubTitle = (title: string) => {
-      checkPageBreak(10);
+      checkPageBreak(6 + lineHeight * 2);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
@@ -467,9 +470,9 @@ export default function ApprovedContractsTab() {
     addText('19.1. This contract is the entire agreement between you and the Employer in relation to its subject matter and replaces all previous agreements and arrangements.');
     addText('19.2. The information contained in this contract contains the particulars required for a written statement under Section 1 of the Employment Rights Act 1996.');
 
-    // Signatures
-    checkPageBreak(80);
+    // Signatures — keep the heading with the whole employee block on one page
     y += 10;
+    checkPageBreak(80);
     addSectionTitle('AGREED by the parties');
     y += 5;
     
@@ -502,16 +505,18 @@ export default function ApprovedContractsTab() {
     // 3. Signed: EMPLOYEE NAME (bold)
     doc.setFont('helvetica', 'normal');
     doc.text('Signed: ', margin, y);
+    const signedLabelWidth = doc.getTextWidth('Signed: ');
     doc.setFont('helvetica', 'bold');
     const empFullName = (contractData.employee_name || `${contract.employee?.first_name} ${contract.employee?.last_name}`).toUpperCase();
-    doc.text(empFullName, margin + doc.getTextWidth('Signed: '), y);
+    doc.text(empFullName, margin + signedLabelWidth, y);
     doc.setFont('helvetica', 'normal');
     y += 7;
     // 4. Date
     doc.text(`Date: ${formatDateDD(contractData.employee_signed_date)}`, margin, y);
     y += 25;
 
-    // --- EMPLOYER SECTION ---
+    // --- EMPLOYER SECTION --- keep the whole block together on one page
+    checkPageBreak(60);
     // 1. Employer signature (handwritten above line)
     if (contract.employer_signature) {
       if (contract.employer_signature_type === 'drawn' || contract.employer_signature_type === 'uploaded') {

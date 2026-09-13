@@ -407,6 +407,8 @@ export default function ContractTemplate({
 
   const handleDownloadPDF = async () => {
     const doc = new jsPDF();
+    // Match wrapped-line spacing to the 5mm we advance per line so paragraphs sit evenly
+    doc.setLineHeightFactor(1.42);
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
@@ -469,14 +471,15 @@ export default function ContractTemplate({
       doc.setFontSize(fontSize);
       doc.setFont('helvetica', isBold ? 'bold' : 'normal');
       const lines = doc.splitTextToSize(text, contentWidth - indent);
-      checkPageBreak(lines.length * lineHeight);
-      doc.text(lines, margin + indent, y);
+      checkPageBreak(lines.length * lineHeight + 2);
+      doc.text(lines, margin + indent, y, { align: 'left' });
       y += lines.length * lineHeight + 2;
     };
 
     const addSectionTitle = (title: string) => {
-      checkPageBreak(12);
       y += 3;
+      // Keep the heading with at least two lines of its section (avoid orphan headings)
+      checkPageBreak(7 + lineHeight * 2);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
@@ -484,7 +487,7 @@ export default function ContractTemplate({
     };
 
     const addSubTitle = (title: string) => {
-      checkPageBreak(10);
+      checkPageBreak(6 + lineHeight * 2);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(title, margin, y);
@@ -703,9 +706,9 @@ export default function ContractTemplate({
       return `${day}/${month}/${year}`;
     };
 
-    // Signatures
-    checkPageBreak(90);
+    // Signatures — keep the heading with the whole employee block on one page
     y += 10;
+    checkPageBreak(75);
     addSectionTitle('AGREED by the parties');
     
     doc.setFontSize(10);
@@ -736,16 +739,19 @@ export default function ContractTemplate({
     // 3. Signed: EMPLOYEE NAME
     doc.setFont('helvetica', 'normal');
     doc.text('Signed: ', margin, y);
+    const signedLabelWidth = doc.getTextWidth('Signed: ');
     doc.setFont('helvetica', 'bold');
-    doc.text(contractData.employee_name?.toUpperCase() || '______________________________', margin + doc.getTextWidth('Signed: '), y);
+    doc.text(contractData.employee_name?.toUpperCase() || '______________________________', margin + signedLabelWidth, y);
     doc.setFont('helvetica', 'normal');
     y += 7;
     
     // 4. Date
     doc.text(`Date: ${formatDateDDMMYYYY(contractData.employee_signed_date)}`, margin, y);
     y += 25;
-    
-    // ── Employer Section ──
+
+    // ── Employer Section ── keep the whole block together on one page
+    checkPageBreak(60);
+
     // 1. Employer signature (drawn or typed) - ABOVE the line
     if (contractApproval?.employer_signature && (contractApproval.employer_signature_type === 'drawn' || contractApproval.employer_signature_type === 'uploaded') && contractApproval.employer_signature.startsWith('data:image')) {
       try {
