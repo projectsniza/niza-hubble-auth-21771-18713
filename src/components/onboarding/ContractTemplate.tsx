@@ -470,7 +470,7 @@ export default function ContractTemplate({
       doc.setFont('helvetica', isBold ? 'bold' : 'normal');
       const lines = doc.splitTextToSize(text, contentWidth - indent);
       checkPageBreak(lines.length * lineHeight + 2);
-      doc.text(lines, margin + indent, y, { align: 'left', lineHeightFactor: lineHeight / fontSize * 2.83 });
+      doc.text(lines, margin + indent, y, { align: 'left' });
       y += lines.length * lineHeight + 2;
     };
 
