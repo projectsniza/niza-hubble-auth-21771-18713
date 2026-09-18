@@ -572,7 +572,19 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
                         )}
                       </div>
 
-                      <div>
+                      <div className="flex items-center gap-2">
+                        {getFilledFormForRequirement(req.name) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={downloadingForm === req.id}
+                            onClick={() => handleDownloadFilledForm(req)}
+                          >
+                            <Download className="h-4 w-4" />
+                            {downloadingForm === req.id ? 'Generating…' : 'Download'}
+                          </Button>
+                        )}
                         <input
                           type="file"
                           id={`signed-doc-${req.id}`}
