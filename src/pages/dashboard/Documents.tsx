@@ -20,6 +20,7 @@ import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
+import { ensureEmployeeDocuments } from '@/lib/ensureEmployeeDocuments';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -168,6 +169,17 @@ export default function Documents() {
         setDocuments([]);
         setBreadcrumbs([]);
       } else if (currentFolderId) {
+        // If viewing an employee folder, ensure all 3 onboarding documents exist
+        const { data: currentFolder } = await supabase
+          .from('folders')
+          .select('id, folder_type, employee_id')
+          .eq('id', currentFolderId)
+          .maybeSingle();
+
+        if (currentFolder?.folder_type === 'employee' && currentFolder?.employee_id) {
+          await ensureEmployeeDocuments(currentFolder.employee_id, currentFolder.id, user?.id);
+        }
+
         // Fetch subfolders of current folder
         const { data: foldersData } = await supabase
           .from('folders')

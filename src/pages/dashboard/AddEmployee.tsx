@@ -17,6 +17,7 @@ import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
 import DocumentUploadStep, { DocumentUploadStepRef } from '@/components/onboarding/DocumentUploadStep';
 import { logActivity } from '@/hooks/useActivityLogs';
+import { ensureEmployeeDocuments } from '@/lib/ensureEmployeeDocuments';
 
 
 interface FormSettings {
@@ -565,6 +566,8 @@ export default function AddEmployee() {
         .from('employee_onboarding')
         .update({ completed_at: new Date().toISOString() })
         .eq('employee_id', employeeRecord.id);
+
+      await ensureEmployeeDocuments(employeeRecord.id, null, user?.id);
 
       toast.success('Employee onboarding completed!');
       navigate('/dashboard/employees');
