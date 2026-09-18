@@ -32,6 +32,71 @@ interface SignedDocUpload {
   file_name?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Helper: find or create the employee's folder inside the branch folder tree
+// Hierarchy: Company Documents → Org folder → Branch folder → Employee folder
+// ---------------------------------------------------------------------------
+async function getOrCreateEmployeeFolder(
+  employeeId: string,
+  employee: any,
+  uploadedBy: string | undefined
+): Promise<string | null> {
+  try {
+    const branchId = employee?.branch_id;
+    if (!branchId) return null;
+
+    // 1. Find the branch folder
+    const { data: branchFolder } = await supabase
+      .from('folders')
+      .select('id, path')
+      .eq('folder_type', 'branch')
+      .eq('branch_id', branchId)
+      .maybeSingle();
+
+    if (!branchFolder) return null;
+
+    // 2. Try to find an existing employee folder under this branch folder
+    const { data: existingEmpFolder } = await supabase
+      .from('folders')
+      .select('id')
+      .eq('folder_type', 'employee')
+      .eq('employee_id', employeeId)
+      .eq('parent_id', branchFolder.id)
+      .maybeSingle();
+
+    if (existingEmpFolder) return existingEmpFolder.id;
+
+    // 3. Create the employee folder under the branch folder
+    const empName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim();
+    const folderPath = `${branchFolder.path}/${empName}`;
+
+    const { data: newFolder, error: createErr } = await supabase
+      .from('folders')
+      .insert({
+        name: empName,
+        path: folderPath,
+        parent_id: branchFolder.id,
+        folder_type: 'employee',
+        employee_id: employeeId,
+        branch_id: branchId,
+        organization_id: employee?.organization_id ?? null,
+        created_by: uploadedBy ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (createErr) {
+      console.error('Failed to create employee folder:', createErr);
+      return null;
+    }
+
+    return newFolder?.id ?? null;
+  } catch (err) {
+    console.error('getOrCreateEmployeeFolder error:', err);
+    return null;
+  }
+}
+
 export default function PostApprovalOnboarding({ employeeId, onBack }: PostApprovalOnboardingProps) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -199,25 +264,18 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         })
         .eq('id', contractApproval.id);
 
-      const { data: employeeFolder } = await supabase
-        .from('folders')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .eq('folder_type', 'employee')
-        .maybeSingle();
+      const empFolderId = await getOrCreateEmployeeFolder(employeeId, employee, user?.id);
 
-      if (employeeFolder) {
-        await supabase.from('documents').insert({
-          title: 'Signed Contract',
-          file_name: signedContractFile.name,
-          file_path: filePath,
-          file_type: signedContractFile.type,
-          file_size: signedContractFile.size,
-          employee_id: employeeId,
-          folder_id: employeeFolder.id,
-          uploaded_by: user?.id,
-        });
-      }
+      await supabase.from('documents').insert({
+        title: 'Signed Contract',
+        file_name: signedContractFile.name,
+        file_path: filePath,
+        file_type: signedContractFile.type,
+        file_size: signedContractFile.size,
+        employee_id: employeeId,
+        folder_id: empFolderId,
+        uploaded_by: user?.id,
+      });
 
       await supabase
         .from('employee_onboarding')
@@ -284,26 +342,18 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
           }, { onConflict: 'employee_id,requirement_id' });
 
         // Also save to employee's document folder
-        const { data: employeeFolder } = await supabase
-          .from('folders')
-          .select('id')
-          .eq('employee_id', employeeId)
-          .eq('folder_type', 'employee')
-          .maybeSingle();
-
-        if (employeeFolder) {
-          const req = signedDocRequirements.find(r => r.id === doc.requirement_id);
-          await supabase.from('documents').insert({
-            title: req?.name || 'Signed Document',
-            file_name: file.name,
-            file_path: filePath,
-            file_type: file.type,
-            file_size: file.size,
-            employee_id: employeeId,
-            folder_id: employeeFolder.id,
-            uploaded_by: user?.id,
-          });
-        }
+        const empFolderId = await getOrCreateEmployeeFolder(employeeId, employee, user?.id);
+        const req = signedDocRequirements.find(r => r.id === doc.requirement_id);
+        await supabase.from('documents').insert({
+          title: req?.name || 'Signed Document',
+          file_name: file.name,
+          file_path: filePath,
+          file_type: file.type,
+          file_size: file.size,
+          employee_id: employeeId,
+          folder_id: empFolderId,
+          uploaded_by: user?.id,
+        });
       }
 
       toast.success('Signed documents uploaded successfully');
@@ -318,24 +368,8 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
   const generateAndSaveOnboardingPdfs = async () => {
     try {
-      // Fetch employee folder (fall back to any folder linked to the employee)
-      let { data: employeeFolder } = await supabase
-        .from('folders')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .eq('folder_type', 'employee')
-        .maybeSingle();
-      if (!employeeFolder) {
-        const { data: anyFolder } = await supabase
-          .from('folders')
-          .select('id')
-          .eq('employee_id', employeeId)
-          .limit(1)
-          .maybeSingle();
-        employeeFolder = anyFolder || null;
-      }
-      const folderId = employeeFolder?.id ?? null;
-
+      // Find or create the employee's folder inside the Company Documents hierarchy
+      const folderId = await getOrCreateEmployeeFolder(employeeId, employee, user?.id);
 
       // Fetch all 3 form responses in parallel
       const [appRes, starterRes, bankRes] = await Promise.all([
@@ -344,7 +378,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         supabase.from('onboarding_form_responses').select('form_data').eq('employee_id', employeeId).eq('form_type', 'bank_details').maybeSingle(),
       ]);
 
-      // Skip files that already exist in this folder (avoid duplicates)
+      // Skip files that already exist for this employee (avoid duplicates)
       const { data: existingDocs } = await supabase
         .from('documents')
         .select('title')
