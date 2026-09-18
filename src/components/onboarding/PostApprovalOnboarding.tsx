@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, Check, Upload, FileSignature, FilePen, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Upload, FileSignature, FilePen, CheckCircle2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,12 +42,64 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
   const [signedDocRequirements, setSignedDocRequirements] = useState<SignedDocRequirement[]>([]);
   const [signedDocUploads, setSignedDocUploads] = useState<SignedDocUpload[]>([]);
   const [hasSignedDocs, setHasSignedDocs] = useState(false);
+  const [formResponses, setFormResponses] = useState<Record<string, any>>({});
+  const [downloadingForm, setDownloadingForm] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEmployee();
     fetchContractApproval();
     fetchSignedDocRequirements();
+    fetchFormResponses();
   }, [employeeId]);
+
+  const fetchFormResponses = async () => {
+    const { data } = await supabase
+      .from('onboarding_form_responses')
+      .select('form_type, form_data')
+      .eq('employee_id', employeeId);
+
+    if (data) {
+      const map: Record<string, any> = {};
+      data.forEach((r: any) => { map[r.form_type] = r.form_data; });
+      setFormResponses(map);
+    }
+  };
+
+  // Match a signed-document requirement to the filled onboarding form for this employee
+  const getFilledFormForRequirement = (reqName: string): { type: string; data: any } | null => {
+    const n = reqName.toLowerCase();
+    if (n.includes('application') && formResponses['application_form']) return { type: 'application_form', data: formResponses['application_form'] };
+    if ((n.includes('starter') || n.includes('checklist')) && formResponses['starter_checklist']) return { type: 'starter_checklist', data: formResponses['starter_checklist'] };
+    if (n.includes('bank') && formResponses['bank_details']) return { type: 'bank_details', data: formResponses['bank_details'] };
+    return null;
+  };
+
+  const handleDownloadFilledForm = async (req: SignedDocRequirement) => {
+    const filled = getFilledFormForRequirement(req.name);
+    if (!filled) {
+      toast.error('No filled form found for this document. Complete it during onboarding first.');
+      return;
+    }
+    setDownloadingForm(req.id);
+    try {
+      let doc: any;
+      if (filled.type === 'application_form') {
+        doc = await buildApplicationFormPdf(filled.data, employee?.organizations?.name, employee?.branches?.name);
+      } else if (filled.type === 'starter_checklist') {
+        doc = await buildStarterChecklistPdf(filled.data);
+      } else {
+        doc = await buildBankDetailsPdf(filled.data);
+      }
+      const safeName = req.name.replace(/[^a-z0-9]+/gi, '_');
+      const empName = `${employee?.first_name || ''}_${employee?.last_name || ''}`.replace(/[^a-z0-9_]+/gi, '');
+      doc.save(`${safeName}_${empName}.pdf`);
+    } catch (err) {
+      console.error('Failed to generate filled form:', err);
+      toast.error('Failed to generate the filled form');
+    } finally {
+      setDownloadingForm(null);
+    }
+  };
 
   const fetchEmployee = async () => {
     const { data } = await supabase
