@@ -42,7 +42,26 @@ async function getOrCreateEmployeeFolder(
   uploadedBy: string | undefined
 ): Promise<string | null> {
   try {
-    const branchId = employee?.branch_id;
+    let branchId = employee?.branch_id;
+    let organizationId = employee?.organization_id;
+    let empFirstName = employee?.first_name || '';
+    let empLastName = employee?.last_name || '';
+
+    // If employee object doesn't have branch_id yet, fetch it from DB
+    if (!branchId) {
+      const { data: empDb } = await supabase
+        .from('employees')
+        .select('branch_id, organization_id, first_name, last_name')
+        .eq('id', employeeId)
+        .maybeSingle();
+      if (empDb) {
+        branchId = empDb.branch_id;
+        organizationId = empDb.organization_id;
+        empFirstName = empDb.first_name || '';
+        empLastName = empDb.last_name || '';
+      }
+    }
+
     if (!branchId) return null;
 
     // 1. Find the branch folder
@@ -55,42 +74,67 @@ async function getOrCreateEmployeeFolder(
 
     if (!branchFolder) return null;
 
-    // 2. Try to find an existing employee folder under this branch folder
+    // 2. Try to find an existing employee folder for this employee
     const { data: existingEmpFolder } = await supabase
       .from('folders')
-      .select('id')
+      .select('id, parent_id')
       .eq('folder_type', 'employee')
       .eq('employee_id', employeeId)
-      .eq('parent_id', branchFolder.id)
       .maybeSingle();
 
-    if (existingEmpFolder) return existingEmpFolder.id;
+    let folderId: string | null = null;
 
-    // 3. Create the employee folder under the branch folder
-    const empName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim();
-    const folderPath = `${branchFolder.path}/${empName}`;
+    if (existingEmpFolder) {
+      folderId = existingEmpFolder.id;
+      // If it exists but parent_id was null or wrong, update it to point to branch folder
+      if (existingEmpFolder.parent_id !== branchFolder.id) {
+        await supabase
+          .from('folders')
+          .update({
+            parent_id: branchFolder.id,
+            branch_id: branchId,
+            organization_id: organizationId ?? null,
+          })
+          .eq('id', existingEmpFolder.id);
+      }
+    } else {
+      // 3. Create the employee folder under the branch folder
+      const empName = `${empFirstName} ${empLastName}`.trim() || 'Employee Documents';
+      const folderPath = `${branchFolder.path}/${empName}`;
 
-    const { data: newFolder, error: createErr } = await supabase
-      .from('folders')
-      .insert({
-        name: empName,
-        path: folderPath,
-        parent_id: branchFolder.id,
-        folder_type: 'employee',
-        employee_id: employeeId,
-        branch_id: branchId,
-        organization_id: employee?.organization_id ?? null,
-        created_by: uploadedBy ?? null,
-      })
-      .select('id')
-      .single();
+      const { data: newFolder, error: createErr } = await supabase
+        .from('folders')
+        .insert({
+          name: empName,
+          path: folderPath,
+          parent_id: branchFolder.id,
+          folder_type: 'employee',
+          employee_id: employeeId,
+          branch_id: branchId,
+          organization_id: organizationId ?? null,
+          created_by: uploadedBy ?? null,
+        })
+        .select('id')
+        .single();
 
-    if (createErr) {
-      console.error('Failed to create employee folder:', createErr);
-      return null;
+      if (createErr) {
+        console.error('Failed to create employee folder:', createErr);
+        return null;
+      }
+
+      folderId = newFolder?.id ?? null;
     }
 
-    return newFolder?.id ?? null;
+    // 4. Update any existing documents for this employee that have null folder_id
+    if (folderId) {
+      await supabase
+        .from('documents')
+        .update({ folder_id: folderId })
+        .eq('employee_id', employeeId)
+        .is('folder_id', null);
+    }
+
+    return folderId;
   } catch (err) {
     console.error('getOrCreateEmployeeFolder error:', err);
     return null;
@@ -130,31 +174,91 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     }
   };
 
-  // Match a signed-document requirement to the filled onboarding form for this employee
-  const getFilledFormForRequirement = (reqName: string): { type: string; data: any } | null => {
+  // Build filled or default form data for a signed document requirement
+  const getFilledFormData = (reqName: string) => {
     const n = reqName.toLowerCase();
-    if (n.includes('application') && formResponses['application_form']) return { type: 'application_form', data: formResponses['application_form'] };
-    if ((n.includes('starter') || n.includes('checklist')) && formResponses['starter_checklist']) return { type: 'starter_checklist', data: formResponses['starter_checklist'] };
-    if (n.includes('bank') && formResponses['bank_details']) return { type: 'bank_details', data: formResponses['bank_details'] };
+    const orgName = employee?.organizations?.name;
+    const branchName = employee?.branches?.name;
+
+    const appFormData = formResponses['application_form'] || {
+      first_name: employee?.first_name || '',
+      last_name: employee?.last_name || '',
+      phone: employee?.phone || '',
+      email: employee?.email || '',
+      address: employee?.address || '',
+      date_of_birth: employee?.date_of_birth || '',
+      job_title: employee?.job_title || '',
+      department: employee?.department || '',
+      start_date: employee?.join_date || '',
+      ni_number: employee?.national_insurance_number || '',
+      emergency_contact_name: employee?.emergency_contact_name || '',
+      emergency_contact_phone: employee?.emergency_contact_phone || '',
+      emergency_contact_relationship: employee?.emergency_contact_relationship || '',
+    };
+
+    if (n.includes('application')) {
+      return {
+        type: 'application_form',
+        getDoc: () => buildApplicationFormPdf(appFormData, orgName, branchName),
+      };
+    }
+
+    if (n.includes('starter') || n.includes('checklist')) {
+      const starterFormData = formResponses['starter_checklist'] || {
+        last_name: appFormData.last_name || employee?.last_name || '',
+        first_names: appFormData.first_name || employee?.first_name || '',
+        gender: appFormData.gender || '',
+        date_of_birth: appFormData.date_of_birth || employee?.date_of_birth || '',
+        address: appFormData.address || employee?.address || '',
+        postcode: appFormData.postcode || '',
+        country: appFormData.country || 'United Kingdom',
+        national_insurance: appFormData.ni_number || employee?.national_insurance_number || '',
+        employment_start_date: appFormData.start_date || employee?.join_date || '',
+        statement: 'A',
+        has_student_loan: false,
+        declaration_agreed: true,
+        signature: appFormData.signature || '',
+        signature_date: appFormData.signature_date || '',
+      };
+      return {
+        type: 'starter_checklist',
+        getDoc: () => buildStarterChecklistPdf(starterFormData),
+      };
+    }
+
+    if (n.includes('bank')) {
+      const bankFormData = formResponses['bank_details'] || {
+        your_name: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
+        telephone_number: appFormData.phone || employee?.phone || '',
+        bank_name: '',
+        bank_address: '',
+        bank_telephone: '',
+        sort_code: '',
+        account_number: '',
+        building_society_roll: '',
+        account_holder_name: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
+        declaration_agreed: true,
+        signature: appFormData.signature || '',
+        signature_date: appFormData.signature_date || '',
+      };
+      return {
+        type: 'bank_details',
+        getDoc: () => buildBankDetailsPdf(bankFormData),
+      };
+    }
+
     return null;
   };
 
   const handleDownloadFilledForm = async (req: SignedDocRequirement) => {
-    const filled = getFilledFormForRequirement(req.name);
+    const filled = getFilledFormData(req.name);
     if (!filled) {
-      toast.error('No filled form found for this document. Complete it during onboarding first.');
+      toast.error('No template found for this document.');
       return;
     }
     setDownloadingForm(req.id);
     try {
-      let doc: any;
-      if (filled.type === 'application_form') {
-        doc = await buildApplicationFormPdf(filled.data, employee?.organizations?.name, employee?.branches?.name);
-      } else if (filled.type === 'starter_checklist') {
-        doc = await buildStarterChecklistPdf(filled.data);
-      } else {
-        doc = await buildBankDetailsPdf(filled.data);
-      }
+      const doc = await filled.getDoc();
       const safeName = req.name.replace(/[^a-z0-9]+/gi, '_');
       const empName = `${employee?.first_name || ''}_${employee?.last_name || ''}`.replace(/[^a-z0-9_]+/gi, '');
       doc.save(`${safeName}_${empName}.pdf`);
@@ -173,7 +277,11 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
       .eq('id', employeeId)
       .single();
     
-    if (data) setEmployee(data);
+    if (data) {
+      setEmployee(data);
+      // Automatically ensure employee folder and all 3 documents are synced
+      generateAndSaveOnboardingPdfs(data);
+    }
   };
 
   const fetchContractApproval = async () => {
@@ -285,6 +393,9 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         })
         .eq('employee_id', employeeId);
 
+      // Also ensure all 3 onboarding PDFs are in place
+      await generateAndSaveOnboardingPdfs();
+
       toast.success('Signed contract uploaded successfully');
       setCurrentStep(prev => prev + 1);
     } catch (error: unknown) {
@@ -356,6 +467,9 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         });
       }
 
+      // Also ensure all 3 onboarding PDFs are in place
+      await generateAndSaveOnboardingPdfs();
+
       toast.success('Signed documents uploaded successfully');
       setCurrentStep(prev => prev + 1);
     } catch (error: unknown) {
@@ -366,10 +480,13 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
     }
   };
 
-  const generateAndSaveOnboardingPdfs = async () => {
+  const generateAndSaveOnboardingPdfs = async (empData?: any) => {
     try {
+      const emp = empData || employee;
+      if (!emp) return;
+
       // Find or create the employee's folder inside the Company Documents hierarchy
-      const folderId = await getOrCreateEmployeeFolder(employeeId, employee, user?.id);
+      const folderId = await getOrCreateEmployeeFolder(employeeId, emp, user?.id);
 
       // Fetch all 3 form responses in parallel
       const [appRes, starterRes, bankRes] = await Promise.all([
@@ -378,52 +495,124 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
         supabase.from('onboarding_form_responses').select('form_data').eq('employee_id', employeeId).eq('form_type', 'bank_details').maybeSingle(),
       ]);
 
-      // Skip files that already exist for this employee (avoid duplicates)
+      const orgName = emp?.organizations?.name;
+      const branchName = emp?.branches?.name;
+
+      const appFormData = appRes.data?.form_data || {
+        first_name: emp?.first_name || '',
+        last_name: emp?.last_name || '',
+        phone: emp?.phone || '',
+        email: emp?.email || '',
+        address: emp?.address || '',
+        date_of_birth: emp?.date_of_birth || '',
+        job_title: emp?.job_title || '',
+        department: emp?.department || '',
+        start_date: emp?.join_date || '',
+        ni_number: emp?.national_insurance_number || '',
+        emergency_contact_name: emp?.emergency_contact_name || '',
+        emergency_contact_phone: emp?.emergency_contact_phone || '',
+        emergency_contact_relationship: emp?.emergency_contact_relationship || '',
+      };
+
+      const starterFormData = starterRes.data?.form_data || {
+        last_name: appFormData.last_name || emp?.last_name || '',
+        first_names: appFormData.first_name || emp?.first_name || '',
+        gender: appFormData.gender || '',
+        date_of_birth: appFormData.date_of_birth || emp?.date_of_birth || '',
+        address: appFormData.address || emp?.address || '',
+        postcode: appFormData.postcode || '',
+        country: appFormData.country || 'United Kingdom',
+        national_insurance: appFormData.ni_number || emp?.national_insurance_number || '',
+        employment_start_date: appFormData.start_date || emp?.join_date || '',
+        statement: 'A',
+        has_student_loan: false,
+        declaration_agreed: true,
+        signature: appFormData.signature || '',
+        signature_date: appFormData.signature_date || '',
+      };
+
+      const bankFormData = bankRes.data?.form_data || {
+        your_name: `${emp?.first_name || ''} ${emp?.last_name || ''}`.trim(),
+        telephone_number: appFormData.phone || emp?.phone || '',
+        bank_name: '',
+        bank_address: '',
+        bank_telephone: '',
+        sort_code: '',
+        account_number: '',
+        building_society_roll: '',
+        account_holder_name: `${emp?.first_name || ''} ${emp?.last_name || ''}`.trim(),
+        declaration_agreed: true,
+        signature: appFormData.signature || '',
+        signature_date: appFormData.signature_date || '',
+      };
+
+      // Check existing documents in DB
       const { data: existingDocs } = await supabase
         .from('documents')
-        .select('title')
+        .select('id, title, folder_id')
         .eq('employee_id', employeeId)
         .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
-      const existingTitles = new Set((existingDocs || []).map((d: any) => d.title));
 
-      const orgName = employee?.organizations?.name;
-      const branchName = employee?.branches?.name;
+      const docMap = new Map((existingDocs || []).map((d: any) => [d.title, d]));
 
-      const uploads: Array<{ title: string; doc: any; baseName: string }> = [];
-      if (appRes.data?.form_data && !existingTitles.has('Application Form')) {
-        const doc = await buildApplicationFormPdf(appRes.data.form_data as any, orgName, branchName);
-        uploads.push({ title: 'Application Form', doc, baseName: 'Application_Form' });
-      }
-      if (starterRes.data?.form_data && !existingTitles.has('Starter Checklist')) {
-        const doc = await buildStarterChecklistPdf(starterRes.data.form_data as any);
-        uploads.push({ title: 'Starter Checklist', doc, baseName: 'Starter_Checklist' });
-      }
-      if (bankRes.data?.form_data && !existingTitles.has('Bank Details')) {
-        const doc = await buildBankDetailsPdf(bankRes.data.form_data as any);
-        uploads.push({ title: 'Bank Details', doc, baseName: 'Bank_Details' });
-      }
-
-      for (const u of uploads) {
-        const blob: Blob = u.doc.output('blob');
-        const fileName = `${u.baseName}_${employeeId}_${Date.now()}.pdf`;
-        const filePath = `employees/${employeeId}/onboarding-forms/${fileName}`;
-        const { error: upErr } = await supabase.storage
-          .from('documents')
-          .upload(filePath, blob, { contentType: 'application/pdf' });
-        if (upErr) {
-          console.error(`Failed to upload ${u.title}:`, upErr);
-          continue;
+      // If any existing doc is missing folder_id or in wrong folder, update it
+      if (folderId && existingDocs) {
+        for (const doc of existingDocs) {
+          if (!doc.folder_id || doc.folder_id !== folderId) {
+            await supabase
+              .from('documents')
+              .update({ folder_id: folderId })
+              .eq('id', doc.id);
+          }
         }
-        await supabase.from('documents').insert({
-          title: u.title,
-          file_name: `${u.baseName}.pdf`,
-          file_path: filePath,
-          file_type: 'application/pdf',
-          file_size: blob.size,
-          employee_id: employeeId,
-          folder_id: folderId,
-          uploaded_by: user?.id,
-        });
+      }
+
+      // Generate any missing documents among the 3
+      const toGenerate: Array<{ title: string; getDoc: () => Promise<any>; baseName: string }> = [
+        {
+          title: 'Application Form',
+          getDoc: () => buildApplicationFormPdf(appFormData, orgName, branchName),
+          baseName: 'Application_Form',
+        },
+        {
+          title: 'Starter Checklist',
+          getDoc: () => buildStarterChecklistPdf(starterFormData),
+          baseName: 'Starter_Checklist',
+        },
+        {
+          title: 'Bank Details',
+          getDoc: () => buildBankDetailsPdf(bankFormData),
+          baseName: 'Bank_Details',
+        },
+      ];
+
+      for (const item of toGenerate) {
+        if (!docMap.has(item.title)) {
+          const doc = await item.getDoc();
+          const blob: Blob = doc.output('blob');
+          const fileName = `${item.baseName}_${employeeId}_${Date.now()}.pdf`;
+          const filePath = `employees/${employeeId}/onboarding-forms/${fileName}`;
+
+          const { error: upErr } = await supabase.storage
+            .from('documents')
+            .upload(filePath, blob, { contentType: 'application/pdf' });
+
+          if (upErr) {
+            console.error(`Failed to upload ${item.title}:`, upErr);
+            continue;
+          }
+
+          await supabase.from('documents').insert({
+            title: item.title,
+            file_name: `${item.baseName}.pdf`,
+            file_path: filePath,
+            file_type: 'application/pdf',
+            file_size: blob.size,
+            employee_id: employeeId,
+            folder_id: folderId,
+            uploaded_by: user?.id,
+          });
+        }
       }
     } catch (err) {
       console.error('Onboarding PDF generation error:', err);
@@ -607,7 +796,7 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {getFilledFormForRequirement(req.name) && (
+                        {getFilledFormData(req.name) && (
                           <Button
                             variant="outline"
                             size="sm"
