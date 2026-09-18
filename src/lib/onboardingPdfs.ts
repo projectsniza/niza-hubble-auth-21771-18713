@@ -28,7 +28,8 @@ const formatDateDDMMYYYY = (dateStr?: string) => {
 };
 
 // ─────────────────────────────  BANK DETAILS ─────────────────────────────
-export async function buildBankDetailsPdf(formData: any): Promise<jsPDF> {
+export async function buildBankDetailsPdf(formDataInput: any): Promise<jsPDF> {
+  const formData = formDataInput || {};
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -151,7 +152,8 @@ export async function buildBankDetailsPdf(formData: any): Promise<jsPDF> {
 }
 
 // ─────────────────────────────  STARTER CHECKLIST ─────────────────────────────
-export async function buildStarterChecklistPdf(formData: any): Promise<jsPDF> {
+export async function buildStarterChecklistPdf(formDataInput: any): Promise<jsPDF> {
+  const formData = formDataInput || {};
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -317,10 +319,11 @@ export async function buildStarterChecklistPdf(formData: any): Promise<jsPDF> {
 
 // ─────────────────────────────  APPLICATION FORM ─────────────────────────────
 export async function buildApplicationFormPdf(
-  formData: any,
+  formDataInput: any,
   orgName?: string,
   branchAddress?: string
 ): Promise<jsPDF> {
+  const formData = formDataInput || {};
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
