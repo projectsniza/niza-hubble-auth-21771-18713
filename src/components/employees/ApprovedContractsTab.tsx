@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
+import { buildCompleteContractPdf } from '@/lib/onboardingPdfs';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ContractTemplate from '@/components/onboarding/ContractTemplate';
@@ -148,450 +149,22 @@ export default function ApprovedContractsTab() {
   };
 
   const handleDownloadFile = async (contract: ApprovedContract) => {
-    const filePath = contract.signed_contract_path || contract.contract_file_path;
-    
-    // Try to download from storage first
-    if (filePath) {
-      try {
-        // Try multiple storage buckets
-        const buckets = ['documents', 'contracts', 'employee-documents'];
-        for (const bucket of buckets) {
-          const { data, error } = await supabase.storage
-            .from(bucket)
-            .createSignedUrl(filePath, 300);
-
-          if (!error && data?.signedUrl) {
-            window.open(data.signedUrl, '_blank');
-            return;
-          }
-        }
-        console.log('File not found in any bucket, generating PDF...');
-      } catch (error) {
-        console.log('Storage file not found, generating PDF...', error);
-      }
-    }
-    
-    // Generate full contract PDF using contract_content
-    if (contract.contract_content && contract.employee) {
-      await generateFullContractPDF(contract);
-      return;
-    }
-    
-    // Fallback to basic PDF if we have employee data
-    if (contract.employee) {
-      generateBasicContractPDF(contract);
-      return;
-    }
-    
-    toast.error('No contract data available to download');
-  };
-
-  const generateFullContractPDF = async (contract: ApprovedContract) => {
-    const contractData = contract.contract_content;
-    const orgName = contract.employee?.organization?.name || 'NIZA GROUP';
-    
-    const doc = new jsPDF();
-    // Match wrapped-line spacing to the 5mm we advance per line so paragraphs sit evenly
-    doc.setLineHeightFactor(1.42);
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const contentWidth = pageWidth - 2 * margin;
-    const headerHeight = 25;
-    let y = headerHeight + 10;
-    const lineHeight = 5;
-    const sectionGap = 8;
-
-    // Load logo image
-    const loadLogoImage = (): Promise<string> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve('');
-        img.src = nizaLogo;
+    try {
+      // Generate complete full 19-clause multi-page contract PDF
+      const doc = await buildCompleteContractPdf({
+        contractData: contract.contract_content || {},
+        employeeData: contract.employee || {},
+        organizationData: contract.employee?.organization || {},
+        branchData: contract.employee?.branch || {},
+        approvalData: contract || {},
       });
-    };
-
-    const logoDataUrl = await loadLogoImage();
-
-    const addHeader = () => {
-      if (logoDataUrl) {
-        doc.addImage(logoDataUrl, 'PNG', pageWidth - margin - 40, 10, 40, 12);
-      }
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.3);
-      doc.line(margin, headerHeight, pageWidth - margin, headerHeight);
-    };
-
-    addHeader();
-
-    const addPage = () => {
-      doc.addPage();
-      addHeader();
-      y = headerHeight + 10;
-    };
-
-    const checkPageBreak = (height: number) => {
-      if (y + height > pageHeight - 20) {
-        addPage();
-      }
-    };
-
-    const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
-      doc.setFontSize(fontSize);
-      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-      const lines = doc.splitTextToSize(text, contentWidth - indent);
-      checkPageBreak(lines.length * lineHeight + 2);
-      doc.text(lines, margin + indent, y, { align: 'left' });
-      y += lines.length * lineHeight + 2;
-    };
-
-    const addSectionTitle = (title: string) => {
-      y += 3;
-      // Keep the heading with at least two lines of its section (avoid orphan headings)
-      checkPageBreak(7 + lineHeight * 2);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(title, margin, y);
-      y += 7;
-    };
-
-    const addSubTitle = (title: string) => {
-      checkPageBreak(6 + lineHeight * 2);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text(title, margin, y);
-      y += 6;
-    };
-
-    // Page 1 - Header
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('THIS CONTRACT OF EMPLOYMENT', pageWidth / 2, y, { align: 'center' });
-    y += 10;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const contractDateFormatted = (() => {
-      const d = contractData.contract_date;
-      if (!d) return '…………………………………………………';
-      const parts = d.split('-');
-      const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
-      if (isNaN(dt.getTime())) return d;
-      const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} - ${days[dt.getDay()]}`;
-    })();
-    doc.text(`is made on ${contractDateFormatted}`, pageWidth / 2, y, { align: 'center' });
-    y += 12;
-
-    // PARTIES
-    addSectionTitle('PARTIES');
-    addText(`1. ${orgName} a company incorporated in England and Wales (registered number ${contractData.registered_number || '________'}) whose registered office is at ${contractData.registered_office || '________________'} (the Employer); and`);
-    y += 2;
-    addText(`2. ${contractData.employee_name || contract.employee?.first_name + ' ' + contract.employee?.last_name} of ${contractData.employee_address || contract.employee?.address || '[                  ]'} (you).`);
-    y += sectionGap;
-
-    // THE PARTIES AGREE
-    addSectionTitle('THE PARTIES AGREE:');
-
-    // 1. Appointment
-    addSectionTitle('1. Appointment');
-    addText('1.1. The Employer will employ you on the terms and conditions set out in this contract.');
-    addText(`1.2. Your employment with the Employer under this contract will commence on the date hereof ${contractData.commencement_date || '……………………….'} (The Commencement Date).`);
-    addText('1.3. Your period of continuous employment with the Employer commenced on the Commencement Date, and no period of employment with any previous employer counts as part of your period of continuous employment with the Employer.');
-    addText('1.4. You warrant to the Employer that you have the unconditional right to work in the U.K. Should this right be withdrawn, or should your status materially change, you agree to notify the Employer immediately. The Employer reserves the right to terminate your employment, with or without notice (as appropriate), should your right to work in the U.K. be withdrawn.');
-    addText('1.5. Any misrepresentation of your employment status is a serious disciplinary offence which may result in your dismissal.');
-    addText('1.6. The first 6 months of your employment will be a probationary period (the Probationary Period), during which the Employer will monitor your performance and conduct. The Employer will confirm your continued employment to you when you have completed your Probationary Period to the Employer\'s satisfaction. During the Probationary Period, either the Employer or you may terminate your employment by giving one week\'s notice.');
-
-    // 2. Duties
-    addSectionTitle('2. Duties');
-    addText(`2.1. You will be employed as a ${contractData.job_title || '………………………….'} or in such other capacity as the Employer may from time to time reasonably direct.`);
-    addText('2.2. In addition to your normal duties, you may be required to undertake alternative, additional, or ancillary duties from time to time or to transfer to another part of the business as the Employer may reasonably direct.');
-    addText('2.3. Unless otherwise notified, you will report to the site manager (your Manager). The Employer may from time to time change your Manager.');
-
-    // 3. Hours of work
-    addSectionTitle('3. Hours of work');
-    addText(`3.1. Your normal hours of work are ${contractData.hours_per_week || '……………….'} hours per week.`);
-    addText('3.2. The Employer may vary your hours of work or the pattern of your normal hours, as it considers necessary to meet the needs of the business.');
-    addText('3.3. You are required to work such additional hours as are deemed necessary by the Employer for the proper performance of your duties. You will not be entitled to any further remuneration for any such additional hours worked.');
-    addText('3.4. If you are late for work this will result in you losing pay. The equivalent of one quarter of an hour\'s gross pay will be deducted in respect of each 15 minute period, or part thereof, for which you fail to attend. Persistent poor time-keeping may result in disciplinary action being taken against you.');
-    addText('3.5. Subject to clauses 3.5.i. to iv. (inclusive) below, you will be entitled to a break during your hours of work on the basis set out below:');
-    
-    y += 3;
-    doc.setFontSize(9);
-    const breakData = [
-      ['Less than 4 hours:', 'None'],
-      ['4 < 6 hours:', '1x15mins unpaid'],
-      ['6 < 7.5 hours:', '1x20mins unpaid'],
-      ['7.5 or above:', '2x15mins unpaid, 1x30mins unpaid']
-    ];
-    breakData.forEach(([hours, breaks]) => {
-      checkPageBreak(6);
-      doc.text(`• ${hours} ${breaks}`, margin + 5, y);
-      y += 5;
-    });
-    y += 3;
-
-    // 4. Salary
-    addSectionTitle('4. Salary');
-    addText(`4.1. The Employer will pay you a salary at the rate of £${contractData.salary_rate || '……………………'} per hour (Salary).`);
-    addText('4.2. All payments of Salary are subject to deductions for income tax and national insurance contributions and other authorised deductions or deductions required by law.');
-    addText('4.3. You authorise the Employer at any time during your employment and/or on its termination to deduct any sums owed by you to the Employer at any time from your Salary and/or from any other sums due to you under this contract.');
-
-    // 5. Place of work
-    addSectionTitle('5. Place of work and mobility');
-    addText(`Your normal place of work will be at ${contractData.place_of_work || '…………………………………………………….....................'}`);
-
-    // 6. Holiday
-    addSectionTitle('6. Holiday');
-    addText(`6.1. You will be entitled to ${contractData.holiday_days || '…….'} days' paid holiday in each holiday year, which runs from 1st of April to 31st of March, excluding bank and public holidays which you normally work. Your holiday entitlement includes your statutory basic entitlement.`);
-    addText('6.2. You acknowledge that the Employer trades on the usual bank holidays in England and Wales and that you may be scheduled to work in accordance with availability unless on Annual Leave.');
-    addText('6.3. You must take all of your entitlement in the holiday year in which it accrues and carrying forward holiday is not permitted.');
-    addText('6.4. You must give your Manager not less than 6 weeks\' written notice of your proposed holiday dates. Holidays are to be taken at such time or times as your Manager agrees.');
-    addText('6.5. The Employer reserves the right to require you to take holidays on particular dates including during any notice period or garden leave.');
-    addText('6.6. On termination of your employment, you will be paid in lieu of accrued but untaken holiday entitlement.');
-
-    // 7. Sickness
-    addSectionTitle('7. Sickness');
-    addText('7.1. If you are absent from work for any reason, you must inform your Manager by no later than 9.30 am on the first day of absence. The reason for absence and the expected duration of the absence should be given.');
-    addText('7.2. There is no pay for any absence due to illness or injury, other than statutory sick pay if you are eligible.');
-    addText('7.3. At any time during your employment, you will, at the Employer\'s request, submit yourself to a medical examination by a medical practitioner nominated by the Employer.');
-
-    // 8. Disciplinary and grievance matters
-    addSectionTitle('8. Disciplinary and grievance matters');
-    addText('8.1. You are subject to the Employer\'s disciplinary and grievance rules and procedures. Such rules and procedures do not form part of this contract.');
-    addText('8.2. The Employer may, in its absolute discretion, suspend you in order to investigate any claim or allegation which it considers could constitute serious misconduct.');
-    addText('8.3. If you wish to appeal against any disciplinary decision, your appeal must be made in writing.');
-    addText('8.4. If you wish to raise a grievance, you may do so by writing.');
-    addText('8.5. The following acts or omissions may result in disciplinary action being taken against you:');
-    
-    const disciplinaryItems = [
-      '8.5.1. Failure or refusal to comply with a reasonable and lawful instruction given to you by a manager or supervisor.',
-      '8.5.2. Unauthorised absence for a reason other than illness or injury.',
-      '8.5.3. Poor time keeping',
-      '8.5.4. Any act of theft or dishonesty',
-      '8.5.5. Fighting',
-      '8.5.6. Drinking or being under the influence of drink or drugs',
-      '8.5.7. Smoking in or near the shop floor, forecourt, or stockroom',
-      '8.5.8. Being impolite or discourteous to members of the public',
-      '8.5.9. Being inappropriately dressed whilst on duty.',
-      '8.5.10. Failure to follow the appropriate procedure in relation staff purchases from the store.'
-    ];
-    disciplinaryItems.forEach(item => {
-      addText(item, 10, false, 5);
-    });
-    addText('This list is not exhaustive.', 10, false, 5);
-
-    // 9. Grievance Procedure
-    addSectionTitle('9. Grievance Procedure');
-    addText('9.1. The object of the grievance procedure is to enable employees who consider they have a grievance or complaint arising from their employment with the Employer to have it dealt with at the nearest appropriate level within as short a time as possible.');
-    addText('9.2. At all stages of the grievance procedure, you may be accompanied by a fellow worker or a trade union official of your choice.');
-    
-    addSubTitle('Informal Resolution');
-    addText('In many cases grievances can be resolved informally without activating the formal procedure. Employees should aim to resolve grievances informally by either writing to or speaking with their line manager.');
-    
-    addSubTitle('Formal Procedure');
-    addText('STEP 1: In the first instance all grievances must be submitted in writing to your Manager who will attempt to deal with the matter.');
-    addText('STEP 2: Every opportunity will be given for your grievance to be stated and thoroughly discussed. You will be invited to attend a meeting.');
-    addText('STEP 3: If you wish to appeal, you will be invited to a further meeting. This will be heard by a more senior manager. The decision is final.');
-
-    // 10. Disciplinary Action
-    addSectionTitle('10. Disciplinary Action');
-    addText('10.1. If your grievance concerns the imposition of an oral or written disciplinary warning, you may use the grievance procedure to seek redress.');
-    addText('10.5. The Employer requires good standards of discipline from its employees, together with satisfactory standards of work.');
-    addText('10.6. The purpose of this procedure is to be corrective rather than punitive.');
-    addText('10.7. If your standard of work or conduct falls, and, after warnings, remains below the level which is acceptable, you may be dismissed.');
-    addText('10.8. Summary dismissal without notice will take place if an act of gross misconduct is committed.');
-
-    // 11. Disciplinary Procedure
-    addSectionTitle('11. Disciplinary Procedure');
-    addText('11.1. The following stages in the disciplinary procedure are outlined below. The Employer reserves the right to activate any stage of the procedure where appropriate.');
-    
-    addSubTitle('STAGE 1 – Improvement Notice: Unsatisfactory Performance');
-    addText('If your performance does not meet the acceptable standards expected by the Employer, you may normally be given an improvement notice.');
-    
-    addSubTitle('STAGE 2 – First Written Warning');
-    addText('If your conduct does not meet acceptable standards you will normally be given a written warning.');
-    
-    addSubTitle('STAGE 3 – Second Written Warning');
-    addText('If your conduct continues to fall below acceptable standards you may be given a second written warning.');
-    
-    addSubTitle('STAGE 4 – Final Written Warning');
-    addText('If the offence is sufficiently serious, or there is a failure to improve during the currency of a prior warning, a final written warning may be given.');
-    
-    addSubTitle('STAGE 5 – Dismissal or Other Sanction');
-    addText('If there is still a failure to improve, or where the conduct or performance is sufficiently serious, the final step in the procedure may be dismissal.');
-
-    // 12. Appeals Procedure
-    addSectionTitle('12. Appeals Procedure');
-    addText('12.1. If you are dissatisfied with any disciplinary decision affecting you, you may appeal to your Manager within five working days of the disciplinary decision.');
-    addText('12.2. Any appeal must be put in writing, stating the grounds for the appeal.');
-    addText('12.3. You will be invited to attend an appeal meeting. A more senior manager will hear this where this is reasonably practicable.');
-    addText('12.4. Within a reasonable period of time after the appeal meeting, you will be informed of the decision. The decision is final.');
-
-    // 13. Pension
-    addSectionTitle('13. Pension');
-    addText('The Employer will comply with the employer pension duties concerning pension auto-enrolment in accordance with Part 1 of the Pensions Act 2008. Subject to your age and earnings level, you will be automatically enrolled into either a qualifying pension scheme or NEST.');
-
-    // 14. Termination
-    addSectionTitle('14. Termination of employment');
-    addText('14.1. You may terminate your employment at any time on giving to the Employer not less than three weeks prior written notice.');
-    addText('14.2. Nothing in this contract will prevent the Employer from terminating your employment, without notice, in a case of gross misconduct.');
-    addText('14.3. The Employer may in its sole and absolute discretion terminate your employment at any time with immediate effect by making a payment to you in lieu of notice.');
-
-    // 15. Data protection
-    addSectionTitle('15. Data protection and monitoring');
-    addText('15.1. You consent to the Employer processing personal data and sensitive personal data concerning you in its manual and computerised/automated filing systems internally and, so far as is reasonably necessary, externally.');
-    addText('15.2. You consent to your personal data and sensitive personal data being transferred to and processed by: any Group Employer; professional advisors; any third-party providing services; HM Revenue and Customs or other authorities; and prospective purchasers.');
-    addText('15.3. You consent to the Employer monitoring, intercepting, reading, and recording your telephone, email, and other electronic communications for monitoring purposes.');
-
-    // 16. Variation
-    addSectionTitle('16. Variation');
-    addText('The Employer reserves the right to make reasonable changes to any of your terms and conditions of employment. Changes will be notified to you in writing before they come into force.');
-
-    // 17. Policies
-    addSectionTitle('17. Policies and Procedures');
-    addText('You agree to comply with the rules, policies, and procedures of the Employer from time to time in force, although these do not form part of your contract of employment.');
-
-    // 18. Collective Agreement
-    addSectionTitle('18. Collective Agreement');
-    addText('There is no collective agreement which directly affects your employment.');
-
-    // 19. Entire agreement
-    addSectionTitle('19. Entire agreement');
-    addText('19.1. This contract is the entire agreement between you and the Employer in relation to its subject matter and replaces all previous agreements and arrangements.');
-    addText('19.2. The information contained in this contract contains the particulars required for a written statement under Section 1 of the Employment Rights Act 1996.');
-
-    // Signatures — keep the heading with the whole employee block on one page
-    y += 10;
-    checkPageBreak(80);
-    addSectionTitle('AGREED by the parties');
-    y += 5;
-    
-    const formatDateDD = (d: string | null) => {
-      if (!d) return '';
-      const parts = d.split('-');
-      const dt = parts.length === 3 ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])) : new Date(d);
-      if (isNaN(dt.getTime())) return d;
-      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-    };
-
-    // --- EMPLOYEE SECTION ---
-    // 1. Employee signature (handwritten space above line)
-    if (contractData.employee_signature_data && contractData.employee_signature_data.startsWith('data:image')) {
-      try { doc.addImage(contractData.employee_signature_data, 'PNG', margin, y, 60, 15); } catch {}
+      const empName = `${contract.employee?.first_name || ''}_${contract.employee?.last_name || ''}`.trim().replace(/\s+/g, '_') || 'Employee';
+      doc.save(`Approved_Employment_Contract_${empName}.pdf`);
+      toast.success('Complete approved contract downloaded');
+    } catch (err: any) {
+      console.error('Error generating contract PDF:', err);
+      toast.error('Failed to download contract PDF');
     }
-    y += 18;
-    // Line
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('______________________________', margin, y);
-    y += 5;
-    doc.setFontSize(8);
-    doc.text('(Employee Signature)', margin, y);
-    y += 8;
-    // 2. I agree to the above terms
-    doc.setFontSize(10);
-    doc.text('I agree to the above terms', margin, y);
-    y += 10;
-    // 3. Signed: EMPLOYEE NAME (bold)
-    doc.setFont('helvetica', 'normal');
-    doc.text('Signed: ', margin, y);
-    const signedLabelWidth = doc.getTextWidth('Signed: ');
-    doc.setFont('helvetica', 'bold');
-    const empFullName = (contractData.employee_name || `${contract.employee?.first_name} ${contract.employee?.last_name}`).toUpperCase();
-    doc.text(empFullName, margin + signedLabelWidth, y);
-    doc.setFont('helvetica', 'normal');
-    y += 7;
-    // 4. Date
-    doc.text(`Date: ${formatDateDD(contractData.employee_signed_date)}`, margin, y);
-    y += 25;
-
-    // --- EMPLOYER SECTION --- keep the whole block together on one page
-    checkPageBreak(60);
-    // 1. Employer signature (handwritten above line)
-    if (contract.employer_signature) {
-      if (contract.employer_signature_type === 'drawn' || contract.employer_signature_type === 'uploaded') {
-        try { doc.addImage(contract.employer_signature, 'PNG', margin, y, 60, 15); } catch {}
-        y += 18;
-      } else {
-        doc.setFont('times', 'bolditalic');
-        doc.setFontSize(14);
-        doc.text(contract.employer_signature, margin, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        y += 12;
-      }
-    }
-    // Line
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('______________________________', margin, y);
-    y += 5;
-    doc.setFontSize(8);
-    doc.text('(Authorized Signature)', margin, y);
-    y += 8;
-    // 2. Signed on behalf of the Employer
-    doc.setFontSize(10);
-    doc.text('Signed on behalf of the Employer', margin, y);
-    y += 10;
-    // 3. Admin name (bold)
-    const adminName = contractData.employer_name || '';
-    if (adminName) {
-      doc.setFont('helvetica', 'bold');
-      doc.text(adminName.toUpperCase(), margin, y);
-      doc.setFont('helvetica', 'normal');
-      y += 7;
-    }
-    // 4. Date
-    doc.text(`Date: ${formatDateDD(contract.employer_signed_date)}`, margin, y);
-
-    const employeeName = contractData.employee_name || `${contract.employee?.first_name}_${contract.employee?.last_name}`;
-    doc.save(`Contract_${employeeName.replace(/\s/g, '_')}.pdf`);
-    toast.success('Contract downloaded');
-  };
-
-  const generateBasicContractPDF = (contract: ApprovedContract) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    let y = 30;
-
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Employment Contract', pageWidth / 2, y, { align: 'center' });
-    y += 15;
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    
-    doc.text(`Employee: ${contract.employee?.first_name} ${contract.employee?.last_name}`, margin, y);
-    y += 8;
-    doc.text(`Organization: ${contract.employee?.organization?.name || '-'}`, margin, y);
-    y += 8;
-    doc.text(`Branch: ${contract.employee?.branch?.name || '-'}`, margin, y);
-    y += 8;
-    doc.text(`Job Title: ${contract.employee?.job_title || '-'}`, margin, y);
-    y += 8;
-    doc.text(`Join Date: ${contract.employee?.join_date || '-'}`, margin, y);
-    y += 15;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Contract Approval', margin, y);
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Approved Date: ${contract.approved_at ? format(new Date(contract.approved_at), 'dd MMM yyyy') : '-'}`, margin, y);
-
-    doc.save(`contract-${contract.employee?.first_name}-${contract.employee?.last_name}.pdf`);
-    toast.success('Contract downloaded');
   };
 
   if (selectedEmployee) {
@@ -678,63 +251,67 @@ export default function ApprovedContractsTab() {
                   }
                 </TableCell>
                 <TableCell>
-                  {contract.employee?.status === 'active' ? (
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Completed
+                  {contract.signed_contract_path ? (
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-600" />
+                      Signed Contract Attached
                     </Badge>
                   ) : (
-                    <Badge variant="secondary">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Pending Docs
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/20 dark:text-amber-400">
+                      <Clock className="h-3 w-3 mr-1 text-amber-600" />
+                      Awaiting Signed Upload
                     </Badge>
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {contract.employee?.status !== 'active' && (
+                      <Button 
+                        size="sm"
+                        className="h-8 text-xs gap-1.5 font-medium"
+                        onClick={() => setSelectedEmployee(contract.employee_id)}
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Final Upload & Activate
+                      </Button>
+                    )}
                     <Button 
                       variant="outline" 
                       size="sm"
+                      className="h-8 text-xs gap-1"
                       onClick={() => handleViewContract(contract)}
                     >
-                      <Eye className="h-4 w-4 mr-1" />
+                      <Eye className="h-3.5 w-3.5" />
                       View
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="h-8 text-xs gap-1"
+                      onClick={() => handleDownloadFile(contract)}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download PDF
                     </Button>
                     {isSuperAdmin && (
                       <Button
                         variant="outline"
                         size="sm"
+                        className="h-8 text-xs gap-1"
                         onClick={() => setEditingContract(contract)}
                       >
-                        <Pencil className="h-4 w-4 mr-1" />
+                        <Pencil className="h-3.5 w-3.5" />
                         Edit
-                      </Button>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleDownloadFile(contract)}
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
-                    </Button>
-                    {contract.employee?.status !== 'active' && (
-                      <Button 
-                        size="sm"
-                        onClick={() => setSelectedEmployee(contract.employee_id)}
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        Continue
                       </Button>
                     )}
                     {isSuperAdmin && (
                       <Button
-                        variant="destructive"
+                        variant="ghost"
                         size="sm"
+                        className="h-8 text-xs text-destructive hover:bg-destructive/10"
                         onClick={() => setDeletingContract(contract)}
                       >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Delete
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>

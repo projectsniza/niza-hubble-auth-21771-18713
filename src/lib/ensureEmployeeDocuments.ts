@@ -143,14 +143,48 @@ export async function getOrCreateEmployeeFolder(
     }
 
     // 4. Find or create Employee Folder under parent folder
-    const { data: existingEmpFolder } = await supabase
-      .from('folders')
-      .select('id')
-      .eq('folder_type', 'employee')
-      .eq('employee_id', employeeId)
-      .maybeSingle();
+    let existingEmpFolder: any = null;
+    if (employeeId) {
+      const { data } = await supabase
+        .from('folders')
+        .select('id, parent_id, path')
+        .eq('folder_type', 'employee')
+        .eq('employee_id', employeeId)
+        .maybeSingle();
+      existingEmpFolder = data;
+    }
+
+    if (!existingEmpFolder && parentFolderId) {
+      const { data } = await supabase
+        .from('folders')
+        .select('id, parent_id, path')
+        .eq('folder_type', 'employee')
+        .eq('parent_id', parentFolderId)
+        .eq('name', empName)
+        .maybeSingle();
+      existingEmpFolder = data;
+      if (existingEmpFolder && employeeId) {
+        await supabase
+          .from('folders')
+          .update({ employee_id: employeeId })
+          .eq('id', existingEmpFolder.id);
+      }
+    }
 
     if (existingEmpFolder) {
+      // If employee was transferred to a new branch, cleanly move the existing folder to the new branch
+      if (parentFolderId && existingEmpFolder.parent_id !== parentFolderId) {
+        const employeeFolderPath = `${currentPath}/${empName}`;
+        await supabase
+          .from('folders')
+          .update({
+            parent_id: parentFolderId,
+            branch_id: branchId || null,
+            organization_id: orgId || null,
+            path: employeeFolderPath,
+          })
+          .eq('id', existingEmpFolder.id);
+      }
       return existingEmpFolder.id;
     }
 
@@ -193,7 +227,17 @@ export async function ensureEmployeeDocuments(
   uploadedBy?: string
 ): Promise<{ success: boolean; folderId: string | null; generatedCount: number }> {
   try {
-    if (!employeeId) return { success: false, folderId: null, generatedCount: 0 };
+    // 0. Check if auto-saving onboarding forms to documents is enabled in Onboarding Settings
+    const { data: autoSaveSetting } = await supabase
+      .from('onboarding_form_settings')
+      .select('enabled')
+      .eq('form_type', 'auto_save_forms_to_documents')
+      .maybeSingle();
+
+    // Default is false: unless toggled ON in Onboarding Settings, do not automatically push form PDFs to documents folder
+    if (!autoSaveSetting?.enabled) {
+      return { success: true, folderId: targetFolderId || null, generatedCount: 0 };
+    }
 
     // 1. Fetch full employee record
     const { data: employee, error: empErr } = await supabase
@@ -213,25 +257,34 @@ export async function ensureEmployeeDocuments(
       folderId = await getOrCreateEmployeeFolder(employeeId, employee, uploadedBy);
     }
 
-    // 3. Fetch existing documents for this employee
+    // 3. Fetch all existing documents for this employee with comprehensive deduplication
     const { data: existingDocs } = await supabase
       .from('documents')
-      .select('id, title, folder_id')
-      .eq('employee_id', employeeId)
-      .in('title', ['Application Form', 'Starter Checklist', 'Bank Details']);
+      .select('id, title, file_name, file_path, folder_id')
+      .eq('employee_id', employeeId);
 
-    const existingDocMap = new Map<string, any>();
-    (existingDocs || []).forEach((d: any) => {
-      existingDocMap.set(d.title, d);
-      // Fix folder_id if it was null or mismatched and we have a valid folderId
-      if (folderId && d.folder_id !== folderId) {
-        supabase
-          .from('documents')
-          .update({ folder_id: folderId })
-          .eq('id', d.id)
-          .then();
+    const hasDoc = (keyword: string) => {
+      const lower = keyword.toLowerCase();
+      const slug = lower.replace(/\s+/g, '_');
+      return (existingDocs || []).some((d: any) => {
+        const titleLower = (d.title || '').toLowerCase();
+        const fileLower = (d.file_name || '').toLowerCase();
+        return titleLower.includes(lower) || fileLower.includes(slug);
+      });
+    };
+
+    // Update folder_id for existing documents if transferred to a new folder
+    if (folderId && existingDocs && existingDocs.length > 0) {
+      for (const d of existingDocs) {
+        if (d.folder_id !== folderId) {
+          supabase
+            .from('documents')
+            .update({ folder_id: folderId })
+            .eq('id', d.id)
+            .then();
+        }
       }
-    });
+    }
 
     // 4. Fetch all 3 onboarding form responses
     const [appRes, starterRes, bankRes] = await Promise.all([
@@ -261,7 +314,7 @@ export async function ensureEmployeeDocuments(
     const uploads: Array<{ title: string; doc: any; baseName: string }> = [];
 
     // --- APPLICATION FORM ---
-    if (!existingDocMap.has('Application Form')) {
+    if (!hasDoc('Application Form')) {
       const appData = appRes?.data?.form_data || {
         organization_id: employee.organization_id,
         branch_id: employee.branch_id,
@@ -282,7 +335,7 @@ export async function ensureEmployeeDocuments(
     }
 
     // --- STARTER CHECKLIST ---
-    if (!existingDocMap.has('Starter Checklist')) {
+    if (!hasDoc('Starter Checklist')) {
       const appData = (appRes?.data?.form_data as any) || {};
       const starterData = starterRes?.data?.form_data || {
         first_names: employee.first_name || appData.name?.split(' ')?.[0] || '',
@@ -308,7 +361,7 @@ export async function ensureEmployeeDocuments(
     }
 
     // --- BANK DETAILS ---
-    if (!existingDocMap.has('Bank Details')) {
+    if (!hasDoc('Bank Details')) {
       const appData = (appRes?.data?.form_data as any) || {};
       const bankData = bankRes?.data?.form_data || {
         your_name: `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || appData.name || '',

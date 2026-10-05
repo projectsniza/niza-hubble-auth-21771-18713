@@ -12,10 +12,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { buildCompleteContractPdf } from '@/lib/onboardingPdfs';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
 interface ContractApprovalDialogProps {
@@ -49,6 +51,7 @@ export default function ContractApprovalDialog({
   const [rtwFile, setRtwFile] = useState<File | null>(null);
   const [rtwExpiry, setRtwExpiry] = useState('');
   const [isUploadingRtw, setIsUploadingRtw] = useState(false);
+  const [rtwUploadProgress, setRtwUploadProgress] = useState(0);
   
   // Document viewer state
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -198,6 +201,15 @@ export default function ContractApprovalDialog({
     if (!rtwFile || !employee.id) return;
     
     setIsUploadingRtw(true);
+    setRtwUploadProgress(15);
+
+    const interval = setInterval(() => {
+      setRtwUploadProgress((prev) => {
+        if (prev >= 88) return prev;
+        return prev + Math.floor(Math.random() * 12) + 6;
+      });
+    }, 120);
+
     try {
       // Get or create employee folder
       let folderId: string | null = null;
@@ -238,9 +250,10 @@ export default function ContractApprovalDialog({
         verified_by_role: user?.role || 'super_admin'
       });
 
-      toast.success('Right to Work document uploaded successfully');
-      setRtwFile(null);
-      setRtwExpiry('');
+      clearInterval(interval);
+      setRtwUploadProgress(100);
+
+      toast.success('Right to Work document uploaded and verified successfully');
       
       // Refresh documents in approval
       if (approval.documents) {
@@ -249,13 +262,27 @@ export default function ContractApprovalDialog({
           title: 'Right to Work (Verified)',
           file_name: rtwFile.name,
           file_path: filePath,
-          verified_by_name: user?.name,
-          verified_by_role: user?.role
+          file_type: rtwFile.type,
+          file_size: rtwFile.size,
+          expiry_date: rtwExpiry || null,
+          created_at: new Date().toISOString(),
+          verified_at: new Date().toISOString(),
+          verified_by_name: user?.name || 'Super Admin',
+          verified_by_role: user?.role || 'super_admin'
         });
       }
+
+      setTimeout(() => {
+        setRtwFile(null);
+        setRtwExpiry('');
+        setRtwUploadProgress(0);
+      }, 600);
     } catch (error: any) {
+      clearInterval(interval);
+      setRtwUploadProgress(0);
       toast.error(error.message || 'Failed to upload RTW document');
     } finally {
+      clearInterval(interval);
       setIsUploadingRtw(false);
     }
   };
@@ -553,46 +580,80 @@ export default function ContractApprovalDialog({
             })()}
 
             {/* RTW Upload Section for Super Admin - Unique Share Code Design */}
-            <Card className="p-5 border-2 border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-md">
+            <Card className="p-5 border-2 border-amber-500/50 bg-gradient-to-br from-amber-50/70 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-sm rounded-xl">
               <div className="flex items-center gap-3 mb-3">
-                <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                  <Upload className="h-5 w-5 text-amber-600" />
+                <div className="h-10 w-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0 text-amber-700 dark:text-amber-400">
+                  <Upload className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-amber-800 dark:text-amber-300">Upload Verified Employee Share Code Document</h4>
-                  <p className="text-sm text-amber-700/80 dark:text-amber-400/80">Verify the share code and upload the Right to Work document. This will be saved to the employee's folder.</p>
+                  <h4 className="font-bold text-amber-900 dark:text-amber-200 text-base">Upload Verified Employee Share Code Document</h4>
+                  <p className="text-xs text-amber-700/90 dark:text-amber-400/80">Verify the share code and upload the Right to Work document. This will be saved to the employee's folder.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Select Document</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Select Document</Label>
                   <Input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setRtwFile(e.target.files?.[0] || null)}
+                    disabled={isUploadingRtw}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setRtwFile(file);
+                      setRtwUploadProgress(0);
+                    }}
+                    className="bg-background text-xs cursor-pointer"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Expiry Date (if applicable)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Expiry Date (if applicable)</Label>
                   <Input
                     type="date"
+                    disabled={isUploadingRtw}
                     value={rtwExpiry}
                     onChange={(e) => setRtwExpiry(e.target.value)}
+                    className="bg-background text-xs"
                   />
                 </div>
-                <div className="space-y-2 flex items-end">
+                <div className="space-y-1.5 flex items-end">
                   <Button
                     onClick={handleUploadRtwDocument}
                     disabled={!rtwFile || isUploadingRtw}
-                    className="w-full gap-2"
+                    className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm transition-all"
                   >
-                    <Plus className="h-4 w-4" />
-                    {isUploadingRtw ? 'Uploading...' : 'Upload RTW'}
+                    {isUploadingRtw ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Uploading ({rtwUploadProgress}%)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span>Upload RTW</span>
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
+
               {rtwFile && (
-                <p className="text-sm text-primary mt-2">Selected: {rtwFile.name}</p>
+                <div className="mt-3 p-3 rounded-lg bg-background/80 border border-amber-200/60 dark:border-amber-900/40 flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                      <span className="font-medium truncate text-foreground">{rtwFile.name}</span>
+                      <span className="text-muted-foreground flex-shrink-0 text-[11px]">({(rtwFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                    </div>
+                    {isUploadingRtw && (
+                      <span className="font-semibold text-amber-700 dark:text-amber-400 flex-shrink-0">
+                        {rtwUploadProgress}%
+                      </span>
+                    )}
+                  </div>
+                  {isUploadingRtw && (
+                    <Progress value={rtwUploadProgress} className="h-2 w-full bg-amber-100 dark:bg-amber-950/60 [&>div]:bg-amber-600" />
+                  )}
+                </div>
               )}
             </Card>
 
@@ -867,105 +928,21 @@ export default function ContractApprovalDialog({
                 </div>
               </div>
               <Button variant="outline" onClick={async () => {
-                if (approval.contract_file_path) {
-                  handleDownloadContract();
-                } else if (contractContent) {
-                  // Generate PDF locally from contract content
-                  toast.info('Generating contract PDF...');
-                  try {
-                    const { jsPDF } = await import('jspdf');
-                    const doc = new jsPDF();
-                    const pageWidth = doc.internal.pageSize.getWidth();
-                    const margin = 20;
-                    const contentWidth = pageWidth - 2 * margin;
-                    let yPos = 30;
-                    
-                    const formatDate = (d: string) => {
-                      if (!d) return '';
-                      const dt = new Date(d);
-                      if (isNaN(dt.getTime())) return d;
-                      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-                    };
-
-                    doc.setFontSize(14);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('CONTRACT OF EMPLOYMENT', pageWidth / 2, yPos, { align: 'center' });
-                    yPos += 10;
-                    doc.setFontSize(10);
-                    doc.setFont('helvetica', 'normal');
-                    doc.text(`Date: ${formatDate(contractContent.contract_date)}`, pageWidth / 2, yPos, { align: 'center' });
-                    yPos += 15;
-
-                    const addLine = (text: string, bold = false) => {
-                      doc.setFont('helvetica', bold ? 'bold' : 'normal');
-                      const lines = doc.splitTextToSize(text, contentWidth);
-                      if (yPos + lines.length * 5 > 280) { doc.addPage(); yPos = 20; }
-                      doc.text(lines, margin, yPos);
-                      yPos += lines.length * 5 + 2;
-                    };
-
-                    addLine('PARTIES', true);
-                    addLine(`1. ${employee.organization?.name || ''} (registered number ${contractContent.registered_number || ''}) (the Employer)`);
-                    addLine(`2. ${contractContent.employee_name || `${employee.first_name} ${employee.last_name}`} (the Employee)`);
-                    yPos += 5;
-                    addLine('KEY TERMS', true);
-                    addLine(`Job Title: ${contractContent.job_title || ''}`);
-                    addLine(`Hours per Week: ${contractContent.hours_per_week || ''}`);
-                    addLine(`Salary: £${contractContent.salary_rate || ''} per ${contractContent.salary_type === 'annual' ? 'annum' : 'hour'}`);
-                    addLine(`Place of Work: ${contractContent.place_of_work || ''}`);
-                    addLine(`Holiday: ${contractContent.holiday_days || '28'} days per year`);
-                    yPos += 10;
-
-                    // Signature section
-                    addLine('AGREED by the parties', true);
-                    yPos += 5;
-
-                    // Employee: 1. signature image
-                    if (contractContent.employee_signature_data && contractContent.employee_signature_data.startsWith('data:image')) {
-                      try { doc.addImage(contractContent.employee_signature_data, 'PNG', margin, yPos, 60, 15); yPos += 18; } catch {}
-                    }
-                    // Line + label
-                    doc.text('______________________________', margin, yPos); yPos += 5;
-                    doc.setFontSize(8); doc.text('(Employee Signature)', margin, yPos); doc.setFontSize(10); yPos += 8;
-                    // 2. I agree
-                    doc.text('I agree to the above terms', margin, yPos); yPos += 10;
-                    // 3. Signed: NAME
-                    doc.setFont('helvetica', 'normal'); doc.text('Signed: ', margin, yPos);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text((contractContent.employee_name || `${employee.first_name} ${employee.last_name}`).toUpperCase(), margin + doc.getTextWidth('Signed: '), yPos);
-                    doc.setFont('helvetica', 'normal'); yPos += 7;
-                    // 4. Date
-                    doc.text(`Date: ${formatDate(contractContent.employee_signed_date)}`, margin, yPos); yPos += 25;
-
-                    // Employer: 1. signature above line
-                    if (approval.employer_signature && approval.employer_signature_type === 'drawn' && approval.employer_signature.startsWith('data:image')) {
-                      try { doc.addImage(approval.employer_signature, 'PNG', margin, yPos, 60, 15); yPos += 18; } catch {}
-                    } else if (approval.employer_signature && approval.employer_signature_type === 'typed') {
-                      doc.setFont('helvetica', 'bolditalic'); doc.setFontSize(14);
-                      doc.text(approval.employer_signature, margin, yPos);
-                      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); yPos += 12;
-                    }
-                    doc.text('______________________________', margin, yPos); yPos += 5;
-                    doc.setFontSize(8); doc.text('(Authorized Signature)', margin, yPos); doc.setFontSize(10); yPos += 10;
-                    // 2. Signed on behalf
-                    doc.text('Signed on behalf of the Employer', margin, yPos); yPos += 10;
-                    // 3. Name
-                    const empName = (approval.contract_content as any)?.employer_name || '';
-                    if (empName) {
-                      doc.setFont('helvetica', 'bold');
-                      doc.text(empName.toUpperCase(), margin, yPos);
-                      doc.setFont('helvetica', 'normal'); yPos += 7;
-                    }
-                    // 4. Date
-                    doc.text(`Date: ${formatDate(approval.employer_signed_date)}`, margin, yPos);
-
-                    doc.save(`Contract_${employee.first_name}_${employee.last_name}.pdf`);
-                    toast.success('Contract PDF downloaded');
-                  } catch (err) {
-                    toast.error('Failed to generate PDF');
-                  }
-                } else {
-                  toast.error('No contract data available');
+                toast.info('Generating complete contract PDF...');
+                try {
+                  const doc = await buildCompleteContractPdf({
+                    contractData: contractContent || {},
+                    employeeData: employeeData || {},
+                    organizationData: employee.organization || {},
+                    branchData: employee.branch || {},
+                    approvalData: approval || {},
+                  });
+                  const empName = `${employeeData.first_name || ''}_${employeeData.last_name || ''}`.trim().replace(/\s+/g, '_') || 'Employee';
+                  doc.save(`Contract_${empName}.pdf`);
+                  toast.success('Complete contract PDF downloaded');
+                } catch (err) {
+                  console.error('Failed to generate contract PDF:', err);
+                  toast.error('Failed to generate PDF');
                 }
               }}>
                 <Download className="h-4 w-4 mr-2" />

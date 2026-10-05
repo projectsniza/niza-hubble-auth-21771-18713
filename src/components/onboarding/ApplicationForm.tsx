@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,6 +91,7 @@ export default function ApplicationForm({
 }: ApplicationFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formData, setFormData] = useState<FormData>({
     organization_id: employeeData.organization_id,
@@ -173,6 +175,7 @@ export default function ApplicationForm({
         savedData.branch_address = selectedBranch?.address || '';
       }
       setFormData(prev => ({ ...prev, ...savedData }));
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } else {
       if (employeeData.address && !formData.postcode) {
         const ukPostcodeRegex = /([A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2})/i;
@@ -307,7 +310,8 @@ export default function ApplicationForm({
         }, { onConflict: 'employee_id,form_type' });
 
       if (error) throw error;
-      toast.success('Application form saved');
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      toast.success('Application form saved successfully');
       onSave();
       return true;
     } catch (error: unknown) {
@@ -705,16 +709,36 @@ export default function ApplicationForm({
 
   return (
     <div className="space-y-6" ref={formRef}>
-      <Card className="p-8 print:shadow-none bg-card">
+      {/* Guidance Banner */}
+      <div className="bg-slate-50 dark:bg-slate-900/50 border rounded-xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground tracking-tight">Stage 2: Employment Application Form</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Record candidate qualifications, past employment, and mandatory declarations. Data is stored digitally and can be downloaded anytime.
+            </p>
+          </div>
+          {savedAt ? (
+            <Badge className="bg-emerald-600 text-white text-xs py-1 px-3 flex-shrink-0 font-normal">
+              Form Saved ({savedAt})
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs bg-background py-1 px-3 flex-shrink-0 font-normal">
+              Draft Pending Save
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <Card className="p-8 print:shadow-none bg-card shadow-sm border">
         {/* Header */}
-        <div className="text-center mb-8">
-          <img src={nizaLogo} alt="Niza Group" className="h-16 mx-auto mb-2" />
-          <h2 className="text-xl font-bold">{selectedOrg?.name?.toUpperCase() || 'NIZA GROUP'}</h2>
-          <h1 className="text-2xl font-bold text-primary mt-2">Application form</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Please contact the site manager at {branchAddress || 'the branch location'} if you require this form in an alternative format.
+        <div className="text-center mb-8 border-b pb-6">
+          <img src={nizaLogo} alt="Niza Group" className="h-14 mx-auto mb-3" />
+          <h2 className="text-lg font-bold tracking-tight text-foreground">{selectedOrg?.name?.toUpperCase() || 'NIZA GROUP'}</h2>
+          <h1 className="text-2xl font-bold text-primary mt-1">Application for Employment</h1>
+          <p className="text-xs text-muted-foreground mt-2">
+            Please contact site management at {branchAddress || 'the branch'} if this document is needed in an alternative format.
           </p>
-          <p className="text-sm text-amber-600 mt-2">Fields marked with * are mandatory</p>
         </div>
 
         {/* Section 1: Position */}
@@ -1399,26 +1423,26 @@ export default function ApplicationForm({
 
         {/* Actions */}
         {!readOnly && (
-          <div className="flex flex-wrap justify-between gap-4 print:hidden">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap justify-between items-center gap-4 mt-8 pt-6 border-t print:hidden">
+            <div className="flex items-center gap-2">
               {onBack && (
-                <Button variant="outline" onClick={onBack} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Previous
+                <Button variant="outline" size="sm" onClick={onBack} className="gap-2 text-xs h-9">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Previous Stage
                 </Button>
               )}
-              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-                <Download className="h-4 w-4" />
-                Download / Print
+              <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="gap-2 text-xs h-9">
+                <Download className="h-3.5 w-3.5" />
+                Download PDF Copy
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
-                <Save className="h-4 w-4" />
-                Save
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSave} disabled={loading} className="gap-2 text-xs h-9">
+                <Save className="h-3.5 w-3.5" />
+                Save Draft
               </Button>
-              <Button onClick={handleSaveAndContinue} disabled={loading}>
-                {loading ? 'Saving...' : 'Save & Continue'}
+              <Button size="sm" onClick={handleSaveAndContinue} disabled={loading} className="gap-2 text-xs h-9 px-5">
+                {loading ? 'Saving Data...' : 'Save & Continue'}
               </Button>
             </div>
           </div>

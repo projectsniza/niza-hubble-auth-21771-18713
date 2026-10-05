@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +54,7 @@ export default function BankDetailsForm({
   readOnly = false
 }: BankDetailsFormProps) {
   const [loading, setLoading] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formData, setFormData] = useState<FormData>({
     your_name: `${employeeData.first_name} ${employeeData.last_name}`,
@@ -83,6 +85,7 @@ export default function BankDetailsForm({
 
     if (bankData?.form_data) {
       setFormData(prev => ({ ...prev, ...(bankData.form_data as unknown as FormData) }));
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       return;
     }
 
@@ -168,7 +171,8 @@ export default function BankDetailsForm({
         }, { onConflict: 'employee_id,form_type' });
 
       if (error) throw error;
-      toast.success('Bank details saved');
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      toast.success('Bank details saved successfully');
       onSave();
       return true;
     } catch (error: unknown) {
@@ -396,18 +400,35 @@ export default function BankDetailsForm({
 
   return (
     <div className="space-y-6">
-      <Card className="p-8 print:shadow-none">
+      {/* Guidance Banner */}
+      <div className="bg-slate-50 dark:bg-slate-900/50 border rounded-xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground tracking-tight">Stage 4: Bank & Payroll Account Details</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Provide UK bank details for monthly wage disbursements. Details are securely encrypted in compliance with financial data standards.
+            </p>
+          </div>
+          {savedAt ? (
+            <Badge className="bg-emerald-600 text-white text-xs py-1 px-3 flex-shrink-0 font-normal">
+              Bank Details Saved ({savedAt})
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs bg-background py-1 px-3 flex-shrink-0 font-normal">
+              Draft Pending Save
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <Card className="p-8 print:shadow-none bg-card shadow-sm border">
         {/* Header */}
-        <div className="text-center mb-8">
-          <img src={nizaLogo} alt="Niza Group" className="h-16 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-primary">EMPLOYEE BANK DETAILS FORM</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Please complete the following information carefully.
+        <div className="text-center mb-8 border-b pb-6">
+          <img src={nizaLogo} alt="Niza Group" className="h-14 mx-auto mb-3" />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Employee Bank Details</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Ensure sort code (XX-XX-XX) and 8-digit account number are accurate to prevent payment delays.
           </p>
-          <p className="text-sm text-amber-600 font-medium mt-1">
-            Incorrect information will result in a delay in payment.
-          </p>
-          <p className="text-sm text-amber-600 mt-2">Fields marked with * are mandatory</p>
         </div>
 
         {/* Form Fields */}
@@ -558,26 +579,26 @@ export default function BankDetailsForm({
 
         {/* Actions */}
         {!readOnly && (
-          <div className="flex flex-wrap justify-between gap-4 print:hidden mt-6">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap justify-between items-center gap-4 mt-8 pt-6 border-t print:hidden">
+            <div className="flex items-center gap-2">
               {onBack && (
-                <Button variant="outline" onClick={onBack} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Previous
+                <Button variant="outline" size="sm" onClick={onBack} className="gap-2 text-xs h-9">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Previous Stage
                 </Button>
               )}
-              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-                <Download className="h-4 w-4" />
-                Download / Print
+              <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="gap-2 text-xs h-9">
+                <Download className="h-3.5 w-3.5" />
+                Download PDF Copy
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
-                <Save className="h-4 w-4" />
-                Save
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSave} disabled={loading} className="gap-2 text-xs h-9">
+                <Save className="h-3.5 w-3.5" />
+                Save Draft
               </Button>
-              <Button onClick={handleSaveAndContinue} disabled={loading}>
-                {loading ? 'Saving...' : 'Save & Continue'}
+              <Button size="sm" onClick={handleSaveAndContinue} disabled={loading} className="gap-2 text-xs h-9 px-5">
+                {loading ? 'Saving Data...' : 'Save & Continue'}
               </Button>
             </div>
           </div>

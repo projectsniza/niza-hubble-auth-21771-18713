@@ -631,6 +631,9 @@ export default function OnboardingSettings() {
 
   const getFormSettingEnabled = (formType: string) => {
     const setting = formSettings.find(s => s.form_type === formType);
+    if (formType === 'auto_save_forms_to_documents') {
+      return setting?.enabled ?? false;
+    }
     return setting?.enabled ?? true;
   };
 
@@ -713,6 +716,30 @@ export default function OnboardingSettings() {
             <Switch
               checked={getFormSettingEnabled('bank_details')}
               onCheckedChange={(checked) => handleToggleFormSetting('bank_details', checked)}
+            />
+          </div>
+        </Card>
+
+        {/* Auto-save to Document Hub Toggle */}
+        <Card className="p-4 border-2 border-primary/20 bg-primary/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-foreground">Save Form PDFs to Employee Document Folder</p>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">Optional</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  When enabled, Application Form, Starter Checklist, and Bank Details will automatically save into the employee's document folder. When disabled, forms are viewable directly from onboarding and profile without cluttering document storage.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={getFormSettingEnabled('auto_save_forms_to_documents')}
+              onCheckedChange={(checked) => handleToggleFormSetting('auto_save_forms_to_documents', checked)}
             />
           </div>
         </Card>

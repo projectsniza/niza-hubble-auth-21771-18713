@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -61,6 +62,7 @@ export default function StarterChecklist({
   readOnly = false
 }: StarterChecklistProps) {
   const [loading, setLoading] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formData, setFormData] = useState<FormData>({
     last_name: employeeData.last_name || '',
@@ -97,6 +99,7 @@ export default function StarterChecklist({
 
     if (checklistData?.form_data) {
       setFormData(prev => ({ ...prev, ...(checklistData.form_data as unknown as FormData) }));
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       return;
     }
 
@@ -193,7 +196,8 @@ export default function StarterChecklist({
         }, { onConflict: 'employee_id,form_type' });
 
       if (error) throw error;
-      toast.success('Starter checklist saved');
+      setSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      toast.success('Starter checklist saved successfully');
       onSave();
       return true;
     } catch (error: unknown) {
@@ -479,12 +483,33 @@ export default function StarterChecklist({
 
   return (
     <div className="space-y-6">
-      <Card className="p-8 print:shadow-none bg-card">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
+      {/* Guidance Banner */}
+      <div className="bg-slate-50 dark:bg-slate-900/50 border rounded-xl p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Starter checklist</h1>
-            <p className="text-sm text-amber-600 mt-2">Fields marked with * are mandatory</p>
+            <h2 className="text-xl font-semibold text-foreground tracking-tight">Stage 3: HMRC Starter Checklist</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Determine payroll tax codes and student loan deductions under UK compliance. Digital responses are stored for onboarding records.
+            </p>
+          </div>
+          {savedAt ? (
+            <Badge className="bg-emerald-600 text-white text-xs py-1 px-3 flex-shrink-0 font-normal">
+              Checklist Saved ({savedAt})
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs bg-background py-1 px-3 flex-shrink-0 font-normal">
+              Draft Pending Save
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <Card className="p-8 print:shadow-none bg-card shadow-sm border">
+        {/* Header */}
+        <div className="mb-8 flex items-start justify-between border-b pb-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">HMRC Starter Checklist</h1>
+            <p className="text-xs text-muted-foreground mt-1">Fields marked with an asterisk are required for tax compliance.</p>
           </div>
           <img src={nizaLogo} alt="Niza Group" className="h-12" />
         </div>
@@ -869,26 +894,26 @@ export default function StarterChecklist({
 
         {/* Actions */}
         {!readOnly && (
-          <div className="flex flex-wrap justify-between gap-4 print:hidden">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap justify-between items-center gap-4 mt-8 pt-6 border-t print:hidden">
+            <div className="flex items-center gap-2">
               {onBack && (
-                <Button variant="outline" onClick={onBack} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Previous
+                <Button variant="outline" size="sm" onClick={onBack} className="gap-2 text-xs h-9">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Previous Stage
                 </Button>
               )}
-              <Button variant="outline" onClick={handleDownloadPDF} className="gap-2">
-                <Download className="h-4 w-4" />
-                Download / Print
+              <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="gap-2 text-xs h-9">
+                <Download className="h-3.5 w-3.5" />
+                Download PDF Copy
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleSave} disabled={loading} className="gap-2">
-                <Save className="h-4 w-4" />
-                Save
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSave} disabled={loading} className="gap-2 text-xs h-9">
+                <Save className="h-3.5 w-3.5" />
+                Save Draft
               </Button>
-              <Button onClick={handleSaveAndContinue} disabled={loading}>
-                {loading ? 'Saving...' : 'Save & Continue'}
+              <Button size="sm" onClick={handleSaveAndContinue} disabled={loading} className="gap-2 text-xs h-9 px-5">
+                {loading ? 'Saving Data...' : 'Save & Continue'}
               </Button>
             </div>
           </div>
