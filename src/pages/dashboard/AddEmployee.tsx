@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Send, User, Briefcase, FileCheck, ClipboardList, Wallet, File, Edit } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { 
+  ArrowLeft, ArrowRight, User, Briefcase, FileCheck, 
+  ClipboardList, Wallet, Edit, Check, ShieldCheck, Clock, Info
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +23,6 @@ import DocumentUploadStep, { DocumentUploadStepRef } from '@/components/onboardi
 import { logActivity } from '@/hooks/useActivityLogs';
 import { ensureEmployeeDocuments } from '@/lib/ensureEmployeeDocuments';
 
-
 interface FormSettings {
   application: boolean;
   checklist: boolean;
@@ -27,12 +30,12 @@ interface FormSettings {
 }
 
 const BASE_STEPS = [
-  { id: 'basic', name: 'Basic Details', icon: User },
-  { id: 'application', name: 'Application Form', icon: ClipboardList },
-  { id: 'checklist', name: 'Starter Checklist', icon: FileCheck },
-  { id: 'bank_details', name: 'Bank Details', icon: Wallet },
-  { id: 'documents', name: 'Required Documents', icon: FileCheck },
-  { id: 'contract', name: 'Contract', icon: Briefcase }
+  { id: 'basic', name: 'Basic Details', icon: User, description: 'Personal, contact & employment basics' },
+  { id: 'application', name: 'Application Form', icon: ClipboardList, description: 'Full employment history & qualifications' },
+  { id: 'checklist', name: 'Starter Checklist', icon: FileCheck, description: 'HMRC tax code & student loan declaration' },
+  { id: 'bank_details', name: 'Bank Details', icon: Wallet, description: 'Salary deposit & payroll account details' },
+  { id: 'documents', name: 'Verification Docs', icon: ShieldCheck, description: 'Mandatory ID & right-to-work files' },
+  { id: 'contract', name: 'Employment Contract', icon: Briefcase, description: 'Terms & Super Admin approval submission' }
 ];
 
 interface FormData {
@@ -77,6 +80,7 @@ export default function AddEmployee() {
   const [managers, setManagers] = useState<any[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [employeeRecord, setEmployeeRecord] = useState<any>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const documentUploadRef = useRef<DocumentUploadStepRef>(null);
   
   // Form settings from database
@@ -116,7 +120,6 @@ export default function AddEmployee() {
       if (step.id === 'application') return formSettings.application;
       if (step.id === 'checklist') return formSettings.checklist;
       if (step.id === 'bank_details') return formSettings.bank_details;
-      if (step.id === 'documents') return true; // Always show documents step
       return true;
     });
   };
@@ -126,7 +129,6 @@ export default function AddEmployee() {
   useEffect(() => {
     fetchOrganizations();
     fetchDepartments();
-    // Load form settings first, then fetch employee (which depends on formSettings)
     fetchFormSettings().then((loadedSettings) => {
       if (employeeId) {
         fetchEmployee(employeeId, loadedSettings);
@@ -137,7 +139,6 @@ export default function AddEmployee() {
   useEffect(() => {
     if (formData.organizationId) {
       fetchBranches(formData.organizationId);
-      // Filter departments by organization
       fetchDepartments(formData.organizationId);
     }
   }, [formData.organizationId]);
@@ -181,6 +182,7 @@ export default function AddEmployee() {
     
     if (data) {
       setEmployeeRecord(data);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setFormData({
         firstName: data.first_name || '',
         lastName: data.last_name || '',
@@ -205,7 +207,6 @@ export default function AddEmployee() {
         additionalDocuments: [{ title: '', file: null, expiryDate: '' }]
       });
       
-      // Always determine resume step based on form responses and contract status
       const onboarding = data.employee_onboarding?.[0];
       
       const { data: formResponses } = await supabase
@@ -221,13 +222,11 @@ export default function AddEmployee() {
         .eq('employee_id', id)
         .maybeSingle();
 
-      // Check if documents have been uploaded
       const { count: docCount } = await supabase
         .from('documents')
         .select('*', { count: 'exact', head: true })
         .eq('employee_id', id);
       
-      // Use passed-in settings to avoid stale state
       const activeSettings = loadedSettings || formSettings;
       const getStepsForSettings = (s: FormSettings) => {
         return BASE_STEPS.filter(step => {
@@ -241,45 +240,26 @@ export default function AddEmployee() {
       const determineStep = () => {
         const steps = getStepsForSettings(activeSettings);
         
-        // Basic details are always complete if the employee record exists
         for (let i = 0; i < steps.length; i++) {
           const stepId = steps[i].id;
-          if (stepId === 'basic') {
-            continue; // Employee exists, basic details are done
-          }
-          if (stepId === 'application' && !completedForms.has('application_form')) {
-            return i;
-          }
-          if (stepId === 'checklist' && !completedForms.has('starter_checklist')) {
-            return i;
-          }
-          if (stepId === 'bank_details' && !completedForms.has('bank_details')) {
-            return i;
-          }
+          if (stepId === 'basic') continue;
+          if (stepId === 'application' && !completedForms.has('application_form')) return i;
+          if (stepId === 'checklist' && !completedForms.has('starter_checklist')) return i;
+          if (stepId === 'bank_details' && !completedForms.has('bank_details')) return i;
           if (stepId === 'documents') {
-            // If no documents uploaded yet, stop here
-            if (!docCount || docCount === 0) {
-              return i;
-            }
-            // If onboarding record tracks we haven't passed docs step
+            if (!docCount || docCount === 0) return i;
             if (onboarding) {
               const storedStep = onboarding.current_step || 1;
               const docsStepIndex = steps.findIndex(s => s.id === 'documents');
-              if (storedStep - 1 <= docsStepIndex) {
-                return i;
-              }
+              if (storedStep - 1 <= docsStepIndex) return i;
             }
             continue;
           }
           if (stepId === 'contract') {
-            if (!contractApproval) {
-              return i;
-            }
+            if (!contractApproval) return i;
             continue;
           }
         }
-        
-        // All steps completed, go to last step
         return steps.length - 1;
       };
       
@@ -314,16 +294,12 @@ export default function AddEmployee() {
         .eq('is_active', true)
         .order('name');
       
-      // If an organization is selected, filter by that org OR global departments (null org_id)
       if (orgId) {
         query = query.or(`organization_id.eq.${orgId},organization_id.is.null`);
       }
       
       const { data, error } = await query;
-      if (error) {
-        console.error('Error fetching departments:', error);
-        return;
-      }
+      if (error) return;
       setDepartments(data || []);
     } catch (err) {
       console.error('Exception fetching departments:', err);
@@ -338,7 +314,6 @@ export default function AddEmployee() {
     const currentStepId = STEPS[currentStep]?.id;
     
     if (currentStepId === 'basic') {
-      // Validate all required fields including emergency contact
       if (!formData.firstName || !formData.lastName || !formData.email || !formData.organizationId || !formData.branchId) {
         toast.error('Please fill in all required fields (Name, Email, Organization, Branch)');
         return;
@@ -352,24 +327,19 @@ export default function AddEmployee() {
         return;
       }
       
-      // Validate emergency phone is not same as employee phone
       if (formData.phone && formData.emergencyContactPhone && 
           formData.phone.replace(/\s/g, '') === formData.emergencyContactPhone.replace(/\s/g, '')) {
         toast.error('Emergency contact phone cannot be the same as employee phone');
         return;
       }
       
-      // Create or update employee record after basic details
       if (!employeeRecord) {
         await saveBasicDetails();
       } else {
-        // Update existing employee with latest data
         await updateBasicDetails();
       }
     }
 
-    // For Application Form, Starter Checklist, Bank Details - the forms handle their own save
-    // Just validate they have been saved (form responses exist)
     if ((currentStepId === 'application' || currentStepId === 'checklist' || currentStepId === 'bank_details') && employeeRecord) {
       const formType = currentStepId === 'application' ? 'application_form' : currentStepId === 'checklist' ? 'starter_checklist' : 'bank_details';
       const { data: formResponse } = await supabase
@@ -385,7 +355,6 @@ export default function AddEmployee() {
       }
     }
 
-    // Save documents before moving to contract step
     if (currentStepId === 'documents' && documentUploadRef.current) {
       if (!documentUploadRef.current.hasAllMandatoryDocuments()) {
         toast.error('Please upload all mandatory documents');
@@ -398,13 +367,12 @@ export default function AddEmployee() {
     if (currentStep < STEPS.length - 1) {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
-      // Persist step to database
       if (employeeRecord) {
         await supabase
           .from('employee_onboarding')
           .upsert({
             employee_id: employeeRecord.id,
-            current_step: nextStep + 1 // 1-indexed in DB
+            current_step: nextStep + 1
           }, { onConflict: 'employee_id' });
       }
       window.scrollTo(0, 0);
@@ -415,13 +383,12 @@ export default function AddEmployee() {
     if (currentStep > 0) {
       const prevStep = currentStep - 1;
       setCurrentStep(prevStep);
-      // Persist step to database
       if (employeeRecord) {
         await supabase
           .from('employee_onboarding')
           .upsert({
             employee_id: employeeRecord.id,
-            current_step: prevStep + 1 // 1-indexed in DB
+            current_step: prevStep + 1
           }, { onConflict: 'employee_id' });
       }
       window.scrollTo(0, 0);
@@ -456,7 +423,8 @@ export default function AddEmployee() {
         .eq('id', employeeRecord.id);
 
       if (error) throw error;
-      toast.success('Details updated');
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      toast.success('Basic details updated');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update details';
       toast.error(message);
@@ -495,6 +463,7 @@ export default function AddEmployee() {
 
       if (empError) throw empError;
       setEmployeeRecord(employee);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       toast.success('Basic details saved');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save details';
@@ -502,83 +471,6 @@ export default function AddEmployee() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSubmitForApproval = async () => {
-    if (!employeeRecord) {
-      toast.error('Employee record not found');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Create contract approval record
-      await supabase.from('contract_approvals').insert({
-        employee_id: employeeRecord.id,
-        submitted_by: user?.id,
-        status: 'pending'
-      });
-
-      // Update onboarding status
-      await supabase
-        .from('employee_onboarding')
-        .update({ 
-          contract_submitted_for_approval: true,
-          current_step: getStepIndex('approval') + 2
-        })
-        .eq('employee_id', employeeRecord.id);
-
-      // Log activity for super admin notification
-      if (user) {
-        await logActivity({
-          userId: user.id,
-          userName: user.name,
-          userRole: user.role,
-          activityType: 'contract_submission',
-          activityCategory: 'employees',
-          title: 'Contract Pending Approval',
-          description: `${user.name} submitted contract for ${formData.firstName} ${formData.lastName}`,
-          organizationId: user.organizationId,
-          branchId: user.branchId,
-        });
-      }
-
-      toast.success('Contract submitted for approval');
-      handleNext();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to submit for approval';
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleComplete = async () => {
-    if (!employeeRecord) return;
-
-    try {
-      await supabase
-        .from('employees')
-        .update({ status: 'active' })
-        .eq('id', employeeRecord.id);
-
-      await supabase
-        .from('employee_onboarding')
-        .update({ completed_at: new Date().toISOString() })
-        .eq('employee_id', employeeRecord.id);
-
-      await ensureEmployeeDocuments(employeeRecord.id, null, user?.id);
-
-      toast.success('Employee onboarding completed!');
-      navigate('/dashboard/employees');
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to complete onboarding';
-      toast.error(message);
-    }
-  };
-
-  const getStepIndex = (stepId: string) => {
-    return STEPS.findIndex(s => s.id === stepId);
   };
 
   const addDocument = () => {
@@ -597,54 +489,123 @@ export default function AddEmployee() {
   const currentStepId = STEPS[currentStep]?.id;
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/employees')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-foreground">Employee Onboarding</h1>
-            <p className="text-muted-foreground">Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep]?.name}</p>
-          </div>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="space-y-4">
-          <Progress value={progress} className="h-2" />
-          <div className="grid grid-cols-5 gap-2 overflow-x-auto pb-2">
-            {STEPS.map((step, index) => (
-              <div key={step.id} className={`flex flex-col items-center gap-1 ${index <= currentStep ? 'text-primary' : 'text-muted-foreground'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${index <= currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                  <step.icon className="h-4 w-4" />
-                </div>
-                <span className="text-[10px] text-center leading-tight">{step.name}</span>
+    <div className="min-h-screen bg-slate-50/50 dark:bg-background p-6 lg:p-10">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/employees')} className="rounded-xl border">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-foreground tracking-tight">Employee Onboarding</h1>
+                {employeeRecord && (
+                  <Badge variant="outline" className="text-xs bg-muted font-mono">
+                    {employeeRecord.first_name} {employeeRecord.last_name}
+                  </Badge>
+                )}
               </div>
-            ))}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Stage {currentStep + 1} of {STEPS.length}: <span className="font-semibold text-foreground">{STEPS[currentStep]?.name}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {lastSavedTime && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border">
+                <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Saved at {lastSavedTime}</span>
+              </div>
+            )}
+            {employeeRecord && currentStep > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setCurrentStep(0)} className="h-8 text-xs gap-1.5">
+                <Edit className="h-3 w-3" />
+                Edit Profile
+              </Button>
+            )}
           </div>
         </div>
 
-        <Card className="p-8">
+        {/* Stepper Navigation */}
+        <Card className="p-5 shadow-sm border">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+              <span>Overall Onboarding Progress</span>
+              <span>{Math.round(progress)}% Complete</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2 pt-2">
+              {STEPS.map((step, index) => {
+                const isCurrent = index === currentStep;
+                const isCompleted = index < currentStep;
+
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => {
+                      if (employeeRecord && index <= currentStep) {
+                        setCurrentStep(index);
+                      }
+                    }}
+                    disabled={!employeeRecord && index > 0}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-all border ${
+                      isCurrent 
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/20' 
+                        : isCompleted
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400'
+                        : 'bg-muted/40 text-muted-foreground border-border/40 opacity-70 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-semibold ${
+                      isCurrent 
+                        ? 'bg-white/20 text-white' 
+                        : isCompleted 
+                        ? 'bg-emerald-200/60 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {isCompleted ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                    </div>
+                    <div className="truncate">
+                      <p className="text-[11px] font-medium leading-tight truncate">{step.name}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+
+        {/* Step Content Container */}
+        <Card className="p-6 md:p-8 shadow-sm border">
           {/* Step: Basic Details */}
           {currentStepId === 'basic' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Basic Details</h2>
+              <div className="border-b pb-4">
+                <h2 className="text-xl font-semibold tracking-tight">Basic Employment Details</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter candidate's personal identity, contact details, organization placement, and emergency contacts.
+                </p>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>First Name *</Label>
-                  <Input value={formData.firstName} onChange={(e) => updateFormData({ firstName: e.target.value })} placeholder="John" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">First Name *</Label>
+                  <Input value={formData.firstName} onChange={(e) => updateFormData({ firstName: e.target.value })} placeholder="John" className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Last Name *</Label>
-                  <Input value={formData.lastName} onChange={(e) => updateFormData({ lastName: e.target.value })} placeholder="Doe" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Last Name *</Label>
+                  <Input value={formData.lastName} onChange={(e) => updateFormData({ lastName: e.target.value })} placeholder="Doe" className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input type="email" value={formData.email} onChange={(e) => updateFormData({ email: e.target.value })} placeholder="john@example.com" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Email Address *</Label>
+                  <Input type="email" value={formData.email} onChange={(e) => updateFormData({ email: e.target.value })} placeholder="john@example.com" className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Phone Number</Label>
                   <Input 
                     value={formData.phone} 
                     onChange={(e) => {
@@ -652,28 +613,29 @@ export default function AddEmployee() {
                       updateFormData({ phone: val });
                     }} 
                     placeholder="+44 7xxx xxx xxx" 
+                    className="h-9 text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Date of Birth</Label>
-                  <Input type="date" value={formData.dateOfBirth} onChange={(e) => updateFormData({ dateOfBirth: e.target.value })} />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Date of Birth</Label>
+                  <Input type="date" value={formData.dateOfBirth} onChange={(e) => updateFormData({ dateOfBirth: e.target.value })} className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>National Insurance Number *</Label>
-                  <Input value={formData.nationalInsuranceNumber} onChange={(e) => updateFormData({ nationalInsuranceNumber: e.target.value })} placeholder="AB 12 34 56 C" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">National Insurance Number *</Label>
+                  <Input value={formData.nationalInsuranceNumber} onChange={(e) => updateFormData({ nationalInsuranceNumber: e.target.value })} placeholder="AB 12 34 56 C" className="h-9 text-sm font-mono uppercase" />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea value={formData.address} onChange={(e) => updateFormData({ address: e.target.value })} placeholder="Full address" />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Residential Address</Label>
+                <Textarea value={formData.address} onChange={(e) => updateFormData({ address: e.target.value })} placeholder="Full residential address and postcode" rows={2} className="text-sm" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Organization *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Organization *</Label>
                   <Select value={formData.organizationId} onValueChange={(v) => updateFormData({ organizationId: v, branchId: '' })}>
-                    <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select organization" /></SelectTrigger>
                     <SelectContent>
                       {organizations.map(org => (
                         <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
@@ -681,10 +643,10 @@ export default function AddEmployee() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Branch *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Branch Location *</Label>
                   <Select value={formData.branchId} onValueChange={(v) => updateFormData({ branchId: v })} disabled={!formData.organizationId}>
-                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select branch" /></SelectTrigger>
                     <SelectContent>
                       {branches.map(branch => (
                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
@@ -692,14 +654,14 @@ export default function AddEmployee() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Job Title</Label>
-                  <Input value={formData.jobTitle} onChange={(e) => updateFormData({ jobTitle: e.target.value })} placeholder="Software Engineer" />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Job Title</Label>
+                  <Input value={formData.jobTitle} onChange={(e) => updateFormData({ jobTitle: e.target.value })} placeholder="Store Assistant" className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Department</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Department</Label>
                   <Select value={formData.department} onValueChange={(v) => updateFormData({ department: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select department" /></SelectTrigger>
                     <SelectContent>
                       {departments.map(dept => (
                         <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
@@ -707,14 +669,14 @@ export default function AddEmployee() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Join Date</Label>
-                  <Input type="date" value={formData.joinDate} onChange={(e) => updateFormData({ joinDate: e.target.value })} />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Commencement Date</Label>
+                  <Input type="date" value={formData.joinDate} onChange={(e) => updateFormData({ joinDate: e.target.value })} className="h-9 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Reporting Manager</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Reporting Line Manager</Label>
                   <Select value={formData.managerId} onValueChange={(v) => updateFormData({ managerId: v })} disabled={!formData.branchId}>
-                    <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select manager" /></SelectTrigger>
                     <SelectContent>
                       {managers.map(manager => (
                         <SelectItem key={manager.id} value={manager.id}>{manager.name}</SelectItem>
@@ -724,29 +686,32 @@ export default function AddEmployee() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Emergency Contact Name *</Label>
-                  <Input value={formData.emergencyContactName} onChange={(e) => updateFormData({ emergencyContactName: e.target.value })} placeholder="Contact name" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Emergency Contact Phone *</Label>
-                  <Input value={formData.emergencyContactPhone} onChange={(e) => updateFormData({ emergencyContactPhone: e.target.value })} placeholder="+44 7xxx xxx xxx" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Relationship</Label>
-                  <Select value={formData.emergencyContactRelationship} onValueChange={(v) => updateFormData({ emergencyContactRelationship: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select relationship" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Spouse">Spouse</SelectItem>
-                      <SelectItem value="Parent">Parent</SelectItem>
-                      <SelectItem value="Sibling">Sibling</SelectItem>
-                      <SelectItem value="Child">Child</SelectItem>
-                      <SelectItem value="Friend">Friend</SelectItem>
-                      <SelectItem value="Partner">Partner</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="border-t pt-4 space-y-4">
+                <h3 className="font-semibold text-sm text-foreground">Emergency Contact Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Contact Full Name *</Label>
+                    <Input value={formData.emergencyContactName} onChange={(e) => updateFormData({ emergencyContactName: e.target.value })} placeholder="Emergency contact name" className="h-9 text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Contact Phone Number *</Label>
+                    <Input value={formData.emergencyContactPhone} onChange={(e) => updateFormData({ emergencyContactPhone: e.target.value })} placeholder="+44 7xxx xxx xxx" className="h-9 text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Relationship</Label>
+                    <Select value={formData.emergencyContactRelationship} onValueChange={(v) => updateFormData({ emergencyContactRelationship: v })}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select relationship" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Spouse">Spouse</SelectItem>
+                        <SelectItem value="Parent">Parent</SelectItem>
+                        <SelectItem value="Sibling">Sibling</SelectItem>
+                        <SelectItem value="Child">Child</SelectItem>
+                        <SelectItem value="Friend">Friend</SelectItem>
+                        <SelectItem value="Partner">Partner</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -759,7 +724,7 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               organizations={organizations}
               branches={branches}
-              onSave={() => {}}
+              onSave={() => setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
               onNext={handleNext}
               onBack={handlePrevious}
             />
@@ -770,7 +735,7 @@ export default function AddEmployee() {
             <StarterChecklist 
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
-              onSave={() => {}}
+              onSave={() => setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
               onNext={handleNext}
               onBack={handlePrevious}
             />
@@ -784,6 +749,7 @@ export default function AddEmployee() {
               additionalDocuments={formData.additionalDocuments}
               onUpdateDocument={updateDocument}
               onAddDocument={addDocument}
+              onDocumentsSaved={() => setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
             />
           )}
 
@@ -792,7 +758,7 @@ export default function AddEmployee() {
             <BankDetailsForm 
               employeeId={employeeRecord.id}
               employeeData={employeeRecord}
-              onSave={() => {}}
+              onSave={() => setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
               onNext={handleNext}
               onBack={handlePrevious}
             />
@@ -805,44 +771,32 @@ export default function AddEmployee() {
               employeeData={employeeRecord}
               organizations={organizations}
               branches={branches}
-              onSave={() => {}}
+              onSave={() => setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}
               onBack={handlePrevious}
               onSubmit={() => {
-                toast.success('Contract submitted for approval. Continue in Approved Contracts tab after Super Admin approves.');
+                toast.success('Contract submitted for Super Admin review. You can track approval status in Contract Approvals.');
                 navigate('/dashboard/employees');
               }}
             />
           )}
 
-          {/* Navigation - only show on basic and documents steps, forms have their own buttons */}
+          {/* Bottom Navigation for Basic and Documents Steps */}
           {(currentStepId === 'basic' || currentStepId === 'documents') && (
-            <div className="flex justify-between mt-8 pt-6 border-t">
+            <div className="flex items-center justify-between mt-8 pt-6 border-t">
               <Button 
                 variant="outline" 
                 onClick={handlePrevious} 
                 disabled={currentStep === 0}
-                className="gap-2"
+                className="gap-2 text-xs h-9"
               >
-                <ArrowLeft className="h-4 w-4" />
-                Previous
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Previous Stage
               </Button>
               
-              <div className="flex gap-2">
-                {/* Edit Basic Details button - available on all steps except first */}
-                {currentStep > 0 && employeeRecord && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setCurrentStep(0)}
-                    className="gap-2"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Edit Basic Details
-                  </Button>
-                )}
-                
-                <Button onClick={handleNext} disabled={loading} className="gap-2">
-                  {loading ? 'Saving...' : 'Save & Continue'}
-                  <ArrowRight className="h-4 w-4" />
+              <div className="flex items-center gap-3">
+                <Button onClick={handleNext} disabled={loading} className="gap-2 text-xs h-9 px-5">
+                  {loading ? 'Saving Details...' : 'Save & Continue'}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>

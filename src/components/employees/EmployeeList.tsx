@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award, ArrowRightLeft } from 'lucide-react';
+import { UserPlus, Users, MoreHorizontal, Eye, Trash2, UserCog, Edit, Ban, CheckCircle, Award, ArrowRightLeft, Search, X } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,6 +44,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 
 const DEACTIVATION_REASONS = [
   { value: 'resigned', label: 'Resigned', color: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -59,12 +61,13 @@ export const getDeactivationReasonConfig = (reason: string | null) => {
 };
 
 interface EmployeeListProps {
-  searchQuery: string;
+  searchQuery?: string;
 }
 
-export default function EmployeeList({ searchQuery }: EmployeeListProps) {
+export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [localSearch, setLocalSearch] = useState(searchQuery);
   const [organizationFilter, setOrganizationFilter] = useState('all');
   const [branchFilter, setBranchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -80,11 +83,29 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
   const [transferResetData, setTransferResetData] = useState<boolean>(true);
   const [isTransferring, setIsTransferring] = useState(false);
 
+  // Keep local search in sync if parent passes external search query
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearch(searchQuery);
+    }
+  }, [searchQuery]);
+
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   
+  const activeSearch = localSearch.trim();
+  const [debouncedSearch, setDebouncedSearch] = useState(activeSearch);
+
+  // Debounce server-side search to prevent rapid refetches during typing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(activeSearch);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [activeSearch]);
+
   const employeeFilters = useMemo(() => {
-    const filters: any = { searchQuery };
+    const filters: any = { searchQuery: debouncedSearch };
     const scopedBranchIds = user?.branchIds?.length ? user.branchIds : [];
     
     if (user?.role === 'manager') {
@@ -111,20 +132,47 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     }
     
     return filters;
-  }, [user, organizationFilter, branchFilter, statusFilter, searchQuery]);
+  }, [user, organizationFilter, branchFilter, statusFilter, debouncedSearch]);
 
   const { employees: rawEmployees, isLoading, deleteEmployee, fetchEmployees } = useEmployees(employeeFilters);
 
-  // Sort: active employees first, deactivated at bottom
+  // Instant 0ms client-side multi-field search & sort: active employees first, deactivated at bottom
   const employees = useMemo(() => {
-    return [...rawEmployees].sort((a, b) => {
+    let list = [...rawEmployees];
+
+    if (activeSearch) {
+      const q = activeSearch.toLowerCase();
+      list = list.filter(e => {
+        const fullName = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase();
+        const email = (e.email || '').toLowerCase();
+        const phone = (e.phone || '').toLowerCase();
+        const jobTitle = (e.job_title || '').toLowerCase();
+        const department = (e.department || '').toLowerCase();
+        const branchName = (e.branch?.name || '').toLowerCase();
+        const orgName = (e.organization?.name || '').toLowerCase();
+        const ni = (e.national_insurance_number || '').toLowerCase();
+
+        return (
+          fullName.includes(q) ||
+          email.includes(q) ||
+          phone.includes(q) ||
+          jobTitle.includes(q) ||
+          department.includes(q) ||
+          branchName.includes(q) ||
+          orgName.includes(q) ||
+          ni.includes(q)
+        );
+      });
+    }
+
+    return list.sort((a, b) => {
       const aInactive = a.status === 'inactive' || a.status === 'terminated';
       const bInactive = b.status === 'inactive' || b.status === 'terminated';
       if (aInactive && !bInactive) return 1;
       if (!aInactive && bInactive) return -1;
       return 0;
     });
-  }, [rawEmployees]);
+  }, [rawEmployees, activeSearch]);
 
   // Fetch certifications for all employees
   const employeeIds = useMemo(() => employees.map(e => e.id), [employees]);
@@ -229,6 +277,13 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
         p_reset_data: transferResetData,
       });
       if (error) throw error;
+
+      // Relocate existing employee folder and documents under the new branch folder without creating duplicates
+      await getOrCreateEmployeeFolder(transferEmployee.id, {
+        ...transferEmployee,
+        branch_id: transferBranchId
+      }, user?.id);
+
       toast.success(`${transferEmployee.first_name} ${transferEmployee.last_name} has been transferred`);
       setTransferEmployee(null);
       setTransferBranchId('');
@@ -245,7 +300,8 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
-  if (isLoading) {
+  // Only show full loader on initial page load when no data is cached yet
+  if (isLoading && rawEmployees.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <NizaLoaderInline />
@@ -255,19 +311,42 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2">
-          <UserPlus className="h-5 w-5" />
-          Add Employee
-        </Button>
+      <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
+        {/* Search Bar */}
+        <div className="flex items-center gap-3 flex-1 max-w-lg">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search employees by name, email, role, phone..." 
+              className="pl-9 pr-8 h-9 text-xs sm:text-sm bg-background" 
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+            />
+            {localSearch && (
+              <button
+                type="button"
+                onClick={() => setLocalSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                title="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2 h-9 text-xs flex-shrink-0">
+            <UserPlus className="h-4 w-4" />
+            Add Employee
+          </Button>
+        </div>
         
-        <div className="flex gap-3">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2.5">
           {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Select value={organizationFilter} onValueChange={(v) => {
               setOrganizationFilter(v);
               setBranchFilter('all');
             }}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-40 sm:w-44 h-9 text-xs">
                 <SelectValue placeholder="All Organizations" />
               </SelectTrigger>
               <SelectContent>
@@ -281,7 +360,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           
           {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Select value={branchFilter} onValueChange={setBranchFilter}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-36 sm:w-40 h-9 text-xs">
                 <SelectValue placeholder="All Branches" />
               </SelectTrigger>
               <SelectContent>
@@ -294,7 +373,7 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
           )}
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-32 sm:w-36 h-9 text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -332,17 +411,28 @@ export default function EmployeeList({ searchQuery }: EmployeeListProps) {
       {employees.length === 0 ? (
         <Card className="p-12 text-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Users className="h-8 w-8 text-primary" />
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center text-muted-foreground">
+              <Search className="h-7 w-7" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">No employees found</h3>
-              <p className="text-muted-foreground mb-4">Add your first employee to get started</p>
+              <h3 className="text-lg font-semibold text-foreground mb-1">
+                {activeSearch ? `No employees matching "${activeSearch}"` : 'No employees found'}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                {activeSearch ? 'Check for spelling mistakes or clear the search to view all employees.' : 'Add your first employee to get started'}
+              </p>
             </div>
-            <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add First Employee
-            </Button>
+            {activeSearch ? (
+              <Button variant="outline" size="sm" onClick={() => setLocalSearch('')} className="gap-2 text-xs">
+                <X className="h-3.5 w-3.5" />
+                Clear Search
+              </Button>
+            ) : (
+              <Button onClick={() => navigate('/dashboard/add-employee')} className="gap-2 text-xs">
+                <UserPlus className="h-4 w-4" />
+                Add First Employee
+              </Button>
+            )}
           </div>
         </Card>
       ) : (

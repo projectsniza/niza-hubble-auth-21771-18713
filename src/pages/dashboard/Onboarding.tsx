@@ -14,6 +14,7 @@ import OnboardingApprovals from '@/components/onboarding/OnboardingApprovals';
 import OnboardingManagement from '@/components/onboarding/OnboardingManagement';
 import PostApprovalOnboarding from '@/components/onboarding/PostApprovalOnboarding';
 import EditApprovedContractDialog from '@/components/onboarding/EditApprovedContractDialog';
+import { buildCompleteContractPdf } from '@/lib/onboardingPdfs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -116,22 +117,19 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
   };
 
   const handleDownload = async (contract: ApprovedContract) => {
-    const filePath = contract.signed_contract_path || contract.contract_file_path;
-    if (!filePath) {
-      toast.error('No contract file available');
-      return;
-    }
-
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(filePath, 60);
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
+      const doc = await buildCompleteContractPdf({
+        contractData: contract.contract_content || {},
+        employeeData: contract.employee || {},
+        organizationData: contract.employee?.organization || {},
+        branchData: contract.employee?.branch || {},
+        approvalData: contract || {},
+      });
+      const empName = `${contract.employee?.first_name || ''}_${contract.employee?.last_name || ''}`.trim().replace(/\s+/g, '_') || 'Employee';
+      doc.save(`Approved_Employment_Contract_${empName}.pdf`);
+      toast.success('Complete approved contract downloaded');
     } catch (error: any) {
+      console.error('Error generating contract PDF:', error);
       toast.error('Failed to download contract');
     }
   };

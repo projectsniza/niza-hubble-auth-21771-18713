@@ -18,6 +18,7 @@ import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 
 interface BulkUploadDialogProps {
   open: boolean;
@@ -142,10 +143,13 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
       const docsRequired = (enabledDocSettings && enabledDocSettings.length > 0);
       const employeeStatus = docsRequired ? 'pending' : 'active';
 
+      const selectedOrg = organizations.find(o => o.id === organizationId);
+      const selectedBranch = branches.find(b => b.id === branchId);
+
       // Process each employee
       for (const emp of employees) {
         try {
-          const { error } = await supabase.from('employees').insert({
+          const { data: insertedEmp, error } = await supabase.from('employees').insert({
             first_name: emp.first_name,
             last_name: emp.last_name,
             email: emp.email,
@@ -161,12 +165,19 @@ export default function BulkUploadDialog({ open, onOpenChange, onSuccess }: Bulk
             bulk_upload_id: bulkUpload.id,
             status: employeeStatus,
             created_by: user?.id
-          });
+          }).select('id, first_name, last_name, organization_id, branch_id').single();
 
           if (error) {
             errors.push(`${emp.first_name} ${emp.last_name}: ${error.message}`);
             failedCount++;
           } else {
+            if (insertedEmp) {
+              await getOrCreateEmployeeFolder(insertedEmp.id, {
+                ...insertedEmp,
+                organizations: selectedOrg,
+                branches: selectedBranch
+              }, user?.id);
+            }
             successCount++;
           }
         } catch (err: unknown) {

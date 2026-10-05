@@ -29,6 +29,8 @@ import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import { getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 
 interface BulkEmployee {
   id: string;
@@ -66,6 +68,7 @@ interface UploadedDoc {
 }
 
 export default function BulkUploadedEmployees() {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<BulkEmployee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
@@ -161,13 +164,21 @@ export default function BulkUploadedEmployees() {
   const handleDeleteEmployee = async () => {
     if (!deleteId) return;
     try {
-      const { data: docs } = await supabase.from('documents').select('id').eq('employee_id', deleteId);
-      if (docs && docs.length > 0) {
-        await supabase.from('documents').delete().eq('employee_id', deleteId);
+      // 1. Fetch employee to ensure their folder exists in Company Documents before deleting
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('*, organizations(id, name), branches(id, name)')
+        .eq('id', deleteId)
+        .maybeSingle();
+
+      if (emp) {
+        await getOrCreateEmployeeFolder(emp.id, emp, user?.id);
       }
+
+      // 2. Delete employee record; folder and documents are preserved permanently in Company Documents with "Deleted Employee" badge
       const { error } = await supabase.from('employees').delete().eq('id', deleteId);
       if (error) throw error;
-      toast.success('Employee deleted');
+      toast.success('Employee deleted. Folder preserved in Company Documents.');
       setDeleteId(null);
       fetchData();
     } catch (error: any) {

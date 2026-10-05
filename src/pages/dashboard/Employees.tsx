@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   UserPlus, Search, Upload, FileSignature, Users, 
-  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle, Loader2, Settings2
+  UserCog, Settings, FileCheck, FileUp, Trash2, PlayCircle, Loader2, Settings2, X
 } from 'lucide-react';
 import EmployeeList from '@/components/employees/EmployeeList';
 import TeamManagement from '@/components/employees/TeamManagement';
@@ -22,6 +22,7 @@ import OnboardingSettings from '@/components/employees/OnboardingSettings';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -234,9 +235,19 @@ function PendingOnboardings() {
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('*, organizations(id, name), branches(id, name)')
+        .eq('id', deleteId)
+        .maybeSingle();
+
+      if (emp) {
+        await getOrCreateEmployeeFolder(emp.id, emp, user?.id);
+      }
+
       const { error } = await supabase.from('employees').delete().eq('id', deleteId);
       if (error) throw error;
-      toast.success('Employee deleted');
+      toast.success('Employee deleted. Folder preserved in Company Documents.');
       setDeleteId(null);
       fetchOnboarding();
     } catch (error: any) {
@@ -246,10 +257,20 @@ function PendingOnboardings() {
 
   const getStepLabel = (emp: any) => {
     const onb = emp.onboarding?.[0];
-    if (!onb) return 'Not started';
+    if (!onb) return 'Step 1: Basic Details';
     if (emp.status === 'awaiting_approval') return 'Awaiting Contract Approval';
     if (emp.status === 'awaiting_signature') return 'Awaiting Signature';
-    return `Step ${onb.current_step || 1} of 3`;
+    
+    const step = onb.current_step || 1;
+    const stepNames: Record<number, string> = {
+      1: 'Basic Details',
+      2: 'Application Form',
+      3: 'Starter Checklist',
+      4: 'Bank Details',
+      5: 'Verification Docs',
+      6: 'Contract'
+    };
+    return `Step ${step} of 6: ${stepNames[step] || 'In Progress'}`;
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><NizaLoaderInline /></div>;
@@ -372,13 +393,23 @@ export default function Employees() {
         </div>
         <div className="flex items-center gap-3">
           <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search employees..." 
-              className="pl-10" 
+              className="pl-9 pr-8 h-9 text-xs sm:text-sm" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                title="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           {(user?.role === 'super_admin' || user?.role === 'hr') && (
             <Button variant="outline" onClick={() => setShowBulkUpload(true)}>

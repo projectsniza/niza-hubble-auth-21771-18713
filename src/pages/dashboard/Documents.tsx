@@ -53,6 +53,13 @@ interface FolderItem {
   is_system?: boolean;
   is_deletable?: boolean;
   color?: string;
+  employee?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    status: string;
+    deactivation_reason?: string | null;
+  } | null;
 }
 
 interface DocumentItem {
@@ -180,10 +187,10 @@ export default function Documents() {
           await ensureEmployeeDocuments(currentFolder.employee_id, currentFolder.id, user?.id);
         }
 
-        // Fetch subfolders of current folder
+        // Fetch subfolders of current folder with employee status & deactivation reason
         const { data: foldersData } = await supabase
           .from('folders')
-          .select('*')
+          .select('*, employee:employees(id, first_name, last_name, status, deactivation_reason)')
           .eq('parent_id', currentFolderId)
           .order('name');
         setFolders(foldersData || []);
@@ -349,16 +356,84 @@ export default function Documents() {
   const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
 
+  const getFolderStatusBadge = (folder: FolderItem) => {
+    if (folder.folder_type !== 'employee' && !folder.employee_id) return null;
+
+    // Case 1: Employee record was deleted from employees table or unlinked, folder is permanently retained for compliance
+    if (folder.folder_type === 'employee' && (!folder.employee || !folder.employee_id || folder.employee?.status === 'deleted')) {
+      return {
+        label: 'Deleted Employee',
+        color: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300',
+        isDeleted: true
+      };
+    }
+
+    const status = folder.employee?.status;
+    const reason = folder.employee?.deactivation_reason;
+
+    if (status === 'inactive' || status === 'terminated') {
+      const reasonLabels: Record<string, { label: string; color: string }> = {
+        temporarily_suspended: {
+          label: 'Temporarily Suspended',
+          color: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300'
+        },
+        resigned: {
+          label: 'Resigned',
+          color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+        },
+        end_of_contract: {
+          label: 'End of Contract',
+          color: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+        },
+        redundancy: {
+          label: 'Redundancy',
+          color: 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300'
+        },
+        gross_misconduct: {
+          label: 'Gross Misconduct',
+          color: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300'
+        },
+        mutual_agreement: {
+          label: 'Mutual Agreement',
+          color: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-300'
+        }
+      };
+
+      if (reason && reasonLabels[reason]) {
+        return {
+          ...reasonLabels[reason],
+          isDeactivated: true
+        };
+      }
+
+      return {
+        label: reason ? reason.replace(/_/g, ' ') : 'Deactivated',
+        color: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300',
+        isDeactivated: true
+      };
+    }
+
+    return null;
+  };
+
   const isProtectedFolder = (folder: FolderItem) => {
     return folder.is_deletable === false || 
            folder.folder_type === 'root' || 
            folder.folder_type === 'organization' || 
            folder.folder_type === 'branch' || 
-           folder.folder_type === 'employee';
+           folder.folder_type === 'employee' ||
+           Boolean(folder.employee_id);
   };
 
   const handleDeleteFolder = async () => {
     if (!deleteFolderId) return;
+
+    const target = folders.find(f => f.id === deleteFolderId);
+    if (target && isProtectedFolder(target)) {
+      toast.error('Employee, branch, organization, and system folders cannot be deleted as they are preserved for compliance history.');
+      setDeleteFolderId(null);
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -667,27 +742,47 @@ export default function Documents() {
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredFolders.map((folder) => {
                     const isProtected = isProtectedFolder(folder);
+                    const statusBadge = getFolderStatusBadge(folder);
                     return (
                       <Card
                         key={folder.id}
-                        className="p-4 cursor-pointer hover:bg-muted/50 transition-colors group"
+                        className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors group ${
+                          statusBadge?.isDeactivated 
+                            ? 'border-red-200/70 bg-red-50/15 dark:border-red-900/40 dark:bg-red-950/10' 
+                            : statusBadge?.isDeleted
+                            ? 'border-slate-300/70 bg-slate-50/30 dark:border-slate-800 dark:bg-slate-900/20'
+                            : ''
+                        }`}
                       >
                         <div className="flex items-center gap-3">
                           <div onClick={() => handleFolderClick(folder.id)} className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="relative">
+                            <div className="relative flex-shrink-0">
                               <Folder 
                                 className="h-8 w-8" 
-                                style={{ color: folder.color || '#3B82F6' }} 
+                                style={{ 
+                                  color: statusBadge?.isDeactivated 
+                                    ? '#EF4444' 
+                                    : statusBadge?.isDeleted 
+                                    ? '#94A3B8' 
+                                    : (folder.color || '#3B82F6') 
+                                }} 
                               />
                               {isProtected && (
                                 <Lock className="h-3 w-3 text-muted-foreground absolute -bottom-1 -right-1" />
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-foreground truncate">{folder.name}</p>
-                              <p className="text-xs text-muted-foreground capitalize">
-                                {folder.folder_type === 'root' ? 'Root folder' : folder.folder_type}
-                              </p>
+                            <div className="flex-1 min-w-0 space-y-0.5">
+                              <p className="font-medium text-foreground truncate text-sm">{folder.name}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[11px] text-muted-foreground capitalize">
+                                  {folder.folder_type === 'root' ? 'Root folder' : folder.folder_type}
+                                </span>
+                                {statusBadge && (
+                                  <Badge className={`text-[10px] px-1.5 py-0 h-4 border font-normal ${statusBadge.color}`}>
+                                    {statusBadge.label}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                           {/* Action buttons */}
