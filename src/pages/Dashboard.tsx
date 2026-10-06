@@ -8,6 +8,7 @@ import ReminderDuePopup from '@/components/reminders/ReminderDuePopup';
 import RemindersSidebar from '@/components/reminders/RemindersSidebar';
 import TodayEventsPopup from '@/components/dashboard/TodayEventsPopup';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import OpenItemsHeaderWidget from '@/components/dashboard/OpenItemsHeaderWidget';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, CheckSquare } from 'lucide-react';
@@ -76,8 +77,9 @@ export default function Dashboard() {
             <AppsDialog />
           </div>
 
-          {/* Notification Bell and Reminders Button */}
-          <div className="flex items-center gap-2">
+          {/* Open Items Widget, Notification Bell and Reminders Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <OpenItemsHeaderWidget />
             <NotificationBell />
             <Button
               variant="ghost"
