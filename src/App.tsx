@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { OrgBranchProvider } from "./contexts/OrgBranchContext";
+import { DueFollowUpsProvider } from "./contexts/DueFollowUpsContext";
 import { NizaLoaderFullPage } from "@/components/ui/niza-loader";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 
@@ -110,106 +111,108 @@ const App = () => (
     <ErrorBoundary>
       <AuthProvider>
         <OrgBranchProvider>
-          <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Suspense fallback={<NizaLoaderFullPage />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<Dashboard />}>
-                <Route index element={<Home />} />
-                <Route path="overview" element={<Overview />} />
-                <Route path="employees" element={<Employees />} />
-                <Route path="employees/:id" element={<EmployeeProfile />} />
-                <Route path="my-profile" element={<MyProfile />} />
-                <Route path="onboarding" element={<Onboarding />} />
-                <Route path="onboarding/:id" element={<AddEmployee />} />
-                <Route path="add-employee" element={<AddEmployee />} />
-                <Route path="documents" element={<Documents />} />
-                <Route path="documents/submit" element={<SubmitDocuments />} />
-                <Route path="documents/todo" element={<DocumentsTodo />} />
-                <Route path="attendance" element={<Attendance />} />
-                <Route path="scheduling" element={<Scheduling />} />
-                <Route path="clock-ins" element={<ClockIns />} />
-                <Route path="payroll" element={<Payroll />} />
-                <Route path="performance" element={<Performance />} />
-                <Route path="daily-reports" element={<DailyReports />} />
-                <Route path="events" element={<Events />} />
-                <Route path="elearning" element={<ELearning />} />
-                <Route path="templates" element={<DashboardTemplates />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="maintenance" element={<Maintenance />} />
-                <Route path="uk-compliance" element={<UKCompliance />} />
-                <Route path="safety-tasks" element={<SafetyTasks />} />
-                <Route path="messages" element={<Messages />} />
-                <Route path="store-templates" element={<StoreTemplates />} />
-                <Route path="lottery" element={<Lottery />} />
-                <Route path="reminders" element={<Reminders />} />
-                <Route path="notifications" element={<Notifications />} />
-                <Route path="drive-offs" element={<DriveOffs />} />
-                <Route path="customer-accounts" element={<CustomerAccounts />} />
-                <Route path="daily-summary" element={<DailySummary />} />
-                <Route path="daily-sales-upload" element={<DailySalesUpload />} />
-              </Route>
-              <Route path="/niza-safe" element={<NizaSafe />}>
-                <Route index element={<NizaSafeHome />} />
-                <Route path="risk-management" element={<RiskManagement />} />
-                <Route path="incident-management" element={<IncidentManagement />} />
-                <Route path="documents" element={<SafeDocuments />} />
-                <Route path="employees" element={<SafeEmployees />} />
-                <Route path="tasks" element={<Tasks />} />
-              </Route>
-              <Route path="/niza-finance" element={<NizaFinance />} />
-              <Route path="/niza-elearning" element={<NizaELearning />}>
-                <Route index element={<ELearningHome />} />
-                <Route path="library" element={<CourseLibrary />} />
-                <Route path="my-courses" element={<MyCourses />} />
-                <Route path="builder" element={<CourseBuilder />} />
-                <Route path="course/:courseId" element={<CourseViewer />} />
-                <Route path="assigned" element={<AssignedCourses />} />
-                <Route path="certificates" element={<ELCertificates />} />
-                <Route path="assessments" element={<ELAssessments />} />
-                <Route path="analytics" element={<LearningAnalytics />} />
-                <Route path="settings" element={<ELSettings />} />
-              </Route>
-              <Route path="/niza-templates" element={<NizaTemplates />}>
-                <Route index element={<TemplatesHome />} />
-                <Route path="id-cards" element={<IDCards />} />
-                <Route path="business-cards" element={<BusinessCards />} />
-                <Route path="invoices" element={<Invoices />} />
-                <Route path="letterhead" element={<Letterhead />} />
-                <Route path="gift-cards" element={<GiftCards />} />
-                <Route path="email-signature" element={<EmailSignature />} />
-                <Route path="brand-settings" element={<BrandSettings />} />
-                <Route path="shared" element={<SharedTemplatesPage />} />
-                <Route path="store-hr" element={<StoreHRTemplatesPage />} />
-              </Route>
-              <Route path="/niza-analysis" element={<NizaAnalysis />}>
-                <Route index element={<NizaAnalysisHome />} />
-                <Route path="daily-sales" element={<DailySalesAdmin />} />
-                <Route path="branch-formats" element={<BranchFormats />} />
-                <Route path="xero-export" element={<XeroExport />} />
-                <Route path="category-alerts" element={<CategoryAlerts />} />
-                <Route path="email-agents" element={<EmailAgents />} />
-                <Route path="settings" element={<AnalysisSettings />} />
-                <Route path="supplier-ledger" element={<SupplierLedger />} />
-                <Route path="variance" element={<VarianceDashboard />} />
-                <Route path="category-mappings" element={<CategoryMappings />} />
-                <Route path="branch-performance" element={<BranchPerformance />} />
-                <Route path="data-flow" element={<DataFlowchart />} />
-                <Route path="live-preview" element={<LivePreview />} />
-                <Route path="uploaded-files" element={<UploadedFiles />} />
-                <Route path="formulas" element={<Formulas />} />
-              </Route>
-              <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        </TooltipProvider>
+          <DueFollowUpsProvider>
+            <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <Suspense fallback={<NizaLoaderFullPage />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/dashboard" element={<Dashboard />}>
+                  <Route index element={<Home />} />
+                  <Route path="overview" element={<Overview />} />
+                  <Route path="employees" element={<Employees />} />
+                  <Route path="employees/:id" element={<EmployeeProfile />} />
+                  <Route path="my-profile" element={<MyProfile />} />
+                  <Route path="onboarding" element={<Onboarding />} />
+                  <Route path="onboarding/:id" element={<AddEmployee />} />
+                  <Route path="add-employee" element={<AddEmployee />} />
+                  <Route path="documents" element={<Documents />} />
+                  <Route path="documents/submit" element={<SubmitDocuments />} />
+                  <Route path="documents/todo" element={<DocumentsTodo />} />
+                  <Route path="attendance" element={<Attendance />} />
+                  <Route path="scheduling" element={<Scheduling />} />
+                  <Route path="clock-ins" element={<ClockIns />} />
+                  <Route path="payroll" element={<Payroll />} />
+                  <Route path="performance" element={<Performance />} />
+                  <Route path="daily-reports" element={<DailyReports />} />
+                  <Route path="events" element={<Events />} />
+                  <Route path="elearning" element={<ELearning />} />
+                  <Route path="templates" element={<DashboardTemplates />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="maintenance" element={<Maintenance />} />
+                  <Route path="uk-compliance" element={<UKCompliance />} />
+                  <Route path="safety-tasks" element={<SafetyTasks />} />
+                  <Route path="messages" element={<Messages />} />
+                  <Route path="store-templates" element={<StoreTemplates />} />
+                  <Route path="lottery" element={<Lottery />} />
+                  <Route path="reminders" element={<Reminders />} />
+                  <Route path="notifications" element={<Notifications />} />
+                  <Route path="drive-offs" element={<DriveOffs />} />
+                  <Route path="customer-accounts" element={<CustomerAccounts />} />
+                  <Route path="daily-summary" element={<DailySummary />} />
+                  <Route path="daily-sales-upload" element={<DailySalesUpload />} />
+                </Route>
+                <Route path="/niza-safe" element={<NizaSafe />}>
+                  <Route index element={<NizaSafeHome />} />
+                  <Route path="risk-management" element={<RiskManagement />} />
+                  <Route path="incident-management" element={<IncidentManagement />} />
+                  <Route path="documents" element={<SafeDocuments />} />
+                  <Route path="employees" element={<SafeEmployees />} />
+                  <Route path="tasks" element={<Tasks />} />
+                </Route>
+                <Route path="/niza-finance" element={<NizaFinance />} />
+                <Route path="/niza-elearning" element={<NizaELearning />}>
+                  <Route index element={<ELearningHome />} />
+                  <Route path="library" element={<CourseLibrary />} />
+                  <Route path="my-courses" element={<MyCourses />} />
+                  <Route path="builder" element={<CourseBuilder />} />
+                  <Route path="course/:courseId" element={<CourseViewer />} />
+                  <Route path="assigned" element={<AssignedCourses />} />
+                  <Route path="certificates" element={<ELCertificates />} />
+                  <Route path="assessments" element={<ELAssessments />} />
+                  <Route path="analytics" element={<LearningAnalytics />} />
+                  <Route path="settings" element={<ELSettings />} />
+                </Route>
+                <Route path="/niza-templates" element={<NizaTemplates />}>
+                  <Route index element={<TemplatesHome />} />
+                  <Route path="id-cards" element={<IDCards />} />
+                  <Route path="business-cards" element={<BusinessCards />} />
+                  <Route path="invoices" element={<Invoices />} />
+                  <Route path="letterhead" element={<Letterhead />} />
+                  <Route path="gift-cards" element={<GiftCards />} />
+                  <Route path="email-signature" element={<EmailSignature />} />
+                  <Route path="brand-settings" element={<BrandSettings />} />
+                  <Route path="shared" element={<SharedTemplatesPage />} />
+                  <Route path="store-hr" element={<StoreHRTemplatesPage />} />
+                </Route>
+                <Route path="/niza-analysis" element={<NizaAnalysis />}>
+                  <Route index element={<NizaAnalysisHome />} />
+                  <Route path="daily-sales" element={<DailySalesAdmin />} />
+                  <Route path="branch-formats" element={<BranchFormats />} />
+                  <Route path="xero-export" element={<XeroExport />} />
+                  <Route path="category-alerts" element={<CategoryAlerts />} />
+                  <Route path="email-agents" element={<EmailAgents />} />
+                  <Route path="settings" element={<AnalysisSettings />} />
+                  <Route path="supplier-ledger" element={<SupplierLedger />} />
+                  <Route path="variance" element={<VarianceDashboard />} />
+                  <Route path="category-mappings" element={<CategoryMappings />} />
+                  <Route path="branch-performance" element={<BranchPerformance />} />
+                  <Route path="data-flow" element={<DataFlowchart />} />
+                  <Route path="live-preview" element={<LivePreview />} />
+                  <Route path="uploaded-files" element={<UploadedFiles />} />
+                  <Route path="formulas" element={<Formulas />} />
+                </Route>
+                <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          </TooltipProvider>
+        </DueFollowUpsProvider>
       </OrgBranchProvider>
     </AuthProvider>
     </ErrorBoundary>
