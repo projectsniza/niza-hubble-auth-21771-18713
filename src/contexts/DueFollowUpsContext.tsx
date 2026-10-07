@@ -11,6 +11,10 @@ export interface DueItem {
   title: string;
   description?: string | null;
   due_date: string;
+  isSnoozed?: boolean;
+  snoozedUntil?: string | null;
+  isDismissed?: boolean;
+  isCompleted?: boolean;
   employee?: {
     id?: string;
     first_name?: string;
@@ -30,14 +34,23 @@ export interface DueItem {
 }
 
 interface DueFollowUpsContextType {
+  allItems: DueItem[];
   items: DueItem[];
   overdueItems: DueItem[];
   upcomingItems: DueItem[];
   reminderItems: DueItem[];
+  snoozedItems: DueItem[];
+  dismissedItems: DueItem[];
   totalCount: number;
+  allCount: number;
   overdueCount: number;
   upcomingCount: number;
   reminderCount: number;
+  snoozedCount: number;
+  dismissedCount: number;
+  allOverdueCount: number;
+  allUpcomingCount: number;
+  allReminderCount: number;
   loading: boolean;
   refetch: () => Promise<void>;
   isPopupOpen: boolean;
@@ -45,27 +58,32 @@ interface DueFollowUpsContextType {
   currentItemIndex: number;
   setCurrentItemIndex: (index: number) => void;
   snoozeItem: (item: DueItem, until: Date) => Promise<void>;
+  unsnoozeItem: (item: DueItem) => Promise<void>;
   snoozeAll: (until: Date) => Promise<void>;
   acknowledgeItem: (item: DueItem) => Promise<void>;
+  undismissItem: (item: DueItem) => Promise<void>;
   acknowledgeAll: () => Promise<void>;
+  restoreAll: () => Promise<void>;
   completeItem: (item: DueItem) => Promise<void>;
   viewDocument: (item: DueItem) => Promise<void>;
-  openReviewModal: (startIndex?: number) => void;
+  openReviewModal: (startIndex?: number, customItems?: DueItem[]) => void;
+  reviewItemsList: DueItem[];
 }
 
 const DueFollowUpsContext = createContext<DueFollowUpsContextType | undefined>(undefined);
 
 export function DueFollowUpsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [items, setItems] = useState<DueItem[]>([]);
+  const [allItems, setAllItems] = useState<DueItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [reviewItemsList, setReviewItemsList] = useState<DueItem[]>([]);
   const hasAutoPoppedRef = useRef(false);
 
   const fetchDueItems = useCallback(async () => {
     if (!user) {
-      setItems([]);
+      setAllItems([]);
       return;
     }
 
@@ -81,14 +99,14 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
         .select('id,title,description,reminder_date,is_completed,is_dismissed,snoozed_until')
         .or(`created_by.eq.${user.id},assigned_to.eq.${user.id}`)
         .eq('is_completed', false)
-        .eq('is_dismissed', false)
         .lte('reminder_date', nowIso)
         .order('reminder_date', { ascending: true })
-        .limit(50);
+        .limit(100);
 
       if (!remError && reminderData) {
         reminderData.forEach((r: any) => {
-          if (r.snoozed_until && new Date(r.snoozed_until) > now) return;
+          const isSnoozed = !!(r.snoozed_until && new Date(r.snoozed_until) > now);
+          const isDismissed = !!r.is_dismissed;
 
           fetchedList.push({
             id: `rem_${r.id}`,
@@ -97,6 +115,9 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
             title: r.title,
             description: r.description,
             due_date: r.reminder_date,
+            isSnoozed,
+            snoozedUntil: r.snoozed_until,
+            isDismissed,
           });
         });
       }
@@ -144,19 +165,17 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
           `)
           .or('expiry_date.not.is.null,follow_up_date.not.is.null')
           .is('verified_at', null)
-          .limit(150);
+          .limit(200);
 
         if (!docError && docsData) {
           docsData.forEach((doc: any) => {
-            // Check client-side snooze, session dismiss, and local completion
-            const snoozedUntilStr = localStorage.getItem(`doc_snoozed_${doc.id}`);
-            if (snoozedUntilStr && new Date(snoozedUntilStr) > now) return;
-
-            const isDismissedSession = sessionStorage.getItem(`doc_dismissed_${doc.id}`);
-            if (isDismissedSession) return;
-
             const isCompletedLocal = localStorage.getItem(`doc_completed_${doc.id}`);
             if (isCompletedLocal) return;
+
+            const snoozedUntilStr = localStorage.getItem(`doc_snoozed_${doc.id}`);
+            const isSnoozed = !!(snoozedUntilStr && new Date(snoozedUntilStr) > now);
+
+            const isDismissedSession = !!sessionStorage.getItem(`doc_dismissed_${doc.id}`);
 
             let isOverdue = false;
             let isUpcoming = false;
@@ -194,6 +213,9 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
                 title: doc.title || doc.file_name || 'Document Follow-up',
                 description: doc.file_name,
                 due_date: dueDate,
+                isSnoozed,
+                snoozedUntil: isSnoozed ? snoozedUntilStr : null,
+                isDismissed: isDismissedSession,
                 employee: doc.employee,
                 document: {
                   id: doc.id,
@@ -220,15 +242,17 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
     });
 
-    setItems(fetchedList);
+    setAllItems(fetchedList);
     setLoading(false);
 
-    // Auto-open review popup once per session if overdue items exist
+    // Auto-open review popup once per session only if active overdue/due items exist
+    const activeList = fetchedList.filter((i) => !i.isSnoozed && !i.isDismissed);
     const sessionPopupKey = `due_popup_shown_session_${user.id}`;
     if (!hasAutoPoppedRef.current && !sessionStorage.getItem(sessionPopupKey)) {
       hasAutoPoppedRef.current = true;
-      if (fetchedList.length > 0) {
+      if (activeList.length > 0) {
         sessionStorage.setItem(sessionPopupKey, '1');
+        setReviewItemsList(activeList);
         setCurrentItemIndex(0);
         setIsPopupOpen(true);
       }
@@ -241,9 +265,17 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     return () => clearInterval(interval);
   }, [fetchDueItems]);
 
+  // Derived filtered collections
+  const items = allItems.filter((i) => !i.isSnoozed && !i.isDismissed);
   const overdueItems = items.filter((i) => i.sourceType === 'document_overdue');
   const upcomingItems = items.filter((i) => i.sourceType === 'document_upcoming');
   const reminderItems = items.filter((i) => i.sourceType === 'reminder');
+  const snoozedItems = allItems.filter((i) => i.isSnoozed);
+  const dismissedItems = allItems.filter((i) => i.isDismissed && !i.isSnoozed);
+
+  const allOverdueCount = allItems.filter((i) => i.sourceType === 'document_overdue').length;
+  const allUpcomingCount = allItems.filter((i) => i.sourceType === 'document_upcoming').length;
+  const allReminderCount = allItems.filter((i) => i.sourceType === 'reminder').length;
 
   const snoozeItem = async (item: DueItem, until: Date) => {
     if (item.sourceType === 'reminder') {
@@ -260,9 +292,14 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     }
 
     toast.success(`Snoozed until ${format(until, 'MMM d, HH:mm')}`);
-    
-    // Remove item from active list
-    setItems((prev) => {
+
+    setAllItems((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, isSnoozed: true, snoozedUntil: until.toISOString() } : i
+      )
+    );
+
+    setReviewItemsList((prev) => {
       const next = prev.filter((i) => i.id !== item.id);
       if (next.length === 0) {
         setIsPopupOpen(false);
@@ -273,12 +310,32 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     });
   };
 
-  const snoozeAll = async (until: Date) => {
-    if (items.length === 0) return;
+  const unsnoozeItem = async (item: DueItem) => {
+    if (item.sourceType === 'reminder') {
+      await supabase
+        .from('reminders')
+        .update({ snoozed_until: null })
+        .eq('id', item.rawId);
+    } else {
+      localStorage.removeItem(`doc_snoozed_${item.rawId}`);
+    }
 
-    const count = items.length;
-    const reminderIds = items.filter((i) => i.sourceType === 'reminder').map((i) => i.rawId);
-    const docIds = items.filter((i) => i.sourceType !== 'reminder').map((i) => i.rawId);
+    setAllItems((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, isSnoozed: false, snoozedUntil: null } : i
+      )
+    );
+
+    toast.success('Item restored to active list');
+  };
+
+  const snoozeAll = async (until: Date) => {
+    const activeOnes = allItems.filter((i) => !i.isSnoozed && !i.isDismissed);
+    if (activeOnes.length === 0) return;
+
+    const count = activeOnes.length;
+    const reminderIds = activeOnes.filter((i) => i.sourceType === 'reminder').map((i) => i.rawId);
+    const docIds = activeOnes.filter((i) => i.sourceType !== 'reminder').map((i) => i.rawId);
 
     if (reminderIds.length > 0) {
       await supabase
@@ -291,8 +348,16 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       localStorage.setItem(`doc_snoozed_${id}`, until.toISOString());
     });
 
+    setAllItems((prev) =>
+      prev.map((i) =>
+        !i.isSnoozed && !i.isDismissed
+          ? { ...i, isSnoozed: true, snoozedUntil: until.toISOString() }
+          : i
+      )
+    );
+
     setIsPopupOpen(false);
-    setItems([]);
+    setReviewItemsList([]);
     setCurrentItemIndex(0);
     toast.success(`All ${count} open item${count > 1 ? 's' : ''} snoozed until ${format(until, 'MMM d, HH:mm')}`);
   };
@@ -309,7 +374,11 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       toast.success('Document follow-up acknowledged for this session');
     }
 
-    setItems((prev) => {
+    setAllItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, isDismissed: true } : i))
+    );
+
+    setReviewItemsList((prev) => {
       const next = prev.filter((i) => i.id !== item.id);
       if (next.length === 0) {
         setIsPopupOpen(false);
@@ -320,12 +389,30 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     });
   };
 
-  const acknowledgeAll = async () => {
-    if (items.length === 0) return;
+  const undismissItem = async (item: DueItem) => {
+    if (item.sourceType === 'reminder') {
+      await supabase
+        .from('reminders')
+        .update({ is_dismissed: false })
+        .eq('id', item.rawId);
+    } else {
+      sessionStorage.removeItem(`doc_dismissed_${item.rawId}`);
+    }
 
-    const count = items.length;
-    const reminderIds = items.filter((i) => i.sourceType === 'reminder').map((i) => i.rawId);
-    const docIds = items.filter((i) => i.sourceType !== 'reminder').map((i) => i.rawId);
+    setAllItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, isDismissed: false } : i))
+    );
+
+    toast.success('Item restored to active list');
+  };
+
+  const acknowledgeAll = async () => {
+    const activeOnes = allItems.filter((i) => !i.isSnoozed && !i.isDismissed);
+    if (activeOnes.length === 0) return;
+
+    const count = activeOnes.length;
+    const reminderIds = activeOnes.filter((i) => i.sourceType === 'reminder').map((i) => i.rawId);
+    const docIds = activeOnes.filter((i) => i.sourceType !== 'reminder').map((i) => i.rawId);
 
     if (reminderIds.length > 0) {
       await supabase
@@ -338,10 +425,45 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       sessionStorage.setItem(`doc_dismissed_${id}`, 'true');
     });
 
+    setAllItems((prev) =>
+      prev.map((i) => (!i.isSnoozed ? { ...i, isDismissed: true } : i))
+    );
+
     setIsPopupOpen(false);
-    setItems([]);
+    setReviewItemsList([]);
     setCurrentItemIndex(0);
     toast.success(`All ${count} item${count > 1 ? 's' : ''} acknowledged for this session`);
+  };
+
+  const restoreAll = async () => {
+    // Clear all client-side storage keys for snooze & dismiss
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('doc_snoozed_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith('doc_dismissed_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+
+    // Reset reminders in Supabase
+    try {
+      await supabase
+        .from('reminders')
+        .update({ snoozed_until: null, is_dismissed: false })
+        .or(`created_by.eq.${user?.id},assigned_to.eq.${user?.id}`)
+        .eq('is_completed', false);
+    } catch (e) {
+      console.error('Error resetting reminder dismiss/snooze:', e);
+    }
+
+    setAllItems((prev) =>
+      prev.map((i) => ({ ...i, isSnoozed: false, snoozedUntil: null, isDismissed: false }))
+    );
+
+    toast.success('All items restored to active view');
   };
 
   const completeItem = async (item: DueItem) => {
@@ -377,7 +499,8 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       toast.success(`Document follow-up for ${empName} marked complete`);
     }
 
-    setItems((prev) => {
+    setAllItems((prev) => prev.filter((i) => i.id !== item.id));
+    setReviewItemsList((prev) => {
       const next = prev.filter((i) => i.id !== item.id);
       if (next.length === 0) {
         setIsPopupOpen(false);
@@ -407,26 +530,37 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const openReviewModal = (startIndex = 0) => {
-    if (items.length === 0) {
+  const openReviewModal = (startIndex = 0, customItems?: DueItem[]) => {
+    const listToReview = customItems || (items.length > 0 ? items : allItems);
+    if (listToReview.length === 0) {
       toast.info('No overdue or due items to review');
       return;
     }
-    setCurrentItemIndex(Math.min(startIndex, items.length - 1));
+    setReviewItemsList(listToReview);
+    setCurrentItemIndex(Math.min(startIndex, listToReview.length - 1));
     setIsPopupOpen(true);
   };
 
   return (
     <DueFollowUpsContext.Provider
       value={{
+        allItems,
         items,
         overdueItems,
         upcomingItems,
         reminderItems,
+        snoozedItems,
+        dismissedItems,
         totalCount: items.length,
+        allCount: allItems.length,
         overdueCount: overdueItems.length,
         upcomingCount: upcomingItems.length,
         reminderCount: reminderItems.length,
+        snoozedCount: snoozedItems.length,
+        dismissedCount: dismissedItems.length,
+        allOverdueCount,
+        allUpcomingCount,
+        allReminderCount,
         loading,
         refetch: fetchDueItems,
         isPopupOpen,
@@ -434,12 +568,16 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
         currentItemIndex,
         setCurrentItemIndex,
         snoozeItem,
+        unsnoozeItem,
         snoozeAll,
         acknowledgeItem,
+        undismissItem,
         acknowledgeAll,
+        restoreAll,
         completeItem,
         viewDocument,
         openReviewModal,
+        reviewItemsList,
       }}
     >
       {children}

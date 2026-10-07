@@ -18,8 +18,8 @@ import {
   Calendar, 
   ChevronLeft, 
   ChevronRight, 
-  X,
-  Layers
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { 
   addMinutes, 
@@ -35,7 +35,6 @@ import {
 
 export default function ReminderDuePopup() {
   const {
-    items,
     isPopupOpen,
     setIsPopupOpen,
     currentItemIndex,
@@ -43,16 +42,21 @@ export default function ReminderDuePopup() {
     snoozeItem,
     snoozeAll,
     acknowledgeItem,
+    acknowledgeAll,
     completeItem,
     viewDocument,
+    reviewItemsList,
+    items,
   } = useDueFollowUps();
 
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [snoozeAllOpen, setSnoozeAllOpen] = useState(false);
 
-  if (!isPopupOpen || items.length === 0) return null;
+  const displayList = reviewItemsList.length > 0 ? reviewItemsList : items;
 
-  const current = items[currentItemIndex] || items[0];
+  if (!isPopupOpen || displayList.length === 0) return null;
+
+  const current = displayList[currentItemIndex] || displayList[0];
   if (!current) return null;
 
   const now = new Date();
@@ -68,7 +72,7 @@ export default function ReminderDuePopup() {
   };
 
   const handleNext = () => {
-    setCurrentItemIndex(Math.min(items.length - 1, currentItemIndex + 1));
+    setCurrentItemIndex(Math.min(displayList.length - 1, currentItemIndex + 1));
   };
 
   const handleSnoozeCurrent = (until: Date) => {
@@ -92,7 +96,7 @@ export default function ReminderDuePopup() {
             ? 'bg-amber-500/10 border-amber-200 dark:border-amber-900/50'
             : 'bg-primary/10 border-primary/20'
         }`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${
               isOverdue 
                 ? 'bg-red-600 text-white' 
@@ -108,7 +112,7 @@ export default function ReminderDuePopup() {
                 <Bell className="h-5 w-5 sm:h-6 sm:w-6" />
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <DialogTitle className="text-base sm:text-lg font-bold tracking-tight text-foreground">
                   {isOverdue 
@@ -124,7 +128,7 @@ export default function ReminderDuePopup() {
                   {isOverdue ? 'Action Required' : isUpcoming ? 'Upcoming' : 'Task'}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
                 {isOverdue 
                   ? 'Expired or overdue follow-up requiring immediate review' 
                   : isUpcoming
@@ -134,11 +138,11 @@ export default function ReminderDuePopup() {
             </div>
           </div>
 
-          {/* Top Right: Snooze All button & Queue pill */}
+          {/* Top Right: Snooze All button, Dismiss All & Close Button */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {items.length > 1 && (
-              <Badge variant="outline" className="text-[11px] font-semibold bg-background/80 px-2 py-0.5">
-                {currentItemIndex + 1} of {items.length}
+            {displayList.length > 1 && (
+              <Badge variant="outline" className="text-[11px] font-semibold bg-background/80 px-2 py-0.5 hidden xs:inline-flex">
+                {currentItemIndex + 1} of {displayList.length}
               </Badge>
             )}
 
@@ -148,16 +152,17 @@ export default function ReminderDuePopup() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs gap-1 rounded-lg border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                  className="h-7 px-2 text-xs gap-1 rounded-lg border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-medium"
                   title="Snooze all open items and dismiss popup"
                 >
                   <Clock className="h-3 w-3" />
-                  <span className="hidden xs:inline">Snooze All</span>
+                  <span>Snooze All</span>
+                  <ChevronDown className="h-2.5 w-2.5 opacity-60" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-52 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
                 <div className="px-2 py-1 font-semibold text-[11px] text-muted-foreground border-b mb-1">
-                  Snooze all {items.length} items:
+                  Snooze all {displayList.length} items:
                 </div>
                 <button
                   className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg"
@@ -191,6 +196,27 @@ export default function ReminderDuePopup() {
                 </button>
               </PopoverContent>
             </Popover>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1 rounded-lg border-border text-muted-foreground hover:text-foreground hidden sm:inline-flex"
+              onClick={acknowledgeAll}
+              title="Dismiss all items for this session"
+            >
+              <BellOff className="h-3 w-3" />
+              <span>Dismiss All</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+              onClick={() => setIsPopupOpen(false)}
+              title="Close popup"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -296,7 +322,7 @@ export default function ReminderDuePopup() {
               </Button>
             )}
 
-            {items.length > 1 && (
+            {displayList.length > 1 && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -313,7 +339,7 @@ export default function ReminderDuePopup() {
                   size="icon"
                   className="h-9 w-9 rounded-lg"
                   onClick={handleNext}
-                  disabled={currentItemIndex === items.length - 1}
+                  disabled={currentItemIndex === displayList.length - 1}
                   title="Next item"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -326,9 +352,10 @@ export default function ReminderDuePopup() {
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Popover open={snoozeOpen} onOpenChange={setSnoozeOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-9 px-3">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-9 px-3 font-medium border-border">
                   <Clock className="h-3.5 w-3.5" /> 
-                  Snooze
+                  <span>Snooze</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-52 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
@@ -372,10 +399,10 @@ export default function ReminderDuePopup() {
               variant="outline" 
               size="sm" 
               onClick={() => acknowledgeItem(current)} 
-              className="gap-1.5 text-xs h-9 px-3"
+              className="gap-1.5 text-xs h-9 px-3 border-border"
             >
               <BellOff className="h-3.5 w-3.5" /> 
-              Acknowledge
+              Dismiss
             </Button>
 
             <Button 
