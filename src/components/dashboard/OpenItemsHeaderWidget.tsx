@@ -17,10 +17,13 @@ import {
   Building, 
   MapPin, 
   ChevronRight, 
+  ChevronDown,
   Layers, 
   BellOff, 
   RefreshCw,
-  Sparkles
+  Sparkles,
+  RotateCcw,
+  X
 } from 'lucide-react';
 import { 
   addMinutes, 
@@ -37,41 +40,51 @@ import {
 export default function OpenItemsHeaderWidget() {
   const navigate = useNavigate();
   const {
+    allItems,
     items,
-    overdueItems,
-    upcomingItems,
-    reminderItems,
     totalCount,
+    allCount,
     overdueCount,
     upcomingCount,
+    reminderCount,
+    snoozedCount,
+    dismissedCount,
+    allOverdueCount,
+    allUpcomingCount,
+    allReminderCount,
     loading,
     refetch,
     snoozeAll,
     snoozeItem,
+    unsnoozeItem,
     acknowledgeItem,
+    undismissItem,
     acknowledgeAll,
+    restoreAll,
     completeItem,
     viewDocument,
     openReviewModal,
   } = useDueFollowUps();
 
   const [open, setOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'overdue' | 'upcoming' | 'tasks'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'overdue' | 'upcoming' | 'tasks' | 'snoozed' | 'dismissed'>('all');
   const [snoozeAllOpen, setSnoozeAllOpen] = useState(false);
 
   const now = new Date();
 
-  const filteredItems = items.filter((item) => {
+  const filteredItems = allItems.filter((item) => {
+    if (activeFilter === 'active') return !item.isSnoozed && !item.isDismissed;
     if (activeFilter === 'overdue') return item.sourceType === 'document_overdue';
     if (activeFilter === 'upcoming') return item.sourceType === 'document_upcoming';
     if (activeFilter === 'tasks') return item.sourceType === 'reminder';
-    return true;
+    if (activeFilter === 'snoozed') return item.isSnoozed;
+    if (activeFilter === 'dismissed') return item.isDismissed && !item.isSnoozed;
+    return true; // 'all'
   });
 
   const handleQuickSnoozeAll = (until: Date) => {
     snoozeAll(until);
     setSnoozeAllOpen(false);
-    setOpen(false);
   };
 
   return (
@@ -82,15 +95,19 @@ export default function OpenItemsHeaderWidget() {
           size="sm"
           className={`relative h-9 px-2.5 sm:px-3 rounded-xl gap-2 font-medium transition-all ${
             overdueCount > 0
-              ? 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20 border border-red-200/60 dark:border-red-900/50'
+              ? 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20 border border-red-200/60 dark:border-red-900/50 shadow-xs'
               : totalCount > 0
-              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-200/60 dark:border-amber-900/50'
+              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-200/60 dark:border-amber-900/50 shadow-xs'
+              : allCount > 0
+              ? 'bg-muted/50 hover:bg-muted text-foreground border border-border/50'
               : 'hover:bg-accent text-muted-foreground'
           }`}
           title={
             totalCount > 0
-              ? `${totalCount} open item${totalCount > 1 ? 's' : ''} requiring attention (${overdueCount} overdue, ${upcomingCount} upcoming)`
-              : 'No overdue follow-ups or tasks'
+              ? `${totalCount} active alert${totalCount > 1 ? 's' : ''} (${overdueCount} overdue, ${upcomingCount} upcoming) • ${allCount} total`
+              : allCount > 0
+              ? `${allCount} open document follow-ups & reminders tracked`
+              : 'No follow-ups or tasks'
           }
         >
           {overdueCount > 0 ? (
@@ -109,7 +126,7 @@ export default function OpenItemsHeaderWidget() {
               : 'Follow-ups'}
           </span>
 
-          {totalCount > 0 && (
+          {totalCount > 0 ? (
             <Badge
               variant={overdueCount > 0 ? 'destructive' : 'secondary'}
               className={`h-5 min-w-[20px] px-1.5 text-[11px] font-bold rounded-full flex items-center justify-center ${
@@ -120,33 +137,43 @@ export default function OpenItemsHeaderWidget() {
             >
               {totalCount > 99 ? '99+' : totalCount}
             </Badge>
-          )}
+          ) : allCount > 0 ? (
+            <Badge
+              variant="outline"
+              className="h-5 min-w-[20px] px-1.5 text-[10px] font-semibold rounded-full bg-background/80 text-muted-foreground"
+            >
+              {allCount}
+            </Badge>
+          ) : null}
         </Button>
       </PopoverTrigger>
 
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[360px] sm:w-[460px] p-0 rounded-2xl border shadow-2xl bg-card overflow-hidden"
+        className="w-[370px] sm:w-[500px] p-0 rounded-2xl border shadow-2xl bg-card overflow-hidden"
       >
         {/* Header Bar */}
-        <div className="p-4 border-b bg-muted/30">
+        <div className="p-3.5 sm:p-4 border-b bg-muted/30">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                 <CalendarClock className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Open Follow-ups & Reminders</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  {totalCount === 0
-                    ? 'All items are caught up'
-                    : `${totalCount} item${totalCount > 1 ? 's' : ''} requiring attention`}
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-foreground truncate">Open Follow-ups & Reminders</h3>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {totalCount > 0
+                    ? `${totalCount} alert${totalCount > 1 ? 's' : ''} active (${allCount} total in list)`
+                    : allCount > 0
+                    ? `All active alerts cleared • ${allCount} item${allCount > 1 ? 's' : ''} tracked`
+                    : 'All items are caught up'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* Header Right Action Buttons */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -159,124 +186,188 @@ export default function OpenItemsHeaderWidget() {
               </Button>
 
               {totalCount > 0 && (
-                <Popover open={snoozeAllOpen} onOpenChange={setSnoozeAllOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs gap-1.5 rounded-lg font-medium border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                    >
-                      <Clock className="h-3 w-3" />
-                      Snooze All
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-52 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
-                    <div className="px-2 py-1 font-semibold text-[11px] text-muted-foreground border-b mb-1">
-                      Snooze all {totalCount} open items:
-                    </div>
-                    <button
-                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
-                      onClick={() => handleQuickSnoozeAll(addMinutes(now, 15))}
-                    >
-                      15 minutes
-                    </button>
-                    <button
-                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
-                      onClick={() => handleQuickSnoozeAll(addHours(now, 1))}
-                    >
-                      1 hour
-                    </button>
-                    <button
-                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors font-medium text-primary"
-                      onClick={() => handleQuickSnoozeAll(addHours(now, 3))}
-                    >
-                      3 hours (Recommended)
-                    </button>
-                    <button
-                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
-                      onClick={() => handleQuickSnoozeAll(setMinutes(setHours(startOfTomorrow(), 9), 0))}
-                    >
-                      Tomorrow 9:00 AM
-                    </button>
-                    <button
-                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
-                      onClick={() => handleQuickSnoozeAll(addDays(now, 7))}
-                    >
-                      7 days
-                    </button>
-                  </PopoverContent>
-                </Popover>
+                <>
+                  <Popover open={snoozeAllOpen} onOpenChange={setSnoozeAllOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 rounded-lg font-medium border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                        title="Snooze all active open items"
+                      >
+                        <Clock className="h-3 w-3" />
+                        <span>Snooze All</span>
+                        <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-52 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
+                      <div className="px-2 py-1 font-semibold text-[11px] text-muted-foreground border-b mb-1">
+                        Snooze all {totalCount} open items:
+                      </div>
+                      <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
+                        onClick={() => handleQuickSnoozeAll(addMinutes(now, 15))}
+                      >
+                        15 minutes
+                      </button>
+                      <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
+                        onClick={() => handleQuickSnoozeAll(addHours(now, 1))}
+                      >
+                        1 hour
+                      </button>
+                      <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors font-medium text-primary"
+                        onClick={() => handleQuickSnoozeAll(addHours(now, 3))}
+                      >
+                        3 hours (Recommended)
+                      </button>
+                      <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
+                        onClick={() => handleQuickSnoozeAll(setMinutes(setHours(startOfTomorrow(), 9), 0))}
+                      >
+                        Tomorrow 9:00 AM
+                      </button>
+                      <button
+                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent rounded-lg transition-colors"
+                        onClick={() => handleQuickSnoozeAll(addDays(now, 7))}
+                      >
+                        7 days
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1 rounded-lg text-muted-foreground hover:text-foreground border-border"
+                    onClick={acknowledgeAll}
+                    title="Dismiss all active items for current session"
+                  >
+                    <BellOff className="h-3 w-3" />
+                    <span>Dismiss All</span>
+                  </Button>
+                </>
               )}
 
-              {totalCount > 0 && (
+              {totalCount === 0 && (snoozedCount > 0 || dismissedCount > 0) && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs rounded-lg text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    acknowledgeAll();
-                    setOpen(false);
-                  }}
-                  title="Dismiss all for current session"
+                  className="h-7 px-2 text-xs gap-1 rounded-lg font-medium border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/40 hover:bg-emerald-100"
+                  onClick={restoreAll}
+                  title="Restore all snoozed and dismissed items to active"
                 >
-                  <BellOff className="h-3 w-3" />
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Restore All</span>
                 </Button>
               )}
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+                onClick={() => setOpen(false)}
+                title="Close"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
 
           {/* Filter Pills */}
-          {totalCount > 0 && (
-            <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t">
+          {allCount > 0 && (
+            <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t overflow-x-auto pb-0.5 no-scrollbar">
               <button
                 onClick={() => setActiveFilter('all')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
                   activeFilter === 'all'
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-muted/70 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                All ({totalCount})
+                All ({allCount})
               </button>
 
-              {overdueCount > 0 && (
+              {totalCount > 0 && (
+                <button
+                  onClick={() => setActiveFilter('active')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
+                    activeFilter === 'active'
+                      ? 'bg-slate-900 dark:bg-slate-100 text-slate-100 dark:text-slate-900 shadow-sm'
+                      : 'bg-muted/70 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Active ({totalCount})
+                </button>
+              )}
+
+              {allOverdueCount > 0 && (
                 <button
                   onClick={() => setActiveFilter('overdue')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap ${
                     activeFilter === 'overdue'
                       ? 'bg-red-600 text-white shadow-sm'
                       : 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20'
                   }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                  Overdue ({overdueCount})
+                  Overdue ({allOverdueCount})
                 </button>
               )}
 
-              {upcomingCount > 0 && (
+              {allUpcomingCount > 0 && (
                 <button
                   onClick={() => setActiveFilter('upcoming')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap ${
                     activeFilter === 'upcoming'
                       ? 'bg-amber-600 text-white shadow-sm'
                       : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
                   }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Upcoming ({upcomingCount})
+                  Upcoming ({allUpcomingCount})
                 </button>
               )}
 
-              {reminderItems.length > 0 && (
+              {allReminderCount > 0 && (
                 <button
                   onClick={() => setActiveFilter('tasks')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap ${
                     activeFilter === 'tasks'
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20'
                   }`}
                 >
-                  Tasks ({reminderItems.length})
+                  Tasks ({allReminderCount})
+                </button>
+              )}
+
+              {snoozedCount > 0 && (
+                <button
+                  onClick={() => setActiveFilter('snoozed')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap ${
+                    activeFilter === 'snoozed'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
+                  }`}
+                >
+                  <Clock className="w-2.5 h-2.5" />
+                  Snoozed ({snoozedCount})
+                </button>
+              )}
+
+              {dismissedCount > 0 && (
+                <button
+                  onClick={() => setActiveFilter('dismissed')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 whitespace-nowrap ${
+                    activeFilter === 'dismissed'
+                      ? 'bg-slate-600 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <BellOff className="w-2.5 h-2.5" />
+                  Dismissed ({dismissedCount})
                 </button>
               )}
             </div>
@@ -284,18 +375,30 @@ export default function OpenItemsHeaderWidget() {
         </div>
 
         {/* Item List Scroll Area */}
-        <ScrollArea className="max-h-[380px] p-3">
+        <ScrollArea className="max-h-[390px] p-3">
           {filteredItems.length === 0 ? (
             <div className="py-10 text-center px-4">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <h4 className="text-sm font-semibold text-foreground">All caught up!</h4>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[240px] mx-auto">
-                {activeFilter === 'all'
+              <h4 className="text-sm font-semibold text-foreground">
+                {allCount === 0 ? 'All caught up!' : `No items in "${activeFilter}"`}
+              </h4>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[260px] mx-auto">
+                {allCount === 0
                   ? 'No overdue documents or pending follow-ups requiring attention.'
-                  : `No items found under ${activeFilter}.`}
+                  : `You have ${allCount} total item${allCount > 1 ? 's' : ''} in your list. Switch to "All" to view everything.`}
               </p>
+              {allCount > 0 && activeFilter !== 'all' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 text-xs h-7 rounded-lg"
+                  onClick={() => setActiveFilter('all')}
+                >
+                  View All ({allCount})
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -306,10 +409,12 @@ export default function OpenItemsHeaderWidget() {
                   onView={() => viewDocument(item)}
                   onComplete={() => completeItem(item)}
                   onAcknowledge={() => acknowledgeItem(item)}
+                  onUndismiss={() => undismissItem(item)}
                   onSnooze={(u) => snoozeItem(item, u)}
+                  onUnsnooze={() => unsnoozeItem(item)}
                   onReviewPopup={() => {
                     setOpen(false);
-                    openReviewModal(idx);
+                    openReviewModal(idx, filteredItems);
                   }}
                 />
               ))}
@@ -319,18 +424,18 @@ export default function OpenItemsHeaderWidget() {
 
         {/* Footer actions */}
         <div className="p-3 border-t bg-muted/20 flex items-center justify-between gap-2">
-          {totalCount > 0 ? (
+          {filteredItems.length > 0 ? (
             <Button
               variant="outline"
               size="sm"
-              className="text-xs h-8 gap-1.5 rounded-xl flex-1 font-medium"
+              className="text-xs h-8 gap-1.5 rounded-xl font-medium"
               onClick={() => {
                 setOpen(false);
-                openReviewModal(0);
+                openReviewModal(0, filteredItems);
               }}
             >
               <Layers className="h-3.5 w-3.5 text-primary" />
-              Step-by-Step Review ({totalCount})
+              Review ({filteredItems.length})
             </Button>
           ) : (
             <div />
@@ -339,7 +444,7 @@ export default function OpenItemsHeaderWidget() {
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs h-8 gap-1 rounded-xl text-muted-foreground hover:text-foreground"
+            className="text-xs h-8 gap-1 rounded-xl text-muted-foreground hover:text-foreground font-medium"
             onClick={() => {
               setOpen(false);
               navigate('/dashboard/documents?tab=submissions');
@@ -359,15 +464,18 @@ function ItemCard({
   onView,
   onComplete,
   onAcknowledge,
+  onUndismiss,
   onSnooze,
+  onUnsnooze,
   onReviewPopup,
 }: {
   item: DueItem;
-  itemKey?: string;
   onView: () => void;
   onComplete: () => void;
   onAcknowledge: () => void;
+  onUndismiss: () => void;
   onSnooze: (until: Date) => void;
+  onUnsnooze: () => void;
   onReviewPopup: () => void;
 }) {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -381,7 +489,11 @@ function ItemCard({
   return (
     <div
       className={`p-3 rounded-xl border transition-all text-xs space-y-2 ${
-        isOverdue
+        item.isSnoozed
+          ? 'bg-amber-500/5 border-amber-200/50 dark:border-amber-900/30 opacity-90'
+          : item.isDismissed
+          ? 'bg-muted/40 border-border/70 opacity-85'
+          : isOverdue
           ? 'bg-red-500/5 hover:bg-red-500/10 border-red-200/70 dark:border-red-900/40'
           : isUpcoming
           ? 'bg-amber-500/5 hover:bg-amber-500/10 border-amber-200/70 dark:border-amber-900/40'
@@ -397,6 +509,21 @@ function ItemCard({
             >
               {isOverdue ? 'Overdue' : isUpcoming ? 'Upcoming' : 'Task'}
             </Badge>
+
+            {item.isSnoozed && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 gap-0.5">
+                <Clock className="h-2.5 w-2.5" />
+                Snoozed
+              </Badge>
+            )}
+
+            {item.isDismissed && !item.isSnoozed && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground border-border gap-0.5">
+                <BellOff className="h-2.5 w-2.5" />
+                Dismissed
+              </Badge>
+            )}
+
             <span
               onClick={onReviewPopup}
               className="font-semibold text-foreground truncate cursor-pointer hover:underline text-xs"
@@ -454,8 +581,8 @@ function ItemCard({
       )}
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-between gap-1 pt-1 border-t border-border/40">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-border/40">
+        <div className="flex items-center gap-1 flex-wrap">
           {item.document?.file_path && (
             <Button
               variant="outline"
@@ -468,77 +595,104 @@ function ItemCard({
             </Button>
           )}
 
-          <Popover open={snoozeOpen} onOpenChange={setSnoozeOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] gap-1 rounded-lg text-muted-foreground hover:text-foreground"
-              >
-                <Clock className="h-3 w-3" />
-                Snooze
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-48 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
-              <button
-                className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
-                onClick={() => {
-                  onSnooze(addMinutes(now, 15));
-                  setSnoozeOpen(false);
-                }}
-              >
-                15 minutes
-              </button>
-              <button
-                className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
-                onClick={() => {
-                  onSnooze(addHours(now, 1));
-                  setSnoozeOpen(false);
-                }}
-              >
-                1 hour
-              </button>
-              <button
-                className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg font-medium text-primary"
-                onClick={() => {
-                  onSnooze(addHours(now, 3));
-                  setSnoozeOpen(false);
-                }}
-              >
-                3 hours
-              </button>
-              <button
-                className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
-                onClick={() => {
-                  onSnooze(setMinutes(setHours(startOfTomorrow(), 9), 0));
-                  setSnoozeOpen(false);
-                }}
-              >
-                Tomorrow 9 AM
-              </button>
-              <button
-                className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
-                onClick={() => {
-                  onSnooze(addDays(now, 7));
-                  setSnoozeOpen(false);
-                }}
-              >
-                7 days
-              </button>
-            </PopoverContent>
-          </Popover>
+          {item.isSnoozed ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUnsnooze}
+              className="h-6 px-2 text-[11px] gap-1 rounded-lg border-amber-300 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+              title="Restore to active alert"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Unsnooze
+            </Button>
+          ) : item.isDismissed ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUndismiss}
+              className="h-6 px-2 text-[11px] gap-1 rounded-lg border-border text-foreground hover:bg-accent"
+              title="Restore to active alert"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Restore
+            </Button>
+          ) : (
+            <Popover open={snoozeOpen} onOpenChange={setSnoozeOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] gap-1 rounded-lg text-muted-foreground hover:text-foreground border-border"
+                >
+                  <Clock className="h-3 w-3" />
+                  Snooze
+                  <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-48 p-1.5 text-xs space-y-0.5 rounded-xl shadow-xl">
+                <button
+                  className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
+                  onClick={() => {
+                    onSnooze(addMinutes(now, 15));
+                    setSnoozeOpen(false);
+                  }}
+                >
+                  15 minutes
+                </button>
+                <button
+                  className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
+                  onClick={() => {
+                    onSnooze(addHours(now, 1));
+                    setSnoozeOpen(false);
+                  }}
+                >
+                  1 hour
+                </button>
+                <button
+                  className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg font-medium text-primary"
+                  onClick={() => {
+                    onSnooze(addHours(now, 3));
+                    setSnoozeOpen(false);
+                  }}
+                >
+                  3 hours
+                </button>
+                <button
+                  className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
+                  onClick={() => {
+                    onSnooze(setMinutes(setHours(startOfTomorrow(), 9), 0));
+                    setSnoozeOpen(false);
+                  }}
+                >
+                  Tomorrow 9 AM
+                </button>
+                <button
+                  className="w-full text-left px-2 py-1 text-xs hover:bg-accent rounded-lg"
+                  onClick={() => {
+                    onSnooze(addDays(now, 7));
+                    setSnoozeOpen(false);
+                  }}
+                >
+                  7 days
+                </button>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onAcknowledge}
-            className="h-6 px-2 text-[11px] rounded-lg text-muted-foreground hover:text-foreground"
-            title="Dismiss for session"
-          >
-            Dismiss
-          </Button>
+        <div className="flex items-center gap-1 flex-wrap">
+          {!item.isDismissed && !item.isSnoozed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAcknowledge}
+              className="h-6 px-2 text-[11px] rounded-lg text-muted-foreground hover:text-foreground"
+              title="Dismiss for session"
+            >
+              Dismiss
+            </Button>
+          )}
 
           <Button
             size="sm"
