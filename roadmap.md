@@ -1,0 +1,2 @@
+- [ ] Add non-destructive lottery slot-assignment history and atomic add/replace workflow without changing existing daily records.
+- [ ] Show current and prior games, prices, dates, and sales context to managers; validate the lottery flow and check preview diagnostics.
