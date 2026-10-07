@@ -1,0 +1,1 @@
+- Keep lottery game history non-destructive: represent slot occupancy as dated assignment records and preserve existing daily records when games are replaced, because managers need reliable historical sales and change visibility.
