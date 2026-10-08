@@ -4110,6 +4110,63 @@ export type Database = {
           },
         ]
       }
+      lottery_slot_assignments: {
+        Row: {
+          assigned_by: string | null
+          branch_id: string
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          ended_at: string | null
+          ended_by: string | null
+          game_id: string
+          id: string
+          notes: string | null
+          slot_number: number
+        }
+        Insert: {
+          assigned_by?: string | null
+          branch_id: string
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          game_id: string
+          id?: string
+          notes?: string | null
+          slot_number: number
+        }
+        Update: {
+          assigned_by?: string | null
+          branch_id?: string
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          game_id?: string
+          id?: string
+          notes?: string | null
+          slot_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lottery_slot_assignments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lottery_slot_assignments_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "lottery_games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_tickets: {
         Row: {
           assigned_to: string | null
@@ -7926,6 +7983,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_lottery_game_to_slot: {
+        Args: {
+          p_branch_id: string
+          p_effective_from?: string
+          p_game_id?: string
+          p_game_name?: string
+          p_slot_number: number
+          p_ticket_price?: number
+        }
+        Returns: string
+      }
       calculate_holiday_balance: {
         Args: { p_employee_id: string; p_holiday_year_start?: string }
         Returns: undefined
@@ -7940,6 +8008,10 @@ export type Database = {
       }
       delete_organization_cascade: {
         Args: { p_organization_id: string }
+        Returns: undefined
+      }
+      end_lottery_slot_game: {
+        Args: { p_assignment_id: string; p_effective_to?: string }
         Returns: undefined
       }
       get_messaging_profiles: {
