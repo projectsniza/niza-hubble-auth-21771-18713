@@ -9,7 +9,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildXeroCsv, DailySalesTotals } from '@/lib/dailySalesParser';
-import { buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, normalizeCoopParsedTotals, attachWeeklyExtras, type WeeklyExtraUpload, type CoopXeroRow } from '@/lib/coopFuelParser';
+import {
+  buildCoopXeroCsv, buildBranchSummaryWorkbook, emptyCoopTotals, normalizeCoopParsedTotals,
+  attachWeeklyExtras, isHoundsmillsBranch, resolveWeeklyExtras, type WeeklyExtraUpload, type CoopXeroRow,
+} from '@/lib/coopFuelParser';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 interface UploadRow {
@@ -49,17 +52,40 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
     if (branchId !== 'all') q = q.eq('branch_id', branchId);
 
     // Weekly Cash Reconciliation (fuel litres) and weekly card statements sit on
-    // one row per week, so widen the window to catch weeks starting earlier.
+    // one row per week, so widen the window to catch weeks crossing boundaries.
     let wq = supabase.from('daily_sales_uploads')
-      .select('branch_id, sale_date, source_format, parsed_totals')
+      .select('id, branch_id, sale_date, source_format, parsed_totals, raw_text, storage_path')
       .in('source_format', ['cashrec', 'fiscard'])
-      .gte('sale_date', format(new Date(new Date(f).getTime() - 8 * 864e5), 'yyyy-MM-dd'))
-      .lte('sale_date', t);
+      .gte('sale_date', format(new Date(new Date(f).getTime() - 14 * 864e5), 'yyyy-MM-dd'))
+      .lte('sale_date', format(new Date(new Date(t).getTime() + 14 * 864e5), 'yyyy-MM-dd'));
     if (branchId !== 'all') wq = wq.eq('branch_id', branchId);
 
     const [{ data, error }, { data: weeklyData }] = await Promise.all([q, wq]);
     if (error) { toast.error(error.message); setLoading(false); return; }
-    setWeekly((weeklyData as any) || []);
+
+    const loadStorage = async (path: string) => {
+      const { data, error } = await supabase.storage.from('daily-sales').download(path);
+      if (error || !data) return null;
+      if (/\.(xlsx|xls)$/i.test(path)) return await data.arrayBuffer();
+      return await data.text();
+    };
+
+    const resolvedWeekly = await resolveWeeklyExtras((weeklyData as any[]) || [], loadStorage);
+
+    for (const rw of resolvedWeekly) {
+      const orig = ((weeklyData as any[]) || []).find(x => x.id === rw.id);
+      if (rw.id && (
+        (!orig?.raw_text && rw.raw_text) ||
+        JSON.stringify(orig?.parsed_totals) !== JSON.stringify(rw.parsed_totals)
+      )) {
+        supabase.from('daily_sales_uploads').update({
+          parsed_totals: rw.parsed_totals,
+          raw_text: rw.raw_text ? rw.raw_text.slice(0, 200000) : null,
+        }).eq('id', rw.id).then();
+      }
+    }
+
+    setWeekly(resolvedWeekly);
     setRows(((data as any) || [])
       .filter((r: any) => !['cashrec', 'fiscard'].includes((r.source_format || '').toLowerCase()))
       .map((r: UploadRow) => ({
@@ -67,7 +93,7 @@ export default function XeroExport({ embedded = false }: XeroExportProps) {
       parsed_totals: normalizeCoopParsedTotals(
         r.parsed_totals,
         r.raw_text,
-        (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
+        (r.branch?.vending_split_mode === 'houndsmills' || isHoundsmillsBranch(r.branch?.name) ? 'houndsmills' : 'culverstone'),
         r.branch?.name,
       ),
 

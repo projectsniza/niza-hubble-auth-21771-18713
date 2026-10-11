@@ -13,7 +13,7 @@ import { parseDailySales } from '@/lib/dailySalesParser';
 import {
   parseCoopFuelDetailed, parseCharfieldShiftReportDetailed,
   spreadsheetBufferToCsvText, IMPORT_FORMATS, applyVendingSplit, parseCashRec, isSouthwaterBranch,
-  parseFisCardStatement,
+  isHoundsmillsBranch, parseFisCardStatement,
   type ImportFormatId, type UnknownDepartment, type VendingSplitMode,
 } from '@/lib/coopFuelParser';
 
@@ -45,8 +45,9 @@ export default function DailySalesUpload() {
   const [weekStatus, setWeekStatus] = useState<Record<string, { xread: boolean; deptvat: boolean }>>({});
   const [cashRecUploaded, setCashRecUploaded] = useState<boolean>(false);
   const [cardUploaded, setCardUploaded] = useState<boolean>(false);
-  // Weekly Card Report can be uploaded for any past week, not just the current one.
+  // Weekly Card Report & Cash Reconciliation can be uploaded for any past week.
   const [cardWeek, setCardWeek] = useState<string>('');
+  const [cashRecWeek, setCashRecWeek] = useState<string>('');
 
 
   const formatMeta = IMPORT_FORMATS.find(f => f.id === profile?.import_format) || null;
@@ -56,7 +57,8 @@ export default function DailySalesUpload() {
   const weekMonday = useMemo(() => mondayOf(date), [date]);
   const weekSunday = useMemo(() => sundayOf(date), [date]);
   const cardWeekMonday = cardWeek || mondayOf(date);
-  const cardWeekOptions = useMemo(() => {
+  const cashRecWeekMonday = cashRecWeek || mondayOf(date);
+  const weekOptions = useMemo(() => {
     const base = mondayOf(format(new Date(), 'yyyy-MM-dd'));
     return Array.from({ length: 16 }, (_, i) => format(addDays(new Date(base), -7 * i), 'yyyy-MM-dd'));
   }, []);
@@ -82,8 +84,8 @@ export default function DailySalesUpload() {
     let card = false;
     for (const r of data || []) {
       const f = (r.source_format || '').toLowerCase();
-      if (f === 'cashrec' && r.sale_date === monday) cash = true;
-      if (f === 'fiscard' && r.sale_date === monday) card = true;
+      if (f === 'cashrec' && r.sale_date === (cashRecWeek || monday)) cash = true;
+      if (f === 'fiscard' && r.sale_date === (cardWeek || monday)) card = true;
       if (status[r.sale_date]) {
         if (f === 'xread' || f === 'coop_fuel' || f === 'charfield_shift') status[r.sale_date].xread = true;
         if (f === 'deptvat' || f === 'coop_fuel') status[r.sale_date].deptvat = true;
@@ -109,7 +111,7 @@ export default function DailySalesUpload() {
         import_format = (br as any)?.import_format || null;
         branch_name = (br as any)?.name || null;
         const raw = (br as any)?.vending_split_mode;
-        vending_split_mode = raw === 'houndsmills' ? 'houndsmills' : 'culverstone';
+        vending_split_mode = (raw === 'houndsmills' || isHoundsmillsBranch(branch_name)) ? 'houndsmills' : 'culverstone';
       }
       const p = {
         branch_id: prof?.branch_id || null,
@@ -288,37 +290,38 @@ export default function DailySalesUpload() {
     if (!cashRecFile) return toast.error('Please select the weekly Cash Reconciliation file');
     setBusyCash(true);
     try {
-      const path = await uploadStorage(cashRecFile, `cashrec/${weekMonday}`);
-      // Try to parse cash rec so the summary can reflect banked figures.
-      let cashRecParsed: any = { week_start: weekMonday, week_end: weekSunday };
+      const text = await readFileText(cashRecFile);
+      let cashRecParsed: any = { week_start: cashRecWeekMonday, week_end: sundayOf(cashRecWeekMonday) };
       try {
-        const text = await readFileText(cashRecFile);
         const p = parseCashRec(text);
         cashRecParsed = { ...cashRecParsed, ...p, raw_size: text.length };
       } catch (parseErr) {
         console.warn('Cash Rec parse failed (kept file only):', parseErr);
       }
+      const effectiveDate = cashRecParsed.week_start || cashRecWeekMonday;
+      const path = await uploadStorage(cashRecFile, `cashrec/${effectiveDate}`);
 
       // Remove existing cash-rec row for this week
       await supabase.from('daily_sales_uploads')
         .delete()
         .eq('branch_id', profile.branch_id)
-        .eq('sale_date', weekMonday)
+        .eq('sale_date', effectiveDate)
         .eq('source_format', 'cashrec');
 
       const { error } = await supabase.from('daily_sales_uploads').insert({
         organization_id: profile.organization_id,
         branch_id: profile.branch_id,
-        sale_date: weekMonday,
+        sale_date: effectiveDate,
         source_filename: cashRecFile.name,
         source_format: 'cashrec',
         storage_path: path,
-        raw_text: null,
+        raw_text: text ? text.slice(0, 200000) : null,
         parsed_totals: cashRecParsed as any,
         uploaded_by: user!.id,
       });
       if (error) throw error;
-      toast.success('Cash Reconciliation uploaded for week');
+      const daysCount = Object.keys(cashRecParsed.litres_by_date || {}).length;
+      toast.success(`Cash Reconciliation uploaded for week (${daysCount} day(s) mapped)`);
       setCashRecFile(null);
       (document.getElementById('cashrec-file') as HTMLInputElement | null)?.setAttribute('value', '');
       loadRows(profile.branch_id);
@@ -334,9 +337,10 @@ export default function DailySalesUpload() {
     if (!cardFile) return toast.error('Please select the weekly FIS credit-card statement');
     setBusyCard(true);
     try {
-      const path = await uploadStorage(cardFile, `fiscard/${cardWeekMonday}`);
       const text = await readFileText(cardFile);
       const parsed = parseFisCardStatement(text);
+      const effectiveDate = parsed.week_start || cardWeekMonday;
+      const path = await uploadStorage(cardFile, `fiscard/${effectiveDate}`);
       if (parsed.matchedLines === 0) {
         toast.warning('No dated card lines were recognised — the file is stored, but no card values will appear on C.CARD for that week.');
       }
@@ -344,24 +348,25 @@ export default function DailySalesUpload() {
       await supabase.from('daily_sales_uploads')
         .delete()
         .eq('branch_id', profile.branch_id)
-        .eq('sale_date', cardWeekMonday)
+        .eq('sale_date', effectiveDate)
         .eq('source_format', 'fiscard');
 
       const { error } = await supabase.from('daily_sales_uploads').insert({
         organization_id: profile.organization_id,
         branch_id: profile.branch_id,
-        sale_date: cardWeekMonday,
+        sale_date: effectiveDate,
         source_filename: cardFile.name,
         source_format: 'fiscard',
         storage_path: path,
         raw_text: text.slice(0, 200000),
         parsed_totals: {
           format: 'fiscard',
-          week_start: cardWeekMonday,
-          week_end: sundayOf(cardWeekMonday),
+          week_start: effectiveDate,
+          week_end: sundayOf(effectiveDate),
           by_date: parsed.byDate,
           week_totals: parsed.weekTotals,
           matched_lines: parsed.matchedLines,
+          ...parsed,
         } as any,
         uploaded_by: user!.id,
       });
@@ -459,8 +464,22 @@ export default function DailySalesUpload() {
                 ? <CheckCircle2 className="h-4 w-4 text-green-600" />
                 : <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase">Weekly</span>}
             </div>
+            <div className="mb-2">
+              <Label className="text-xs">Report week</Label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs"
+                value={cashRecWeekMonday}
+                onChange={(e) => setCashRecWeek(e.target.value)}
+              >
+                {weekOptions.map(w => (
+                  <option key={w} value={w}>
+                    {format(new Date(w), 'dd MMM')} – {format(new Date(sundayOf(w)), 'dd MMM yyyy')}
+                  </option>
+                ))}
+              </select>
+            </div>
             <p className="text-xs text-muted-foreground mb-2">
-              Week {format(new Date(weekMonday), 'dd MMM')} – {format(new Date(weekSunday), 'dd MMM')}. Upload anytime during the week.
+              Weekly Cash Reconciliation CSV — fuel sold litres (Diesel, Unleaded, Super) and bank totals. Upload after week ends.
             </p>
             <Input id="cashrec-file" type="file" accept="*/*" onChange={(e) => setCashRecFile(e.target.files?.[0] || null)} />
             {cashRecFile && <p className="text-xs text-primary mt-1 truncate">{cashRecFile.name}</p>}
@@ -487,7 +506,7 @@ export default function DailySalesUpload() {
                 value={cardWeekMonday}
                 onChange={(e) => setCardWeek(e.target.value)}
               >
-                {cardWeekOptions.map(w => (
+                {weekOptions.map(w => (
                   <option key={w} value={w}>
                     {format(new Date(w), 'dd MMM')} – {format(new Date(sundayOf(w)), 'dd MMM yyyy')}
                   </option>

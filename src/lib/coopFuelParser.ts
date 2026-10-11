@@ -100,10 +100,8 @@ const sumTxtLines = (text: string, kw: RegExp): number => {
 // Map a department label (left-side text in DEPARTMENTVAT) to a category code.
 // Amount columns only — VAT is tracked separately and never added into a category.
 // GROCERY (family) is a virtual code — it means "split by rate: 20%→GS, 0%→GZ, 5%→DO".
-// FORCE_GZ departments are always reported as Grocery Zero, never Grocery Std
-// (client rule: FRANCHISE LOCAL for every Co-op shop, plus GROCERY 3 at Southwater
-// only — GROCERY 3 stays a normal grocery department at every other shop).
-const FORCE_GZ = /FRANCHISE\s*LOCAL|FRANCHISE\b/i;
+// Southwater store rule: GROCERY 3 is reported as Grocery Zero (20% moved from Grocery Std to Grocery Zero).
+// Franchise Local keeps its normal grocery rate split across all branches.
 const FORCE_GZ_SOUTHWATER = /GROCERY\s*3\b/i;
 
 const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
@@ -124,14 +122,14 @@ const DEPT_MAP: Array<[RegExp, keyof CoopCategoryTotals | 'GROCERY']> = [
 ];
 
 const codeForDept = (label: string, southwater = false): (keyof CoopCategoryTotals | 'GROCERY') | null => {
-  if (FORCE_GZ.test(label)) return 'GZ';
   if (southwater && FORCE_GZ_SOUTHWATER.test(label)) return 'GZ';
   for (const [re, code] of DEPT_MAP) if (re.test(label)) return code;
   return null;
 };
 
 // Southwater is the only shop where GROCERY 3 moves into Grocery Zero.
-export const isSouthwaterBranch = (branchName?: string | null) => /southwater/i.test(branchName || '');
+export const isSouthwaterBranch = (branchName?: string | null) => /south\s*water/i.test(branchName || '');
+export const isHoundsmillsBranch = (branchName?: string | null) => /hound/i.test(branchName || '');
 
 
 
@@ -226,9 +224,9 @@ export function applyVendingSplit(totals: CoopCategoryTotals, mode: VendingSplit
   const out = { ...totals };
   const extra = out.fuel_zero_rated || 0;
   if (mode === 'houndsmills') {
-    // X-Read Vending is the gross figure (vending + car wash), so the car wash
-    // total is always deducted to leave the net vending sales.
-    out.VM = +Math.max(0, (out.VM || 0) + extra - (out.CW || 0)).toFixed(2);
+    // In Houndsmills, Fuel @ 0% represents gross Car Wash + Vending.
+    // Car Wash comes from X-Read functions (CW), and Vending is the remainder.
+    out.VM = +Math.max(0, extra - (out.CW || 0)).toFixed(2);
     return out;
   }
   if (!extra) return out;
@@ -244,19 +242,31 @@ export function normalizeCoopParsedTotals(
   mode?: VendingSplitMode | null,
   branchName?: string | null,
 ) {
+  const effectiveMode: VendingSplitMode = mode ?? (isHoundsmillsBranch(branchName) ? 'houndsmills' : 'culverstone');
   const input = splitStoredCoopRawText(rawText);
   const detailed = parseCoopFuelDetailed(input, { southwater: isSouthwaterBranch(branchName) });
-  if (!detailed.knownLabels.length) return parsedTotals || {};
-  const breakdown = applyVendingSplit(detailed.totals, mode ?? 'culverstone');
-
-  return {
-    ...(parsedTotals || {}),
-    shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
-    fuel: breakdown.FU,
-    lottery: breakdown.national_lottery,
-    breakdown,
-    format: 'coop_fuel' as const,
-  };
+  if (detailed.knownLabels.length) {
+    const breakdown = applyVendingSplit(detailed.totals, effectiveMode);
+    return {
+      ...(parsedTotals || {}),
+      shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
+      fuel: breakdown.FU,
+      lottery: breakdown.national_lottery,
+      breakdown,
+      format: 'coop_fuel' as const,
+    };
+  }
+  if (parsedTotals?.breakdown) {
+    const breakdown = applyVendingSplit(parsedTotals.breakdown, effectiveMode);
+    return {
+      ...parsedTotals,
+      shop: +(breakdown.TO + breakdown.DR + breakdown.AL + breakdown.GS + breakdown.GZ + breakdown.DO + breakdown.NP + breakdown.NP20 + breakdown.VM).toFixed(2),
+      fuel: breakdown.FU,
+      lottery: breakdown.national_lottery,
+      breakdown,
+    };
+  }
+  return parsedTotals || {};
 }
 
 /**
@@ -268,6 +278,7 @@ export interface FuelLitreSplit { diesel: number; unleaded: number; super: numbe
 export function parseCashRec(text: string): {
   total_banking: number; cash_banked: number; card_banked: number; other: number;
   litres: FuelLitreSplit; litres_by_date: Record<string, FuelLitreSplit>;
+  week_start: string | null; week_end: string | null;
 } {
   const grab = (kw: RegExp) => findTxtLineLast(text, kw);
   const total_banking = grab(/Total\s*Banking|Total\s*Banked/i);
@@ -279,35 +290,115 @@ export function parseCashRec(text: string): {
   const empty = (): FuelLitreSplit => ({ diesel: 0, unleaded: 0, super: 0, total: 0 });
   const litres = empty();
   const litres_by_date: Record<string, FuelLitreSplit> = {};
-  let currentDate: string | null = null;
 
-  for (const rawLine of (text || '').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const d = normaliseFisDate(line);
-    if (d) currentDate = d;
+  const lines = (text || '').split(/\r?\n/);
+  let weekMonday: Date | null = null;
+  let week_start: string | null = null;
+  let week_end: string | null = null;
 
-    let grade: keyof FuelLitreSplit | null = null;
-    if (/super\s*(unleaded|plus)|premium\s*unleaded|\bSUL\b/i.test(line)) grade = 'super';
-    else if (/unleaded|\bULSP\b|\bPETROL\b/i.test(line)) grade = 'unleaded';
-    else if (/diesel|\bULSD\b|\bgas\s*oil\b/i.test(line)) grade = 'diesel';
-    if (!grade) continue;
+  // Detect week date range in headers, e.g. "(10/08/2026 - 16/08/2026)" or "01/08/2026 - 02/08/2026"
+  for (const l of lines.slice(0, 15)) {
+    const m = l.match(/\(?(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\s*-\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\)?/);
+    if (m) {
+      const d1 = parseInt(m[1], 10);
+      const mon1 = parseInt(m[2], 10) - 1;
+      let yr1 = parseInt(m[3], 10);
+      if (yr1 < 100) yr1 += 2000;
+      const startDate = new Date(Date.UTC(yr1, mon1, d1));
+      week_start = startDate.toISOString().slice(0, 10);
 
-    const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
-    const nums = (withoutDate.match(/-?\d[\d,]*\.\d{1,3}/g) || []).map(n => Number(n.replace(/,/g, '')));
-    const qty = nums.find(n => Number.isFinite(n) && n !== 0);
-    if (!qty) continue;
+      const d2 = parseInt(m[4], 10);
+      const mon2 = parseInt(m[5], 10) - 1;
+      let yr2 = parseInt(m[6], 10);
+      if (yr2 < 100) yr2 += 2000;
+      const endDate = new Date(Date.UTC(yr2, mon2, d2));
+      week_end = endDate.toISOString().slice(0, 10);
 
-    litres[grade] = +(litres[grade] + qty).toFixed(2);
-    litres.total = +(litres.total + qty).toFixed(2);
-    if (currentDate) {
-      if (!litres_by_date[currentDate]) litres_by_date[currentDate] = empty();
-      litres_by_date[currentDate][grade] = +(litres_by_date[currentDate][grade] + qty).toFixed(2);
-      litres_by_date[currentDate].total = +(litres_by_date[currentDate].total + qty).toFixed(2);
+      // In JS Date, getUTCDay: 0=Sun, 1=Mon, ..., 6=Sat
+      const dayOfWeek = startDate.getUTCDay();
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      weekMonday = new Date(startDate.getTime() + diffToMonday * 86400000);
+      break;
     }
   }
 
-  return { total_banking, cash_banked, card_banked, other, litres, litres_by_date };
+  if (weekMonday) {
+    for (let i = 0; i < 7; i++) {
+      const dStr = new Date(weekMonday.getTime() + i * 86400000).toISOString().slice(0, 10);
+      litres_by_date[dStr] = empty();
+    }
+  }
+
+  let inLitresSection = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/FUEL\s*LITRES\s*SOLD/i.test(line)) {
+      inLitresSection = true;
+      continue;
+    }
+    if (inLitresSection) {
+      const firstCell = line.split(',')[0].trim();
+      if (firstCell.length >= 4 && !/^\d+$|D[IE]{2}SEL|UNLEADED/i.test(firstCell)) {
+        inLitresSection = false;
+        continue;
+      }
+      let grade: keyof FuelLitreSplit | null = null;
+      if (/super\s*unleaded|\bSUL\b/i.test(line)) grade = 'super';
+      else if (/unleaded|\bULSP\b/i.test(line)) grade = 'unleaded';
+      else if (/d[ie]{2}sel|\bULSD\b/i.test(line)) grade = 'diesel';
+      if (!grade) continue;
+
+      const cells = line.split(',').map(c => c.trim());
+      let nums: number[] = [];
+      for (const c of cells) {
+        const cleaned = c.replace(/,/g, '');
+        if (/^-?\d+(?:\.\d+)?$/.test(cleaned)) nums.push(parseFloat(cleaned));
+      }
+      if (nums.length && [1, 2, 3, 4, 5].includes(nums[0])) nums = nums.slice(1);
+
+      if (nums.length >= 7 && weekMonday) {
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+          const dStr = new Date(weekMonday.getTime() + dayIdx * 86400000).toISOString().slice(0, 10);
+          const val = nums[dayIdx] || 0;
+          if (!litres_by_date[dStr]) litres_by_date[dStr] = empty();
+          litres_by_date[dStr][grade] = +(litres_by_date[dStr][grade] + val).toFixed(2);
+          litres_by_date[dStr].total = +(litres_by_date[dStr].total + val).toFixed(2);
+          litres[grade] = +(litres[grade] + val).toFixed(2);
+          litres.total = +(litres.total + val).toFixed(2);
+        }
+      }
+    }
+  }
+
+  // Fallback for single-line / non-table formats
+  if (Object.keys(litres_by_date).length === 0 || litres.total === 0) {
+    let currentDate: string | null = null;
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const d = normaliseFisDate(line);
+      if (d) currentDate = d;
+      let grade: keyof FuelLitreSplit | null = null;
+      if (/super\s*(unleaded|plus)|premium\s*unleaded|\bSUL\b/i.test(line)) grade = 'super';
+      else if (/unleaded|\bULSP\b|\bPETROL\b/i.test(line)) grade = 'unleaded';
+      else if (/d[ie]{2}sel|\bULSD\b|\bgas\s*oil\b/i.test(line)) grade = 'diesel';
+      if (!grade) continue;
+      const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
+      const nums = (withoutDate.match(/-?\d[\d,]*\.\d{1,3}/g) || []).map(n => Number(n.replace(/,/g, '')));
+      const qty = nums.find(n => Number.isFinite(n) && n !== 0);
+      if (!qty) continue;
+      litres[grade] = +(litres[grade] + qty).toFixed(2);
+      litres.total = +(litres.total + qty).toFixed(2);
+      if (currentDate) {
+        if (!litres_by_date[currentDate]) litres_by_date[currentDate] = empty();
+        litres_by_date[currentDate][grade] = +(litres_by_date[currentDate][grade] + qty).toFixed(2);
+        litres_by_date[currentDate].total = +(litres_by_date[currentDate].total + qty).toFixed(2);
+      }
+    }
+  }
+
+  return { total_banking, cash_banked, card_banked, other, litres, litres_by_date, week_start, week_end };
 }
 
 
@@ -332,10 +423,22 @@ export interface FisCardParseResult {
 
 const emptyFisDay = (): FisCardDay => ({ visa_mc: 0, amex: 0, fuel_card: 0, other: 0, total: 0, brands: {} });
 
-const normaliseFisDate = (raw: string): string | null => {
-  let m = raw.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+const MONTH_MAP: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+export const normaliseFisDate = (raw: string): string | null => {
+  if (!raw) return null;
+  const trimmed = raw.trim().replace(/^["']|["']$/g, '');
+  const mNamed = trimmed.match(/\b(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-]+(\d{4})\b/);
+  if (mNamed) {
+    const mon = MONTH_MAP[mNamed[2].toLowerCase().slice(0, 3)];
+    if (mon) return `${mNamed[3]}-${mon}-${mNamed[1].padStart(2, '0')}`;
+  }
+  let m = trimmed.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  m = raw.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
+  m = trimmed.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
   if (m) {
     const yr = m[3].length === 2 ? `20${m[3]}` : m[3];
     return `${yr}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
@@ -361,7 +464,7 @@ const titleCase = (s: string) => s.toLowerCase().replace(/\b[a-z]/g, c => c.toUp
 const brandForLine = (line: string): string => {
   for (const [re, label] of CARD_BRAND_RULES) if (re.test(line)) return label;
   // Fall back to the longest alphabetic cell on the row (usually the Brand column).
-  const cells = line.split(',').map(c => c.trim()).filter(c => /[a-z]{3,}/i.test(c) && !/^\d/.test(c));
+  const cells = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, '')).filter(c => /[a-z]{3,}/i.test(c) && !/^\d/.test(c));
   const best = cells.sort((a, b) => b.length - a.length)[0];
   return best ? titleCase(best).slice(0, 24) : 'Other';
 };
@@ -370,16 +473,25 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
   const byDate: Record<string, FisCardDay> = {};
   const weekTotals = emptyFisDay();
   let matchedLines = 0;
+  let currentTxDate: string | null = null;
 
   for (const rawLine of (text || '').split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
-    if (/total|summary|grand/i.test(line) && !/\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/.test(line)) continue;
+    if (/TransactionDateTotal|SettlementDateTotal|GrandTotal|\bTotal\b/i.test(line)) continue;
 
-    const dateStr = normaliseFisDate(line);
+    const cols = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+    if (cols.length >= 4 && cols[3]) {
+      const d = normaliseFisDate(cols[3]);
+      if (d) currentTxDate = d;
+    } else {
+      const lineDate = normaliseFisDate(line);
+      if (lineDate) currentTxDate = lineDate;
+    }
 
     // Collect numbers, ignoring the date digits themselves.
-    const withoutDate = line.replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
+    const withoutDate = line.replace(/\b\d{1,2}[\s\-]+[A-Za-z]{3,}[\s\-]+\d{4}\b/g, ' ')
+                            .replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ');
     const nums = (withoutDate.match(/-?\d[\d,]*\.\d{2}|-?\d[\d,]*(?=\s|,|$)/g) || [])
       .map(n => Number(n.replace(/,/g, '')))
       .filter(n => Number.isFinite(n) && n !== 0);
@@ -399,9 +511,9 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
 
     const brand = brandForLine(line);
 
-    if (dateStr) {
-      if (!byDate[dateStr]) byDate[dateStr] = emptyFisDay();
-      const day = byDate[dateStr];
+    if (currentTxDate) {
+      if (!byDate[currentTxDate]) byDate[currentTxDate] = emptyFisDay();
+      const day = byDate[currentTxDate];
       day[key] = +(day[key] + amount).toFixed(2);
       day.total = +(day.total + amount).toFixed(2);
       day.brands[brand] = +((day.brands[brand] || 0) + amount).toFixed(2);
@@ -413,7 +525,14 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
   }
 
   const brandNames = Object.keys(weekTotals.brands).sort();
-  return { byDate, weekTotals, brandNames, matchedLines };
+  const dates = Object.keys(byDate).sort();
+  const week_start = dates.length > 0 ? weekStartSaturday(dates[0]) : null;
+  return {
+    byDate, by_date: byDate,
+    weekTotals, week_totals: weekTotals,
+    brandNames, matchedLines,
+    week_start,
+  };
 }
 
 
@@ -424,10 +543,13 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
 // Weekly reports run Saturday → Friday and are stored on one row per week.
 // ---------------------------------------------------------------------------
 export interface WeeklyExtraUpload {
+  id?: string;
   branch_id?: string | null;
   sale_date: string;
   source_format?: string | null;
   parsed_totals: any;
+  raw_text?: string | null;
+  storage_path?: string | null;
 }
 
 export const weekStartSaturday = (iso: string): string => {
@@ -437,6 +559,70 @@ export const weekStartSaturday = (iso: string): string => {
   d.setUTCDate(d.getUTCDate() - back);
   return d.toISOString().slice(0, 10);
 };
+
+export type StorageLoader = (path: string) => Promise<string | ArrayBuffer | null>;
+
+export async function resolveWeeklyExtras(
+  items: WeeklyExtraUpload[],
+  loadStorage?: StorageLoader,
+): Promise<WeeklyExtraUpload[]> {
+  const out: WeeklyExtraUpload[] = [];
+  for (const item of items) {
+    let pt = { ...(item.parsed_totals || {}) };
+    const fmt = (item.source_format || '').toLowerCase();
+    let text = item.raw_text || '';
+
+    if (fmt === 'fiscard') {
+      const hasDays = Object.keys(pt.by_date || {}).length > 0;
+      if (!hasDays) {
+        if (!text && item.storage_path && loadStorage) {
+          try {
+            const data = await loadStorage(item.storage_path);
+            if (typeof data === 'string') text = data;
+            else if (data instanceof ArrayBuffer) text = spreadsheetBufferToCsvText(data);
+          } catch (e) {
+            console.warn('Failed to load storage for fiscard:', item.storage_path, e);
+          }
+        }
+        if (text) {
+          try {
+            const parsed = parseFisCardStatement(text);
+            pt = { ...pt, ...parsed, format: 'fiscard' };
+          } catch (e) {
+            console.warn('Failed to reparse fiscard:', e);
+          }
+        }
+      }
+    } else if (fmt === 'cashrec') {
+      const hasDays = Object.keys(pt.litres_by_date || {}).length > 1;
+      if (!hasDays) {
+        if (!text && item.storage_path && loadStorage) {
+          try {
+            const data = await loadStorage(item.storage_path);
+            if (typeof data === 'string') text = data;
+            else if (data instanceof ArrayBuffer) text = spreadsheetBufferToCsvText(data);
+          } catch (e) {
+            console.warn('Failed to load storage for cashrec:', item.storage_path, e);
+          }
+        }
+        if (text) {
+          try {
+            const parsed = parseCashRec(text);
+            pt = { ...pt, ...parsed, format: 'cashrec' };
+          } catch (e) {
+            console.warn('Failed to reparse cashrec:', e);
+          }
+        }
+      }
+    }
+    out.push({
+      ...item,
+      raw_text: text || item.raw_text,
+      parsed_totals: pt,
+    });
+  }
+  return out;
+}
 
 export function attachWeeklyExtras<T extends CoopXeroRow & { branch_id?: string | null }>(
   rows: T[],
@@ -450,16 +636,44 @@ export function attachWeeklyExtras<T extends CoopXeroRow & { branch_id?: string 
 
   for (const u of weekly || []) {
     const bid = u.branch_id || '';
-    const pt = u.parsed_totals || {};
-    const wk = `${bid}|${weekStartSaturday(pt.week_start || u.sale_date)}`;
-    if ((u.source_format || '').toLowerCase() === 'fiscard') {
-      const byDate = pt.by_date || {};
-      for (const [d, v] of Object.entries<any>(byDate)) cardByDay[`${bid}|${d}`] = v;
-      if (!Object.keys(byDate).length && pt.week_totals) cardByWeek[wk] = pt.week_totals;
+    let pt = u.parsed_totals || {};
+    const fmt = (u.source_format || '').toLowerCase();
+    if (fmt === 'fiscard') {
+      let byDate = pt.by_date || {};
+      if (Object.keys(byDate).length === 0 && u.raw_text) {
+        try {
+          const re = parseFisCardStatement(u.raw_text);
+          pt = re;
+          byDate = re.by_date || {};
+        } catch {}
+      }
+      const wk = `${bid}|${weekStartSaturday(pt.week_start || u.sale_date)}`;
+      for (const [d, v] of Object.entries<any>(byDate)) {
+        cardByDay[`${bid}|${d}`] = v;
+        if (!cardByDay[d]) cardByDay[d] = v;
+      }
+      if (!Object.keys(byDate).length && pt.week_totals) {
+        cardByWeek[wk] = pt.week_totals;
+        cardByWeek[weekStartSaturday(pt.week_start || u.sale_date)] = pt.week_totals;
+      }
     } else {
-      const byDate = pt.litres_by_date || {};
-      for (const [d, v] of Object.entries<any>(byDate)) litreByDay[`${bid}|${d}`] = v;
-      if (!Object.keys(byDate).length && pt.litres) litreByWeek[wk] = pt.litres;
+      let byDate = pt.litres_by_date || {};
+      if (Object.keys(byDate).length <= 1 && u.raw_text) {
+        try {
+          const re = parseCashRec(u.raw_text);
+          pt = re;
+          byDate = re.litres_by_date || {};
+        } catch {}
+      }
+      const wk = `${bid}|${weekStartSaturday(pt.week_start || u.sale_date)}`;
+      for (const [d, v] of Object.entries<any>(byDate)) {
+        litreByDay[`${bid}|${d}`] = v;
+        if (!litreByDay[d]) litreByDay[d] = v;
+      }
+      if (!Object.keys(byDate).length && pt.litres) {
+        litreByWeek[wk] = pt.litres;
+        litreByWeek[weekStartSaturday(pt.week_start || u.sale_date)] = pt.litres;
+      }
     }
   }
 
@@ -470,14 +684,19 @@ export function attachWeeklyExtras<T extends CoopXeroRow & { branch_id?: string 
     const bid = r.branch_id || '';
     const key = `${bid}|${r.sale_date}`;
     const wk = `${bid}|${weekStartSaturday(r.sale_date)}`;
+    const pureWk = weekStartSaturday(r.sale_date);
 
-    let card = cardByDay[key];
-    if (!card && cardByWeek[wk] && !usedCardWeek.has(wk)) { usedCardWeek.add(wk); card = cardByWeek[wk]; }
+    let card = cardByDay[key] || cardByDay[r.sale_date];
+    if (!card && (cardByWeek[wk] || cardByWeek[pureWk]) && !usedCardWeek.has(wk)) {
+      usedCardWeek.add(wk);
+      card = cardByWeek[wk] || cardByWeek[pureWk];
+    }
 
-    let lit = litreByDay[key];
-    if (!lit && litreByWeek[wk] && !usedLitreWeek.has(wk)) { usedLitreWeek.add(wk); lit = litreByWeek[wk]; }
-
-    if (!card && !lit) return r;
+    let lit = litreByDay[key] || litreByDay[r.sale_date];
+    if (!lit && (litreByWeek[wk] || litreByWeek[pureWk]) && !usedLitreWeek.has(wk)) {
+      usedLitreWeek.add(wk);
+      lit = litreByWeek[wk] || litreByWeek[pureWk];
+    }
 
     const totals: CoopCategoryTotals = { ...r.totals };
     if (card) {
@@ -485,6 +704,15 @@ export function attachWeeklyExtras<T extends CoopXeroRow & { branch_id?: string 
       totals.amex = n(card.amex);
       totals.fuel_card = n(card.fuel_card);
       totals.card_brands = card.brands || {};
+    } else if (!totals.card_brands || Object.keys(totals.card_brands).length === 0) {
+      // Fallback to daily till report tenders if no weekly card statement exists for this day
+      if (totals.visa_mc || totals.amex || totals.fuel_card) {
+        totals.card_brands = {
+          'Visa/Master': totals.visa_mc,
+          'Amex': totals.amex,
+          'All Star': totals.fuel_card,
+        };
+      }
     }
     if (lit) {
       totals.fuel_litres_diesel = n(lit.diesel);
@@ -835,7 +1063,13 @@ export async function buildBranchSummaryWorkbook(
   // statement automatically gets its own column.
   const DEFAULT_BRANDS = ['Visa/Master', 'All Star', 'Amex', 'UK Fuel', 'Texaco/Fast Fuel', 'BP', 'Euroshell'];
   const seenBrands = new Set<string>();
-  for (const r of rows) Object.keys(r.totals.card_brands || {}).forEach(b => { if (b) seenBrands.add(b); });
+  for (const r of rows) {
+    const bMap = r.totals.card_brands || {};
+    Object.keys(bMap).forEach(b => { if (b) seenBrands.add(b); });
+    if (r.totals.visa_mc || r.totals.amex || r.totals.fuel_card) {
+      DEFAULT_BRANDS.forEach(b => seenBrands.add(b));
+    }
+  }
   const brandCols = [
     ...DEFAULT_BRANDS.filter(b => seenBrands.has(b) || seenBrands.size === 0),
     ...Array.from(seenBrands).filter(b => !DEFAULT_BRANDS.includes(b)).sort(),
@@ -847,9 +1081,18 @@ export async function buildBranchSummaryWorkbook(
   const ccardRows: any[][] = [...title('Credit Card Receipts'), ccardHeaders];
   for (const r of rows) {
     const t = r.totals;
-    const brands = t.card_brands || {};
-    // Card values come exclusively from the weekly card report upload. No
-    // X-Read till-tender fallback: an unuploaded week simply shows 0.
+    let brands = t.card_brands;
+    if (!brands || Object.keys(brands).length === 0) {
+      if (t.visa_mc || t.amex || t.fuel_card) {
+        brands = {
+          'Visa/Master': t.visa_mc || 0,
+          'Amex': t.amex || 0,
+          'All Star': t.fuel_card || 0,
+        };
+      } else {
+        brands = {};
+      }
+    }
     const cells = brandCols.map(b => Number(brands[b] || 0));
     ccardRows.push([r.sale_date, ...cells, null]);
   }
