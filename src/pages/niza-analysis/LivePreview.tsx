@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Download, Eye, Save, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, startOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
-  emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook, type CoopXeroRow,
+  emptyCoopTotals, normalizeCoopParsedTotals, buildBranchSummaryWorkbook,
+  isHoundsmillsBranch, weekStartSaturday, resolveWeeklyExtras, type CoopXeroRow,
 } from '@/lib/coopFuelParser';
 import OutputReviewPanel from '@/components/niza-analysis/OutputReviewPanel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,7 +33,7 @@ type LitreDay = { diesel: number; unleaded: number; super: number; total: number
 const num = (v: any) => Number(v || 0);
 
 // Weekly reports (Cash Rec + Weekly Card Report) run Saturday → Friday.
-const weekStartOf = (iso: string) => format(startOfWeek(new Date(iso), { weekStartsOn: 6 }), 'yyyy-MM-dd');
+const weekStartOf = (iso: string) => weekStartSaturday(iso);
 
 export default function LivePreview() {
   const today = new Date();
@@ -67,56 +68,88 @@ export default function LivePreview() {
     if (branchId !== 'all') q = q.eq('branch_id', branchId);
 
     // FIS card statements and weekly Cash Reconciliations are stored on the
-    // week's Monday, so widen the window a little to catch weeks that start
-    // before the selected range.
+    // week's start, so widen the window to catch statements crossing month boundaries.
     let cq = supabase.from('daily_sales_uploads')
-      .select('branch_id, sale_date, source_format, parsed_totals')
+      .select('id, branch_id, sale_date, source_format, parsed_totals, raw_text, storage_path')
       .in('source_format', ['fiscard', 'cashrec'])
-      .gte('sale_date', format(new Date(new Date(from).getTime() - 8 * 864e5), 'yyyy-MM-dd'))
-      .lte('sale_date', to);
+      .gte('sale_date', format(new Date(new Date(from).getTime() - 14 * 864e5), 'yyyy-MM-dd'))
+      .lte('sale_date', format(new Date(new Date(to).getTime() + 14 * 864e5), 'yyyy-MM-dd'));
     if (branchId !== 'all') cq = cq.eq('branch_id', branchId);
 
     const [{ data, error }, { data: cardData }] = await Promise.all([q, cq]);
+    if (error) { setLoading(false); return toast.error(error.message); }
+
+    const loadStorage = async (path: string) => {
+      const { data, error } = await supabase.storage.from('daily-sales').download(path);
+      if (error || !data) return null;
+      if (/\.(xlsx|xls)$/i.test(path)) return await data.arrayBuffer();
+      return await data.text();
+    };
+
+    const resolvedWeekly = await resolveWeeklyExtras((cardData as any[]) || [], loadStorage);
+
+    // Persist parsed totals/raw_text back to database in the background if resolved from storage
+    for (const rw of resolvedWeekly) {
+      const orig = ((cardData as any[]) || []).find(x => x.id === rw.id);
+      if (rw.id && (
+        (!orig?.raw_text && rw.raw_text) ||
+        JSON.stringify(orig?.parsed_totals) !== JSON.stringify(rw.parsed_totals)
+      )) {
+        supabase.from('daily_sales_uploads').update({
+          parsed_totals: rw.parsed_totals,
+          raw_text: rw.raw_text ? rw.raw_text.slice(0, 200000) : null,
+        }).eq('id', rw.id).then();
+      }
+    }
+
     setLoading(false);
-    if (error) return toast.error(error.message);
 
     const cards: Record<string, FisDay> = {};
     const litres: Record<string, LitreDay> = {};
     const wkCards: Record<string, FisDay> = {};
     const wkLitres: Record<string, LitreDay> = {};
-    for (const c of (cardData as any[]) || []) {
+    for (const c of resolvedWeekly) {
       const fmt = (c.source_format || '').toLowerCase();
-      const weekKey = `${c.branch_id}|${weekStartOf(c.parsed_totals?.week_start || c.sale_date)}`;
+      const weekKey = `${c.branch_id}|${weekStartSaturday(c.parsed_totals?.week_start || c.sale_date)}`;
+      const pureWeekKey = weekStartSaturday(c.parsed_totals?.week_start || c.sale_date);
       if (fmt === 'fiscard') {
-        const byDate = c.parsed_totals?.by_date || {};
+        const byDate = c.parsed_totals?.by_date || c.parsed_totals?.byDate || {};
         for (const [d, v] of Object.entries<any>(byDate)) {
-          cards[`${c.branch_id}|${d}`] = {
+          const entry = {
             visa_mc: num(v.visa_mc), amex: num(v.amex), fuel_card: num(v.fuel_card),
             other: num(v.other), total: num(v.total), brands: v.brands || {},
           };
+          cards[`${c.branch_id}|${d}`] = entry;
+          if (!cards[d]) cards[d] = entry;
         }
         // Statements without usable per-day dates still carry weekly totals.
-        if (Object.keys(byDate).length === 0 && c.parsed_totals?.week_totals) {
-          const w = c.parsed_totals.week_totals;
-          wkCards[weekKey] = {
+        if (Object.keys(byDate).length === 0 && (c.parsed_totals?.week_totals || c.parsed_totals?.weekTotals)) {
+          const w = c.parsed_totals.week_totals || c.parsed_totals.weekTotals;
+          const entry = {
             visa_mc: num(w.visa_mc), amex: num(w.amex), fuel_card: num(w.fuel_card),
             other: num(w.other), total: num(w.total), brands: w.brands || {},
           };
+          wkCards[weekKey] = entry;
+          if (!wkCards[pureWeekKey]) wkCards[pureWeekKey] = entry;
         }
       } else {
         const byDate = c.parsed_totals?.litres_by_date || {};
         for (const [d, v] of Object.entries<any>(byDate)) {
-          litres[`${c.branch_id}|${d}`] = {
+          const entry = {
             diesel: num(v.diesel), unleaded: num(v.unleaded),
             super: num(v.super), total: num(v.total),
           };
+          litres[`${c.branch_id}|${d}`] = entry;
+          if (!litres[d]) litres[d] = entry;
         }
         if (Object.keys(byDate).length === 0 && c.parsed_totals?.litres) {
           const l = c.parsed_totals.litres;
-          wkLitres[weekKey] = {
+          const entry = {
             diesel: num(l.diesel), unleaded: num(l.unleaded),
             super: num(l.super), total: num(l.total),
           };
+          wkLitres[weekKey] = entry;
+          if (!wkLitres[pureWeekKey]) wkLitres[pureWeekKey] = entry;
         }
       }
     }
@@ -136,7 +169,7 @@ export default function LivePreview() {
         parsed_totals: normalizeCoopParsedTotals(
           r.parsed_totals,
           r.raw_text,
-          (r.branch?.vending_split_mode === 'houndsmills' ? 'houndsmills' : 'culverstone'),
+          (r.branch?.vending_split_mode === 'houndsmills' || isHoundsmillsBranch(r.branch?.name) ? 'houndsmills' : 'culverstone'),
           r.branch?.name,
         ),
 
@@ -154,17 +187,19 @@ export default function LivePreview() {
       .map(r => {
         const bid = (r as any).branch_id;
         const key = `${bid}|${r.sale_date}`;
-        const wkKey = `${bid}|${weekStartOf(r.sale_date)}`;
-        let fis = cardByKey[key];
-        if (!fis && weekCards[wkKey] && !usedWeekCard.has(wkKey)) {
+        const wkKey = `${bid}|${weekStartSaturday(r.sale_date)}`;
+        const pureWk = weekStartSaturday(r.sale_date);
+        let fis = cardByKey[key] || cardByKey[r.sale_date];
+        if (!fis && (weekCards[wkKey] || weekCards[pureWk]) && !usedWeekCard.has(wkKey)) {
           usedWeekCard.add(wkKey);
-          fis = weekCards[wkKey];
+          fis = weekCards[wkKey] || weekCards[pureWk];
         }
-        let lit = litresByKey[key];
-        if (!lit && weekLitres[wkKey] && !usedWeekLitre.has(wkKey)) {
+        let lit = litresByKey[key] || litresByKey[r.sale_date];
+        if (!lit && (weekLitres[wkKey] || weekLitres[pureWk]) && !usedWeekLitre.has(wkKey)) {
           usedWeekLitre.add(wkKey);
-          lit = weekLitres[wkKey];
+          lit = weekLitres[wkKey] || weekLitres[pureWk];
         }
+        const bTotals = r.parsed_totals?.breakdown || {};
         return {
           row_id: r.id,
           sale_date: r.sale_date,
@@ -174,8 +209,16 @@ export default function LivePreview() {
           reference: `${r.branch!.name}-${format(new Date(r.sale_date), 'MMM yy')}`,
           totals: {
             ...emptyCoopTotals(),
-            ...(r.parsed_totals?.breakdown || {}),
-            ...(fis ? { visa_mc: fis.visa_mc, amex: fis.amex, fuel_card: fis.fuel_card, card_brands: fis.brands } : {}),
+            ...bTotals,
+            ...(fis ? { visa_mc: fis.visa_mc, amex: fis.amex, fuel_card: fis.fuel_card, card_brands: fis.brands } : (
+              bTotals.visa_mc || bTotals.amex || bTotals.fuel_card ? {
+                card_brands: {
+                  'Visa/Master': bTotals.visa_mc || 0,
+                  'Amex': bTotals.amex || 0,
+                  'All Star': bTotals.fuel_card || 0,
+                }
+              } : {}
+            )),
             ...(lit ? {
               fuel_litres: lit.total || +(lit.diesel + lit.unleaded + lit.super).toFixed(2),
               fuel_litres_diesel: lit.diesel,
