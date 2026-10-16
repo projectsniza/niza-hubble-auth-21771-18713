@@ -257,6 +257,7 @@ export default function UploadDocumentDialog({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   className={cn(
                     "w-full justify-start text-left font-normal",
@@ -267,13 +268,38 @@ export default function UploadDocumentDialog({
                   {expiryDate ? format(expiryDate, "PPP") : "Not set"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={expiryDate}
-                  onSelect={setExpiryDate}
-                  initialFocus
-                />
+              <PopoverContent 
+                className="w-auto p-0 z-[70] shadow-2xl border bg-popover" 
+                align="start" 
+                side="bottom" 
+                sideOffset={6} 
+                avoidCollisions={false}
+              >
+                <div className="p-2">
+                  <Calendar
+                    mode="single"
+                    selected={expiryDate}
+                    onSelect={setExpiryDate}
+                    captionLayout="dropdown"
+                    fromYear={2020}
+                    toYear={2040}
+                    fixedWeeks
+                    initialFocus
+                  />
+                  {expiryDate && (
+                    <div className="pt-2 mt-2 border-t flex justify-end">
+                      <Button 
+                        type="button"
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setExpiryDate(undefined)} 
+                        className="text-xs h-7 text-destructive hover:text-destructive"
+                      >
+                        Clear Expiry Date
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           </div>

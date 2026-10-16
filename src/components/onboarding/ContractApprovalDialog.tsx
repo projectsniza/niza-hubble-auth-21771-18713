@@ -13,10 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Building, User, FileText, CheckCircle, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save, RefreshCw } from 'lucide-react';
+import { Building, User, FileText, CheckCircle, CheckCircle2, FileCheck, Check, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 import { buildCompleteContractPdf } from '@/lib/onboardingPdfs';
 import nizaLogo from '@/assets/niza-group-logo.png';
 
@@ -52,6 +54,8 @@ export default function ContractApprovalDialog({
   const [rtwExpiry, setRtwExpiry] = useState('');
   const [isUploadingRtw, setIsUploadingRtw] = useState(false);
   const [rtwUploadProgress, setRtwUploadProgress] = useState(0);
+  const [justUploadedRtw, setJustUploadedRtw] = useState(false);
+  const [showReplaceRtw, setShowReplaceRtw] = useState(false);
   
   // Document viewer state
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -253,24 +257,27 @@ export default function ContractApprovalDialog({
       clearInterval(interval);
       setRtwUploadProgress(100);
 
-      toast.success('Right to Work document uploaded and verified successfully');
+      setJustUploadedRtw(true);
+      setShowReplaceRtw(false);
+      toast.success('Verified Employee Share Code Document uploaded successfully!');
       
       // Refresh documents in approval
-      if (approval.documents) {
-        approval.documents.push({
-          id: 'temp-' + Date.now(),
-          title: 'Right to Work (Verified)',
-          file_name: rtwFile.name,
-          file_path: filePath,
-          file_type: rtwFile.type,
-          file_size: rtwFile.size,
-          expiry_date: rtwExpiry || null,
-          created_at: new Date().toISOString(),
-          verified_at: new Date().toISOString(),
-          verified_by_name: user?.name || 'Super Admin',
-          verified_by_role: user?.role || 'super_admin'
-        });
+      if (!approval.documents) {
+        approval.documents = [];
       }
+      approval.documents.push({
+        id: 'temp-' + Date.now(),
+        title: 'Right to Work (Verified)',
+        file_name: rtwFile.name,
+        file_path: filePath,
+        file_type: rtwFile.type,
+        file_size: rtwFile.size,
+        expiry_date: rtwExpiry || null,
+        created_at: new Date().toISOString(),
+        verified_at: new Date().toISOString(),
+        verified_by_name: user?.name || 'Super Admin',
+        verified_by_role: user?.role || 'super_admin'
+      });
 
       setTimeout(() => {
         setRtwFile(null);
@@ -580,82 +587,193 @@ export default function ContractApprovalDialog({
             })()}
 
             {/* RTW Upload Section for Super Admin - Unique Share Code Design */}
-            <Card className="p-5 border-2 border-amber-500/50 bg-gradient-to-br from-amber-50/70 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-sm rounded-xl">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-10 w-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0 text-amber-700 dark:text-amber-400">
-                  <Upload className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-amber-900 dark:text-amber-200 text-base">Upload Verified Employee Share Code Document</h4>
-                  <p className="text-xs text-amber-700/90 dark:text-amber-400/80">Verify the share code and upload the Right to Work document. This will be saved to the employee's folder.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Select Document</Label>
-                  <Input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    disabled={isUploadingRtw}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setRtwFile(file);
-                      setRtwUploadProgress(0);
-                    }}
-                    className="bg-background text-xs cursor-pointer"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Expiry Date (if applicable)</Label>
-                  <Input
-                    type="date"
-                    disabled={isUploadingRtw}
-                    value={rtwExpiry}
-                    onChange={(e) => setRtwExpiry(e.target.value)}
-                    className="bg-background text-xs"
-                  />
-                </div>
-                <div className="space-y-1.5 flex items-end">
-                  <Button
-                    onClick={handleUploadRtwDocument}
-                    disabled={!rtwFile || isUploadingRtw}
-                    className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm transition-all"
-                  >
-                    {isUploadingRtw ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span>Uploading ({rtwUploadProgress}%)</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span>Upload RTW</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
+            {(() => {
+              const verifiedRtwDoc = (approval.documents || []).find((doc: any) => 
+                doc.verified_at || 
+                doc.title?.toLowerCase().includes('right to work (verified)') ||
+                (doc.title?.toLowerCase().includes('right to work') && doc.title?.toLowerCase().includes('verified'))
+              );
+              const isRtwUploaded = justUploadedRtw || !!verifiedRtwDoc;
 
-              {rtwFile && (
-                <div className="mt-3 p-3 rounded-lg bg-background/80 border border-amber-200/60 dark:border-amber-900/40 flex flex-col gap-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                      <span className="font-medium truncate text-foreground">{rtwFile.name}</span>
-                      <span className="text-muted-foreground flex-shrink-0 text-[11px]">({(rtwFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+              return (
+                <Card className={cn(
+                  "p-5 border-2 shadow-sm rounded-xl transition-all",
+                  isRtwUploaded 
+                    ? "border-emerald-500 bg-gradient-to-br from-emerald-50/90 to-green-50/70 dark:from-emerald-950/40 dark:to-green-950/30"
+                    : "border-amber-500/50 bg-gradient-to-br from-amber-50/70 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-950/20"
+                )}>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0",
+                        isRtwUploaded 
+                          ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                          : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                      )}>
+                        {isRtwUploaded ? <CheckCircle2 className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className={cn(
+                            "font-bold text-base",
+                            isRtwUploaded ? "text-emerald-950 dark:text-emerald-100" : "text-amber-900 dark:text-amber-200"
+                          )}>
+                            Upload Verified Employee Share Code Document
+                          </h4>
+                          {isRtwUploaded && (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1 text-xs font-semibold shadow-xs">
+                              <Check className="h-3 w-3" /> Uploaded & Verified
+                            </Badge>
+                          )}
+                        </div>
+                        <p className={cn(
+                          "text-xs mt-0.5",
+                          isRtwUploaded ? "text-emerald-800/90 dark:text-emerald-300/90" : "text-amber-700/90 dark:text-amber-400/80"
+                        )}>
+                          {isRtwUploaded 
+                            ? "Verified employee share code document has been successfully uploaded and saved to the employee's folder."
+                            : "Verify the share code and upload the Right to Work document. This will be saved to the employee's folder."}
+                        </p>
+                      </div>
                     </div>
-                    {isUploadingRtw && (
-                      <span className="font-semibold text-amber-700 dark:text-amber-400 flex-shrink-0">
-                        {rtwUploadProgress}%
-                      </span>
+                    {isRtwUploaded && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setShowReplaceRtw(!showReplaceRtw)}
+                        className={cn(
+                          "text-xs gap-1 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40",
+                          showReplaceRtw && "bg-emerald-100 text-emerald-900"
+                        )}
+                      >
+                        {showReplaceRtw ? (
+                          <>
+                            <X className="h-3.5 w-3.5" /> Cancel
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-3.5 w-3.5" /> Replace Document
+                          </>
+                        )}
+                      </Button>
                     )}
                   </div>
-                  {isUploadingRtw && (
-                    <Progress value={rtwUploadProgress} className="h-2 w-full bg-amber-100 dark:bg-amber-950/60 [&>div]:bg-amber-600" />
+
+                  {isRtwUploaded && !showReplaceRtw ? (
+                    <div className="mt-3 p-3.5 rounded-lg bg-white/90 dark:bg-card/90 border border-emerald-200 dark:border-emerald-800/70 shadow-xs flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileCheck className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {verifiedRtwDoc?.file_name || 'Right_to_Work_Verified.pdf'}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">Status: Uploaded & Verified</span>
+                            {verifiedRtwDoc?.expiry_date && (
+                              <span>• Expires: {format(new Date(verifiedRtwDoc.expiry_date), 'dd MMM yyyy')}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {verifiedRtwDoc && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDocument(verifiedRtwDoc)}
+                          className="text-xs gap-1.5 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View Document
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {showReplaceRtw && isRtwUploaded && (
+                        <p className="text-xs text-emerald-800 dark:text-emerald-300 font-medium mb-3">
+                          Select a new file below to replace the existing verified Right to Work document:
+                        </p>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">Select Document</Label>
+                          <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            disabled={isUploadingRtw}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              setRtwFile(file);
+                              setRtwUploadProgress(0);
+                            }}
+                            className="bg-background text-xs cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">Expiry Date (if applicable)</Label>
+                          <Input
+                            type="date"
+                            disabled={isUploadingRtw}
+                            value={rtwExpiry}
+                            onChange={(e) => setRtwExpiry(e.target.value)}
+                            className="bg-background text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1.5 flex items-end">
+                          <Button
+                            onClick={handleUploadRtwDocument}
+                            disabled={!rtwFile || isUploadingRtw}
+                            className={cn(
+                              "w-full gap-2 font-medium shadow-sm transition-all text-white",
+                              isRtwUploaded
+                                ? "bg-emerald-600 hover:bg-emerald-700"
+                                : "bg-amber-600 hover:bg-amber-700"
+                            )}
+                          >
+                            {isUploadingRtw ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                <span>Uploading ({rtwUploadProgress}%)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4" />
+                                <span>{isRtwUploaded ? "Upload New Document" : "Upload RTW"}</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {rtwFile && (
+                        <div className={cn(
+                          "mt-3 p-3 rounded-lg bg-background/80 border flex flex-col gap-2",
+                          isRtwUploaded ? "border-emerald-200/70" : "border-amber-200/60"
+                        )}>
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className={cn("h-4 w-4 flex-shrink-0", isRtwUploaded ? "text-emerald-600" : "text-amber-600")} />
+                              <span className="font-medium truncate text-foreground">{rtwFile.name}</span>
+                              <span className="text-muted-foreground flex-shrink-0 text-[11px]">({(rtwFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </div>
+                            {isUploadingRtw && (
+                              <span className={cn("font-semibold flex-shrink-0", isRtwUploaded ? "text-emerald-700" : "text-amber-700")}>
+                                {rtwUploadProgress}%
+                              </span>
+                            )}
+                          </div>
+                          {isUploadingRtw && (
+                            <Progress value={rtwUploadProgress} className={cn(
+                              "h-2 w-full",
+                              isRtwUploaded ? "bg-emerald-100 [&>div]:bg-emerald-600" : "bg-amber-100 [&>div]:bg-amber-600"
+                            )} />
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
-                </div>
-              )}
-            </Card>
+                </Card>
+              );
+            })()}
 
             {/* Share Code / RTW documents shown separately at top */}
             {(() => {

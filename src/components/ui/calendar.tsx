@@ -17,6 +17,10 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
+        caption_dropdowns: "flex justify-center items-center gap-1 text-sm font-medium",
+        dropdown: "rounded-md border border-input bg-background px-1.5 py-1 text-xs font-medium text-foreground shadow-xs focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer",
+        dropdown_month: "text-xs font-medium",
+        dropdown_year: "text-xs font-medium",
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),

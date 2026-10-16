@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDueFollowUps } from '@/contexts/DueFollowUpsContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -49,8 +50,11 @@ export default function ReminderDuePopup() {
     items,
   } = useDueFollowUps();
 
+  const { user } = useAuth();
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [snoozeAllOpen, setSnoozeAllOpen] = useState(false);
+
+  if (user?.role !== 'super_admin' && user?.role !== 'hr') return null;
 
   const displayList = reviewItemsList.length > 0 ? reviewItemsList : items;
 

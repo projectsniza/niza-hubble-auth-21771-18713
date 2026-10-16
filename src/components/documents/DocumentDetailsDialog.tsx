@@ -3,7 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Download, CheckCircle } from 'lucide-react';
+import { Download, CheckCircle, FileSignature } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -144,8 +144,29 @@ export default function DocumentDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         {/* Document title */}
-        <div className="pb-2">
+        <div className="pb-2 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-xl font-semibold">{document.title || document.file_name}</h2>
+          {(() => {
+            const title = (document.title || '').toLowerCase();
+            const path = (document.file_path || '').toLowerCase();
+            const name = (document.file_name || '').toLowerCase();
+            const isSignedDoc = 
+              path.includes('/signed-documents/') || 
+              path.includes('/contracts/') ||
+              title.includes('signed document') ||
+              title.includes('signed employment contract') ||
+              title.includes('physical signed') ||
+              title.includes('(signed document)') ||
+              name.includes('signed_doc_') ||
+              title.startsWith('signed ');
+            
+            return isSignedDoc ? (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 gap-1 font-semibold text-xs py-1">
+                <FileSignature className="h-3.5 w-3.5" />
+                Signed Document
+              </Badge>
+            ) : null;
+          })()}
         </div>
 
         {/* Two Column Layout */}

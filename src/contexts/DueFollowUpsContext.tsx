@@ -82,7 +82,7 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
   const hasAutoPoppedRef = useRef(false);
 
   const fetchDueItems = useCallback(async () => {
-    if (!user) {
+    if (!user || (user.role !== 'super_admin' && user.role !== 'hr')) {
       setAllItems([]);
       return;
     }
@@ -125,8 +125,8 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
       console.error('Error fetching reminders for due items:', err);
     }
 
-    // 2. Fetch Document Follow-ups (Admin / HR / Manager)
-    const hasDocAccess = ['super_admin', 'hr', 'manager'].includes(user.role);
+    // 2. Fetch Document Follow-ups (Super Admin / HR only; store accounts/managers do not receive document expiry notifications)
+    const hasDocAccess = ['super_admin', 'hr'].includes(user.role);
     if (hasDocAccess) {
       try {
         let followUpIntervals = [30];

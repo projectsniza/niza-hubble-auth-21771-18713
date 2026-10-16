@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDueFollowUps, DueItem } from '@/contexts/DueFollowUpsContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,12 @@ import {
 } from 'date-fns';
 
 export default function OpenItemsHeaderWidget() {
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  if (user?.role !== 'super_admin' && user?.role !== 'hr') {
+    return null;
+  }
   const {
     allItems,
     items,

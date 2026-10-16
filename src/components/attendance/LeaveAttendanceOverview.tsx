@@ -631,6 +631,7 @@ export default function LeaveAttendanceOverview() {
                   <TableHead>Leave Type</TableHead>
                   <TableHead>Start Date</TableHead>
                   <TableHead>End Date</TableHead>
+                  <TableHead>Raised At</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Document</TableHead>
@@ -640,7 +641,7 @@ export default function LeaveAttendanceOverview() {
               <TableBody>
                 {filteredLeave.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isSuperAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={isSuperAdmin ? 9 : 8} className="text-center text-muted-foreground py-8">
                       No leave requests found
                     </TableCell>
                   </TableRow>
@@ -653,6 +654,9 @@ export default function LeaveAttendanceOverview() {
                       <TableCell>{leave.leave_type?.name || '-'}</TableCell>
                       <TableCell>{format(parseISO(leave.start_date), 'dd MMM yyyy')}</TableCell>
                       <TableCell>{format(parseISO(leave.end_date), 'dd MMM yyyy')}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {leave.created_at ? format(new Date(leave.created_at), 'dd MMM yyyy, HH:mm') : '-'}
+                      </TableCell>
                       <TableCell>{getStatusBadge(leave.status)}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{leave.reason || '-'}</TableCell>
                       <TableCell>
