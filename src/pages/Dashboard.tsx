@@ -34,7 +34,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen flex w-full bg-background">
       <TaskReminderListener />
-      <ReminderDuePopup />
+      {(user?.role === 'super_admin' || user?.role === 'hr') && <ReminderDuePopup />}
       <TodayEventsPopup />
       {/* Desktop Sidebar */}
       {!isMobile && (
@@ -79,7 +79,7 @@ export default function Dashboard() {
 
           {/* Open Items Widget, Notification Bell and Reminders Button */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <OpenItemsHeaderWidget />
+            {(user?.role === 'super_admin' || user?.role === 'hr') && <OpenItemsHeaderWidget />}
             <NotificationBell />
             <Button
               variant="ghost"

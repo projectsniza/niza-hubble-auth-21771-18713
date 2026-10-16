@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
-  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home
+  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home, FileSignature
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,7 +20,7 @@ import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
-import { ensureEmployeeDocuments } from '@/lib/ensureEmployeeDocuments';
+import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -193,7 +193,52 @@ export default function Documents() {
           .select('*, employee:employees(id, first_name, last_name, status, deactivation_reason)')
           .eq('parent_id', currentFolderId)
           .order('name');
-        setFolders(foldersData || []);
+
+        // Sanitize: Employee folders should never be located directly under root ("Company Documents")
+        if (currentFolderId === rootFolderId && foldersData) {
+          const misplacedEmpFolders = foldersData.filter(f => f.folder_type === 'employee');
+          if (misplacedEmpFolders.length > 0) {
+            // Asynchronously heal/relocate misplaced employee folders into their proper branch
+            (async () => {
+              let relocatedCount = 0;
+              for (const empFolder of misplacedEmpFolders) {
+                try {
+                  let targetEmpId = empFolder.employee_id;
+                  if (!targetEmpId) {
+                    const parts = empFolder.name.trim().split(/\s+/);
+                    const firstPart = parts[0];
+                    const { data: matchedEmp } = await supabase
+                      .from('employees')
+                      .select('id')
+                      .ilike('first_name', `%${firstPart}%`)
+                      .limit(1)
+                      .maybeSingle();
+                    if (matchedEmp) targetEmpId = matchedEmp.id;
+                  }
+
+                  if (targetEmpId) {
+                    await getOrCreateEmployeeFolder(targetEmpId, null, user?.id);
+                    relocatedCount++;
+                  }
+                } catch (err) {
+                  console.error('Failed to auto-relocate root employee folder:', err);
+                }
+              }
+              if (relocatedCount > 0) {
+                fetchFoldersAndDocuments();
+              }
+            })();
+          }
+        }
+
+        // Only display non-employee folders at root level
+        const visibleFolders = (foldersData || []).filter(f => {
+          if (currentFolderId === rootFolderId && f.folder_type === 'employee') {
+            return false;
+          }
+          return true;
+        });
+        setFolders(visibleFolders);
 
         // Fetch documents in current folder
         const { data: docsData } = await supabase
@@ -855,6 +900,27 @@ export default function Documents() {
                                 )}
                               </div>
                               <div className="flex gap-2 mt-1 flex-wrap">
+                                {(() => {
+                                  const title = (doc.title || '').toLowerCase();
+                                  const path = (doc.file_path || '').toLowerCase();
+                                  const name = (doc.file_name || '').toLowerCase();
+                                  const isSignedDoc = 
+                                    path.includes('/signed-documents/') || 
+                                    path.includes('/contracts/') ||
+                                    title.includes('signed document') ||
+                                    title.includes('signed employment contract') ||
+                                    title.includes('physical signed') ||
+                                    title.includes('(signed document)') ||
+                                    name.includes('signed_doc_') ||
+                                    title.startsWith('signed ');
+                                  
+                                  return isSignedDoc ? (
+                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 gap-1 text-[11px] font-semibold">
+                                      <FileSignature className="h-3 w-3" />
+                                      Signed Document
+                                    </Badge>
+                                  ) : null;
+                                })()}
                                 {doc.follow_up_date && (
                                   <Badge variant={status === 'overdue' ? 'destructive' : status === 'upcoming' ? 'secondary' : 'outline'}>
                                     Follow-up: {format(new Date(doc.follow_up_date), 'dd MMM yyyy')}

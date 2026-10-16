@@ -387,8 +387,12 @@ export default function PostApprovalOnboarding({ employeeId, onBack }: PostAppro
 
       const empFolderId = await getOrCreateEmployeeFolder(employeeId, employee, user?.id);
       const req = signedDocRequirements.find(r => r.id === requirementId);
+      const docTitle = req?.name 
+        ? (req.name.toLowerCase().includes('signed') ? req.name : `${req.name} (Signed Document)`)
+        : 'Physical Signed Document';
+
       await supabase.from('documents').insert({
-        title: req?.name || 'Signed Document',
+        title: docTitle,
         file_name: file.name,
         file_path: filePath,
         file_type: file.type,

@@ -100,11 +100,11 @@ export function useNotificationCounts() {
 
       if (['super_admin', 'hr'].includes(user.role)) {
         promises.push((async () => { try { const r = await supabase.from('employees').select('*', { count: 'exact', head: true }).eq('account_activated', false).eq('status', 'active'); pendingAccountsCount = r.count || 0; } catch {} })());
+        promises.push((async () => { try { const r = await supabase.from('documents').select('*', { count: 'exact', head: true }).lte('follow_up_date', new Date().toISOString()).is('verified_at', null); pendingDocs = r.count || 0; } catch {} })());
       }
 
       if (notEmployee) {
         promises.push((async () => { try { const r = await supabase.from('maintenance_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']); pendingMaintenance = r.count || 0; } catch {} })());
-        promises.push((async () => { try { const r = await supabase.from('documents').select('*', { count: 'exact', head: true }).lte('follow_up_date', new Date().toISOString()).is('verified_at', null); pendingDocs = r.count || 0; } catch {} })());
         promises.push((async () => { try { const r = await supabase.from('drive_offs').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo); driveOffsCount = r.count || 0; } catch {} })());
         promises.push((async () => { try { const r = await supabase.from('daily_reports').select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString()); dailyReportsCount = r.count || 0; } catch {} })());
         promises.push((async () => { try { const r = await supabase.from('performance_reviews').select('*', { count: 'exact', head: true }).eq('status', 'pending'); pendingPerformance = r.count || 0; } catch {} })());

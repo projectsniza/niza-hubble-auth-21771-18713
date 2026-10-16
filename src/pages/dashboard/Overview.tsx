@@ -143,6 +143,8 @@ export default function Overview() {
     setMaintenanceTickets(data || []);
   }, []);
 
+  const isSuperAdminOrHr = user?.role === 'super_admin' || user?.role === 'hr';
+
   const fetchAllData = useCallback(async () => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
@@ -150,13 +152,13 @@ export default function Overview() {
     setLoading(true);
     await Promise.all([
       fetchStats(),
-      fetchDocumentFollowUps(),
+      isSuperAdminOrHr ? fetchDocumentFollowUps() : Promise.resolve(),
       fetchPendingApprovals(),
       fetchDailyReports(),
       fetchMaintenanceTickets()
     ]);
     setLoading(false);
-  }, [fetchStats, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets]);
+  }, [fetchStats, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets, isSuperAdminOrHr]);
 
   useEffect(() => {
     fetchAllData();
@@ -164,7 +166,9 @@ export default function Overview() {
     // Single consolidated real-time channel for better performance
     const overviewChannel = supabase
       .channel('overview-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => fetchDocumentFollowUps())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
+        if (isSuperAdminOrHr) fetchDocumentFollowUps();
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contract_approvals' }, () => {
         fetchPendingApprovals();
         fetchStats();
@@ -176,7 +180,7 @@ export default function Overview() {
     return () => {
       supabase.removeChannel(overviewChannel);
     };
-  }, [fetchAllData, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets, fetchStats]);
+  }, [fetchAllData, fetchDocumentFollowUps, fetchPendingApprovals, fetchDailyReports, fetchMaintenanceTickets, fetchStats, isSuperAdminOrHr]);
 
   const attendanceRate = useMemo(() => stats.totalEmployees > 0 
     ? ((stats.presentToday / stats.totalEmployees) * 100).toFixed(1) 
@@ -424,58 +428,60 @@ export default function Overview() {
           </div>
         </Card>
 
-        {/* Document Follow-ups */}
-        <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
-          <div className="p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4 md:mb-6">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <h3 className="text-lg md:text-xl font-bold text-foreground">Document Follow-ups</h3>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/documents')} className="text-xs md:text-sm">
-                View All
-              </Button>
-            </div>
-
-            {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No document follow-ups</p>
-              </div>
-            ) : (
-              <ScrollArea className="h-[200px]">
-                <div className="space-y-3">
-                  {overdueFollowUps.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                      <div>
-                        <p className="font-medium text-sm">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
-                        </p>
-                      </div>
-                      <Badge variant="destructive" className="text-xs">
-                        Overdue {formatDistanceToNow(new Date(doc.follow_up_date), { addSuffix: false })}
-                      </Badge>
-                    </div>
-                  ))}
-                  {upcomingFollowUps.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div>
-                        <p className="font-medium text-sm">{doc.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
-                        </p>
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {format(new Date(doc.follow_up_date), 'MMM dd')}
-                      </Badge>
-                    </div>
-                  ))}
+        {/* Document Follow-ups (Super Admin / HR only) */}
+        {isSuperAdminOrHr && (
+          <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
+            <div className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg md:text-xl font-bold text-foreground">Document Follow-ups</h3>
                 </div>
-              </ScrollArea>
-            )}
-          </div>
-        </Card>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/documents')} className="text-xs md:text-sm">
+                  View All
+                </Button>
+              </div>
+
+              {overdueFollowUps.length === 0 && upcomingFollowUps.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No document follow-ups</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[200px]">
+                  <div className="space-y-3">
+                    {overdueFollowUps.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                        <div>
+                          <p className="font-medium text-sm">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                          </p>
+                        </div>
+                        <Badge variant="destructive" className="text-xs">
+                          Overdue {formatDistanceToNow(new Date(doc.follow_up_date), { addSuffix: false })}
+                        </Badge>
+                      </div>
+                    ))}
+                    {upcomingFollowUps.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div>
+                          <p className="font-medium text-sm">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}` : 'Unassigned'}
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {format(new Date(doc.follow_up_date), 'MMM dd')}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Maintenance Tickets */}
         <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">

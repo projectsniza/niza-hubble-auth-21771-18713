@@ -278,8 +278,15 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
       });
       if (error) throw error;
 
+      // Fetch fresh employee record with organizations and branches to guarantee folder hierarchy
+      const { data: freshEmp } = await supabase
+        .from('employees')
+        .select('*, organizations(id, name), branches(id, name)')
+        .eq('id', transferEmployee.id)
+        .maybeSingle();
+
       // Relocate existing employee folder and documents under the new branch folder without creating duplicates
-      await getOrCreateEmployeeFolder(transferEmployee.id, {
+      await getOrCreateEmployeeFolder(transferEmployee.id, freshEmp || {
         ...transferEmployee,
         branch_id: transferBranchId
       }, user?.id);

@@ -15,14 +15,17 @@ export async function getOrCreateEmployeeFolder(
   uploadedBy?: string
 ): Promise<string | null> {
   try {
+    // 1. Resolve full employee data, branch and organization
     let employee = employeeData;
-    if (!employee || !employee.first_name) {
+    if (!employee || !employee.first_name || !employee.branches?.name || !employee.organizations?.name) {
       const { data: empRecord } = await supabase
         .from('employees')
         .select('*, organizations(id, name), branches(id, name)')
         .eq('id', employeeId)
         .maybeSingle();
-      employee = empRecord;
+      if (empRecord) {
+        employee = empRecord;
+      }
     }
 
     if (!employee) return null;
@@ -54,13 +57,42 @@ export async function getOrCreateEmployeeFolder(
       rootFolderId = newRoot?.id || null;
     }
 
-    // 2. Find or create Organization Folder (if org exists)
     let parentFolderId = rootFolderId;
     let currentPath = 'Company Documents';
 
-    const orgName = employee.organizations?.name;
-    const orgId = employee.organization_id || employee.organizations?.id;
+    // Direct resolution of branch and organization from DB to guarantee accurate names
+    let branchName = employee.branches?.name;
+    let branchId = employee.branch_id || employee.branches?.id;
+    let orgName = employee.organizations?.name;
+    let orgId = employee.organization_id || employee.organizations?.id;
 
+    if (branchId && (!branchName || !orgName)) {
+      const { data: branchRecord } = await supabase
+        .from('branches')
+        .select('id, name, organization_id, organizations(id, name)')
+        .eq('id', branchId)
+        .maybeSingle();
+      if (branchRecord) {
+        branchName = branchRecord.name;
+        if (!orgName && branchRecord.organizations) {
+          orgName = (branchRecord.organizations as any)?.name;
+          orgId = branchRecord.organization_id || (branchRecord.organizations as any)?.id;
+        }
+      }
+    }
+
+    if (orgId && !orgName) {
+      const { data: orgRecord } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('id', orgId)
+        .maybeSingle();
+      if (orgRecord) {
+        orgName = orgRecord.name;
+      }
+    }
+
+    // 2. Find or create Organization Folder (if org exists)
     if (orgName && parentFolderId) {
       let orgFolderId: string | null = null;
       const { data: existingOrgFolder } = await supabase
@@ -100,9 +132,6 @@ export async function getOrCreateEmployeeFolder(
     }
 
     // 3. Find or create Branch Folder (if branch exists)
-    const branchName = employee.branches?.name;
-    const branchId = employee.branch_id || employee.branches?.id;
-
     if (branchName && parentFolderId) {
       let branchFolderId: string | null = null;
       const { data: existingBranchFolder } = await supabase
@@ -142,6 +171,11 @@ export async function getOrCreateEmployeeFolder(
       }
     }
 
+    // Guard: An employee folder should NEVER be placed directly under the root folder
+    if (parentFolderId === rootFolderId) {
+      console.warn(`[getOrCreateEmployeeFolder] Unable to resolve branch/organization for employee ${empName}. Avoiding placing employee folder at root.`);
+    }
+
     // 4. Find or create Employee Folder under parent folder
     let existingEmpFolder: any = null;
     if (employeeId) {
@@ -154,11 +188,10 @@ export async function getOrCreateEmployeeFolder(
       existingEmpFolder = data;
     }
 
-    if (!existingEmpFolder && parentFolderId) {
+    if (!existingEmpFolder && parentFolderId && parentFolderId !== rootFolderId) {
       const { data } = await supabase
         .from('folders')
         .select('id, parent_id, path')
-        .eq('folder_type', 'employee')
         .eq('parent_id', parentFolderId)
         .eq('name', empName)
         .maybeSingle();
@@ -172,8 +205,8 @@ export async function getOrCreateEmployeeFolder(
     }
 
     if (existingEmpFolder) {
-      // If employee was transferred to a new branch, cleanly move the existing folder to the new branch
-      if (parentFolderId && existingEmpFolder.parent_id !== parentFolderId) {
+      // If employee was transferred to a new branch (or previously misplaced at root level), cleanly move the folder
+      if (parentFolderId && parentFolderId !== rootFolderId && existingEmpFolder.parent_id !== parentFolderId) {
         const employeeFolderPath = `${currentPath}/${empName}`;
         await supabase
           .from('folders')
@@ -186,6 +219,11 @@ export async function getOrCreateEmployeeFolder(
           .eq('id', existingEmpFolder.id);
       }
       return existingEmpFolder.id;
+    }
+
+    // If parentFolderId is still root, fallback to any available branch or create a General folder rather than root
+    if (parentFolderId === rootFolderId) {
+      return null;
     }
 
     const employeeFolderPath = `${currentPath}/${empName}`;

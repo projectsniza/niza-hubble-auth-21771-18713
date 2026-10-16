@@ -1337,6 +1337,7 @@ export default function Attendance() {
                     <TableHead>From</TableHead>
                     <TableHead>To</TableHead>
                     <TableHead>Days</TableHead>
+                    <TableHead>Raised At</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -1344,18 +1345,21 @@ export default function Attendance() {
                 <TableBody>
                   {filteredRequests.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No leave requests found
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredRequests.map(req => (
                       <TableRow key={req.id}>
-                        <TableCell>{req.employee?.first_name} {req.employee?.last_name}</TableCell>
+                        <TableCell className="font-medium">{req.employee?.first_name} {req.employee?.last_name}</TableCell>
                         <TableCell>{req.leave_type?.name || 'N/A'}</TableCell>
-                        <TableCell>{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
-                        <TableCell>{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
+                        <TableCell className="whitespace-nowrap">{format(new Date(req.start_date), 'dd MMM yyyy')}</TableCell>
+                        <TableCell className="whitespace-nowrap">{format(new Date(req.end_date), 'dd MMM yyyy')}</TableCell>
                         <TableCell>{differenceInDays(new Date(req.end_date), new Date(req.start_date)) + 1}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {req.created_at ? format(new Date(req.created_at), 'dd MMM yyyy, HH:mm') : '-'}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge variant={req.status === 'approved' ? 'default' : req.status === 'rejected' ? 'destructive' : 'secondary'}>
@@ -1435,6 +1439,11 @@ export default function Attendance() {
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {req.leave_type?.name} • {format(new Date(req.start_date), 'dd MMM')} - {format(new Date(req.end_date), 'dd MMM yyyy')}
+                          {req.created_at && (
+                            <span className="text-xs text-primary/80 font-medium ml-2">
+                              • Raised: {format(new Date(req.created_at), 'dd MMM yyyy, HH:mm')}
+                            </span>
+                          )}
                         </p>
                         {req.reason && <p className="text-sm mt-1">{req.reason}</p>}
                         {req.requires_reapproval && req.modification_reason && (
