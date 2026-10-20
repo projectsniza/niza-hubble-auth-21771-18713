@@ -1197,6 +1197,7 @@ export function TimesheetView() {
         const branchRows: Record<string, ExcelEmployeeWeek[]> = {};
         selectedEmployees.forEach(employee => {
           const branchName = employee.branch?.name || 'Unassigned';
+          if (selectedBranch && canViewFilters && employee.branch_id !== selectedBranch) return;
           const entries = Array.from({ length: 7 }, (_, dayIndex) => {
             const date = new Date(weekStart);
             date.setDate(date.getDate() + dayIndex);
@@ -1223,7 +1224,12 @@ export function TimesheetView() {
 
         tempRows.forEach((temp: any) => {
           const branchName = branchNames.get(temp.branch_id) || 'Unassigned';
-          const entries = (tempEntriesById[temp.id] || []).filter(entry => entry.entry_date >= format(weekStart, 'yyyy-MM-dd') && entry.entry_date <= format(weekEnd, 'yyyy-MM-dd'));
+          const entries = (tempEntriesById[temp.id] || []).filter(entry =>
+            entry.entry_date >= format(weekStart, 'yyyy-MM-dd') &&
+            entry.entry_date <= format(weekEnd, 'yyyy-MM-dd') &&
+            entry.entry_date >= format(payroll.start, 'yyyy-MM-dd') &&
+            entry.entry_date <= format(payroll.end, 'yyyy-MM-dd')
+          );
           if (!entries.length) return;
           (branchRows[branchName] ||= []).push({
             id: `temp-${temp.id}`,

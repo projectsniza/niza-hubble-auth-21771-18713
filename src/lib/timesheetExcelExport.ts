@@ -227,7 +227,7 @@ export function exportTimesheetWorkbook(
 
   addMerged(sheet, row, 1, 13, 'MONTHLY CONSOLIDATION', COLORS.week);
   row += 1;
-  const summaryHeaders: Array<unknown> = [cell('', COLORS.week), ...['NAME', 'WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', 'WEEK 5', 'WEEK 6', 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'].map((label, i) => cell(label, i === 9 ? COLORS.heading : COLORS.week, true))];
+  const summaryHeaders: Array<unknown> = [cell('', COLORS.week), ...['NAME', 'WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', 'WEEK 5', 'WEEK 6', 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'].map((label, i) => cell(label, i === 7 ? COLORS.heading : COLORS.week, true))];
   addRow(sheet, row, summaryHeaders, colCount);
   row += 1;
   const monthlyGrand = { weeks: Array.from({ length: 6 }, () => 0), total: 0, lastMonth: 0, totalHrs: 0, holiday: 0, sick: 0 };
