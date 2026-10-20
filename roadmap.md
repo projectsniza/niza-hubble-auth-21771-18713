@@ -2,3 +2,4 @@
 - [ ] Show current and prior games, prices, dates, and sales context to managers; validate the lottery flow and check preview diagnostics.
 - [ ] Create the filtered, reference-formatted timesheet Excel export with weekly sections and monthly summary; align weekly/monthly calculations to dated shift entries, then run focused tests and check preview diagnostics.
 - [x] Include temporary employees in Monthly Consolidation totals and Full View weekly rows, using their dated shift entries and existing branch filters.
+- [ ] Include temporary employees in both weekly and monthly Excel exports, and use the dated work branch consistently in Full View.

@@ -170,15 +170,29 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
               .range(from, to)
           ));
         }
+        const tempBranchIds = Array.from(new Set([
+          ...tempEmployees.map((temp: any) => temp.branch_id),
+          ...tempEntries.map((entry: any) => entry.branch_id),
+        ].filter(Boolean)));
+        const tempBranches = tempBranchIds.length
+          ? await fetchAllPages((from, to) => supabase
+            .from('branches')
+            .select('id, name')
+            .in('id', tempBranchIds)
+            .order('id')
+            .range(from, to))
+          : [];
+        const tempBranchNameById = new Map(tempBranches.map((branch: any) => [branch.id, branch.name]));
         const tempById = new Map(tempEmployees.map((temp: any) => [temp.id, temp]));
         const bestTempEntryByIdentityDate = new Map<string, { identity: string; temp: any; entry: any; hours: number }>();
         (tempEntries || []).forEach((entry: any) => {
           const temp = tempById.get(entry.temporary_employee_id);
           if (!temp || (temp.start_date && entry.entry_date < temp.start_date) || (temp.end_date && entry.entry_date > temp.end_date)) return;
+          const workBranchId = entry.branch_id || temp.branch_id;
           if (filterMode === 'organization' && selectedOrg && temp.organization_id !== selectedOrg) return;
-          if (filterMode === 'branch' && selectedBranch && temp.branch_id !== selectedBranch) return;
+          if (filterMode === 'branch' && selectedBranch && workBranchId !== selectedBranch) return;
           const name = `${temp.first_name || ''} ${temp.last_name || ''}`.trim().toUpperCase();
-          const identity = `${temp.branch_id || entry.branch_id}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+          const identity = `${workBranchId}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
           const key = `${identity}|${entry.entry_date}`;
           const hours = calculateEntryWorkedHours(entry);
           const existing = bestTempEntryByIdentityDate.get(key);
@@ -244,8 +258,8 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
               row = {
                 employee_id: `temp-${identity}`,
                 name: `[TEMP] ${temp.first_name || ''} ${temp.last_name || ''}`.trim(),
-                branch: temp.branch?.name || '—',
-                branch_id: temp.branch_id || entry.branch_id,
+                branch: tempBranchNameById.get(entry.branch_id || temp.branch_id) || temp.branch?.name || '—',
+                branch_id: entry.branch_id || temp.branch_id,
                 daily: new Array(7).fill(0),
                 worked: 0,
                 holiday: 0,

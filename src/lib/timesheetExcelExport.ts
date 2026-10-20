@@ -33,10 +33,43 @@ export interface ExcelMonthlyEmployee {
   lastMonthAdjustment: number;
   holidayHours: number;
   sickHours: number;
+  isTemporary?: boolean;
 }
 
 export interface ExcelMonthlySection {
   branches: Record<string, ExcelMonthlyEmployee[]>;
+}
+
+export interface TemporaryMonthlyEmployee {
+  id: string;
+  name: string;
+  weeklyHours: number[];
+}
+
+export function includeTemporaryEmployeesInMonthlyExport(
+  monthly: ExcelMonthlySection,
+  temporaryByBranch: Record<string, TemporaryMonthlyEmployee[]>,
+): ExcelMonthlySection {
+  const branches = Object.fromEntries(
+    Object.entries(monthly.branches).map(([branch, employees]) => [branch, [...employees]]),
+  );
+
+  Object.entries(temporaryByBranch).forEach(([branch, employees]) => {
+    const branchRows = branches[branch] || (branches[branch] = []);
+    employees.forEach(employee => {
+      branchRows.push({
+        id: `temp-${employee.id}`,
+        name: `[TEMP] ${employee.name}`,
+        weeklyHours: employee.weeklyHours,
+        lastMonthAdjustment: 0,
+        holidayHours: 0,
+        sickHours: 0,
+        isTemporary: true,
+      });
+    });
+  });
+
+  return { branches };
 }
 
 const COLORS = {

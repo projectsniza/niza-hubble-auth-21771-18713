@@ -6,6 +6,7 @@ import {
   calculateShiftHours,
   sumDatedTimesheetEntries,
 } from './timesheetCalculations';
+import { includeTemporaryEmployeesInMonthlyExport } from './timesheetExcelExport';
 
 describe('timesheet calculations', () => {
   it('subtracts the recorded break from a daytime shift', () => {
@@ -36,6 +37,25 @@ describe('timesheet calculations', () => {
       { entry_date: '2026-10-20', actual_hours: 115.5 },
     ], '2026-09-21', '2026-10-20');
     expect(totals.worked).toBe(123.5);
+  });
+
+  it('includes temporary employees in the exported monthly branch summary', () => {
+    const result = includeTemporaryEmployeesInMonthlyExport(
+      { branches: { TEXACO: [] } },
+      {
+        TEXACO: [
+          { id: 'tejveer', name: 'TEJVEER SINGH', weeklyHours: [8, 0, 0, 0, 0, 0] },
+          { id: 'theepan', name: 'THEEPAN', weeklyHours: [8.5, 31, 34, 42, 8, 0] },
+        ],
+      },
+    );
+
+    expect(result.branches.TEXACO.map(employee => employee.name)).toEqual([
+      '[TEMP] TEJVEER SINGH',
+      '[TEMP] THEEPAN',
+    ]);
+    expect(result.branches.TEXACO.reduce((sum, employee) => sum + employee.weeklyHours.reduce((weekSum, hours) => weekSum + hours, 0), 0)).toBe(131.5);
+    expect(result.branches.TEXACO.every(employee => employee.isTemporary)).toBe(true);
   });
 
   it('keeps sickness separate from the reference weekly total', () => {
