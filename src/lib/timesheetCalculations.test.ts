@@ -1,3 +1,4 @@
+// @ts-expect-error Bun supplies this module when focused tests are run.
 import { describe, expect, it } from 'bun:test';
 import {
   calculateEntryWorkedHours,

@@ -1184,7 +1184,7 @@ export function TimesheetView() {
       for (const ids of chunkValues(tempRows.map((temp: any) => temp.id))) {
         const tempEntries = await fetchAllPages<any>((from, to) => supabase
           .from('temporary_timesheet_entries')
-          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours, adjustment_hours')
+          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time')
           .in('temporary_employee_id', ids)
           .gte('entry_date', format(firstWeek, 'yyyy-MM-dd'))
           .lte('entry_date', format(endOfWeek(monthWeeks[monthWeeks.length - 1] || payroll.end, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
@@ -1202,16 +1202,16 @@ export function TimesheetView() {
             date.setDate(date.getDate() + dayIndex);
             const dateKey = format(date, 'yyyy-MM-dd');
             const entry = bestEntryByEmployeeDate.get(`${employee.id}|${dateKey}`)?.entry;
-            if (!entry) return null;
+            if (!entry || dateKey < format(payroll.start, 'yyyy-MM-dd') || dateKey > format(payroll.end, 'yyyy-MM-dd')) return null;
             return {
               entry_date: dateKey,
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
-              break_minutes: Number(entry.break_duration_minutes) || 0,
+              break_minutes: 0,
               worked: calculateEntryWorkedHours(entry),
-              holiday: Number(entry.holiday_hours) || 0,
-              sick: Number(entry.sick_hours) || 0,
-              adjustment: Number(entry.adjustment_hours) || 0,
+              holiday: 0,
+              sick: 0,
+              adjustment: 0,
             };
           }).filter((entry): entry is NonNullable<typeof entry> => !!entry);
           (branchRows[branchName] ||= []).push({
@@ -1233,11 +1233,11 @@ export function TimesheetView() {
               entry_date: entry.entry_date,
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
-              break_minutes: Number(entry.break_duration_minutes) || 0,
+              break_minutes: 0,
               worked: calculateEntryWorkedHours(entry),
-              holiday: Number(entry.holiday_hours) || 0,
-              sick: Number(entry.sick_hours) || 0,
-              adjustment: Number(entry.adjustment_hours) || 0,
+              holiday: 0,
+              sick: 0,
+              adjustment: 0,
             })),
           });
         });
