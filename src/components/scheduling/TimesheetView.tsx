@@ -326,7 +326,7 @@ export function TimesheetView() {
           if (wIdx < 0) return;
           const name = `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase();
           const source = t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null);
-          const h = Number(e.actual_hours) || 0;
+          const h = calculateEntryWorkedHours(e);
           const identity = `${t.branch_id || branchName}|${name}|${t.source_branch_id || ''}|${String(t.source_name || '').trim().toUpperCase()}`;
           const key = `${identity}|${e.entry_date}`;
           const existing = bestTempEntryByIdentityDate.get(key);
