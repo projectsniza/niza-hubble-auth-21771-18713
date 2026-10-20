@@ -4,6 +4,7 @@ import {
   calculateEntryWorkedHours,
   calculatePayableWeekTotal,
   calculateShiftHours,
+  calculateTemporaryEntryHours,
   sumDatedTimesheetEntries,
 } from './timesheetCalculations';
 import { includeTemporaryEmployeesInMonthlyExport } from './timesheetExcelExport';
@@ -37,6 +38,14 @@ describe('timesheet calculations', () => {
       { entry_date: '2026-10-20', actual_hours: 115.5 },
     ], '2026-09-21', '2026-10-20');
     expect(totals.worked).toBe(123.5);
+  });
+
+  it('uses saved temporary hours rather than deriving them from clock times', () => {
+    expect(calculateTemporaryEntryHours({
+      actual_hours: 7.25,
+      shift_start_time: '10:00',
+      shift_end_time: '18:00',
+    })).toBe(7.25);
   });
 
   it('includes temporary employees in the exported monthly branch summary', () => {

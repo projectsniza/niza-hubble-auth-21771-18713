@@ -8,7 +8,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Calendar, Edit3, Lock } from 'lucide-react';
 import { eachDayOfInterval, endOfWeek, format, startOfWeek } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
-import { calculateEntryWorkedHours, calculatePayableWeekTotal } from '@/lib/timesheetCalculations';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateTemporaryEntryHours } from '@/lib/timesheetCalculations';
 
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -194,7 +194,7 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           const name = `${temp.first_name || ''} ${temp.last_name || ''}`.trim().toUpperCase();
           const identity = `${workBranchId}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
           const key = `${identity}|${entry.entry_date}`;
-          const hours = calculateEntryWorkedHours(entry);
+          const hours = calculateTemporaryEntryHours(entry);
           const existing = bestTempEntryByIdentityDate.get(key);
           if (!existing || hours > existing.hours) bestTempEntryByIdentityDate.set(key, { identity, temp, entry, hours });
         });

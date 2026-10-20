@@ -29,7 +29,7 @@ import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
-import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, calculateTemporaryEntryHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
 import { exportTimesheetWorkbook, includeTemporaryEmployeesInMonthlyExport, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
 
 interface Employee {
@@ -326,7 +326,7 @@ export function TimesheetView() {
           if (wIdx < 0) return;
           const name = `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase();
           const source = t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null);
-          const h = calculateEntryWorkedHours(e);
+          const h = calculateTemporaryEntryHours(e);
           const identity = `${t.branch_id || branchName}|${name}|${t.source_branch_id || ''}|${String(t.source_name || '').trim().toUpperCase()}`;
           const key = `${identity}|${e.entry_date}`;
           const existing = bestTempEntryByIdentityDate.get(key);
@@ -1217,7 +1217,7 @@ export function TimesheetView() {
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
               break_minutes: Number(entry.break_duration_minutes) || 0,
-              worked: calculateEntryWorkedHours(entry),
+              worked: calculateTemporaryEntryHours(entry),
               holiday: Number(entry.holiday_hours) || 0,
               sick: Number(entry.sick_hours) || 0,
               adjustment: Number(entry.adjustment_hours) || 0,
