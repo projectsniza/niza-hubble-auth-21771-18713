@@ -535,7 +535,6 @@ export function parseFisCardStatement(text: string): FisCardParseResult {
     weekTotals, week_totals: weekTotals,
     brandNames, matchedLines,
     week_start,
-    week_start,
   };
 }
 
