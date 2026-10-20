@@ -97,11 +97,6 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
         });
         if (cancelled) return;
         const empIds = (emps || []).map((e: any) => e.id);
-        if (empIds.length === 0) {
-          setByWeek(Object.fromEntries(weeks.map(w => [format(w, 'yyyy-MM-dd'), []])));
-          return;
-        }
-
         // Timesheets restricted to these employees + date range
         const tsList: any[] = [];
         const empChunk = 100;
@@ -152,6 +147,43 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           }
         }
 
+
+        const tempEntries = await fetchAllPages((from, to) =>
+          supabase
+            .from('temporary_timesheet_entries')
+            .select('temporary_employee_id, branch_id, entry_date, actual_hours, shift_start_time, shift_end_time')
+            .gte('entry_date', format(payStart, 'yyyy-MM-dd'))
+            .lte('entry_date', format(payEnd, 'yyyy-MM-dd'))
+            .order('id')
+            .range(from, to)
+        );
+        const tempIds = Array.from(new Set((tempEntries || []).map((entry: any) => entry.temporary_employee_id)));
+        const tempEmployees: any[] = [];
+        for (let i = 0; i < tempIds.length; i += empChunk) {
+          const ids = tempIds.slice(i, i + empChunk);
+          tempEmployees.push(...await fetchAllPages((from, to) =>
+            supabase
+              .from('temporary_employees')
+              .select('id, first_name, last_name, branch_id, organization_id, start_date, end_date, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name)')
+              .in('id', ids)
+              .order('id')
+              .range(from, to)
+          ));
+        }
+        const tempById = new Map(tempEmployees.map((temp: any) => [temp.id, temp]));
+        const bestTempEntryByIdentityDate = new Map<string, { identity: string; temp: any; entry: any; hours: number }>();
+        (tempEntries || []).forEach((entry: any) => {
+          const temp = tempById.get(entry.temporary_employee_id);
+          if (!temp || (temp.start_date && entry.entry_date < temp.start_date) || (temp.end_date && entry.entry_date > temp.end_date)) return;
+          if (filterMode === 'organization' && selectedOrg && temp.organization_id !== selectedOrg) return;
+          if (filterMode === 'branch' && selectedBranch && temp.branch_id !== selectedBranch) return;
+          const name = `${temp.first_name || ''} ${temp.last_name || ''}`.trim().toUpperCase();
+          const identity = `${temp.branch_id || entry.branch_id}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+          const key = `${identity}|${entry.entry_date}`;
+          const hours = calculateEntryWorkedHours(entry);
+          const existing = bestTempEntryByIdentityDate.get(key);
+          if (!existing || hours > existing.hours) bestTempEntryByIdentityDate.set(key, { identity, temp, entry, hours });
+        });
 
         const out: Record<string, EmpRow[]> = {};
         weeks.forEach(weekStart => {
