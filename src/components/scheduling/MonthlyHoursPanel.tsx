@@ -86,13 +86,20 @@ export function MonthlyHoursPanel() {
             .order('id').range(from, to)));
           const empByTs: Record<string, string> = {};
           (ts || []).forEach(t => { empByTs[t.id] = t.employee_id; });
+          const bestByEmployeeDate = new Map<string, { employeeId: string; entry: any; activity: number }>();
           (ents || []).forEach((e: any) => {
             const eid = empByTs[e.timesheet_id];
             if (!eid) return;
-            const a = (entriesByEmp[eid] ||= { w: 0, h: 0, s: 0 });
-            a.w += calculateEntryWorkedHours(e);
-            a.h += Number(e.holiday_hours) || 0;
-            a.s += Number(e.sick_hours) || 0;
+            const activity = calculateEntryWorkedHours(e) + (Number(e.holiday_hours) || 0) + (Number(e.sick_hours) || 0);
+            const key = `${eid}|${e.entry_date}`;
+            const existing = bestByEmployeeDate.get(key);
+            if (!existing || activity > existing.activity) bestByEmployeeDate.set(key, { employeeId: eid, entry: e, activity });
+          });
+          bestByEmployeeDate.forEach(({ employeeId, entry }) => {
+            const a = (entriesByEmp[employeeId] ||= { w: 0, h: 0, s: 0 });
+            a.w += calculateEntryWorkedHours(entry);
+            a.h += Number(entry.holiday_hours) || 0;
+            a.s += Number(entry.sick_hours) || 0;
           });
         }
 
@@ -120,11 +127,19 @@ export function MonthlyHoursPanel() {
           ytdEntries.forEach((entry: any) => {
             const employeeId = employeeByTimesheet.get(entry.timesheet_id);
             if (!employeeId) return;
-            const totals = ytdEntriesByEmp[employeeId] ||= { worked: 0, holiday: 0 };
-            totals.worked += calculateEntryWorkedHours(entry);
-            totals.holiday += Number(entry.holiday_hours) || 0;
+            const activity = calculateEntryWorkedHours(entry) + (Number(entry.holiday_hours) || 0);
+            const key = `${employeeId}|${entry.entry_date}`;
+            const existing = bestYtdEntryByEmployeeDate.get(key);
+            if (!existing || activity > existing.activity) {
+              bestYtdEntryByEmployeeDate.set(key, { employeeId, entry, activity });
+            }
           });
         }
+        bestYtdEntryByEmployeeDate.forEach(({ employeeId, entry }) => {
+          const totals = ytdEntriesByEmp[employeeId] ||= { worked: 0, holiday: 0 };
+          totals.worked += calculateEntryWorkedHours(entry);
+          totals.holiday += Number(entry.holiday_hours) || 0;
+        });
 
         // We need contract data for earned-to-date pro-rata.
         const contracts: any[] = [];
