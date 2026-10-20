@@ -42,6 +42,7 @@ describe('timesheet calculations', () => {
 
   it('uses saved temporary hours rather than deriving them from clock times', () => {
     expect(calculateTemporaryEntryHours({
+      entry_date: '2026-10-02',
       actual_hours: 7.25,
       shift_start_time: '10:00',
       shift_end_time: '18:00',
