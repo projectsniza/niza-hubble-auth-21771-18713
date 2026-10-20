@@ -8,6 +8,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Calendar, Edit3, Lock } from 'lucide-react';
 import { eachDayOfInterval, endOfWeek, format, startOfWeek } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal } from '@/lib/timesheetCalculations';
 
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -123,8 +124,11 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
         const tsIds = tsList.map(t => t.id);
 
         // Index timesheet by employee+week, entries by timesheet id (O(1) lookups)
-        const tsByEmpWeek = new Map<string, any>();
-        tsList.forEach(t => tsByEmpWeek.set(`${t.employee_id}|${t.week_start_date}`, t));
+        const tsByEmpWeek = new Map<string, any[]>();
+        tsList.forEach(t => {
+          const key = `${t.employee_id}|${t.week_start_date}`;
+          tsByEmpWeek.set(key, [...(tsByEmpWeek.get(key) || []), t]);
+        });
 
         const entriesByTs = new Map<string, any[]>();
         if (tsIds.length) {
@@ -134,7 +138,7 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
             const ents = await fetchAllPages((from, to) =>
               supabase
                 .from('timesheet_entries')
-                .select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
+                .select('timesheet_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours, adjustment_hours')
                 .in('timesheet_id', chunk)
                 .order('id')
                 .range(from, to)
@@ -159,23 +163,31 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           const rows: EmpRow[] = [];
 
           (emps || []).forEach((emp: any) => {
-            const t = tsByEmpWeek.get(`${emp.id}|${wsStr}`);
+            const employeeWeekSheets = tsByEmpWeek.get(`${emp.id}|${wsStr}`) || [];
             const daily = new Array(7).fill(0);
-            let worked = 0, holiday = 0, sick = 0;
-            if (t) {
-              (entriesByTs.get(t.id) || []).forEach((e: any) => {
+            let worked = 0, holiday = 0, sick = 0, adj = 0;
+            const bestByDate = new Map<string, any>();
+            employeeWeekSheets.forEach(t => {
+              (entriesByTs.get(t.id) || []).forEach((entry: any) => {
+                const existing = bestByDate.get(entry.entry_date);
+                const score = calculateEntryWorkedHours(entry) + (Number(entry.holiday_hours) || 0) + (Number(entry.sick_hours) || 0) + (Number(entry.adjustment_hours) || 0);
+                const existingScore = existing ? calculateEntryWorkedHours(existing) + (Number(existing.holiday_hours) || 0) + (Number(existing.sick_hours) || 0) + (Number(existing.adjustment_hours) || 0) : -Infinity;
+                if (!existing || score > existingScore) bestByDate.set(entry.entry_date, entry);
+              });
+            });
+            bestByDate.forEach((e: any) => {
                 const idx = dayIndex.get(e.entry_date);
                 if (idx === undefined) return;
                 const inPayroll = days[idx] >= payStart && days[idx] <= payEnd;
                 if (!inPayroll) return;
-                const h = Number(e.actual_hours) || 0;
+                const h = calculateEntryWorkedHours(e);
                 daily[idx] = h;
                 worked += h;
                 holiday += Number(e.holiday_hours) || 0;
                 sick += Number(e.sick_hours) || 0;
-              });
-            }
-            if (t || worked || holiday || sick) {
+                adj += Number(e.adjustment_hours) || 0;
+            });
+            if (employeeWeekSheets.length || worked || holiday || sick || adj) {
               rows.push({
                 employee_id: emp.id,
                 name: `${emp.first_name} ${emp.last_name}`,
@@ -185,8 +197,8 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
                 worked,
                 holiday,
                 sick,
-                adj: Number(t?.total_adjustment_hours) || 0,
-                timesheet_id: t?.id,
+                adj,
+                timesheet_id: employeeWeekSheets[0]?.id,
               });
             }
           });
@@ -269,7 +281,7 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
                               </TableCell>
                             </TableRow>
                             {list.map(r => {
-                              const total = r.worked + r.holiday + r.sick + r.adj;
+                              const total = calculatePayableWeekTotal({ worked: r.worked, holiday: r.holiday, sick: r.sick, adjustment: r.adj });
                               return (
                                 <TableRow key={r.employee_id} className="hover:bg-muted/40">
                                   <TableCell className="font-medium sticky left-0 bg-background z-10">{r.name}</TableCell>
