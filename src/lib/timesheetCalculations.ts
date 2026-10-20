@@ -74,7 +74,7 @@ export function calculateEntryWorkedHours(entry: DatedHoursEntry): number {
   return numberOrZero(entry.actual_hours);
 }
 
-export function calculateTemporaryEntryHours(entry: Pick<DatedHoursEntry, 'actual_hours'>): number {
+export function calculateTemporaryEntryHours(entry: DatedHoursEntry): number {
   return numberOrZero(entry.actual_hours);
 }
 
