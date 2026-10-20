@@ -29,8 +29,8 @@ import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
-import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
-import { exportTimesheetWorkbook, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, calculateTemporaryEntryHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
+import { exportTimesheetWorkbook, includeTemporaryEmployeesInMonthlyExport, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
 
 interface Employee {
   id: string;
@@ -326,7 +326,7 @@ export function TimesheetView() {
           if (wIdx < 0) return;
           const name = `${t.first_name || ''} ${t.last_name || ''}`.trim().toUpperCase();
           const source = t.source_branch?.name ? `from ${t.source_branch.name}` : (t.source_name ? `from ${t.source_name}` : null);
-          const h = calculateEntryWorkedHours(e);
+          const h = calculateTemporaryEntryHours(e);
           const identity = `${t.branch_id || branchName}|${name}|${t.source_branch_id || ''}|${String(t.source_name || '').trim().toUpperCase()}`;
           const key = `${identity}|${e.entry_date}`;
           const existing = bestTempEntryByIdentityDate.get(key);
@@ -1171,26 +1171,34 @@ export function TimesheetView() {
         });
       });
 
-      const tempIds = Array.from(new Set(selectedEmployees.map(employee => employee.branch_id)));
-      const tempRows = tempIds.length ? await fetchAllPages<any>((from, to) => supabase
+      const tempRows = await fetchAllPages<any>((from, to) => supabase
         .from('temporary_employees')
-        .select('id, branch_id, first_name, last_name, start_date, end_date, source_name, source_branch_id')
-        .in('branch_id', tempIds)
-        .lte('start_date', format(monthWeeks[monthWeeks.length - 1] ? endOfWeek(monthWeeks[monthWeeks.length - 1], { weekStartsOn: 1 }) : payroll.end, 'yyyy-MM-dd'))
-        .or(`end_date.is.null,end_date.gte.${format(firstWeek, 'yyyy-MM-dd')}`)
-        .order('id').range(from, to)) : [];
+        .select('id, branch_id, organization_id, first_name, last_name, start_date, end_date, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name)')
+        .lte('start_date', format(payroll.end, 'yyyy-MM-dd'))
+        .or(`end_date.is.null,end_date.gte.${format(payroll.start, 'yyyy-MM-dd')}`)
+        .order('id').range(from, to));
+      const scopedTempRows = tempRows.filter((temp: any) => {
+        if (scopedBranchIds.length > 0 && !scopedBranchIds.includes(temp.branch_id)) return false;
+        if (canViewFilters && filterMode === 'organization' && selectedOrg && temp.organization_id !== selectedOrg) return false;
+        if (canViewFilters && filterMode === 'branch' && selectedBranch && temp.branch_id !== selectedBranch) return false;
+        return true;
+      });
 
       const tempEntriesById: Record<string, any[]> = {};
-      for (const ids of chunkValues(tempRows.map((temp: any) => temp.id))) {
+      for (const ids of chunkValues(scopedTempRows.map((temp: any) => temp.id))) {
         const tempEntries = await fetchAllPages<any>((from, to) => supabase
           .from('temporary_timesheet_entries')
-          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time')
+          .select('temporary_employee_id, branch_id, entry_date, actual_hours, shift_start_time, shift_end_time')
           .in('temporary_employee_id', ids)
-          .gte('entry_date', format(firstWeek, 'yyyy-MM-dd'))
-          .lte('entry_date', format(endOfWeek(monthWeeks[monthWeeks.length - 1] || payroll.end, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+          .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
+          .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
           .order('id').range(from, to));
         tempEntries.forEach((entry: any) => { (tempEntriesById[entry.temporary_employee_id] ||= []).push(entry); });
       }
+
+      scopedTempRows.forEach((temp: any) => {
+        if (temp.branch_id && temp.branch?.name) branchNames.set(temp.branch_id, temp.branch.name);
+      });
 
       const weeks: ExcelWeekSection[] = monthWeeks.map(weekStart => {
         const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
@@ -1209,7 +1217,7 @@ export function TimesheetView() {
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
               break_minutes: Number(entry.break_duration_minutes) || 0,
-              worked: calculateEntryWorkedHours(entry),
+              worked: calculateTemporaryEntryHours(entry),
               holiday: Number(entry.holiday_hours) || 0,
               sick: Number(entry.sick_hours) || 0,
               adjustment: Number(entry.adjustment_hours) || 0,
@@ -1222,9 +1230,7 @@ export function TimesheetView() {
           });
         });
 
-        tempRows.forEach((temp: any) => {
-          if (selectedBranch && canViewFilters && temp.branch_id !== selectedBranch) return;
-          const branchName = branchNames.get(temp.branch_id) || 'Unassigned';
+        scopedTempRows.forEach((temp: any) => {
           const entries = (tempEntriesById[temp.id] || []).filter(entry =>
             entry.entry_date >= format(weekStart, 'yyyy-MM-dd') &&
             entry.entry_date <= format(weekEnd, 'yyyy-MM-dd') &&
@@ -1232,6 +1238,8 @@ export function TimesheetView() {
             entry.entry_date <= format(payroll.end, 'yyyy-MM-dd')
           );
           if (!entries.length) return;
+          const branchName = branchNames.get(entries[0].branch_id || temp.branch_id) || temp.branch?.name || 'Unassigned';
+          if (selectedBranch && canViewFilters && entries.some((entry: any) => (entry.branch_id || temp.branch_id) !== selectedBranch)) return;
           (branchRows[branchName] ||= []).push({
             id: `temp-${temp.id}`,
             name: `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.trim(),
@@ -1264,9 +1272,15 @@ export function TimesheetView() {
           })),
         ])),
       };
+      const monthlyWithTemporary = includeTemporaryEmployeesInMonthlyExport(monthly, Object.fromEntries(
+        Object.entries(monthlyTempByBranch).map(([branchName, employees]) => [
+          branchName,
+          employees.map(employee => ({ id: employee.id, name: employee.name, weeklyHours: employee.weeklyHours })),
+        ]),
+      ));
 
       const filename = `Timesheet_${format(payroll.end, 'MMM_yyyy')}.xlsx`;
-      exportTimesheetWorkbook(weeks, monthly, filename, `${format(payroll.start, 'dd MMM yyyy')} – ${format(payroll.end, 'dd MMM yyyy')}`);
+      exportTimesheetWorkbook(weeks, monthlyWithTemporary, filename, `${format(payroll.start, 'dd MMM yyyy')} – ${format(payroll.end, 'dd MMM yyyy')}`);
       toast.success('Formatted Excel timesheet exported.');
     } catch (error) {
       console.error('Timesheet Excel export failed:', error);

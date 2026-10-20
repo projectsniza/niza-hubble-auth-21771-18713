@@ -74,6 +74,10 @@ export function calculateEntryWorkedHours(entry: DatedHoursEntry): number {
   return numberOrZero(entry.actual_hours);
 }
 
+export function calculateTemporaryEntryHours(entry: DatedHoursEntry): number {
+  return numberOrZero(entry.actual_hours);
+}
+
 export function calculatePayableWeekTotal(hours: TimesheetHours): number {
   return hours.worked + hours.holiday + hours.adjustment;
 }
