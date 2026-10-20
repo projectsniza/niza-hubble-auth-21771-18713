@@ -354,6 +354,7 @@ export function usePendingApprovals() {
     isLoading,
     error,
     fetchPendingApprovals,
+    refetch: fetchPendingApprovals,
     approveContract,
     rejectContract
   };

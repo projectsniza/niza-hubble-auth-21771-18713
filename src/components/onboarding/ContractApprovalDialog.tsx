@@ -153,6 +153,19 @@ export default function ContractApprovalDialog({
     }
   };
 
+  const handleViewDocument = async (doc: any) => {
+    if (!doc?.file_path) return;
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(doc.file_path, 3600);
+    if (error || !data?.signedUrl) {
+      toast.error('Could not open this document.');
+      return;
+    }
+    setViewerUrl(data.signedUrl);
+    setViewerTitle(doc.title || doc.file_name || 'Document');
+  };
+
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
