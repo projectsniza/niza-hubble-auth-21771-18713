@@ -234,6 +234,30 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
               });
             }
           });
+          const tempRows = new Map<string, EmpRow>();
+          bestTempEntryByIdentityDate.forEach(({ identity, temp, entry, hours }) => {
+            const idx = dayIndex.get(entry.entry_date);
+            if (idx === undefined) return;
+            const key = `${identity}|${wsStr}`;
+            let row = tempRows.get(key);
+            if (!row) {
+              row = {
+                employee_id: `temp-${identity}`,
+                name: `[TEMP] ${temp.first_name || ''} ${temp.last_name || ''}`.trim(),
+                branch: temp.branch?.name || '—',
+                branch_id: temp.branch_id || entry.branch_id,
+                daily: new Array(7).fill(0),
+                worked: 0,
+                holiday: 0,
+                sick: 0,
+                adj: 0,
+              };
+              tempRows.set(key, row);
+            }
+            row.daily[idx] += hours;
+            row.worked += hours;
+          });
+          rows.push(...tempRows.values());
           out[wsStr] = rows.sort(
             (a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name)
           );
