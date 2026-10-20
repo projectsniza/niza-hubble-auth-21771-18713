@@ -88,12 +88,6 @@ function addRow(sheet: XLSX.WorkSheet, row: number, values: Array<unknown | Retu
   sheet['!ref'] = sheet['!ref'] ? XLSX.utils.encode_range(XLSX.utils.decode_range(sheet['!ref']).s, { r: row, c: widths - 1 }) : XLSX.utils.encode_range({ r: row, c: 0 }, { r: row, c: widths - 1 });
 }
 
-function styleRow(sheet: XLSX.WorkSheet, row: number, startCol: number, endCol: number, fill: string, bold = false) {
-  for (let col = startCol; col <= endCol; col += 1) {
-    sheet[XLSX.utils.encode_cell({ r: row, c: col })] = cell('', fill, bold);
-  }
-}
-
 function addMerged(sheet: XLSX.WorkSheet, row: number, startCol: number, endCol: number, value: string, fill: string, bold = true) {
   sheet[XLSX.utils.encode_cell({ r: row, c: startCol })] = cell(value, fill, bold);
   for (let col = startCol + 1; col <= endCol; col += 1) {
@@ -133,7 +127,6 @@ export function exportTimesheetWorkbook(
     row += 1;
 
     const dayLabels: Array<unknown> = [cell('', COLORS.week, true), cell(`WEEK ${weekIndex + 1}`, COLORS.week, true)];
-    week.start.toLocaleDateString();
     for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
       const date = new Date(week.start);
       date.setDate(date.getDate() + dayIndex);
@@ -152,15 +145,13 @@ export function exportTimesheetWorkbook(
     for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
       const date = new Date(week.start);
       date.setDate(date.getDate() + dayIndex);
-      dateRow.push(cell(date, COLORS.date), cell('', COLORS.date));
+      dateRow.push(cell(format(date, 'dd/MM/yyyy'), COLORS.date), cell('', COLORS.date));
     }
     for (let col = 16; col < colCount; col += 1) dateRow.push(cell('', COLORS.heading));
     addRow(sheet, row, dateRow, colCount);
     for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
       const startCol = 2 + dayIndex * 2;
       sheet['!merges'].push({ s: { r: row, c: startCol }, e: { r: row, c: startCol + 1 } });
-      const dateCell = sheet[XLSX.utils.encode_cell({ r: row, c: startCol })] as XLSX.CellObject;
-      dateCell.z = 'dd/mm/yyyy';
     }
     row += 1;
 
@@ -194,13 +185,12 @@ export function exportTimesheetWorkbook(
         branchTotals.adjustment += hours.adjustment;
 
         const excelRow = row + 1;
-        const workedFormula = `=IF(AND(C${excelRow}<>"",D${excelRow}<>""),MOD(D${excelRow}-C${excelRow},1)*24,0)+IF(AND(E${excelRow}<>"",F${excelRow}<>""),MOD(F${excelRow}-E${excelRow},1)*24,0)+IF(AND(G${excelRow}<>"",H${excelRow}<>""),MOD(H${excelRow}-G${excelRow},1)*24,0)+IF(AND(I${excelRow}<>"",J${excelRow}<>""),MOD(J${excelRow}-I${excelRow},1)*24,0)+IF(AND(K${excelRow}<>"",L${excelRow}<>""),MOD(L${excelRow}-K${excelRow},1)*24,0)+IF(AND(M${excelRow}<>"",N${excelRow}<>""),MOD(N${excelRow}-M${excelRow},1)*24,0)+IF(AND(O${excelRow}<>"",P${excelRow}<>""),MOD(P${excelRow}-O${excelRow},1)*24,0)`;
         data.push(
-          { ...cell(workedFormula, COLORS.heading), f: workedFormula.slice(1), t: 'n', z: '0.00' },
+          cell(hours.worked, COLORS.heading),
           cell(hours.holiday || '', COLORS.holiday),
           cell(hours.sick || '', COLORS.sick),
           cell(hours.adjustment || ''),
-          { ...cell(`=Q${excelRow}+R${excelRow}+T${excelRow}`, COLORS.total, true), f: `Q${excelRow}+R${excelRow}+T${excelRow}`, t: 'n', z: '0.00' },
+          cell(rowTotal(hours), COLORS.total, true),
         );
         addRow(sheet, row, data, colCount);
         for (let col = 2; col <= 15; col += 1) {
@@ -209,18 +199,14 @@ export function exportTimesheetWorkbook(
         }
         row += 1;
       });
-      ['SUBTOTAL', branchTotals.worked, branchTotals.holiday, branchTotals.sick, branchTotals.adjustment, rowTotal(branchTotals)].forEach((v, index) => {
-        const col = index === 0 ? 1 : 15 + index;
-        sheet[XLSX.utils.encode_cell({ r: row, c: col })] = cell(v, index === 0 ? COLORS.subtotal : [COLORS.heading, COLORS.holiday, COLORS.sick, COLORS.subtotal, COLORS.total][index - 1], true);
-      });
-      styleRow(sheet, row, 1, 20, COLORS.subtotal, true);
-      sheet[XLSX.utils.encode_cell({ r: row, c: 1 })] = cell('SUBTOTAL', COLORS.subtotal, true, 'left');
-      sheet[XLSX.utils.encode_cell({ r: row, c: 16 })] = cell(branchTotals.worked, COLORS.heading, true);
-      sheet[XLSX.utils.encode_cell({ r: row, c: 17 })] = cell(branchTotals.holiday, COLORS.holiday, true);
-      sheet[XLSX.utils.encode_cell({ r: row, c: 18 })] = cell(branchTotals.sick, COLORS.sick, true);
-      sheet[XLSX.utils.encode_cell({ r: row, c: 19 })] = cell(branchTotals.adjustment, COLORS.subtotal, true);
-      sheet[XLSX.utils.encode_cell({ r: row, c: 20 })] = cell(rowTotal(branchTotals), COLORS.total, true);
-      addRow(sheet, row, Array.from({ length: colCount }, (_, col) => sheet[XLSX.utils.encode_cell({ r: row, c: col })] || cell('')), colCount);
+      const subtotal = Array.from({ length: colCount }, () => cell('', COLORS.subtotal, true));
+      subtotal[1] = cell('SUBTOTAL', COLORS.subtotal, true, 'left');
+      subtotal[16] = cell(branchTotals.worked, COLORS.heading, true);
+      subtotal[17] = cell(branchTotals.holiday, COLORS.holiday, true);
+      subtotal[18] = cell(branchTotals.sick, COLORS.sick, true);
+      subtotal[19] = cell(branchTotals.adjustment, COLORS.subtotal, true);
+      subtotal[20] = cell(rowTotal(branchTotals), COLORS.total, true);
+      addRow(sheet, row, subtotal, colCount);
       row += 1;
       weekTotals.worked += branchTotals.worked;
       weekTotals.holiday += branchTotals.holiday;
@@ -276,10 +262,9 @@ export function exportTimesheetWorkbook(
     { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
   ];
   sheet['!rows'] = Array.from({ length: row + 1 }, () => ({ hpt: 18 }));
-  sheet['!freeze'] = { xSplit: 2, ySplit: 3, topLeftCell: 'C4', activePane: 'bottomRight', state: 'frozen' };
-  sheet['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 };
-  sheet['!printOptions'] = { horizontalCentered: true };
-  sheet['!autofilter'] = { ref: 'B4:U4' };
+  (sheet as any)['!views'] = [{ state: 'frozen', xSplit: 2, ySplit: 3, topLeftCell: 'C4' }];
+  (sheet as any)['!pageSetup'] = { orientation: 'landscape', paperSize: 9, fitToWidth: 1, fitToHeight: 0 };
+  (sheet as any)['!printOptions'] = { horizontalCentered: true };
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, 'Timesheet');
   exportExcel(workbook, filename);

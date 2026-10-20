@@ -16,6 +16,8 @@ export interface TimesheetHours {
   adjustment: number;
 }
 
+export type TimesheetHourTotals = TimesheetHours;
+
 const numberOrZero = (value: number | string | null | undefined) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
