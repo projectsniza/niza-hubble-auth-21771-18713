@@ -117,6 +117,7 @@ export function MonthlyHoursPanel() {
           .lte('week_start_date', endStr).order('id').range(from, to)));
 
         const ytdEntriesByEmp: Record<string, { worked: number; holiday: number }> = {};
+        const bestYtdEntryByEmployeeDate = new Map<string, { employeeId: string; entry: any; activity: number }>();
         const employeeByTimesheet = new Map(allTs.map(t => [t.id, t.employee_id]));
         for (const idChunk of chunkValues(allTs.map(t => t.id))) {
           const ytdEntries = await fetchAllPages((from, to) => supabase
