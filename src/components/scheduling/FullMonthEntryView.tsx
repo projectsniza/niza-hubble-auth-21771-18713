@@ -164,7 +164,7 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
           tempEmployees.push(...await fetchAllPages((from, to) =>
             supabase
               .from('temporary_employees')
-              .select('id, first_name, last_name, branch_id, organization_id, start_date, end_date, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name)')
+            .select('id, first_name, last_name, branch_id, organization_id, start_date, end_date, source_name, source_branch_id, branch:branches!temporary_employees_branch_id_fkey(name)')
               .in('id', ids)
               .order('id')
               .range(from, to)
