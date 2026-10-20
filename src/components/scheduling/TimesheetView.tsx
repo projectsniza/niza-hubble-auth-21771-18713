@@ -1208,11 +1208,11 @@ export function TimesheetView() {
               entry_date: dateKey,
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
-              break_minutes: 0,
+              break_minutes: Number(entry.break_duration_minutes) || 0,
               worked: calculateEntryWorkedHours(entry),
-              holiday: 0,
-              sick: 0,
-              adjustment: 0,
+              holiday: Number(entry.holiday_hours) || 0,
+              sick: Number(entry.sick_hours) || 0,
+              adjustment: Number(entry.adjustment_hours) || 0,
             };
           }).filter((entry): entry is NonNullable<typeof entry> => !!entry);
           (branchRows[branchName] ||= []).push({
