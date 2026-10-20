@@ -416,9 +416,12 @@ export interface FisCardDay {
 }
 export interface FisCardParseResult {
   byDate: Record<string, FisCardDay>;
+  by_date: Record<string, FisCardDay>;
   weekTotals: FisCardDay;
+  week_totals: FisCardDay;
   brandNames: string[];
   matchedLines: number;
+  week_start: string | null;
 }
 
 const emptyFisDay = (): FisCardDay => ({ visa_mc: 0, amex: 0, fuel_card: 0, other: 0, total: 0, brands: {} });
@@ -579,7 +582,7 @@ export async function resolveWeeklyExtras(
           try {
             const data = await loadStorage(item.storage_path);
             if (typeof data === 'string') text = data;
-            else if (data instanceof ArrayBuffer) text = spreadsheetBufferToCsvText(data);
+            else if (data instanceof ArrayBuffer) text = await spreadsheetBufferToCsvText(data);
           } catch (e) {
             console.warn('Failed to load storage for fiscard:', item.storage_path, e);
           }
@@ -600,7 +603,7 @@ export async function resolveWeeklyExtras(
           try {
             const data = await loadStorage(item.storage_path);
             if (typeof data === 'string') text = data;
-            else if (data instanceof ArrayBuffer) text = spreadsheetBufferToCsvText(data);
+            else if (data instanceof ArrayBuffer) text = await spreadsheetBufferToCsvText(data);
           } catch (e) {
             console.warn('Failed to load storage for cashrec:', item.storage_path, e);
           }

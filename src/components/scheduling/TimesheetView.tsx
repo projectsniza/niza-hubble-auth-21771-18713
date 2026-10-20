@@ -29,7 +29,7 @@ import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
-import { calculateEntryWorkedHours, calculatePayableWeekTotal, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
 import { exportTimesheetWorkbook, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
 
 interface Employee {
@@ -140,7 +140,7 @@ const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
   const { start, end } = getPayrollPeriod(payrollMonth);
   const entries = ts?.entries as Array<any> | undefined;
-  if (!entries || !entries.length) {
+  if (!Array.isArray(entries)) {
     return {
       worked: Number(ts?.total_worked_hours) || 0,
       holiday: Number(ts?.total_holiday_hours) || 0,
@@ -1011,7 +1011,7 @@ export function TimesheetView() {
       acc[branchName].totals.holiday += holiday;
       acc[branchName].totals.sick += sick;
       acc[branchName].totals.adj += adj;
-      acc[branchName].totals.total += worked + holiday + sick + adj;
+      acc[branchName].totals.total += calculatePayableWeekTotal({ worked, holiday, sick, adjustment: adj });
       return acc;
     }, {} as Record<string, { timesheets: Timesheet[]; totals: { worked: number; holiday: number; sick: number; adj: number; total: number } }>);
     return grouped;
@@ -1110,7 +1110,7 @@ export function TimesheetView() {
       const date = parseLocalDate(entry.entry_date);
       const weekIndex = monthWeeks.findIndex(week => date >= week && date <= endOfWeek(week, { weekStartsOn: 1 }));
       if (weekIndex < 0) return;
-      consolidation[rowKey].weeklyHours[weekIndex] += Number(entry.actual_hours) || 0;
+      consolidation[rowKey].weeklyHours[weekIndex] += calculateEntryWorkedHours(entry);
       consolidation[rowKey].holidayHrs += Number(entry.holiday_hours) || 0;
       consolidation[rowKey].sickHrs += Number(entry.sick_hours) || 0;
     });
@@ -1184,7 +1184,7 @@ export function TimesheetView() {
       for (const ids of chunkValues(tempRows.map((temp: any) => temp.id))) {
         const tempEntries = await fetchAllPages<any>((from, to) => supabase
           .from('temporary_timesheet_entries')
-          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours, adjustment_hours')
+          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time')
           .in('temporary_employee_id', ids)
           .gte('entry_date', format(firstWeek, 'yyyy-MM-dd'))
           .lte('entry_date', format(endOfWeek(monthWeeks[monthWeeks.length - 1] || payroll.end, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
@@ -1197,12 +1197,13 @@ export function TimesheetView() {
         const branchRows: Record<string, ExcelEmployeeWeek[]> = {};
         selectedEmployees.forEach(employee => {
           const branchName = employee.branch?.name || 'Unassigned';
+          if (selectedBranch && canViewFilters && employee.branch_id !== selectedBranch) return;
           const entries = Array.from({ length: 7 }, (_, dayIndex) => {
             const date = new Date(weekStart);
             date.setDate(date.getDate() + dayIndex);
             const dateKey = format(date, 'yyyy-MM-dd');
             const entry = bestEntryByEmployeeDate.get(`${employee.id}|${dateKey}`)?.entry;
-            if (!entry) return null;
+            if (!entry || dateKey < format(payroll.start, 'yyyy-MM-dd') || dateKey > format(payroll.end, 'yyyy-MM-dd')) return null;
             return {
               entry_date: dateKey,
               start_time: entry.shift_start_time || null,
@@ -1222,8 +1223,14 @@ export function TimesheetView() {
         });
 
         tempRows.forEach((temp: any) => {
+          if (selectedBranch && canViewFilters && temp.branch_id !== selectedBranch) return;
           const branchName = branchNames.get(temp.branch_id) || 'Unassigned';
-          const entries = (tempEntriesById[temp.id] || []).filter(entry => entry.entry_date >= format(weekStart, 'yyyy-MM-dd') && entry.entry_date <= format(weekEnd, 'yyyy-MM-dd'));
+          const entries = (tempEntriesById[temp.id] || []).filter(entry =>
+            entry.entry_date >= format(weekStart, 'yyyy-MM-dd') &&
+            entry.entry_date <= format(weekEnd, 'yyyy-MM-dd') &&
+            entry.entry_date >= format(payroll.start, 'yyyy-MM-dd') &&
+            entry.entry_date <= format(payroll.end, 'yyyy-MM-dd')
+          );
           if (!entries.length) return;
           (branchRows[branchName] ||= []).push({
             id: `temp-${temp.id}`,
@@ -1233,11 +1240,11 @@ export function TimesheetView() {
               entry_date: entry.entry_date,
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
-              break_minutes: Number(entry.break_duration_minutes) || 0,
+              break_minutes: 0,
               worked: calculateEntryWorkedHours(entry),
-              holiday: Number(entry.holiday_hours) || 0,
-              sick: Number(entry.sick_hours) || 0,
-              adjustment: Number(entry.adjustment_hours) || 0,
+              holiday: 0,
+              sick: 0,
+              adjustment: 0,
             })),
           });
         });
@@ -1410,7 +1417,7 @@ export function TimesheetView() {
             <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Total</p>
             <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
               {(viewTab === 'weekly' 
-                ? (weeklyGrandTotals.worked + weeklyGrandTotals.holiday + weeklyGrandTotals.sick + weeklyGrandTotals.adj)
+                ? calculatePayableWeekTotal({ worked: weeklyGrandTotals.worked, holiday: weeklyGrandTotals.holiday, sick: weeklyGrandTotals.sick, adjustment: weeklyGrandTotals.adj })
                 : monthlyGrandTotals.totalHrs
               ).toFixed(1)}
             </p>
@@ -1541,7 +1548,7 @@ export function TimesheetView() {
                       {/* Employee Rows */}
                       {data.timesheets.map((ts, idx) => {
                         const inPeriod = getTsInPeriodTotals(ts, currentMonth);
-                        const total = inPeriod.worked + inPeriod.holiday + inPeriod.sick + inPeriod.adj;
+        const total = calculatePayableWeekTotal({ worked: inPeriod.worked, holiday: inPeriod.holiday, sick: inPeriod.sick, adjustment: inPeriod.adj });
                         return (
                           <TableRow key={ts.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                             <TableCell className="sticky left-0 bg-inherit z-10 font-medium">

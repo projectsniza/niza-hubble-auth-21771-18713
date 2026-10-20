@@ -187,6 +187,7 @@ function PendingAccountsOnly() {
 // Pending Onboardings - shows employees in onboarding
 function PendingOnboardings() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [onboardingEmployees, setOnboardingEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);

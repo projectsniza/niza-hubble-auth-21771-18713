@@ -29,6 +29,7 @@ interface ClockIn {
 
 interface LeaveRequest {
   id: string;
+  created_at?: string | null;
   employee_id: string;
   start_date: string;
   end_date: string;

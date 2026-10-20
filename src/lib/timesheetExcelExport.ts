@@ -227,7 +227,7 @@ export function exportTimesheetWorkbook(
 
   addMerged(sheet, row, 1, 13, 'MONTHLY CONSOLIDATION', COLORS.week);
   row += 1;
-  const summaryHeaders: Array<unknown> = [cell('', COLORS.week), ...['NAME', 'WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', 'WEEK 5', 'WEEK 6', 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'].map((label, i) => cell(label, i === 9 ? COLORS.heading : COLORS.week, true))];
+  const summaryHeaders: Array<unknown> = [cell('', COLORS.week), ...['NAME', 'WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', 'WEEK 5', 'WEEK 6', 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'].map((label, i) => cell(label, i === 7 ? COLORS.heading : COLORS.week, true))];
   addRow(sheet, row, summaryHeaders, colCount);
   row += 1;
   const monthlyGrand = { weeks: Array.from({ length: 6 }, () => 0), total: 0, lastMonth: 0, totalHrs: 0, holiday: 0, sick: 0 };
@@ -241,7 +241,7 @@ export function exportTimesheetWorkbook(
       const total = weeks.reduce((sum, n) => sum + n, 0);
       const totalHrs = total + employee.lastMonthAdjustment;
       const vals = ['', employee.name.toUpperCase(), ...weeks.map(value => value || ''), total || '', employee.lastMonthAdjustment || '', totalHrs || '', employee.holidayHours || '', employee.sickHours || ''];
-      addRow(sheet, row, vals.map((value, i) => cell(value, i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 13 ? COLORS.sick : undefined, false, i === 1 ? 'left' : 'center')), colCount);
+      addRow(sheet, row, vals.map((value, i) => cell(value, i === 8 ? COLORS.heading : i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 12 ? COLORS.sick : undefined, false, i === 1 ? 'left' : 'center')), colCount);
       weeks.forEach((value, i) => { branchTotal.weeks[i] += value; monthlyGrand.weeks[i] += value; });
       branchTotal.total += total; monthlyGrand.total += total;
       branchTotal.lastMonth += employee.lastMonthAdjustment; monthlyGrand.lastMonth += employee.lastMonthAdjustment;
@@ -251,12 +251,12 @@ export function exportTimesheetWorkbook(
       row += 1;
     });
     const values = ['', 'SUBTOTAL', ...branchTotal.weeks, branchTotal.total, branchTotal.lastMonth, branchTotal.totalHrs, branchTotal.holiday, branchTotal.sick];
-    addRow(sheet, row, values.map((value, i) => cell(value || '', i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 13 ? COLORS.sick : COLORS.subtotal, true, i === 1 ? 'left' : 'center')), colCount);
+    addRow(sheet, row, values.map((value, i) => cell(value || '', i === 8 ? COLORS.heading : i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 12 ? COLORS.sick : COLORS.subtotal, true, i === 1 ? 'left' : 'center')), colCount);
     row += 1;
   });
 
   const grandValues = ['', 'GRAND TOTAL', ...monthlyGrand.weeks, monthlyGrand.total, '', monthlyGrand.totalHrs, monthlyGrand.holiday, monthlyGrand.sick];
-  addRow(sheet, row, grandValues.map((value, i) => cell(value || '', i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 13 ? COLORS.sick : COLORS.week, true, i === 1 ? 'left' : 'center')), colCount);
+  addRow(sheet, row, grandValues.map((value, i) => cell(value || '', i === 8 ? COLORS.heading : i === 10 ? COLORS.total : i === 11 ? COLORS.holiday : i === 12 ? COLORS.sick : COLORS.week, true, i === 1 ? 'left' : 'center')), colCount);
   sheet['!cols'] = [
     { wch: 2 }, { wch: 24 }, ...Array.from({ length: 14 }, () => ({ wch: 11 })),
     { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 },

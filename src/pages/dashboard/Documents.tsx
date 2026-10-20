@@ -401,7 +401,7 @@ export default function Documents() {
   const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
 
-  const getFolderStatusBadge = (folder: FolderItem) => {
+  const getFolderStatusBadge = (folder: FolderItem): { label: string; color: string; isDeleted?: boolean; isDeactivated?: boolean } | null => {
     if (folder.folder_type !== 'employee' && !folder.employee_id) return null;
 
     // Case 1: Employee record was deleted from employees table or unlinked, folder is permanently retained for compliance
