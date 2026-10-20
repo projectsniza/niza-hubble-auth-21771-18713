@@ -6,9 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChevronLeft, ChevronRight, CalendarDays, Search } from 'lucide-react';
-import { addMonths, format, subMonths } from 'date-fns';
+import { addMonths, format, startOfWeek, subMonths } from 'date-fns';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
+import { calculateEntryWorkedHours } from '@/lib/timesheetCalculations';
 
 // Payroll month: 21st of month M → 20th of month M+1.
 const getPayrollPeriod = (m: Date) => ({
