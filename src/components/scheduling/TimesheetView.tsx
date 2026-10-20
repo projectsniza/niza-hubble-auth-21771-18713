@@ -1223,6 +1223,7 @@ export function TimesheetView() {
         });
 
         tempRows.forEach((temp: any) => {
+          if (selectedBranch && canViewFilters && temp.branch_id !== selectedBranch) return;
           const branchName = branchNames.get(temp.branch_id) || 'Unassigned';
           const entries = (tempEntriesById[temp.id] || []).filter(entry =>
             entry.entry_date >= format(weekStart, 'yyyy-MM-dd') &&
