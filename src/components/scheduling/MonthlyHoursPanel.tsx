@@ -65,12 +65,12 @@ export function MonthlyHoursPanel() {
         const ids = empList.map(e => e.id);
         if (!ids.length) { setRows([]); setLoading(false); return; }
 
-        // Timesheets in month (by week_start_date overlap)
+        // Include the Monday containing payroll start so all dated entries can be matched.
         const ts: any[] = [];
         for (const idChunk of chunkValues(ids)) {
           ts.push(...await fetchAllPages((from, to) => supabase.from('timesheets')
             .select('id, employee_id').in('employee_id', idChunk)
-            .gte('week_start_date', format(new Date(start.getFullYear(), start.getMonth(), 1), 'yyyy-MM-dd'))
+            .gte('week_start_date', format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
             .lte('week_start_date', endStr).order('id').range(from, to)));
         }
         const tsIds = ts.map(t => t.id);
@@ -81,7 +81,7 @@ export function MonthlyHoursPanel() {
         if (tsIds.length) {
           const ents: any[] = [];
           for (const tsChunk of chunkValues(tsIds)) ents.push(...await fetchAllPages((from, to) => supabase
-            .from('timesheet_entries').select('timesheet_id, entry_date, actual_hours, holiday_hours, sick_hours')
+            .from('timesheet_entries').select('timesheet_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours')
             .in('timesheet_id', tsChunk).gte('entry_date', startStr).lte('entry_date', endStr)
             .order('id').range(from, to)));
           const empByTs: Record<string, string> = {};
@@ -90,7 +90,7 @@ export function MonthlyHoursPanel() {
             const eid = empByTs[e.timesheet_id];
             if (!eid) return;
             const a = (entriesByEmp[eid] ||= { w: 0, h: 0, s: 0 });
-            a.w += Number(e.actual_hours) || 0;
+            a.w += calculateEntryWorkedHours(e);
             a.h += Number(e.holiday_hours) || 0;
             a.s += Number(e.sick_hours) || 0;
           });
@@ -104,9 +104,27 @@ export function MonthlyHoursPanel() {
 
         const allTs: any[] = [];
         for (const idChunk of chunkValues(ids)) allTs.push(...await fetchAllPages((from, to) => supabase
-          .from('timesheets').select('id, employee_id, total_worked_hours, total_holiday_hours, week_start_date')
-          .in('employee_id', idChunk).gte('week_start_date', hyStartStr).lte('week_start_date', endStr)
-          .order('id').range(from, to)));
+          .from('timesheets').select('id, employee_id')
+          .in('employee_id', idChunk)
+          .gte('week_start_date', format(startOfWeek(hyStart, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+          .lte('week_start_date', endStr).order('id').range(from, to)));
+
+        const ytdEntriesByEmp: Record<string, { worked: number; holiday: number }> = {};
+        const employeeByTimesheet = new Map(allTs.map(t => [t.id, t.employee_id]));
+        for (const idChunk of chunkValues(allTs.map(t => t.id))) {
+          const ytdEntries = await fetchAllPages((from, to) => supabase
+            .from('timesheet_entries')
+            .select('timesheet_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours')
+            .in('timesheet_id', idChunk).gte('entry_date', hyStartStr).lte('entry_date', endStr)
+            .order('id').range(from, to));
+          ytdEntries.forEach((entry: any) => {
+            const employeeId = employeeByTimesheet.get(entry.timesheet_id);
+            if (!employeeId) return;
+            const totals = ytdEntriesByEmp[employeeId] ||= { worked: 0, holiday: 0 };
+            totals.worked += calculateEntryWorkedHours(entry);
+            totals.holiday += Number(entry.holiday_hours) || 0;
+          });
+        }
 
         // We need contract data for earned-to-date pro-rata.
         const contracts: any[] = [];
@@ -121,13 +139,6 @@ export function MonthlyHoursPanel() {
           }
         });
 
-        const workedToDate: Record<string, number> = {};
-        const takenToDate: Record<string, number> = {};
-        (allTs || []).forEach((t: any) => {
-          workedToDate[t.employee_id] = (workedToDate[t.employee_id] || 0) + (Number(t.total_worked_hours) || 0);
-          takenToDate[t.employee_id] = (takenToDate[t.employee_id] || 0) + (Number(t.total_holiday_hours) || 0);
-        });
-
         const built: Row[] = empList.map((e: any) => {
           const m = entriesByEmp[e.id] || { w: 0, h: 0, s: 0 };
           const c = contractByEmp[e.id];
@@ -135,8 +146,8 @@ export function MonthlyHoursPanel() {
           const days = Number(c?.holiday_entitlement_days) || 28;
           const hoursPerDay = weekly / 5;
           const annual = hoursPerDay * days;
-          const worked = workedToDate[e.id] || 0;
-          const taken = takenToDate[e.id] || 0;
+          const worked = ytdEntriesByEmp[e.id]?.worked || 0;
+          const taken = ytdEntriesByEmp[e.id]?.holiday || 0;
           const weeksWorked = weekly ? (worked + taken) / weekly : 0;
           const earned = (annual / 52) * weeksWorked;
           return {
