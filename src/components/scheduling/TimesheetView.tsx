@@ -29,6 +29,8 @@ import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
+import { calculateEntryWorkedHours, calculatePayableWeekTotal, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
+import { exportTimesheetWorkbook, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
 
 interface Employee {
   id: string;
@@ -146,17 +148,12 @@ const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
       adj: Number(ts?.total_adjustment_hours) || 0,
     };
   }
-  let worked = 0, holiday = 0, sick = 0, adj = 0;
-  entries.forEach((e: any) => {
-    if (!e?.entry_date) return;
-    const d = parseLocalDate(String(e.entry_date));
-    if (d < start || d > end) return;
-    worked += Number(e.actual_hours) || 0;
-    holiday += Number(e.holiday_hours) || 0;
-    sick += Number(e.sick_hours) || 0;
-    adj += Number(e.adjustment_hours) || 0;
-  });
-  return { worked, holiday, sick, adj };
+  const totals = sumDatedTimesheetEntries(
+    entries,
+    format(start, 'yyyy-MM-dd'),
+    format(end, 'yyyy-MM-dd'),
+  );
+  return { worked: totals.worked, holiday: totals.holiday, sick: totals.sick, adj: totals.adjustment };
 };
 
 const entryTotal = (entry: Partial<TimesheetEntry> | null | undefined) =>
@@ -758,11 +755,7 @@ export function TimesheetView() {
       const start = updated[index].shift_start_time!;
       const end = updated[index].shift_end_time!;
       const breakMins = updated[index].break_duration_minutes || 0;
-      const [startH, startM] = start.split(':').map(Number);
-      const [endH, endM] = end.split(':').map(Number);
-      let totalMins = (endH * 60 + endM) - (startH * 60 + startM) - breakMins;
-      if (totalMins < 0) totalMins += 24 * 60;
-      updated[index].actual_hours = Math.round(totalMins / 60 * 100) / 100;
+      updated[index].actual_hours = calculateShiftHours(start, end, breakMins);
     }
     setEntries(updated);
   };
@@ -887,14 +880,7 @@ export function TimesheetView() {
         : (edit.end === '' ? null : entry.shift_end_time || null);
     }
 
-    let actualHours = 0;
-    if (startTime && endTime) {
-      const [startH, startM] = startTime.split(':').map(Number);
-      const [endH, endM] = endTime.split(':').map(Number);
-      let totalMins = (endH * 60 + endM) - (startH * 60 + startM);
-      if (totalMins < 0) totalMins += 24 * 60;
-      actualHours = Math.round(totalMins / 60 * 100) / 100;
-    }
+    const actualHours = calculateShiftHours(startTime, endTime, entry.break_duration_minutes || 0);
 
     const { error: inlineErr } = await supabase.from('timesheet_entries').update({
       shift_start_time: startTime,
@@ -1162,155 +1148,123 @@ export function TimesheetView() {
   }, [monthlyConsolidation, monthWeeks, monthlyTempByBranch]);
 
 
-  const exportToCSV = async () => {
-    const headers = viewTab === 'weekly' 
-      ? ['', 'NAME', 'FROM (BRANCH)', ...DAYS_SHORT.flatMap(d => [d, '']), 'HOURS', 'HOLIDAY', 'SICK', 'ADJ+/-', 'TOTAL']
-      : ['', 'NAME', ...monthWeeks.map((_, i) => `WEEK ${i + 1}`), 'TOTAL', '(+/-) LAST MONTH', 'TOTAL HRS', 'HOLIDAY HRS', 'SICK'];
-    
-    const rows: string[][] = [headers];
-    
-    if (viewTab === 'weekly') {
-      // Pre-fetch temporary staff for all branches in scope, for the current week
-      const branchIds = Object.values(groupedTimesheets)
-        .map(d => d.timesheets[0]?.employee?.branch_id || (d as any).branchId)
-        .filter(Boolean);
-      const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-      const weekEndDate = new Date(currentWeekStart);
-      weekEndDate.setDate(weekEndDate.getDate() + 6);
-      const weekEndStr = format(weekEndDate, 'yyyy-MM-dd');
-
-      let tempsByBranch: Record<string, any[]> = {};
-      let tempEntriesByTemp: Record<string, any[]> = {};
-      let sourceBranchNames: Record<string, string> = {};
-
-      try {
-        // Get temps for all branches we currently view (filter by branch name match later)
-        const temps = await fetchAllPages<any>((from, to) => supabase
-          .from('temporary_employees')
-          .select('*')
-          .lte('start_date', weekEndStr)
-          .or(`end_date.is.null,end_date.gte.${weekStartStr}`)
-          .order('id')
-          .range(from, to));
-
-        if (temps.length > 0) {
-          const tempIds = temps.map(t => t.id);
-          for (const ids of chunkValues(tempIds)) {
-            const tEntries = await fetchAllPages<any>((from, to) => supabase
-              .from('temporary_timesheet_entries')
-              .select('*')
-              .in('temporary_employee_id', ids)
-              .eq('week_start_date', weekStartStr)
-              .order('id')
-              .range(from, to));
-            tEntries.forEach((e: any) => {
-              (tempEntriesByTemp[e.temporary_employee_id] ||= []).push(e);
-            });
-          }
-
-          // Resolve source branch names
-          const srcIds = Array.from(new Set(temps.map(t => t.source_branch_id).filter(Boolean)));
-          if (srcIds.length) {
-            const { data: srcBranches } = await supabase
-              .from('branches').select('id, name').in('id', srcIds);
-            (srcBranches || []).forEach((b: any) => { sourceBranchNames[b.id] = b.name; });
-          }
-
-          // Group by host branch_id
-          temps.forEach(t => { (tempsByBranch[t.branch_id] ||= []).push(t); });
-        }
-      } catch (err) {
-        console.error('Failed to load temp staff for export', err);
+  const exportToExcel = async () => {
+    try {
+      const payroll = getPayrollPeriod(currentMonth);
+      const firstWeek = monthWeeks[0];
+      if (!firstWeek || monthWeeks.length === 0) {
+        toast.error('There are no weeks in this payroll period to export.');
+        return;
       }
 
-      const dayCols = DAYS_OF_WEEK.length * 2; // start/end per day
-
-      Object.entries(groupedTimesheets).forEach(([branchName, data]) => {
-        const branchId = data.timesheets[0]?.employee?.branch_id;
-        rows.push([branchName, ...Array(headers.length - 1).fill('')]);
-
-        // Regular employees
-        data.timesheets.forEach(t => {
-          const dayEntries = t.entries || [];
-          const total = Number(t.total_worked_hours) + Number(t.total_holiday_hours) + Number(t.total_sick_hours) + Number(t.total_adjustment_hours || 0);
-          rows.push([
-            '', 
-            `${t.employee?.first_name} ${t.employee?.last_name}`.toUpperCase(),
-            '', // FROM (BRANCH) — empty for permanent staff
-            ...DAYS_OF_WEEK.flatMap((day) => {
-              const entry = dayEntries.find(e => e.day_of_week === day);
-              return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
-            }),
-            String(t.total_worked_hours || 0),
-            t.total_holiday_hours ? String(t.total_holiday_hours) : '',
-            t.total_sick_hours ? String(t.total_sick_hours) : '',
-            t.total_adjustment_hours ? String(t.total_adjustment_hours) : '',
-            String(total.toFixed(1))
-          ]);
-        });
-
-        // Temporary staff for this branch — same row format
-        const branchTemps = branchId ? (tempsByBranch[branchId] || []) : [];
-        let tempWorked = 0;
-        branchTemps.forEach((temp: any) => {
-          const tEntries = tempEntriesByTemp[temp.id] || [];
-          const fromLabel = temp.source_branch_id
-            ? (sourceBranchNames[temp.source_branch_id] || 'Other branch')
-            : (temp.source_name || '');
-          const worked = tEntries.reduce((s: number, e: any) => s + (Number(e.actual_hours) || 0), 0);
-          tempWorked += worked;
-          rows.push([
-            '',
-            `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.toUpperCase().trim(),
-            fromLabel,
-            ...DAYS_OF_WEEK.flatMap((day) => {
-              const entry = tEntries.find((e: any) => e.day_of_week === day);
-              return [entry?.shift_start_time || '', entry?.shift_end_time || ''];
-            }),
-            worked ? worked.toFixed(1) : '',
-            '', '', '',
-            worked ? worked.toFixed(1) : '0.0',
-          ]);
-        });
-
-        const totalWorked = data.totals.worked + tempWorked;
-        const grandTotal = data.totals.total + tempWorked;
-        rows.push(['', 'SUBTOTAL', '', ...Array(dayCols).fill(''), 
-          String(totalWorked.toFixed(1)),
-          String(data.totals.holiday.toFixed(1)),
-          String(data.totals.sick.toFixed(1)),
-          String(data.totals.adj.toFixed(1)),
-          String(grandTotal.toFixed(1))
-        ]);
-      });
-    } else {
-      Object.entries(monthlyConsolidation.grouped).forEach(([branchName, branchData]) => {
-        rows.push([branchName, ...Array(headers.length - 1).fill('')]);
-        Object.values(branchData).forEach(emp => {
-          rows.push([
-            '',
-            `${emp.employee.first_name} ${emp.employee.last_name}`.toUpperCase(),
-            ...emp.weeklyHours.map(h => h > 0 ? h.toFixed(1) : '-'),
-            emp.totalHours.toFixed(1),
-            emp.lastMonthAdj !== 0 ? emp.lastMonthAdj.toFixed(1) : '-',
-            emp.totalHrs.toFixed(1),
-            emp.holidayHrs > 0 ? emp.holidayHrs.toFixed(1) : '-',
-            emp.sickHrs > 0 ? emp.sickHrs.toFixed(1) : '-'
-          ]);
+      const selectedEmployees = filteredEmployees.filter(employee => employee.branch_id);
+      const employeeById = new Map(selectedEmployees.map(employee => [employee.id, employee]));
+      const branchNames = new Map(selectedEmployees.map(employee => [employee.branch_id, employee.branch?.name || 'Unassigned']));
+      const bestEntryByEmployeeDate = new Map<string, { entry: any; activity: number }>();
+      allMonthTimesheets.forEach(timesheet => {
+        if (!employeeById.has(timesheet.employee_id)) return;
+        (timesheet.entries || []).forEach(entry => {
+          const key = `${timesheet.employee_id}|${entry.entry_date}`;
+          const activity = entryTotal(entry);
+          const existing = bestEntryByEmployeeDate.get(key);
+          if (!existing || activity > existing.activity) bestEntryByEmployeeDate.set(key, { entry, activity });
         });
       });
+
+      const tempIds = Array.from(new Set(selectedEmployees.map(employee => employee.branch_id)));
+      const tempRows = tempIds.length ? await fetchAllPages<any>((from, to) => supabase
+        .from('temporary_employees')
+        .select('id, branch_id, first_name, last_name, start_date, end_date, source_name, source_branch_id')
+        .in('branch_id', tempIds)
+        .lte('start_date', format(monthWeeks[monthWeeks.length - 1] ? endOfWeek(monthWeeks[monthWeeks.length - 1], { weekStartsOn: 1 }) : payroll.end, 'yyyy-MM-dd'))
+        .or(`end_date.is.null,end_date.gte.${format(firstWeek, 'yyyy-MM-dd')}`)
+        .order('id').range(from, to)) : [];
+
+      const tempEntriesById: Record<string, any[]> = {};
+      for (const ids of chunkValues(tempRows.map((temp: any) => temp.id))) {
+        const tempEntries = await fetchAllPages<any>((from, to) => supabase
+          .from('temporary_timesheet_entries')
+          .select('temporary_employee_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours, adjustment_hours')
+          .in('temporary_employee_id', ids)
+          .gte('entry_date', format(firstWeek, 'yyyy-MM-dd'))
+          .lte('entry_date', format(endOfWeek(monthWeeks[monthWeeks.length - 1] || payroll.end, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+          .order('id').range(from, to));
+        tempEntries.forEach((entry: any) => { (tempEntriesById[entry.temporary_employee_id] ||= []).push(entry); });
+      }
+
+      const weeks: ExcelWeekSection[] = monthWeeks.map(weekStart => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        const branchRows: Record<string, ExcelEmployeeWeek[]> = {};
+        selectedEmployees.forEach(employee => {
+          const branchName = employee.branch?.name || 'Unassigned';
+          const entries = Array.from({ length: 7 }, (_, dayIndex) => {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + dayIndex);
+            const dateKey = format(date, 'yyyy-MM-dd');
+            const entry = bestEntryByEmployeeDate.get(`${employee.id}|${dateKey}`)?.entry;
+            if (!entry) return null;
+            return {
+              entry_date: dateKey,
+              start_time: entry.shift_start_time || null,
+              end_time: entry.shift_end_time || null,
+              break_minutes: Number(entry.break_duration_minutes) || 0,
+              worked: calculateEntryWorkedHours(entry),
+              holiday: Number(entry.holiday_hours) || 0,
+              sick: Number(entry.sick_hours) || 0,
+              adjustment: Number(entry.adjustment_hours) || 0,
+            };
+          }).filter((entry): entry is NonNullable<typeof entry> => !!entry);
+          (branchRows[branchName] ||= []).push({
+            id: employee.id,
+            name: `${employee.first_name} ${employee.last_name}`.trim(),
+            entries,
+          });
+        });
+
+        tempRows.forEach((temp: any) => {
+          const branchName = branchNames.get(temp.branch_id) || 'Unassigned';
+          const entries = (tempEntriesById[temp.id] || []).filter(entry => entry.entry_date >= format(weekStart, 'yyyy-MM-dd') && entry.entry_date <= format(weekEnd, 'yyyy-MM-dd'));
+          if (!entries.length) return;
+          (branchRows[branchName] ||= []).push({
+            id: `temp-${temp.id}`,
+            name: `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.trim(),
+            sourceBranch: temp.source_name || undefined,
+            entries: entries.map(entry => ({
+              entry_date: entry.entry_date,
+              start_time: entry.shift_start_time || null,
+              end_time: entry.shift_end_time || null,
+              break_minutes: Number(entry.break_duration_minutes) || 0,
+              worked: calculateEntryWorkedHours(entry),
+              holiday: Number(entry.holiday_hours) || 0,
+              sick: Number(entry.sick_hours) || 0,
+              adjustment: Number(entry.adjustment_hours) || 0,
+            })),
+          });
+        });
+        return { start: weekStart, end: weekEnd, branches: branchRows };
+      });
+
+      const monthly: ExcelMonthlySection = {
+        branches: Object.fromEntries(Object.entries(monthlyConsolidation.grouped).map(([branchName, branchData]) => [
+          branchName,
+          Object.values(branchData).map(employee => ({
+            id: employee.employee.id,
+            name: `${employee.employee.first_name} ${employee.employee.last_name}`.trim(),
+            weeklyHours: employee.weeklyHours,
+            lastMonthAdjustment: employee.lastMonthAdj,
+            holidayHours: employee.holidayHrs,
+            sickHours: employee.sickHrs,
+          })),
+        ])),
+      };
+
+      const filename = `Timesheet_${format(payroll.end, 'MMM_yyyy')}.xlsx`;
+      exportTimesheetWorkbook(weeks, monthly, filename, `${format(payroll.start, 'dd MMM yyyy')} – ${format(payroll.end, 'dd MMM yyyy')}`);
+      toast.success('Formatted Excel timesheet exported.');
+    } catch (error) {
+      console.error('Timesheet Excel export failed:', error);
+      toast.error('Could not create the formatted Excel timesheet.');
     }
-
-    const csv = rows.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = viewTab === 'weekly' 
-      ? `TimeSheet_Week${selectedWeekIndex + 1}_${format(currentMonth, 'MMM_yy')}.csv`
-      : `TimeSheet_${format(currentMonth, 'MMMM_yyyy')}_Consolidated.csv`;
-    a.click();
-    toast.success('Exported to CSV');
   };
 
   const formatTimeDisplay = (time: string | null) => {
@@ -1384,7 +1338,7 @@ export function TimesheetView() {
                 </Select>
               )}
               
-              <Button variant="outline" size="sm" onClick={exportToCSV} className="shadow-sm">
+              <Button variant="outline" size="sm" onClick={exportToExcel} className="shadow-sm">
                 <Download className="h-4 w-4 mr-2" />Export
               </Button>
               
