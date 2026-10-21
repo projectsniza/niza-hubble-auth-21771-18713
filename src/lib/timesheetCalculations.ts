@@ -78,6 +78,19 @@ export function calculateTemporaryEntryHours(entry: DatedHoursEntry): number {
   return numberOrZero(entry.actual_hours);
 }
 
+export function deduplicateDatedEntries(entries: readonly DatedHoursEntry[]): DatedHoursEntry[] {
+  const bestByDate = new Map<string, DatedHoursEntry>();
+  entries.forEach(entry => {
+    const existing = bestByDate.get(entry.entry_date);
+    const hours = calculateTemporaryEntryHours(entry);
+    const existingHours = existing ? calculateTemporaryEntryHours(existing) : -Infinity;
+    if (!existing || hours > existingHours) {
+      bestByDate.set(entry.entry_date, entry);
+    }
+  });
+  return Array.from(bestByDate.values());
+}
+
 export function calculatePayableWeekTotal(hours: TimesheetHours): number {
   return hours.worked + hours.holiday + hours.adjustment;
 }

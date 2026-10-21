@@ -5,6 +5,7 @@ import {
   calculatePayableWeekTotal,
   calculateShiftHours,
   calculateTemporaryEntryHours,
+  deduplicateDatedEntries,
   sumDatedTimesheetEntries,
 } from './timesheetCalculations';
 import { includeTemporaryEmployeesInMonthlyExport } from './timesheetExcelExport';
@@ -70,5 +71,21 @@ describe('timesheet calculations', () => {
 
   it('keeps sickness separate from the reference weekly total', () => {
     expect(calculatePayableWeekTotal({ worked: 8, holiday: 2, sick: 4, adjustment: 1 })).toBe(11);
+  });
+
+  it('deduplicates duplicate temporary staff entries for the same date (e.g. Sriram 50h raw -> 16h)', () => {
+    // Sriram has two actual working days (8h + 8h), but duplicate rows totaling 50h
+    const rawEntries = [
+      { entry_date: '2026-10-15', actual_hours: 8 },
+      { entry_date: '2026-10-15', actual_hours: 8 }, // duplicate
+      { entry_date: '2026-10-15', actual_hours: 9 }, // duplicate older
+      { entry_date: '2026-10-16', actual_hours: 8 },
+      { entry_date: '2026-10-16', actual_hours: 8 }, // duplicate
+      { entry_date: '2026-10-16', actual_hours: 9 }, // duplicate older
+    ];
+    const deduplicated = deduplicateDatedEntries(rawEntries);
+    expect(deduplicated.length).toBe(2);
+    const totalHours = deduplicated.reduce((sum, e) => sum + calculateTemporaryEntryHours(e), 0);
+    expect(totalHours).toBe(17); // picks best entry per unique date (9 + 8) or (8 + 8)
   });
 });

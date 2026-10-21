@@ -205,7 +205,8 @@ export function exportTimesheetWorkbook(
             cell(timeForExcel(entry?.end_time || null)),
           );
         }
-        const hours = employee.entries.reduce<TimesheetHours>((totals, entry) => {
+        const uniqueEntries = Array.from(byDate.values());
+        const hours = uniqueEntries.reduce<TimesheetHours>((totals, entry) => {
           totals.worked += entry.worked;
           totals.holiday += entry.holiday;
           totals.sick += entry.sick;

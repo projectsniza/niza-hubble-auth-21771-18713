@@ -254,13 +254,23 @@ export function TimesheetView() {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
       const data = await fetchAllPages((from, to) => supabase
         .from('temporary_timesheet_entries')
-        .select('branch_id, actual_hours')
+        .select('temporary_employee_id, branch_id, entry_date, actual_hours')
         .eq('week_start_date', weekStartStr)
         .order('id')
         .range(from, to));
-      const map: Record<string, number> = {};
+      const bestByEmpDate = new Map<string, { branchId: string; hours: number }>();
       (data || []).forEach((row: any) => {
-        map[row.branch_id] = (map[row.branch_id] || 0) + (Number(row.actual_hours) || 0);
+        if (!isDateStringInPayrollPeriod(row.entry_date, currentMonth)) return;
+        const key = `${row.temporary_employee_id || ''}|${row.entry_date}`;
+        const h = Number(row.actual_hours) || 0;
+        const ex = bestByEmpDate.get(key);
+        if (!ex || h > ex.hours) {
+          bestByEmpDate.set(key, { branchId: row.branch_id, hours: h });
+        }
+      });
+      const map: Record<string, number> = {};
+      bestByEmpDate.forEach(({ branchId, hours }) => {
+        if (branchId) map[branchId] = (map[branchId] || 0) + hours;
       });
       setTempHoursByBranch(map);
     })();
@@ -397,7 +407,6 @@ export function TimesheetView() {
     try {
       const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
       const payroll = getPayrollPeriod(currentMonth);
-      const prevPayroll = getPayrollPeriod(subMonths(currentMonth, 1));
 
       const employeesData = await fetchAllPages((from, to) => {
         let query = supabase
@@ -441,7 +450,6 @@ export function TimesheetView() {
       // Use Monday of the week containing the payroll start so partial first
       // week (e.g. Sat 21 / Sun 22 with Mon-start 16) is included.
       const monthRangeStart = startOfWeek(payroll.start, { weekStartsOn: 1 });
-      const prevMonthRangeStart = startOfWeek(prevPayroll.start, { weekStartsOn: 1 });
 
       // NOTE: PostgREST caps every response at 1000 rows regardless of .limit(),
       // so all month-wide reads MUST be paginated with .range(). Without this the
@@ -525,23 +533,9 @@ export function TimesheetView() {
 
       setAllMonthTimesheets(monthTsWithEntries);
 
-
-      const prevMonthData = await fetchAllPages((from, to) =>
-        supabase
-          .from('timesheets')
-          .select('employee_id, total_adjustment_hours')
-          .gte('week_start_date', format(prevMonthRangeStart, 'yyyy-MM-dd'))
-          .lte('week_start_date', format(prevPayroll.end, 'yyyy-MM-dd'))
-          .order('id')
-          .range(from, to)
-      );
-
-      
-      const adjustments: Record<string, number> = {};
-      prevMonthData?.forEach(t => {
-        adjustments[t.employee_id] = (adjustments[t.employee_id] || 0) + (Number(t.total_adjustment_hours) || 0);
-      });
-      setLastMonthAdjustment(adjustments);
+      // Weekly ADJ+/- is already settled and paid within each month's weekly timesheet;
+      // do not roll over into next month's (+/-) LAST MONTH column to prevent double-counting.
+      setLastMonthAdjustment({});
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -1200,6 +1194,50 @@ export function TimesheetView() {
         if (temp.branch_id && temp.branch?.name) branchNames.set(temp.branch_id, temp.branch.name);
       });
 
+      // Deduplicate temporary staff entries by identity and date, strictly matching monthly consolidation
+      const bestTempEntryByIdentityDate = new Map<string, {
+        id: string;
+        temp: any;
+        entry: any;
+        branchName: string;
+        name: string;
+        source: string | null;
+        hours: number;
+      }>();
+
+      scopedTempRows.forEach((temp: any) => {
+        const branchName = branchNames.get(temp.branch_id) || temp.branch?.name || 'Unassigned';
+        const name = `${temp.first_name || ''} ${temp.last_name || ''}`.trim().toUpperCase();
+        const source = temp.source_branch?.name ? `from ${temp.source_branch.name}` : (temp.source_name ? `from ${temp.source_name}` : null);
+        const identity = `${temp.branch_id || branchName}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+
+        const empEntries = tempEntriesById[temp.id] || [];
+        empEntries.forEach((entry: any) => {
+          if (temp.start_date && entry.entry_date < temp.start_date) return;
+          if (temp.end_date && entry.entry_date > temp.end_date) return;
+          if (entry.entry_date < format(payroll.start, 'yyyy-MM-dd') || entry.entry_date > format(payroll.end, 'yyyy-MM-dd')) return;
+
+          const workBranchId = entry.branch_id || temp.branch_id;
+          if (selectedBranch && canViewFilters && workBranchId !== selectedBranch) return;
+
+          const workBranchName = branchNames.get(workBranchId) || temp.branch?.name || branchName;
+          const key = `${identity}|${entry.entry_date}`;
+          const hours = calculateTemporaryEntryHours(entry);
+          const existing = bestTempEntryByIdentityDate.get(key);
+          if (!existing || hours > existing.hours) {
+            bestTempEntryByIdentityDate.set(key, {
+              id: temp.id,
+              temp,
+              entry,
+              branchName: workBranchName,
+              name,
+              source,
+              hours,
+            });
+          }
+        });
+      });
+
       const weeks: ExcelWeekSection[] = monthWeeks.map(weekStart => {
         const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
         const branchRows: Record<string, ExcelEmployeeWeek[]> = {};
@@ -1217,7 +1255,7 @@ export function TimesheetView() {
               start_time: entry.shift_start_time || null,
               end_time: entry.shift_end_time || null,
               break_minutes: Number(entry.break_duration_minutes) || 0,
-              worked: calculateTemporaryEntryHours(entry),
+              worked: calculateEntryWorkedHours(entry),
               holiday: Number(entry.holiday_hours) || 0,
               sick: Number(entry.sick_hours) || 0,
               adjustment: Number(entry.adjustment_hours) || 0,
@@ -1230,32 +1268,52 @@ export function TimesheetView() {
           });
         });
 
-        scopedTempRows.forEach((temp: any) => {
-          const entries = (tempEntriesById[temp.id] || []).filter(entry =>
-            entry.entry_date >= format(weekStart, 'yyyy-MM-dd') &&
-            entry.entry_date <= format(weekEnd, 'yyyy-MM-dd') &&
-            entry.entry_date >= format(payroll.start, 'yyyy-MM-dd') &&
-            entry.entry_date <= format(payroll.end, 'yyyy-MM-dd')
-          );
-          if (!entries.length) return;
-          const branchName = branchNames.get(entries[0].branch_id || temp.branch_id) || temp.branch?.name || 'Unassigned';
-          if (selectedBranch && canViewFilters && entries.some((entry: any) => (entry.branch_id || temp.branch_id) !== selectedBranch)) return;
-          (branchRows[branchName] ||= []).push({
-            id: `temp-${temp.id}`,
-            name: `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.trim(),
-            sourceBranch: temp.source_name || undefined,
-            entries: entries.map(entry => ({
-              entry_date: entry.entry_date,
-              start_time: entry.shift_start_time || null,
-              end_time: entry.shift_end_time || null,
-              break_minutes: 0,
-              worked: calculateEntryWorkedHours(entry),
-              holiday: 0,
-              sick: 0,
-              adjustment: 0,
-            })),
+        // Add temporary staff for this week using deduplicated identity entries
+        const tempWeekByIdentity = new Map<string, {
+          id: string;
+          name: string;
+          branchName: string;
+          sourceBranch?: string;
+          entriesByDate: Map<string, ExcelShiftEntry>;
+        }>();
+
+        bestTempEntryByIdentityDate.forEach(({ id, temp, entry, branchName, name, source, hours }) => {
+          if (entry.entry_date < format(weekStart, 'yyyy-MM-dd') || entry.entry_date > format(weekEnd, 'yyyy-MM-dd')) {
+            return;
+          }
+          const identity = `${temp.branch_id || branchName}|${name}|${temp.source_branch_id || ''}|${String(temp.source_name || '').trim().toUpperCase()}`;
+          let rec = tempWeekByIdentity.get(identity);
+          if (!rec) {
+            rec = {
+              id: `temp-${id}`,
+              name: `[TEMP] ${temp.first_name} ${temp.last_name || ''}`.trim(),
+              branchName,
+              sourceBranch: source || undefined,
+              entriesByDate: new Map(),
+            };
+            tempWeekByIdentity.set(identity, rec);
+          }
+          rec.entriesByDate.set(entry.entry_date, {
+            entry_date: entry.entry_date,
+            start_time: entry.shift_start_time || null,
+            end_time: entry.shift_end_time || null,
+            break_minutes: 0,
+            worked: hours,
+            holiday: 0,
+            sick: 0,
+            adjustment: 0,
           });
         });
+
+        tempWeekByIdentity.forEach(rec => {
+          (branchRows[rec.branchName] ||= []).push({
+            id: rec.id,
+            name: rec.name,
+            sourceBranch: rec.sourceBranch,
+            entries: Array.from(rec.entriesByDate.values()),
+          });
+        });
+
         return { start: weekStart, end: weekEnd, branches: branchRows };
       });
 
