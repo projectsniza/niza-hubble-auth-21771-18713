@@ -335,9 +335,26 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
     return null;
   };
 
+  const isEntryInPayroll = useCallback((e: TempEntry, temp?: TempEmployee) => {
+    if (!e.entry_date) return false;
+    const [y, m, d] = e.entry_date.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    if (!isDateInPayroll(date)) return false;
+    if (temp) {
+      if (temp.start_date && e.entry_date < temp.start_date) return false;
+      if (temp.end_date && e.entry_date > temp.end_date) return false;
+    }
+    return true;
+  }, [isDateInPayroll]);
+
   if (!branchId) return null;
 
-  const totalHours = entries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
+  const totalHours = entries
+    .filter(e => {
+      const temp = temps.find(t => t.id === e.temporary_employee_id);
+      return isEntryInPayroll(e, temp);
+    })
+    .reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
 
   return (
     <Card className="border-amber-300/60 mt-4 overflow-hidden shadow-sm">
@@ -397,7 +414,9 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
               <tbody>
                 {temps.map((temp, idx) => {
                   const empEntries = entries.filter(e => e.temporary_employee_id === temp.id);
-                  const empHours = empEntries.reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
+                  const empHours = empEntries
+                    .filter(e => isEntryInPayroll(e, temp))
+                    .reduce((s, e) => s + (Number(e.actual_hours) || 0), 0);
                   const holiday = 0, sick = 0, adj = 0;
                   const empTotal = empHours + holiday + sick + adj;
                   const src = sourceLabel(temp);

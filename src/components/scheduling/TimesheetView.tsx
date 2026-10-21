@@ -260,6 +260,7 @@ export function TimesheetView() {
         .range(from, to));
       const bestByEmpDate = new Map<string, { branchId: string; hours: number }>();
       (data || []).forEach((row: any) => {
+        if (!isDateStringInPayrollPeriod(row.entry_date, currentMonth)) return;
         const key = `${row.temporary_employee_id || ''}|${row.entry_date}`;
         const h = Number(row.actual_hours) || 0;
         const ex = bestByEmpDate.get(key);
