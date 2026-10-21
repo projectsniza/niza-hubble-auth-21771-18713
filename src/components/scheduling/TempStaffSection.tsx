@@ -108,7 +108,15 @@ export function TempStaffSection({ branchId, organizationId, weekStart, weekDays
           .range(from, to));
         entriesData.push(...part);
       }
-      setEntries(entriesData);
+      const bestByEmpDate = new Map<string, TempEntry>();
+      entriesData.forEach(entry => {
+        const key = `${entry.temporary_employee_id}|${entry.entry_date}`;
+        const existing = bestByEmpDate.get(key);
+        if (!existing || (Number(entry.actual_hours) || 0) > (Number(existing.actual_hours) || 0)) {
+          bestByEmpDate.set(key, entry);
+        }
+      });
+      setEntries(Array.from(bestByEmpDate.values()));
     } else {
       setEntries([]);
     }

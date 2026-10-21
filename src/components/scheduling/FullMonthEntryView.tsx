@@ -343,36 +343,94 @@ export function FullMonthEntryView({ currentMonth, filterMode, selectedOrg, sele
                       (() => {
                         const grouped: Record<string, EmpRow[]> = {};
                         rows.forEach(r => { (grouped[r.branch] ||= []).push(r); });
-                        return Object.entries(grouped).map(([branch, list]) => (
-                          <React.Fragment key={branch}>
-                            <TableRow className="bg-primary/5 hover:bg-primary/10">
-                              <TableCell colSpan={13} className="py-1.5 font-semibold text-primary text-xs">
-                                📍 {branch} <Badge variant="secondary" className="ml-1 text-[10px]">{list.length} staff</Badge>
-                              </TableCell>
-                            </TableRow>
-                            {list.map(r => {
-                              const total = calculatePayableWeekTotal({ worked: r.worked, holiday: r.holiday, sick: r.sick, adjustment: r.adj });
+                        return (
+                          <>
+                            {Object.entries(grouped).map(([branch, list]) => {
+                              const branchWorked = list.reduce((s, r) => s + r.worked, 0);
+                              const branchHoliday = list.reduce((s, r) => s + r.holiday, 0);
+                              const branchSick = list.reduce((s, r) => s + r.sick, 0);
+                              const branchAdj = list.reduce((s, r) => s + r.adj, 0);
+                              const branchTotal = list.reduce((s, r) => s + calculatePayableWeekTotal({ worked: r.worked, holiday: r.holiday, sick: r.sick, adjustment: r.adj }), 0);
+
                               return (
-                                <TableRow key={r.employee_id} className="hover:bg-muted/40">
-                                  <TableCell className="font-medium sticky left-0 bg-background z-10">{r.name}</TableCell>
-                                  {r.daily.map((h, di) => {
-                                    const inP = days[di] >= payStart && days[di] <= payEnd;
+                                <React.Fragment key={branch}>
+                                  <TableRow className="bg-primary/5 hover:bg-primary/10">
+                                    <TableCell colSpan={13} className="py-1.5 font-semibold text-primary text-xs">
+                                      📍 {branch} <Badge variant="secondary" className="ml-1 text-[10px]">{list.length} staff</Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                  {list.map(r => {
+                                    const total = calculatePayableWeekTotal({ worked: r.worked, holiday: r.holiday, sick: r.sick, adjustment: r.adj });
                                     return (
-                                      <TableCell key={di} className={`text-center ${inP ? '' : 'bg-muted/50 opacity-50'}`}>
-                                        {h ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
-                                      </TableCell>
+                                      <TableRow key={r.employee_id} className="hover:bg-muted/40">
+                                        <TableCell className="font-medium sticky left-0 bg-background z-10">{r.name}</TableCell>
+                                        {r.daily.map((h, di) => {
+                                          const inP = days[di] >= payStart && days[di] <= payEnd;
+                                          return (
+                                            <TableCell key={di} className={`text-center ${inP ? '' : 'bg-muted/50 opacity-50'}`}>
+                                              {h ? h.toFixed(1) : <span className="text-muted-foreground">-</span>}
+                                            </TableCell>
+                                          );
+                                        })}
+                                        <TableCell className="text-center font-semibold">{r.worked.toFixed(1)}</TableCell>
+                                        <TableCell className="text-center text-amber-700">{r.holiday.toFixed(1)}</TableCell>
+                                        <TableCell className="text-center text-rose-700">{r.sick.toFixed(1)}</TableCell>
+                                        <TableCell className="text-center text-purple-700">{r.adj.toFixed(1)}</TableCell>
+                                        <TableCell className="text-center font-bold text-emerald-700">{total.toFixed(1)}</TableCell>
+                                      </TableRow>
                                     );
                                   })}
-                                  <TableCell className="text-center font-semibold">{r.worked.toFixed(1)}</TableCell>
-                                  <TableCell className="text-center text-amber-700">{r.holiday.toFixed(1)}</TableCell>
-                                  <TableCell className="text-center text-rose-700">{r.sick.toFixed(1)}</TableCell>
-                                  <TableCell className="text-center text-purple-700">{r.adj.toFixed(1)}</TableCell>
-                                  <TableCell className="text-center font-bold text-emerald-700">{total.toFixed(1)}</TableCell>
-                                </TableRow>
+                                  {/* Branch Subtotal */}
+                                  <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
+                                    <TableCell className="sticky left-0 bg-muted/50 z-10 text-xs font-bold">SUBTOTAL</TableCell>
+                                    {days.map((d, di) => {
+                                      const inP = d >= payStart && d <= payEnd;
+                                      const daySum = list.reduce((s, r) => s + (r.daily[di] || 0), 0);
+                                      return (
+                                        <TableCell key={di} className={`text-center font-semibold ${inP ? '' : 'bg-muted/50 opacity-50'}`}>
+                                          {daySum ? daySum.toFixed(1) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                      );
+                                    })}
+                                    <TableCell className="text-center font-semibold bg-blue-100/50 dark:bg-blue-900/30">{branchWorked.toFixed(1)}</TableCell>
+                                    <TableCell className="text-center font-semibold bg-amber-100/50 dark:bg-amber-900/30 text-amber-700">{branchHoliday.toFixed(1)}</TableCell>
+                                    <TableCell className="text-center font-semibold bg-rose-100/50 dark:bg-rose-900/30 text-rose-700">{branchSick.toFixed(1)}</TableCell>
+                                    <TableCell className="text-center font-semibold bg-purple-100/50 dark:bg-purple-900/30 text-purple-700">{branchAdj.toFixed(1)}</TableCell>
+                                    <TableCell className="text-center font-bold bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700">{branchTotal.toFixed(1)}</TableCell>
+                                  </TableRow>
+                                </React.Fragment>
                               );
                             })}
-                          </React.Fragment>
-                        ));
+                            {/* Week Total */}
+                            <TableRow className="bg-primary/10 font-bold hover:bg-primary/10 border-t-2">
+                              <TableCell className="sticky left-0 bg-primary/10 z-10 text-xs font-bold">WEEK TOTAL</TableCell>
+                              {days.map((d, di) => {
+                                const inP = d >= payStart && d <= payEnd;
+                                const daySum = rows.reduce((s, r) => s + (r.daily[di] || 0), 0);
+                                return (
+                                  <TableCell key={di} className={`text-center font-bold ${inP ? '' : 'bg-muted/50 opacity-50'}`}>
+                                    {daySum ? daySum.toFixed(1) : <span className="text-muted-foreground">-</span>}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center font-bold bg-blue-100 dark:bg-blue-900/50">
+                                {rows.reduce((s, r) => s + r.worked, 0).toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-center font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-700">
+                                {rows.reduce((s, r) => s + r.holiday, 0).toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-center font-bold bg-rose-100 dark:bg-rose-900/50 text-rose-700">
+                                {rows.reduce((s, r) => s + r.sick, 0).toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-center font-bold bg-purple-100 dark:bg-purple-900/50 text-purple-700">
+                                {rows.reduce((s, r) => s + r.adj, 0).toFixed(1)}
+                              </TableCell>
+                              <TableCell className="text-center font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200">
+                                {rows.reduce((s, r) => s + calculatePayableWeekTotal({ worked: r.worked, holiday: r.holiday, sick: r.sick, adjustment: r.adj }), 0).toFixed(1)}
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        );
                       })()
                     )}
                   </TableBody>
