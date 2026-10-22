@@ -30,7 +30,7 @@ import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
 import { calculateEntryWorkedHours, calculatePayableWeekTotal, calculateShiftHours, calculateTemporaryEntryHours, sumDatedTimesheetEntries } from '@/lib/timesheetCalculations';
-import { exportTimesheetWorkbook, includeTemporaryEmployeesInMonthlyExport, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
+import { exportTimesheetWorkbook, includeTemporaryEmployeesInMonthlyExport, type ExcelShiftEntry, type ExcelEmployeeWeek, type ExcelMonthlySection, type ExcelWeekSection } from '@/lib/timesheetExcelExport';
 
 interface Employee {
   id: string;

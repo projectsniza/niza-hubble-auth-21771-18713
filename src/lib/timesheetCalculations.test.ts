@@ -86,6 +86,6 @@ describe('timesheet calculations', () => {
     const deduplicated = deduplicateDatedEntries(rawEntries);
     expect(deduplicated.length).toBe(2);
     const totalHours = deduplicated.reduce((sum, e) => sum + calculateTemporaryEntryHours(e), 0);
-    expect(totalHours).toBe(17); // picks best entry per unique date (9 + 8) or (8 + 8)
+    expect(totalHours).toBe(18); // keeps the highest-hours entry per unique date (9 + 9)
   });
 });

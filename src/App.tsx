@@ -94,6 +94,7 @@ const UploadedFiles = lazy(() => import("./pages/niza-analysis/UploadedFiles"));
 const Formulas = lazy(() => import("./pages/niza-analysis/Formulas"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -206,6 +207,7 @@ const App = () => (
                   <Route path="formulas" element={<Formulas />} />
                 </Route>
                 <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
