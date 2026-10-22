@@ -330,6 +330,13 @@ export default function Login() {
                     Remember me
                   </label>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/reset-password')}
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <Button 
@@ -343,6 +350,70 @@ export default function Login() {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
+            )}
+
+            {mode === 'code-request' && (
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleSendCode(); }}
+                className="space-y-5"
+              >
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700" htmlFor="code-email-input">
+                    Email
+                  </label>
+                  <Input
+                    id="code-email-input"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={codeEmail}
+                    onChange={(e) => setCodeEmail(e.target.value)}
+                    className="h-12 text-[15px] px-4 rounded-xl border-gray-200 bg-gray-50/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all duration-200 placeholder:text-gray-400"
+                    disabled={isSendingCode}
+                    autoComplete="email"
+                    autoFocus
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold rounded-xl transition-all duration-300 bg-primary hover:bg-primary/90 text-white"
+                  disabled={isSendingCode}
+                >
+                  {isSendingCode ? 'Sending code...' : 'Send code'}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('password')}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to password login
+                </button>
+              </form>
+            )}
+
+            {mode === 'code-verify' && (
+              <CodeVerification
+                email={codeEmail}
+                title="Enter your code"
+                description="Type the 6-digit code from your email to sign in"
+                onVerify={handleVerifyEmailCode}
+                onResend={handleResendEmailCode}
+                onChangeEmail={() => setMode('code-request')}
+              />
+            )}
+
+            {mode === 'password' && (
+              <button
+                type="button"
+                onClick={() => { setCodeEmail(email); setMode('code-request'); }}
+                className="mt-4 w-full flex items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
+              >
+                <KeyRound className="h-4 w-4" />
+                Login with email code
+              </button>
+            )}
 
             <div className="mt-7 pt-5 border-t border-gray-100">
               <p className="text-xs text-center text-gray-400">
