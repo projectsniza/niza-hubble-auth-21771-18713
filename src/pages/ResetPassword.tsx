@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,19 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Clicking the "Reset Password" link in the email signs the user in directly —
+  // detect that fresh recovery session and jump straight to the new-password step.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const signedInAt = session?.user?.last_sign_in_at ? new Date(session.user.last_sign_in_at).getTime() : 0;
+      if (session && Date.now() - signedInAt < 5 * 60 * 1000) {
+        if (session.user.email) setEmail(session.user.email);
+        setStep('password');
+      }
+    });
+  }, []);
+
 
   const sendResetCode = async () => {
     if (!email) {
@@ -157,6 +170,10 @@ export default function ResetPassword() {
                 onResend={handleResendCode}
                 onChangeEmail={() => setStep('email')}
               />
+              <p className="text-xs text-gray-500 text-center mt-4">
+                Prefer the link? Click <span className="font-semibold text-gray-700">Reset Password</span> in the email instead — it takes you straight here to set a new password.
+              </p>
+
             </>
           )}
 
