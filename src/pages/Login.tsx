@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { NizaLoaderFullPage, NizaLoaderOverlay } from '@/components/ui/niza-loader';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { friendlyAuthError } from '@/lib/authErrors';
+import CodeVerification from '@/components/auth/CodeVerification';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import hrEmployee1 from '@/assets/hr-employee-1.jpg';
 import hrEmployee2 from '@/assets/hr-employee-2.jpg';
@@ -21,6 +24,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<'password' | 'code-request' | 'code-verify'>('password');
+  const [codeEmail, setCodeEmail] = useState('');
+  const [isSendingCode, setIsSendingCode] = useState(false);
   const { login, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -86,6 +92,68 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSendCode = async () => {
+    if (!codeEmail) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter your email address',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSendingCode(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: codeEmail,
+        options: {
+          shouldCreateUser: false,
+          // Always bring people back to the Niza login page from any email link
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: 'Could not send code',
+          description: friendlyAuthError(error.message),
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setMode('code-verify');
+      toast({ title: 'Code sent', description: `A 6-digit code was sent to ${codeEmail}` });
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerifyEmailCode = async (code: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.verifyOtp({
+      email: codeEmail,
+      token: code,
+      type: 'email',
+    });
+
+    if (error) return { error: friendlyAuthError(error.message) };
+
+    toast({ title: 'Welcome back!', description: 'Login successful' });
+    // The auth listener picks up the session and navigates to the dashboard
+    return { error: null };
+  };
+
+  const handleResendEmailCode = async (): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: codeEmail,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    });
+    return error ? { error: friendlyAuthError(error.message) } : { error: null };
   };
 
   // Show nothing while checking auth status
@@ -194,13 +262,16 @@ export default function Login() {
 
             <div className="mb-8">
               <h2 className="text-3xl lg:text-[2rem] font-bold mb-2 tracking-tight text-gray-900 leading-tight">
-                Welcome back
+                {mode === 'code-verify' ? 'Check your email' : 'Welcome back'}
               </h2>
               <p className="text-sm lg:text-base text-gray-500 leading-relaxed">
-                Sign in to access your HR dashboard
+                {mode === 'code-verify'
+                  ? `We sent a 6-digit sign-in code to ${codeEmail}`
+                  : 'Sign in to access your HR dashboard'}
               </p>
             </div>
 
+            {mode === 'password' && (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold mb-2 text-gray-700" htmlFor="email-input">
