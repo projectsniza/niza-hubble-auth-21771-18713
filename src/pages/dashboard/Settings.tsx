@@ -12,6 +12,9 @@ import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
 import DepartmentManagement from '@/components/settings/DepartmentManagement';
 import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import CodeVerification from '@/components/auth/CodeVerification';
+import { friendlyAuthError } from '@/lib/authErrors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -24,6 +27,10 @@ export default function Settings() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [changeEmailStage, setChangeEmailStage] = useState<'email' | 'code'>('email');
+  const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -88,6 +95,57 @@ export default function Settings() {
     }
 
     setIsChangingPassword(false);
+  };
+
+  const handleRequestEmailChange = async () => {
+    const normalized = newEmail.trim().toLowerCase();
+    if (!normalized || !/^\S+@\S+\.\S+$/.test(normalized)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    if (normalized === user?.email?.toLowerCase()) {
+      toast.error('This is already your current email address');
+      return;
+    }
+
+    setIsRequestingEmailChange(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: normalized });
+      if (error) {
+        toast.error(friendlyAuthError(error.message));
+        return;
+      }
+      setChangeEmailStage('code');
+      toast.success(`Confirmation code sent to ${normalized}`);
+    } finally {
+      setIsRequestingEmailChange(false);
+    }
+  };
+
+  const handleVerifyEmailChange = async (code: string): Promise<{ error: string | null }> => {
+    const normalized = newEmail.trim().toLowerCase();
+    const { error } = await supabase.auth.verifyOtp({
+      email: normalized,
+      token: code,
+      type: 'email_change',
+    });
+    if (error) return { error: friendlyAuthError(error.message) };
+
+    // Keep the app profile record in sync with the new login email
+    try {
+      await supabase.from('profiles').update({ email: normalized }).eq('id', user?.id);
+    } catch {
+      // Non-blocking: the profile record can be re-synced later
+    }
+
+    toast.success('Email updated successfully');
+    setTimeout(() => window.location.reload(), 800);
+    return { error: null };
+  };
+
+  const handleResendEmailChangeCode = async (): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim().toLowerCase() });
+    return error ? { error: friendlyAuthError(error.message) } : { error: null };
   };
 
   // Check if user has access to organization/user management
@@ -175,13 +233,28 @@ export default function Settings() {
               <form onSubmit={handleProfileUpdate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-foreground">Email</Label>
-                  <Input
-                    id="email"
-                    value={user?.email || ''}
-                    disabled
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="email"
+                      value={user?.email || ''}
+                      disabled
+                      className="bg-muted flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setChangeEmailOpen(true);
+                        setChangeEmailStage('email');
+                        setNewEmail('');
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Changing your email requires a 6-digit code sent to the new address
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -220,6 +293,63 @@ export default function Settings() {
               </form>
             </CardContent>
           </Card>
+
+          <Dialog
+            open={changeEmailOpen}
+            onOpenChange={(open) => {
+              setChangeEmailOpen(open);
+              if (!open) setChangeEmailStage('email');
+            }}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Change email</DialogTitle>
+                <DialogDescription>
+                  {changeEmailStage === 'email'
+                    ? 'We will send a 6-digit confirmation code to your new email address.'
+                    : `Enter the code sent to ${newEmail.trim().toLowerCase()}`}
+                </DialogDescription>
+              </DialogHeader>
+              {changeEmailStage === 'email' ? (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleRequestEmailChange(); }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="new-email">New email address</Label>
+                    <Input
+                      id="new-email"
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="name@company.com"
+                      disabled={isRequestingEmailChange}
+                      autoFocus
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isRequestingEmailChange}>
+                    {isRequestingEmailChange ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sending code...
+                      </>
+                    ) : (
+                      'Send confirmation code'
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <CodeVerification
+                  email={newEmail.trim().toLowerCase()}
+                  title="Confirm your new email"
+                  description="Enter the 6-digit code we sent"
+                  onVerify={handleVerifyEmailChange}
+                  onResend={handleResendEmailChangeCode}
+                  onChangeEmail={() => setChangeEmailStage('email')}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="password" forceMount className="data-[state=inactive]:hidden">

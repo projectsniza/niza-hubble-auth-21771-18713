@@ -190,6 +190,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
+        if (existingSession?.user && !existingSession.user.email_confirmed_at) {
+          // Block app access for unverified accounts
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+
         if (existingSession?.user) {
           setSession(existingSession);
           const result = await fetchUserProfile(existingSession.user.id);
@@ -231,6 +241,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(null);
           setUser(null);
         } else if (event === 'SIGNED_IN') {
+          if (newSession?.user && !newSession.user.email_confirmed_at) {
+            supabase.auth.signOut();
+            return;
+          }
           setSession(newSession);
           if (newSession?.user) {
             setTimeout(async () => {
@@ -279,6 +293,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       return { error: error.message };
+    }
+
+    // Unverified accounts cannot access the app until they confirm via email code
+    if (data.user && !data.user.email_confirmed_at) {
+      await supabase.auth.signOut();
+      return {
+        error: 'Your email is not verified yet. Use "Login with email code" on the sign-in page to receive a 6-digit code.',
+      };
     }
 
     // Immediately fetch user profile and set state after successful login
