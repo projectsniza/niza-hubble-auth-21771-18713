@@ -47,7 +47,14 @@ export async function send2FACode(
     });
 
     if (error) {
-      return { success: false, error: error.message || 'Failed to send verification code' };
+      let resolvedError = error.message;
+      try {
+        if ('context' in error && (error as any).context && typeof (error as any).context.json === 'function') {
+          const body = await (error as any).context.json();
+          if (body?.error) resolvedError = body.error;
+        }
+      } catch {}
+      return { success: false, error: resolvedError || 'Failed to send verification code' };
     }
 
     if (!data?.success) {
@@ -86,7 +93,16 @@ export async function verify2FACode(
     });
 
     if (error) {
-      return { success: false, error: error.message || 'Verification failed' };
+      let resolvedError = error.message;
+      let nextToken: string | undefined;
+      try {
+        if ('context' in error && (error as any).context && typeof (error as any).context.json === 'function') {
+          const body = await (error as any).context.json();
+          if (body?.error) resolvedError = body.error;
+          if (body?.challengeToken) nextToken = body.challengeToken;
+        }
+      } catch {}
+      return { success: false, error: resolvedError || 'Verification failed', challengeToken: nextToken };
     }
 
     if (!data?.success) {
