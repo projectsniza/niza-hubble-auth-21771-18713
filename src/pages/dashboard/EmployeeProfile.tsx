@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import EditEmployeeDialog from '@/components/employees/EditEmployeeDialog';
 import EmployeeStatusBadge from '@/components/employees/EmployeeStatusBadge';
+import { getDeactivationReasonConfig } from '@/components/employees/EmployeeList';
 import { Progress } from '@/components/ui/progress';
 
 export default function EmployeeProfile() {
@@ -200,6 +201,14 @@ export default function EmployeeProfile() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">{employee.first_name} {employee.last_name}</h1>
               {getStatusBadge(employee.status)}
+              {employee.deactivation_reason && (() => {
+                const reasonConfig = getDeactivationReasonConfig(employee.deactivation_reason);
+                return reasonConfig ? (
+                  <Badge className={`text-xs px-2.5 py-0.5 font-medium border ${reasonConfig.color}`}>
+                    {reasonConfig.label}
+                  </Badge>
+                ) : null;
+              })()}
               <EmployeeCertifications employeeId={employee.id} canManage={user?.role === 'super_admin' || user?.role === 'hr'} />
             </div>
             <p className="text-muted-foreground">{employee.job_title || 'No job title'}</p>

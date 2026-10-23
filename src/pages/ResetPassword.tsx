@@ -8,6 +8,7 @@ import CodeVerification from '@/components/auth/CodeVerification';
 import { friendlyAuthError } from '@/lib/authErrors';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import { send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
 
 type Step = 'email' | 'code' | 'password';
 
@@ -23,18 +24,41 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Clicking the "Reset Password" link in the email signs the user in directly —
-  // detect that fresh recovery session and jump straight to the new-password step.
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
+
+  // Clicking the "Reset Password" link in the email signs the user in via recovery token —
+  // detect that recovery session or URL hash and jump straight to the new-password step.
   useEffect(() => {
+    // Check if recovery token is present in hash
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('access_token')) {
+      setIsRecoverySession(true);
+      setStep('password');
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const signedInAt = session?.user?.last_sign_in_at ? new Date(session.user.last_sign_in_at).getTime() : 0;
-      if (session && Date.now() - signedInAt < 5 * 60 * 1000) {
-        if (session.user.email) setEmail(session.user.email);
+      if (session) {
+        if (session.user?.email) setEmail(session.user.email);
+        setIsRecoverySession(true);
         setStep('password');
       }
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        if (session?.user?.email) setEmail(session.user.email);
+        setIsRecoverySession(true);
+        setStep('password');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [verifiedCode, setVerifiedCode] = useState<string>('');
 
   const sendResetCode = async () => {
     if (!email) {
@@ -43,31 +67,38 @@ export default function ResetPassword() {
     }
     setIsSending(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) {
-        toast({ title: 'Could not send code', description: friendlyAuthError(error.message), variant: 'destructive' });
+      const res = await send2FACode(email, 'password_reset');
+      if (!res.success || !res.challengeToken) {
+        toast({ title: 'Could not send code', description: res.error || 'Failed to send reset code', variant: 'destructive' });
         return;
       }
+      setChallengeToken(res.challengeToken);
       setStep('code');
+      toast({ title: 'Code sent', description: `A 6-digit verification code was sent to ${email}` });
     } finally {
       setIsSending(false);
     }
   };
 
   const handleVerifyCode = async (code: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' });
-    if (error) return { error: friendlyAuthError(error.message) };
+    if (!challengeToken) return { error: 'Session expired. Please request a new code.' };
+    const res = await verify2FACode(challengeToken, code);
+    if (!res.success) {
+      if (res.challengeToken) setChallengeToken(res.challengeToken);
+      return { error: res.error || 'Invalid code' };
+    }
+    setVerifiedCode(code);
     setStep('password');
     return { error: null };
   };
 
   const handleResendCode = async (): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    return error ? { error: friendlyAuthError(error.message) } : { error: null };
+    const res = await send2FACode(email, 'password_reset');
+    if (!res.success || !res.challengeToken) {
+      return { error: res.error || 'Failed to resend code' };
+    }
+    setChallengeToken(res.challengeToken);
+    return { error: null };
   };
 
   const handleSetNewPassword = async (e: React.FormEvent) => {
@@ -80,16 +111,32 @@ export default function ResetPassword() {
       toast({ title: 'Validation Error', description: 'Password must be at least 6 characters long', variant: 'destructive' });
       return;
     }
+
     setIsUpdating(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        toast({ title: 'Could not update password', description: friendlyAuthError(error.message), variant: 'destructive' });
-        return;
+      // Flow A: User verified with Resend 2FA code
+      if (challengeToken && verifiedCode) {
+        const res = await verify2FACode(challengeToken, verifiedCode, newPassword);
+        if (!res.success) {
+          toast({ title: 'Could not update password', description: res.error || 'Failed to update password', variant: 'destructive' });
+          return;
+        }
+      } 
+      // Flow B: User clicked the Supabase recovery link in email
+      else {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          toast({ title: 'Could not update password', description: error.message, variant: 'destructive' });
+          return;
+        }
       }
+
       setNewPassword('');
       setConfirmPassword('');
-      toast({ title: 'Password updated', description: 'Sign in with your new password' });
+      toast({ title: 'Password updated', description: 'Your password has been changed. Sign in to continue.' });
+      
+      // Sign out recovery session to allow fresh login
+      await supabase.auth.signOut();
       navigate('/login');
     } finally {
       setIsUpdating(false);
@@ -165,15 +212,11 @@ export default function ResetPassword() {
               <CodeVerification
                 email={email}
                 title="Enter your code"
-                description="Type the 6-digit code from your email to reset your password"
+                description="Type the 6-digit code sent to your email to verify and choose a new password"
                 onVerify={handleVerifyCode}
                 onResend={handleResendCode}
                 onChangeEmail={() => setStep('email')}
               />
-              <p className="text-xs text-gray-500 text-center mt-4">
-                Prefer the link? Click <span className="font-semibold text-gray-700">Reset Password</span> in the email instead — it takes you straight here to set a new password.
-              </p>
-
             </>
           )}
 

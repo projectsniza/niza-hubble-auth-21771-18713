@@ -18,6 +18,7 @@ import { friendlyAuthError } from '@/lib/authErrors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
 
 export default function Settings() {
   const { user, updatePassword } = useAuth();
@@ -31,6 +32,11 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState('');
   const [changeEmailStage, setChangeEmailStage] = useState<'email' | 'code'>('email');
   const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
+
+  // Super Admin Password 2FA states
+  const [password2FAOpen, setPassword2FAOpen] = useState(false);
+  const [passwordChallengeToken, setPasswordChallengeToken] = useState<string | null>(null);
+  const [isSendingPassword2FA, setIsSendingPassword2FA] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -79,6 +85,25 @@ export default function Settings() {
 
     if (newPassword.length < 6) {
       toast.error('Password must be at least 6 characters long');
+      return;
+    }
+
+    // Super Admin 2-Step Mail Verification
+    if (user?.role === 'super_admin') {
+      if (!user.email) {
+        toast.error('User email not found');
+        return;
+      }
+      setIsChangingPassword(true);
+      const res = await send2FACode(user.email, 'admin_password_change');
+      setIsChangingPassword(false);
+      if (!res.success || !res.challengeToken) {
+        toast.error(res.error || 'Failed to send 2-step verification code');
+        return;
+      }
+      setPasswordChallengeToken(res.challengeToken);
+      setPassword2FAOpen(true);
+      toast.info(`A 2-step verification code was sent to ${user.email}`);
       return;
     }
 
@@ -411,6 +436,45 @@ export default function Settings() {
               </form>
             </CardContent>
           </Card>
+
+          {/* Super Admin 2FA Password Change Dialog */}
+          <Dialog open={password2FAOpen} onOpenChange={setPassword2FAOpen}>
+            <DialogContent className="sm:max-w-md p-6">
+              <DialogHeader>
+                <DialogTitle>Super Admin 2-Step Verification</DialogTitle>
+                <DialogDescription>
+                  Enter the 6-digit verification code sent to {user?.email} via Resend to authorize your password update.
+                </DialogDescription>
+              </DialogHeader>
+              <CodeVerification
+                email={user?.email || ''}
+                title="Admin Security Check"
+                description="Enter the 6-digit code sent to your email"
+                onVerify={async (code) => {
+                  if (!passwordChallengeToken) return { error: 'Verification session expired. Please retry.' };
+                  const res = await verify2FACode(passwordChallengeToken, code, newPassword);
+                  if (!res.success) {
+                    if (res.challengeToken) setPasswordChallengeToken(res.challengeToken);
+                    return { error: res.error || 'Invalid verification code' };
+                  }
+                  toast.success('Super Admin password updated successfully');
+                  setPassword2FAOpen(false);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  return { error: null };
+                }}
+                onResend={async () => {
+                  if (!user?.email) return { error: 'User email not found' };
+                  const res = await send2FACode(user.email, 'admin_password_change');
+                  if (!res.success || !res.challengeToken) {
+                    return { error: res.error || 'Failed to resend code' };
+                  }
+                  setPasswordChallengeToken(res.challengeToken);
+                  return { error: null };
+                }}
+              />
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {canManageOrgs && (

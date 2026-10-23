@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import CodeVerification from '@/components/auth/CodeVerification';
+import { isStoreSchedulingVerified, setStoreSchedulingVerified, send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -16,7 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
   Download, Loader2, Users, Plus, Search, Calendar, Clock,
-  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X
+  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X, Shield
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
@@ -198,6 +201,67 @@ export function TimesheetView() {
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Store Account 2-Step Mail Verification for Weekly Scheduling
+  const [isStoreVerified, setIsStoreVerified] = useState(() => isStoreSchedulingVerified());
+  const [store2FAOpen, setStore2FAOpen] = useState(false);
+  const [storeChallengeToken, setStoreChallengeToken] = useState<string | null>(null);
+  const [isSendingStore2FA, setIsSendingStore2FA] = useState(false);
+  const [pendingStoreAction, setPendingStoreAction] = useState<(() => void) | null>(null);
+  const isSendingStore2FARef = useRef(false);
+  const lastStore2FATriggerTimeRef = useRef<number>(0);
+
+  const triggerStore2FA = useCallback(async () => {
+    if (!user?.email) {
+      toast.error('Store account email not found');
+      return;
+    }
+    // Prevent multiple requests if already in-flight or if already opened/requested within the last 30 seconds
+    const now = Date.now();
+    if (isSendingStore2FARef.current) {
+      return;
+    }
+    if (store2FAOpen && storeChallengeToken) {
+      return;
+    }
+    if (now - lastStore2FATriggerTimeRef.current < 30000 && storeChallengeToken) {
+      setStore2FAOpen(true);
+      return;
+    }
+
+    isSendingStore2FARef.current = true;
+    lastStore2FATriggerTimeRef.current = now;
+    setIsSendingStore2FA(true);
+    try {
+      const res = await send2FACode(user.email, 'store_scheduling');
+      if (!res.success || !res.challengeToken) {
+        toast.error(res.error || 'Failed to send store scheduling verification code');
+        return;
+      }
+      setStoreChallengeToken(res.challengeToken);
+      setStore2FAOpen(true);
+      toast.info(`A 2-step verification code was sent to ${user.email}`);
+    } finally {
+      setIsSendingStore2FA(false);
+      isSendingStore2FARef.current = false;
+    }
+  }, [user?.email, store2FAOpen, storeChallengeToken]);
+
+  const checkStore2FA = useCallback((action: () => void): boolean => {
+    if (user?.role !== 'manager') {
+      action();
+      return true;
+    }
+    if (isStoreSchedulingVerified()) {
+      setIsStoreVerified(true);
+      action();
+      return true;
+    }
+    setIsStoreVerified(false);
+    setPendingStoreAction(() => action);
+    triggerStore2FA();
+    return false;
+  }, [user?.role, triggerStore2FA]);
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'organization' | 'branch'>('all');
@@ -606,114 +670,118 @@ export function TimesheetView() {
   };
 
   const openTimesheetEditor = async (timesheet: Timesheet) => {
-    const { data: entriesData } = await supabase
-      .from('timesheet_entries')
-      .select('*')
-      .eq('timesheet_id', timesheet.id)
-      .order('entry_date');
+    checkStore2FA(async () => {
+      const { data: entriesData } = await supabase
+        .from('timesheet_entries')
+        .select('*')
+        .eq('timesheet_id', timesheet.id)
+        .order('entry_date');
 
-    setSelectedTimesheet(timesheet);
-    setEntries(entriesData || []);
-    setShowEditPanel(true);
+      setSelectedTimesheet(timesheet);
+      setEntries(entriesData || []);
+      setShowEditPanel(true);
+    });
   };
 
   // Open timesheet editor for a specific employee and week (for monthly view)
   const openTimesheetEditorForWeek = async (employeeId: string, weekIdx: number, targetBranchName?: string) => {
-    setSelectedWeekIndex(weekIdx);
-    const weekStart = monthWeeks[weekIdx];
-    if (!weekStart) return;
+    checkStore2FA(async () => {
+      setSelectedWeekIndex(weekIdx);
+      const weekStart = monthWeeks[weekIdx];
+      if (!weekStart) return;
 
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-    const employee = employees.find(e => e.id === employeeId);
-    const employeeKey = employee ? getEmployeeMonthlyKey(employee) : '';
-    
-    // Find an existing sheet by exact employee/week first, then by same
-    // employee-name+branch with entries inside the requested week. This avoids
-    // creating duplicate sheets when legacy rows were made from a different
-    // week context but contain the correct dated entries.
-    const existingTimesheet = allMonthTimesheets.find(ts =>
-      ts.employee_id === employeeId &&
-      ts.week_start_date === weekStartStr &&
-      (!targetBranchName || getTimesheetBranchName(ts) === targetBranchName)
-    )
-      || allMonthTimesheets.find(ts => {
-        if (targetBranchName && getTimesheetBranchName(ts) !== targetBranchName) return false;
-        const sameEmployee = ts.employee_id === employeeId || (!!employeeKey && getEmployeeMonthlyKey(ts.employee) === employeeKey);
-        if (!sameEmployee) return false;
-        return (ts.entries || []).some(e => {
-          const dd = parseLocalDate(e.entry_date);
-          return dd >= weekStart && dd <= wkEnd;
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const wkEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      const employee = employees.find(e => e.id === employeeId);
+      const employeeKey = employee ? getEmployeeMonthlyKey(employee) : '';
+      
+      // Find an existing sheet by exact employee/week first, then by same
+      // employee-name+branch with entries inside the requested week. This avoids
+      // creating duplicate sheets when legacy rows were made from a different
+      // week context but contain the correct dated entries.
+      const existingTimesheet = allMonthTimesheets.find(ts =>
+        ts.employee_id === employeeId &&
+        ts.week_start_date === weekStartStr &&
+        (!targetBranchName || getTimesheetBranchName(ts) === targetBranchName)
+      )
+        || allMonthTimesheets.find(ts => {
+          if (targetBranchName && getTimesheetBranchName(ts) !== targetBranchName) return false;
+          const sameEmployee = ts.employee_id === employeeId || (!!employeeKey && getEmployeeMonthlyKey(ts.employee) === employeeKey);
+          if (!sameEmployee) return false;
+          return (ts.entries || []).some(e => {
+            const dd = parseLocalDate(e.entry_date);
+            return dd >= weekStart && dd <= wkEnd;
+          });
         });
-      });
 
-    if (existingTimesheet) {
-      // Open existing timesheet
-      const { data: entriesData } = await supabase
-        .from('timesheet_entries')
-        .select('*')
-        .eq('timesheet_id', existingTimesheet.id)
-        .order('entry_date');
-
-      setSelectedTimesheet(existingTimesheet);
-      setEntries(entriesData || []);
-      setShowEditPanel(true);
-    } else {
-      // Create timesheet for this week
-      if (!employee) {
-        toast.error('Employee not found');
-        return;
-      }
-
-      const wkDays = eachDayOfInterval({ start: weekStart, end: wkEnd });
-
-      try {
-        const { data: timesheet, error } = await supabase
-          .from('timesheets')
-          .insert({
-            employee_id: employee.id,
-            organization_id: employee.organization_id,
-            branch_id: employee.branch_id,
-            week_start_date: weekStartStr,
-            week_end_date: format(wkEnd, 'yyyy-MM-dd'),
-            status: 'draft',
-            created_by: user?.id
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        const entryInserts = wkDays.map((day, idx) => ({
-          timesheet_id: timesheet.id,
-          entry_date: format(day, 'yyyy-MM-dd'),
-          day_of_week: DAYS_OF_WEEK[idx],
-          entry_type: 'work',
-          actual_hours: 0,
-          holiday_hours: 0,
-          sick_hours: 0,
-          adjustment_hours: 0,
-          break_duration_minutes: 0
-        }));
-
-        await supabase.from('timesheet_entries').insert(entryInserts);
-
-        // Fetch and open the new timesheet
-        const { data: newEntriesData } = await supabase
+      if (existingTimesheet) {
+        // Open existing timesheet
+        const { data: entriesData } = await supabase
           .from('timesheet_entries')
           .select('*')
-          .eq('timesheet_id', timesheet.id)
+          .eq('timesheet_id', existingTimesheet.id)
           .order('entry_date');
 
-        setSelectedTimesheet({ ...timesheet, employee });
-        setEntries(newEntriesData || []);
+        setSelectedTimesheet(existingTimesheet);
+        setEntries(entriesData || []);
         setShowEditPanel(true);
-        fetchData(); // Refresh data
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Failed to create timesheet';
-        toast.error(message);
+      } else {
+        // Create timesheet for this week
+        if (!employee) {
+          toast.error('Employee not found');
+          return;
+        }
+
+        const wkDays = eachDayOfInterval({ start: weekStart, end: wkEnd });
+
+        try {
+          const { data: timesheet, error } = await supabase
+            .from('timesheets')
+            .insert({
+              employee_id: employee.id,
+              organization_id: employee.organization_id,
+              branch_id: employee.branch_id,
+              week_start_date: weekStartStr,
+              week_end_date: format(wkEnd, 'yyyy-MM-dd'),
+              status: 'draft',
+              created_by: user?.id
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          const entryInserts = wkDays.map((day, idx) => ({
+            timesheet_id: timesheet.id,
+            entry_date: format(day, 'yyyy-MM-dd'),
+            day_of_week: DAYS_OF_WEEK[idx],
+            entry_type: 'work',
+            actual_hours: 0,
+            holiday_hours: 0,
+            sick_hours: 0,
+            adjustment_hours: 0,
+            break_duration_minutes: 0
+          }));
+
+          await supabase.from('timesheet_entries').insert(entryInserts);
+
+          // Fetch and open the new timesheet
+          const { data: newEntriesData } = await supabase
+            .from('timesheet_entries')
+            .select('*')
+            .eq('timesheet_id', timesheet.id)
+            .order('entry_date');
+
+          setSelectedTimesheet({ ...timesheet, employee });
+          setEntries(newEntriesData || []);
+          setShowEditPanel(true);
+          fetchData(); // Refresh data
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Failed to create timesheet';
+          toast.error(message);
+        }
       }
-    }
+    });
   };
 
   const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
@@ -832,6 +900,10 @@ export function TimesheetView() {
       toast.error('This payroll period is locked. Contact a Super Admin to unlock.');
       return;
     }
+    if (user?.role === 'manager' && !isStoreSchedulingVerified()) {
+      checkStore2FA(() => {});
+      return;
+    }
     setInlineEditing(prev => ({
       ...prev,
       [timesheetId]: {
@@ -842,7 +914,7 @@ export function TimesheetView() {
         }
       }
     }));
-  }, [editingDisabled]);
+  }, [editingDisabled, user?.role, checkStore2FA]);
 
   const saveInlineTime = useCallback(async (timesheet: Timesheet, dayOfWeek: string, opts?: { clear?: boolean; keepEditing?: boolean }) => {
     if (editingDisabled) {
@@ -1496,6 +1568,54 @@ export function TimesheetView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Store Account 2FA Security Banner for Weekly Scheduling */}
+      {user?.role === 'manager' && (
+        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm transition-all ${
+          isStoreVerified
+            ? 'bg-emerald-500/10 border-emerald-500/30'
+            : 'bg-amber-500/10 border-amber-500/30'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+              isStoreVerified
+                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+            }`}>
+              <Shield className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {isStoreVerified ? 'Weekly Scheduling Unlocked' : '2-Step Mail Verification Required for Weekly Scheduling'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isStoreVerified
+                  ? `Store account session verified via Resend (${user?.email}). You can create and edit weekly shifts.`
+                  : `Before store accounts can do scheduling in Weekly View, confirm your identity with a code sent to ${user?.email}.`}
+              </p>
+            </div>
+          </div>
+          {!isStoreVerified && (
+            <Button
+              onClick={triggerStore2FA}
+              disabled={isSendingStore2FA}
+              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-medium"
+            >
+              {isSendingStore2FA ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Sending code...
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Verify with Email Code
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Search and Actions */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -2200,6 +2320,49 @@ export function TimesheetView() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Store Account 2-Step Mail Verification Dialog */}
+      <Dialog open={store2FAOpen} onOpenChange={setStore2FAOpen}>
+        <DialogContent className="sm:max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle>Store Scheduling 2-Step Verification</DialogTitle>
+            <DialogDescription>
+              Enter the 6-digit code sent to {user?.email} via Resend to unlock weekly scheduling.
+            </DialogDescription>
+          </DialogHeader>
+          <CodeVerification
+            email={user?.email || ''}
+            title="Store Security Authorization"
+            description="Enter the 6-digit code sent to your store email"
+            onVerify={async (code) => {
+              if (!storeChallengeToken) return { error: 'Verification session expired. Please retry.' };
+              const res = await verify2FACode(storeChallengeToken, code);
+              if (!res.success) {
+                if (res.challengeToken) setStoreChallengeToken(res.challengeToken);
+                return { error: res.error || 'Invalid verification code' };
+              }
+              setStoreSchedulingVerified(8);
+              setIsStoreVerified(true);
+              setStore2FAOpen(false);
+              toast.success('Store scheduling unlocked successfully');
+              if (pendingStoreAction) {
+                pendingStoreAction();
+                setPendingStoreAction(null);
+              }
+              return { error: null };
+            }}
+            onResend={async () => {
+              if (!user?.email) return { error: 'User email not found' };
+              const res = await send2FACode(user.email, 'store_scheduling');
+              if (!res.success || !res.challengeToken) {
+                return { error: res.error || 'Failed to resend code' };
+              }
+              setStoreChallengeToken(res.challengeToken);
+              return { error: null };
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

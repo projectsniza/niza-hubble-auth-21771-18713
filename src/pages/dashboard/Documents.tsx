@@ -19,8 +19,10 @@ import CreateFolderDialog from '@/components/documents/CreateFolderDialog';
 import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
+import DocumentRecycleBinTab from '@/components/documents/DocumentRecycleBinTab';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
+import { moveToRecycleBin, getRecycleBinDocuments } from '@/lib/recycleBin';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,6 +104,7 @@ export default function Documents() {
   const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
   const [isDragging, setIsDragging] = useState(false);
   const [isDropUploading, setIsDropUploading] = useState(false);
+  const [recycleBinCount, setRecycleBinCount] = useState(() => getRecycleBinDocuments().length);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
@@ -294,21 +297,29 @@ export default function Documents() {
   };
 
   const handleDeleteDocument = async () => {
-    if (!deleteDocId || !deleteDocPath) return;
+    if (!deleteDocId) return;
 
     try {
-      // Delete from storage
-      await supabase.storage.from('documents').remove([deleteDocPath]);
+      const docToDelete = documents.find(d => d.id === deleteDocId) || allDocuments.find(d => d.id === deleteDocId);
+      const currentFolder = folders.find(f => f.id === currentFolderId);
 
-      // Delete record
-      const { error } = await supabase.from('documents').delete().eq('id', deleteDocId);
-      if (error) throw error;
+      if (docToDelete) {
+        await moveToRecycleBin(
+          docToDelete,
+          user?.name || user?.email,
+          currentFolder ? { name: currentFolder.name, path: currentFolder.path } : undefined
+        );
+      } else {
+        // Fallback delete if not found in active state
+        await supabase.from('documents').delete().eq('id', deleteDocId);
+      }
 
       setDocuments(prev => prev.filter(d => d.id !== deleteDocId));
       setAllDocuments(prev => prev.filter(d => d.id !== deleteDocId));
-      toast.success('Document deleted');
+      setRecycleBinCount(getRecycleBinDocuments().length);
+      toast.success('Document moved to Recycle Bin (available for 90 days)');
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to delete document');
     } finally {
       setDeleteDocId(null);
       setDeleteDocPath(null);
@@ -769,10 +780,26 @@ export default function Documents() {
                 )}
               </TabsTrigger>
             )}
+            <TabsTrigger value="recycle-bin" className="gap-2">
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+              Recycle Bin
+              {recycleBinCount > 0 && (
+                <Badge variant="outline" className="bg-muted text-xs">
+                  {recycleBinCount}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {activeTab === 'submissions' ? (
+        {activeTab === 'recycle-bin' ? (
+          <DocumentRecycleBinTab
+            onDocumentRestored={() => {
+              fetchFoldersAndDocuments();
+              setRecycleBinCount(getRecycleBinDocuments().length);
+            }}
+          />
+        ) : activeTab === 'submissions' ? (
           <DocumentSubmissionsTab />
         ) : loading ? (
           <div className="flex items-center justify-center h-40">

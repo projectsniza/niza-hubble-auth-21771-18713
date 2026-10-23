@@ -8,6 +8,12 @@ const Index = () => {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
+    // If arriving from a Supabase recovery email link (hash has type=recovery or access_token)
+    if (window.location.hash.includes('type=recovery')) {
+      navigate('/reset-password' + window.location.hash, { replace: true });
+      return;
+    }
+
     if (!isLoading) {
       if (user) {
         navigate('/dashboard');

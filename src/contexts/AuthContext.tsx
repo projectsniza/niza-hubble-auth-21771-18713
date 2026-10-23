@@ -2,6 +2,11 @@ import { createContext, useContext, useState, ReactNode, useEffect, useCallback,
 import { supabase } from '@/integrations/supabase/client';
 import { logActivity } from '@/hooks/useActivityLogs';
 import type { Session } from '@supabase/supabase-js';
+import {
+  recordUserSessionStart,
+  isSessionExpired24Hours,
+  clearUserSessionStart,
+} from '@/lib/twoFactorAuth';
 
 export type UserRole = 'super_admin' | 'hr' | 'manager' | 'employee';
 
@@ -167,6 +172,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check for existing session FIRST before setting up listener
     const initializeAuth = async () => {
       try {
+        // Enforce 24-hour automatic logout across all accounts
+        if (isSessionExpired24Hours()) {
+          clearUserSessionStart();
+          await supabase.auth.signOut();
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setIsLoading(false);
+            setIsInitialized(true);
+          }
+          return;
+        }
+
         const {
           data: { session: existingSession },
           error: sessionError,
@@ -285,6 +303,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [isInitialized, fetchUserProfile]);
 
+  // Periodic and window-focus watchdog to immediately log out when 24 hours have passed
+  useEffect(() => {
+    if (!session) return;
+
+    const checkExpiration = async () => {
+      if (isSessionExpired24Hours()) {
+        clearUserSessionStart();
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+      }
+    };
+
+    // Check every minute
+    const interval = setInterval(checkExpiration, 60 * 1000);
+
+    // Also check whenever tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkExpiration();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [session]);
+
   const login = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -323,12 +373,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Set user and session state immediately so navigation works
       setSession(data.session);
       setUser(result);
+      recordUserSessionStart();
     }
 
     return { error: null };
   }, [fetchUserProfile]);
 
   const logout = useCallback(async () => {
+    clearUserSessionStart();
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

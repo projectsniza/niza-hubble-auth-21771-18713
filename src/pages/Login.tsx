@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { friendlyAuthError } from '@/lib/authErrors';
 import CodeVerification from '@/components/auth/CodeVerification';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
+import { send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
 import hrEmployee1 from '@/assets/hr-employee-1.jpg';
 import hrEmployee2 from '@/assets/hr-employee-2.jpg';
 import hrEmployee3 from '@/assets/hr-employee-3.jpg';
@@ -24,9 +25,11 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<'password' | 'code-request' | 'code-verify'>('password');
+  const [mode, setMode] = useState<'password' | 'code-request' | 'code-verify' | '2fa-verify'>('password');
   const [codeEmail, setCodeEmail] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
+  const [loginChallengeToken, setLoginChallengeToken] = useState<string | null>(null);
+  const [pendingLoginCredentials, setPendingLoginCredentials] = useState<{ email: string; password: string } | null>(null);
   const { login, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -68,30 +71,82 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { error } = await login(email, password);
+      // 1. Verify credentials with Supabase first
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-      if (error) {
+      if (signInError) {
         toast({
           title: 'Login failed',
-          description: error,
+          description: friendlyAuthError(signInError.message),
           variant: 'destructive'
         });
         return;
       }
 
-      // Save or clear credentials based on remember me
-      if (rememberMe) {
-        localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email, password })));
-      } else {
-        localStorage.removeItem(REMEMBER_ME_KEY);
+      // Temporarily sign out so user cannot access dashboard until 2FA code is verified
+      await supabase.auth.signOut();
+
+      // 2. Dispatch 2-Step Verification Code via Resend
+      const res = await send2FACode(email.trim().toLowerCase(), 'login');
+      if (!res.success || !res.challengeToken) {
+        toast({
+          title: 'Could not send verification code',
+          description: res.error || 'Failed to send 2-step verification code',
+          variant: 'destructive'
+        });
+        return;
       }
 
-      toast({ title: 'Welcome back!', description: 'Login successful' });
-      // Don't navigate here - let the useEffect handle navigation once user state updates
-      // The useEffect at line 43 will navigate when user becomes truthy
+      setLoginChallengeToken(res.challengeToken);
+      setPendingLoginCredentials({ email: email.trim().toLowerCase(), password });
+      setMode('2fa-verify');
+      toast({
+        title: '2-Step Verification Required',
+        description: `A 6-digit verification code was sent to ${email.trim().toLowerCase()}`,
+      });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifyLogin2FA = async (code: string): Promise<{ error: string | null }> => {
+    if (!loginChallengeToken || !pendingLoginCredentials) {
+      return { error: 'Verification session expired. Please sign in again.' };
+    }
+
+    const res = await verify2FACode(loginChallengeToken, code);
+    if (!res.success) {
+      if (res.challengeToken) setLoginChallengeToken(res.challengeToken);
+      return { error: res.error || 'Invalid verification code' };
+    }
+
+    // Code verified! Complete actual login session
+    const { error } = await login(pendingLoginCredentials.email, pendingLoginCredentials.password);
+    if (error) {
+      return { error };
+    }
+
+    if (rememberMe) {
+      localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify(pendingLoginCredentials)));
+    } else {
+      localStorage.removeItem(REMEMBER_ME_KEY);
+    }
+
+    toast({ title: 'Welcome back!', description: '2-Step verification successful' });
+    return { error: null };
+  };
+
+  const handleResendLogin2FA = async (): Promise<{ error: string | null }> => {
+    if (!pendingLoginCredentials?.email) return { error: 'Email not found' };
+    const res = await send2FACode(pendingLoginCredentials.email, 'login');
+    if (!res.success || !res.challengeToken) {
+      return { error: res.error || 'Failed to resend code' };
+    }
+    setLoginChallengeToken(res.challengeToken);
+    return { error: null };
   };
 
   const handleSendCode = async () => {
@@ -401,6 +456,17 @@ export default function Login() {
                 onVerify={handleVerifyEmailCode}
                 onResend={handleResendEmailCode}
                 onChangeEmail={() => setMode('code-request')}
+              />
+            )}
+
+            {mode === '2fa-verify' && (
+              <CodeVerification
+                email={pendingLoginCredentials?.email || email}
+                title="2-Step Verification"
+                description="Enter the 6-digit security code sent to your email"
+                onVerify={handleVerifyLogin2FA}
+                onResend={handleResendLogin2FA}
+                onChangeEmail={() => setMode('password')}
               />
             )}
 

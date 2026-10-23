@@ -613,17 +613,53 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
             <div className="space-y-2">
               <Label>Reason for deactivation</Label>
               <Select value={deactivationReason} onValueChange={setDeactivationReason}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a reason..." />
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Select a reason...">
+                    {deactivationReason && (() => {
+                      const selectedConfig = getDeactivationReasonConfig(deactivationReason);
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-xs px-2.5 py-0.5 font-medium border ${selectedConfig?.color}`}>
+                            {selectedConfig?.label}
+                          </Badge>
+                        </div>
+                      );
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {DEACTIVATION_REASONS.map(reason => (
-                    <SelectItem key={reason.value} value={reason.value}>
-                      {reason.label}
+                    <SelectItem key={reason.value} value={reason.value} className="py-2">
+                      <div className="flex items-center gap-2">
+                        <Badge className={`text-xs px-2 py-0.5 font-medium border ${reason.color}`}>
+                          {reason.label}
+                        </Badge>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Reason Tags */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {DEACTIVATION_REASONS.map(reason => {
+                  const isSelected = deactivationReason === reason.value;
+                  return (
+                    <button
+                      key={reason.value}
+                      type="button"
+                      onClick={() => setDeactivationReason(reason.value)}
+                      className={`text-xs px-2.5 py-1 rounded-md border font-medium transition-all ${
+                        isSelected
+                          ? `${reason.color} ring-2 ring-primary/40 shadow-sm font-semibold scale-105`
+                          : 'bg-muted/40 hover:bg-muted text-muted-foreground border-border/60 hover:text-foreground'
+                      }`}
+                    >
+                      {reason.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Additional notes (optional)</Label>
