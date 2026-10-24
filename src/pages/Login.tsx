@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { friendlyAuthError } from '@/lib/authErrors';
 import CodeVerification from '@/components/auth/CodeVerification';
 import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
-import { send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
+import { send2FACode, verify2FACode, getTwoFactorAuthEnabled, isTwoFactorAuthEnabledSync, subscribeToTwoFactorSetting, recordUserSessionStart } from '@/lib/twoFactorAuth';
 import hrEmployee1 from '@/assets/hr-employee-1.jpg';
 import hrEmployee2 from '@/assets/hr-employee-2.jpg';
 import hrEmployee3 from '@/assets/hr-employee-3.jpg';
@@ -49,12 +49,19 @@ export default function Login() {
     }
   }, []);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (never while waiting on 2FA challenge)
   useEffect(() => {
-    if (!authLoading && user) {
-      navigate('/dashboard');
+    if (!authLoading && user && !loginChallengeToken) {
+      navigate('/dashboard', { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, loginChallengeToken]);
+
+  // Keep 2FA configuration in sync on mount and across setting changes
+  useEffect(() => {
+    getTwoFactorAuthEnabled().catch(() => {});
+    const unsubscribe = subscribeToTwoFactorSetting(() => {});
+    return () => unsubscribe();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +78,39 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. Verify credentials with Supabase first
+      // Check 2FA state synchronously - ZERO async gap to prevent premature auth listener redirect
+      const is2FAActive = isTwoFactorAuthEnabledSync();
+
+      if (!is2FAActive) {
+        // -------------------------------------------------------------
+        // 2FA IS DISABLED:
+        // Perform direct standard login via AuthContext
+        // -------------------------------------------------------------
+        const { error: loginError } = await login(email.trim().toLowerCase(), password);
+        if (loginError) {
+          toast({
+            title: 'Login failed',
+            description: friendlyAuthError(loginError),
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        if (rememberMe) {
+          localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email: email.trim().toLowerCase(), password })));
+        } else {
+          localStorage.removeItem(REMEMBER_ME_KEY);
+        }
+        recordUserSessionStart();
+        toast({ title: 'Welcome back!', description: 'Login successful' });
+        navigate('/dashboard');
+        return;
+      }
+
+      // ---------------------------------------------------------------
+      // 2FA IS ENABLED:
+      // 1. Verify credentials with Supabase
+      // ---------------------------------------------------------------
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -81,28 +120,31 @@ export default function Login() {
         toast({
           title: 'Login failed',
           description: friendlyAuthError(signInError.message),
-          variant: 'destructive'
+          variant: 'destructive',
         });
         return;
       }
 
-      // Temporarily sign out so user cannot access dashboard until 2FA code is verified
+      // 2. IMMEDIATELY sign out on the very next line with NO async gap!
+      // This prevents AuthContext from prematurely setting user state
       await supabase.auth.signOut();
 
-      // 2. Dispatch 2-Step Verification Code via Resend
+      // 3. Switch mode to 2fa-verify immediately so UI shows OTP prompt
+      setPendingLoginCredentials({ email: email.trim().toLowerCase(), password });
+      setMode('2fa-verify');
+
+      // 4. Dispatch 2-Step Verification Code via Resend
       const res = await send2FACode(email.trim().toLowerCase(), 'login');
       if (!res.success || !res.challengeToken) {
         toast({
           title: 'Could not send verification code',
           description: res.error || 'Failed to send 2-step verification code',
-          variant: 'destructive'
+          variant: 'destructive',
         });
         return;
       }
 
       setLoginChallengeToken(res.challengeToken);
-      setPendingLoginCredentials({ email: email.trim().toLowerCase(), password });
-      setMode('2fa-verify');
       toast({
         title: '2-Step Verification Required',
         description: `A 6-digit verification code was sent to ${email.trim().toLowerCase()}`,
@@ -135,7 +177,13 @@ export default function Login() {
       localStorage.removeItem(REMEMBER_ME_KEY);
     }
 
+    recordUserSessionStart();
+    setLoginChallengeToken(null);
+    setPendingLoginCredentials(null);
     toast({ title: 'Welcome back!', description: '2-Step verification successful' });
+
+    // Transition immediately into the app
+    navigate('/dashboard', { replace: true });
     return { error: null };
   };
 
@@ -195,8 +243,9 @@ export default function Login() {
 
     if (error) return { error: friendlyAuthError(error.message) };
 
+    recordUserSessionStart();
     toast({ title: 'Welcome back!', description: 'Login successful' });
-    // The auth listener picks up the session and navigates to the dashboard
+    navigate('/dashboard', { replace: true });
     return { error: null };
   };
 

@@ -10,7 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import CodeVerification from '@/components/auth/CodeVerification';
-import { isStoreSchedulingVerified, setStoreSchedulingVerified, send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
+import { 
+  isStoreSchedulingVerified, 
+  setStoreSchedulingVerified, 
+  send2FACode, 
+  verify2FACode,
+  isTwoFactorAuthEnabledSync,
+  getTwoFactorAuthEnabled,
+  subscribeToTwoFactorSetting
+} from '@/lib/twoFactorAuth';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -248,11 +256,7 @@ export function TimesheetView() {
   }, [user?.email, store2FAOpen, storeChallengeToken]);
 
   const checkStore2FA = useCallback((action: () => void): boolean => {
-    if (user?.role !== 'manager') {
-      action();
-      return true;
-    }
-    if (isStoreSchedulingVerified()) {
+    if (user?.role !== 'manager' || !isTwoFactorAuthEnabledSync() || isStoreSchedulingVerified()) {
       setIsStoreVerified(true);
       action();
       return true;
@@ -262,6 +266,29 @@ export function TimesheetView() {
     triggerStore2FA();
     return false;
   }, [user?.role, triggerStore2FA]);
+
+  // Synchronize 2FA state so Timesheet unlocks immediately when 2FA is disabled
+  useEffect(() => {
+    let mounted = true;
+    getTwoFactorAuthEnabled().then((enabled) => {
+      if (mounted && !enabled) {
+        setIsStoreVerified(true);
+        setStore2FAOpen(false);
+      }
+    });
+
+    const unsubscribe = subscribeToTwoFactorSetting((enabled) => {
+      if (!enabled) {
+        setIsStoreVerified(true);
+        setStore2FAOpen(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'organization' | 'branch'>('all');
@@ -900,7 +927,7 @@ export function TimesheetView() {
       toast.error('This payroll period is locked. Contact a Super Admin to unlock.');
       return;
     }
-    if (user?.role === 'manager' && !isStoreSchedulingVerified()) {
+    if (user?.role === 'manager' && isTwoFactorAuthEnabledSync() && !isStoreSchedulingVerified()) {
       checkStore2FA(() => {});
       return;
     }
@@ -1569,8 +1596,8 @@ export function TimesheetView() {
         </Card>
       </div>
 
-      {/* Store Account 2FA Security Banner for Weekly Scheduling */}
-      {user?.role === 'manager' && (
+      {/* Store Account 2FA Security Banner for Weekly Scheduling (only shown when 2FA is active) */}
+      {user?.role === 'manager' && isTwoFactorAuthEnabledSync() && (
         <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm transition-all ${
           isStoreVerified
             ? 'bg-emerald-500/10 border-emerald-500/30'

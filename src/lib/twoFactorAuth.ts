@@ -36,6 +36,14 @@ export async function send2FACode(
   purpose: TwoFactorPurpose,
   metadata?: Record<string, unknown>
 ): Promise<Send2FAResponse> {
+  // If 2FA is disabled system-wide, skip sending code for auth purposes
+  if (!isTwoFactorAuthEnabledSync() && (purpose === 'login' || purpose === 'store_scheduling' || purpose === 'admin_password_change')) {
+    return {
+      success: false,
+      error: 'Two-factor authentication is currently disabled.',
+    };
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke('resend-2fa', {
       body: {
@@ -196,11 +204,15 @@ export function clearUserSessionStart(): void {
 /**
  * Store Account scheduling session helpers
  * Stored strictly in-memory per app launch so that closing the app
- * and opening it again ALWAYS requires 2-step verification.
+ * and opening it again ALWAYS requires 2-step verification (when 2FA is enabled).
  */
 let memoryStoreSchedulingVerifiedUntil = 0;
 
 export function isStoreSchedulingVerified(): boolean {
+  // If 2FA is disabled system-wide, store scheduling is immediately unlocked!
+  if (!isTwoFactorAuthEnabledSync()) {
+    return true;
+  }
   return Date.now() < memoryStoreSchedulingVerifiedUntil;
 }
 
@@ -224,4 +236,242 @@ export function clearStoreSchedulingVerified(): void {
     // ignore
   }
 }
+
+/**
+ * ============================================================================
+ * GLOBAL TWO-FACTOR AUTHENTICATION SYSTEM-WIDE SETTING
+ * ============================================================================
+ * Managed exclusively by Super Administrators in Settings.
+ * When disabled:
+ * - Normal password login without any 2-step verification code across the app.
+ * - Weekly timesheet scheduling is directly unlocked without 2-step verification.
+ * - Super admin password changes update directly without 2-step verification.
+ */
+export const TWO_FACTOR_GLOBAL_KEY = 'niza_2fa_enabled_system_wide';
+export const TWO_FACTOR_LAST_UPDATED_KEY = 'niza_2fa_last_updated';
+export const TWO_FACTOR_UPDATED_BY_KEY = 'niza_2fa_updated_by';
+export const TWO_FACTOR_SETTING_DB_KEY = 'two_factor_auth_enabled';
+
+// In-memory cache for ultra-fast synchronous checks
+let memory2FAEnabled: boolean | null = (() => {
+  try {
+    const cached = localStorage.getItem(TWO_FACTOR_GLOBAL_KEY);
+    if (cached === 'false') return false;
+    if (cached === 'true') return true;
+  } catch {
+    // ignore
+  }
+  return null;
+})();
+
+/**
+ * Synchronous check whether 2FA is enabled.
+ * Uses cached memory/localStorage so UI renders immediately without flashing modals.
+ * Defaults to true if no explicit disable recorded.
+ */
+export function isTwoFactorAuthEnabledSync(): boolean {
+  if (memory2FAEnabled !== null) {
+    return memory2FAEnabled;
+  }
+  try {
+    const cached = localStorage.getItem(TWO_FACTOR_GLOBAL_KEY);
+    if (cached === 'false') {
+      memory2FAEnabled = false;
+      return false;
+    }
+    if (cached === 'true') {
+      memory2FAEnabled = true;
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  // Default to true
+  return true;
+}
+
+/**
+ * Fetch latest 2FA setting from database (message_settings table).
+ * Synchronizes localStorage and runtime memory cache.
+ */
+export async function getTwoFactorAuthEnabled(): Promise<boolean> {
+  try {
+    // 1. Query Edge function first (runs with service role, always accessible to anon and auth users)
+    try {
+      const { data: edgeData } = await supabase.functions.invoke('resend-2fa', {
+        body: { action: 'get_2fa_config' },
+      });
+      if (edgeData && typeof edgeData.twoFactorEnabled === 'boolean') {
+        const isEnabled = edgeData.twoFactorEnabled;
+        memory2FAEnabled = isEnabled;
+        try {
+          localStorage.setItem(TWO_FACTOR_GLOBAL_KEY, String(isEnabled));
+          if (edgeData.updatedAt) {
+            localStorage.setItem(TWO_FACTOR_LAST_UPDATED_KEY, edgeData.updatedAt);
+          }
+          if (edgeData.description) {
+            localStorage.setItem(TWO_FACTOR_UPDATED_BY_KEY, edgeData.description);
+          }
+        } catch {
+          // ignore
+        }
+        return isEnabled;
+      }
+    } catch {
+      // fallback to direct table
+    }
+
+    // 2. Direct table fallback (when authenticated)
+    const { data, error } = await supabase
+      .from('message_settings')
+      .select('setting_value, updated_at, description')
+      .eq('setting_key', TWO_FACTOR_SETTING_DB_KEY)
+      .maybeSingle();
+
+    if (!error && data) {
+      let isEnabled = true;
+      const rawVal = data.setting_value;
+
+      if (rawVal === false || rawVal === 'false' || rawVal === '0') {
+        isEnabled = false;
+      } else if (typeof rawVal === 'object' && rawVal !== null && (rawVal as any).enabled === false) {
+        isEnabled = false;
+      } else {
+        isEnabled = true;
+      }
+
+      memory2FAEnabled = isEnabled;
+      try {
+        localStorage.setItem(TWO_FACTOR_GLOBAL_KEY, String(isEnabled));
+        if (data.updated_at) {
+          localStorage.setItem(TWO_FACTOR_LAST_UPDATED_KEY, data.updated_at);
+        }
+        if (data.description) {
+          localStorage.setItem(TWO_FACTOR_UPDATED_BY_KEY, data.description);
+        }
+      } catch {
+        // ignore
+      }
+
+      return isEnabled;
+    }
+  } catch (err) {
+    console.warn('Error fetching 2FA setting from DB, using cache:', err);
+  }
+
+  // Fallback to cache / sync value
+  return isTwoFactorAuthEnabledSync();
+}
+
+/**
+ * Update 2FA setting system-wide (Super Admin only).
+ * Persists to Supabase, updates localStorage and notifies all components.
+ */
+export async function setTwoFactorAuthEnabled(
+  enabled: boolean,
+  adminUser?: { id?: string; name?: string; role?: string; email?: string } | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Update memory and localStorage immediately
+    memory2FAEnabled = enabled;
+    const nowIso = new Date().toISOString();
+    const updaterInfo = adminUser?.name || adminUser?.email || 'Super Admin';
+
+    try {
+      localStorage.setItem(TWO_FACTOR_GLOBAL_KEY, String(enabled));
+      localStorage.setItem(TWO_FACTOR_LAST_UPDATED_KEY, nowIso);
+      localStorage.setItem(TWO_FACTOR_UPDATED_BY_KEY, updaterInfo);
+    } catch {
+      // ignore
+    }
+
+    // Dispatch custom event for real-time reactivity in current tab
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('niza_2fa_setting_changed', {
+          detail: { enabled, updatedBy: updaterInfo, updatedAt: nowIso },
+        })
+      );
+    }
+
+    // Persist to Supabase message_settings
+    const { error } = await supabase
+      .from('message_settings')
+      .upsert(
+        {
+          setting_key: TWO_FACTOR_SETTING_DB_KEY,
+          setting_value: String(enabled),
+          description: `2FA ${enabled ? 'enabled' : 'disabled'} by ${updaterInfo}`,
+          updated_at: nowIso,
+        },
+        { onConflict: 'setting_key' }
+      );
+
+    if (error) {
+      console.warn('Could not persist 2FA setting directly to message_settings:', error.message);
+      // Attempt via Edge function
+      try {
+        await supabase.functions.invoke('resend-2fa', {
+          body: {
+            action: 'set_2fa_config',
+            enabled,
+            updatedBy: updaterInfo,
+          },
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update 2FA setting';
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Returns metadata about when 2FA setting was last modified and by whom.
+ */
+export function getTwoFactorMetadata(): { lastUpdated: string | null; updatedBy: string | null } {
+  try {
+    return {
+      lastUpdated: localStorage.getItem(TWO_FACTOR_LAST_UPDATED_KEY),
+      updatedBy: localStorage.getItem(TWO_FACTOR_UPDATED_BY_KEY),
+    };
+  } catch {
+    return { lastUpdated: null, updatedBy: null };
+  }
+}
+
+/**
+ * Subscribe to changes in the 2FA setting
+ */
+export function subscribeToTwoFactorSetting(callback: (enabled: boolean) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const handleCustomEvent = (e: Event) => {
+    const custom = e as CustomEvent<{ enabled: boolean }>;
+    if (custom?.detail?.enabled !== undefined) {
+      callback(custom.detail.enabled);
+    } else {
+      callback(isTwoFactorAuthEnabledSync());
+    }
+  };
+
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === TWO_FACTOR_GLOBAL_KEY) {
+      callback(e.newValue !== 'false');
+    }
+  };
+
+  window.addEventListener('niza_2fa_setting_changed', handleCustomEvent);
+  window.addEventListener('storage', handleStorage);
+
+  return () => {
+    window.removeEventListener('niza_2fa_setting_changed', handleCustomEvent);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
+
 

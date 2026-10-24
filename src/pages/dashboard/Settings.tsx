@@ -10,7 +10,8 @@ import MessageSettingsPanel from '@/components/messaging/MessageSettingsPanel';
 import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
 import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
 import DepartmentManagement from '@/components/settings/DepartmentManagement';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, FileText, Briefcase } from 'lucide-react';
+import SecuritySettingsPanel from '@/components/settings/SecuritySettingsPanel';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, ShieldCheck, FileText, Briefcase } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import CodeVerification from '@/components/auth/CodeVerification';
@@ -18,7 +19,7 @@ import { friendlyAuthError } from '@/lib/authErrors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { send2FACode, verify2FACode } from '@/lib/twoFactorAuth';
+import { send2FACode, verify2FACode, isTwoFactorAuthEnabledSync } from '@/lib/twoFactorAuth';
 
 export default function Settings() {
   const { user, updatePassword } = useAuth();
@@ -88,8 +89,8 @@ export default function Settings() {
       return;
     }
 
-    // Super Admin 2-Step Mail Verification
-    if (user?.role === 'super_admin') {
+    // Super Admin 2-Step Mail Verification (only when 2FA is active)
+    if (user?.role === 'super_admin' && isTwoFactorAuthEnabledSync()) {
       if (!user.email) {
         toast.error('User email not found');
         return;
@@ -242,6 +243,12 @@ export default function Settings() {
             <TabsTrigger value="departments" className="gap-2">
               <Briefcase className="h-4 w-4" />
               Departments
+            </TabsTrigger>
+          )}
+          {user?.role === 'super_admin' && (
+            <TabsTrigger value="security" className="gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Security & 2FA
             </TabsTrigger>
           )}
         </TabsList>
@@ -510,6 +517,12 @@ export default function Settings() {
         {canManageDepartments && (
           <TabsContent value="departments" forceMount className="data-[state=inactive]:hidden">
             <DepartmentManagement />
+          </TabsContent>
+        )}
+
+        {user?.role === 'super_admin' && (
+          <TabsContent value="security" forceMount className="data-[state=inactive]:hidden">
+            <SecuritySettingsPanel />
           </TabsContent>
         )}
       </Tabs>

@@ -277,6 +277,77 @@ serve(async (req) => {
     const action = body.action;
 
     // -----------------------------------------------------------------
+    // ACTION: GET 2FA CONFIGURATION
+    // -----------------------------------------------------------------
+    if (action === "get_2fa_config") {
+      const { data } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value, updated_at, description")
+        .eq("setting_key", "two_factor_auth_enabled")
+        .maybeSingle();
+
+      let enabled = true;
+      if (data) {
+        const v = data.setting_value;
+        if (v === false || v === "false" || v === "0") {
+          enabled = false;
+        } else if (
+          typeof v === "object" &&
+          v !== null &&
+          (v as Record<string, unknown>).enabled === false
+        ) {
+          enabled = false;
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          twoFactorEnabled: enabled,
+          updatedAt: data?.updated_at || null,
+          description: data?.description || null,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // ACTION: SET 2FA CONFIGURATION (Super Admin)
+    // -----------------------------------------------------------------
+    if (action === "set_2fa_config") {
+      const { enabled, updatedBy = "Super Admin" } = body;
+      const isEnabled = Boolean(enabled);
+      const nowIso = new Date().toISOString();
+
+      await supabaseAdmin
+        .from("message_settings")
+        .upsert(
+          {
+            setting_key: "two_factor_auth_enabled",
+            setting_value: String(isEnabled),
+            description: `2FA ${isEnabled ? "enabled" : "disabled"} by ${updatedBy}`,
+            updated_at: nowIso,
+          },
+          { onConflict: "setting_key" }
+        );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          twoFactorEnabled: isEnabled,
+          updatedAt: nowIso,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // -----------------------------------------------------------------
     // ACTION: SEND 2FA CODE
     // -----------------------------------------------------------------
     if (action === "send_code") {
@@ -284,6 +355,32 @@ serve(async (req) => {
 
       if (!email || !purpose) {
         throw new Error("Missing required fields: email and purpose");
+      }
+
+      // Check if 2FA is globally disabled by Super Admin
+      if (purpose === "login" || purpose === "store_scheduling" || purpose === "admin_password_change") {
+        const { data: configData } = await supabaseAdmin
+          .from("message_settings")
+          .select("setting_value")
+          .eq("setting_key", "two_factor_auth_enabled")
+          .maybeSingle();
+
+        if (
+          configData &&
+          (configData.setting_value === false || configData.setting_value === "false")
+        ) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              disabled: true,
+              error: "Two-factor authentication is currently disabled by administrator.",
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            }
+          );
+        }
       }
 
       const normalizedEmail = email.trim().toLowerCase();
