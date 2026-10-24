@@ -371,9 +371,9 @@ serve(async (req) => {
         ) {
           return new Response(
             JSON.stringify({
-              success: false,
+              success: true,
               disabled: true,
-              error: "Two-factor authentication is currently disabled by administrator.",
+              message: "Two-factor authentication is currently disabled by administrator.",
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
