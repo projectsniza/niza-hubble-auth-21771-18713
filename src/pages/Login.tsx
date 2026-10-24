@@ -78,8 +78,13 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // Check 2FA state synchronously - ZERO async gap to prevent premature auth listener redirect
-      const is2FAActive = isTwoFactorAuthEnabledSync();
+      // 1. Check current 2FA status from database BEFORE signing in
+      let is2FAActive = isTwoFactorAuthEnabledSync();
+      try {
+        is2FAActive = await getTwoFactorAuthEnabled();
+      } catch {
+        // fallback to sync cache
+      }
 
       if (!is2FAActive) {
         // -------------------------------------------------------------
@@ -103,7 +108,7 @@ export default function Login() {
         }
         recordUserSessionStart();
         toast({ title: 'Welcome back!', description: 'Login successful' });
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
         return;
       }
 
@@ -129,12 +134,25 @@ export default function Login() {
       // This prevents AuthContext from prematurely setting user state
       await supabase.auth.signOut();
 
-      // 3. Switch mode to 2fa-verify immediately so UI shows OTP prompt
-      setPendingLoginCredentials({ email: email.trim().toLowerCase(), password });
-      setMode('2fa-verify');
-
-      // 4. Dispatch 2-Step Verification Code via Resend
+      // 3. Dispatch 2-Step Verification Code via Resend
       const res = await send2FACode(email.trim().toLowerCase(), 'login');
+
+      // If the edge function reports that 2FA is disabled, log directly in!
+      if (res.disabled || res.error?.toLowerCase().includes('disabled')) {
+        const { error: directLoginError } = await login(email.trim().toLowerCase(), password);
+        if (!directLoginError) {
+          if (rememberMe) {
+            localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email: email.trim().toLowerCase(), password })));
+          } else {
+            localStorage.removeItem(REMEMBER_ME_KEY);
+          }
+          recordUserSessionStart();
+          toast({ title: 'Welcome back!', description: 'Login successful' });
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
+
       if (!res.success || !res.challengeToken) {
         toast({
           title: 'Could not send verification code',
@@ -143,6 +161,10 @@ export default function Login() {
         });
         return;
       }
+
+      // 4. Switch mode to 2fa-verify immediately so UI shows OTP prompt
+      setPendingLoginCredentials({ email: email.trim().toLowerCase(), password });
+      setMode('2fa-verify');
 
       setLoginChallengeToken(res.challengeToken);
       toast({

@@ -39,8 +39,8 @@ export async function send2FACode(
   // If 2FA is disabled system-wide, skip sending code for auth purposes
   if (!isTwoFactorAuthEnabledSync() && (purpose === 'login' || purpose === 'store_scheduling' || purpose === 'admin_password_change')) {
     return {
-      success: false,
-      error: 'Two-factor authentication is currently disabled.',
+      success: true,
+      disabled: true,
     };
   }
 
@@ -54,12 +54,27 @@ export async function send2FACode(
       },
     });
 
+    if (data?.disabled || data?.error?.toLowerCase().includes('disabled')) {
+      memory2FAEnabled = false;
+      try {
+        localStorage.setItem(TWO_FACTOR_GLOBAL_KEY, 'false');
+      } catch {}
+      return { success: true, disabled: true };
+    }
+
     if (error) {
       let resolvedError = error.message;
       try {
         if ('context' in error && (error as any).context && typeof (error as any).context.json === 'function') {
           const body = await (error as any).context.json();
           if (body?.error) resolvedError = body.error;
+          if (body?.disabled || body?.error?.toLowerCase().includes('disabled')) {
+            memory2FAEnabled = false;
+            try {
+              localStorage.setItem(TWO_FACTOR_GLOBAL_KEY, 'false');
+            } catch {}
+            return { success: true, disabled: true };
+          }
         }
       } catch {}
       return { success: false, error: resolvedError || 'Failed to send verification code' };
