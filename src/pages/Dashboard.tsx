@@ -9,6 +9,8 @@ import RemindersSidebar from '@/components/reminders/RemindersSidebar';
 import TodayEventsPopup from '@/components/dashboard/TodayEventsPopup';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import OpenItemsHeaderWidget from '@/components/dashboard/OpenItemsHeaderWidget';
+import ActionItemsHeaderWidget from '@/components/dashboard/ActionItemsHeaderWidget';
+import ActionRequiredPopup from '@/components/messaging/ActionRequiredPopup';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, CheckSquare } from 'lucide-react';
@@ -35,6 +37,7 @@ export default function Dashboard() {
     <div className="min-h-screen flex w-full bg-background">
       <TaskReminderListener />
       {(user?.role === 'super_admin' || user?.role === 'hr') && <ReminderDuePopup />}
+      <ActionRequiredPopup />
       <TodayEventsPopup />
       {/* Desktop Sidebar */}
       {!isMobile && (
@@ -80,6 +83,7 @@ export default function Dashboard() {
           {/* Open Items Widget, Notification Bell and Reminders Button */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             {(user?.role === 'super_admin' || user?.role === 'hr') && <OpenItemsHeaderWidget />}
+            <ActionItemsHeaderWidget />
             <NotificationBell />
             <Button
               variant="ghost"

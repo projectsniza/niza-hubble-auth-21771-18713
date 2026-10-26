@@ -20,6 +20,7 @@ import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
 import DocumentRecycleBinTab from '@/components/documents/DocumentRecycleBinTab';
+import DeleteDocumentConfirmDialog from '@/components/documents/DeleteDocumentConfirmDialog';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 import { moveToRecycleBin, getRecycleBinDocuments } from '@/lib/recycleBin';
@@ -1052,23 +1053,27 @@ export default function Documents() {
         onSuccess={fetchFoldersAndDocuments}
       />
 
-      {/* Delete Document Confirmation */}
-      <AlertDialog open={!!deleteDocId} onOpenChange={() => { setDeleteDocId(null); setDeleteDocPath(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this document? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Document Confirmation (Big Box Popup with 90-Day Retrieval Guarantee) */}
+      {(() => {
+        const docToDelete = documents.find(d => d.id === deleteDocId) || allDocuments.find(d => d.id === deleteDocId);
+        const folderOfDoc = folders.find(f => f.id === (docToDelete?.folder_id || currentFolderId));
+        return (
+          <DeleteDocumentConfirmDialog
+            open={!!deleteDocId}
+            onOpenChange={(open) => {
+              if (!open) {
+                setDeleteDocId(null);
+                setDeleteDocPath(null);
+              }
+            }}
+            documentName={docToDelete?.title || docToDelete?.file_name}
+            documentType={docToDelete?.file_type}
+            documentSize={docToDelete?.file_size}
+            folderName={folderOfDoc?.name}
+            onConfirm={handleDeleteDocument}
+          />
+        );
+      })()}
 
       {/* Delete Folder Confirmation */}
       <AlertDialog open={!!deleteFolderId} onOpenChange={() => setDeleteFolderId(null)}>

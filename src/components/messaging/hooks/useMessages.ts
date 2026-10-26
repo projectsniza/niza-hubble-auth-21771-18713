@@ -143,7 +143,7 @@ export function useMessages(conversationId: string | null) {
           .update({ updated_at: new Date().toISOString() })
           .eq('id', conversationId);
 
-        return true;
+        return (newMessage as unknown as Message) || true;
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : 'Failed to send message';
         toast.error(msg);

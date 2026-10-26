@@ -32,7 +32,24 @@ import {
   CheckSquare,
   AtSign,
   ClipboardList,
+  CheckCircle2,
+  ExternalLink,
+  Calendar,
+  Check,
+  Layers,
+  AlertTriangle,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { useNavigate } from 'react-router-dom';
+import { useActionItemsGlobal } from '@/contexts/ActionItemsContext';
+import { ACTION_MODULES, getActionModuleByKey, ActionItem } from './hooks/useActionItems';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,12 +65,13 @@ interface ChatAreaProps {
   sending: boolean;
   typingUsers: string[];
   participants: UserProfile[];
+  actionItems?: ActionItem[];
   onSendMessage: (
     content: string,
     attachments?: Attachment[],
     replyToId?: string,
     mentions?: string[]
-  ) => Promise<boolean>;
+  ) => Promise<any>;
   onTogglePin: (messageId: string, pinned: boolean) => void;
   settings: Record<string, string>;
   onRaiseAction?: (message: Message) => void;
@@ -67,12 +85,23 @@ export default function ChatArea({
   sending,
   typingUsers,
   participants,
+  actionItems = [],
   onSendMessage,
   onTogglePin,
   settings,
   onRaiseAction,
 }: ChatAreaProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { createActionItem, markDone } = useActionItemsGlobal();
+
+  // Action item tagging state in typing space
+  const [actionItemMode, setActionItemMode] = useState(false);
+  const [actionAssignee, setActionAssignee] = useState<string>('');
+  const [actionModuleKey, setActionModuleKey] = useState<string>('general');
+  const [actionDueDate, setActionDueDate] = useState<string>('');
+  const [extraAssignees, setExtraAssignees] = useState<UserProfile[]>([]);
+
   const [newMessage, setNewMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -93,6 +122,76 @@ export default function ChatArea({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isSuperAdmin = user?.role === 'super_admin';
+
+  // Fetch admin and store manager profiles so store accounts can ALWAYS raise for superadmin and vice-versa
+  useEffect(() => {
+    const fetchAdminsAndStores = async () => {
+      try {
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('user_id, role')
+          .in('role', ['super_admin', 'hr', 'manager']);
+
+        const userIds = roles?.map(r => r.user_id) || [];
+        if (userIds.length === 0) return;
+
+        const { data: profiles } = await supabase
+          .rpc('get_messaging_profiles', { p_user_ids: userIds });
+
+        const roleMap = new Map(roles?.map(r => [r.user_id, r.role]) || []);
+        const loaded: UserProfile[] = (profiles || []).map(p => ({
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          role: roleMap.get(p.id),
+        }));
+        setExtraAssignees(loaded);
+      } catch (err) {
+        console.error('Error fetching assignees for action items:', err);
+      }
+    };
+
+    fetchAdminsAndStores();
+  }, []);
+
+  const assignableUsers = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    // First, participants in the current conversation
+    participants.forEach(p => {
+      if (p.id !== user?.id) map.set(p.id, p);
+    });
+    // Add extra assignees (superadmin, hr, managers)
+    extraAssignees.forEach(u => {
+      if (u.id !== user?.id && !map.has(u.id)) {
+        map.set(u.id, u);
+      }
+    });
+
+    const list = Array.from(map.values());
+
+    // Sort: if user is store account (manager), put super_admin / hr at top!
+    // If user is super_admin, put managers at top!
+    list.sort((a, b) => {
+      if (user?.role === 'manager') {
+        if (a.role === 'super_admin' && b.role !== 'super_admin') return -1;
+        if (b.role === 'super_admin' && a.role !== 'super_admin') return 1;
+        if (a.role === 'hr' && b.role !== 'hr') return -1;
+        if (b.role === 'hr' && a.role !== 'hr') return 1;
+      } else {
+        if (a.role === 'manager' && b.role !== 'manager') return -1;
+        if (b.role === 'manager' && a.role !== 'manager') return 1;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    return list;
+  }, [participants, extraAssignees, user]);
+
+  useEffect(() => {
+    if (!actionAssignee && assignableUsers.length > 0) {
+      setActionAssignee(assignableUsers[0].id);
+    }
+  }, [assignableUsers, actionAssignee]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -310,6 +409,24 @@ export default function ChatArea({
       );
 
       if (success) {
+        if (actionItemMode && conversation) {
+          const targetAssignee = actionAssignee || assignableUsers[0]?.id;
+          if (targetAssignee) {
+            const mod = getActionModuleByKey(actionModuleKey);
+            const msgId = typeof success === 'object' && (success as any)?.id ? (success as any).id : null;
+            await createActionItem({
+              conversation_id: conversation.id,
+              message_id: msgId,
+              assigned_to: targetAssignee,
+              title: newMessage.trim().slice(0, 80) || `Action Item: ${mod.label}`,
+              details: newMessage.trim() || undefined,
+              module: mod,
+              due_date: actionDueDate || null,
+            });
+            setActionItemMode(false);
+            setActionDueDate('');
+          }
+        }
         setNewMessage('');
         setAttachments([]);
         setReplyTo(null);
@@ -675,6 +792,78 @@ export default function ChatArea({
                             <Pin className="absolute -top-2 -right-2 h-4 w-4 text-amber-500" />
                           )}
 
+                          {(() => {
+                            const linkedAction = (actionItems || []).find(item => item.message_id === msg.id);
+                            if (!linkedAction) return null;
+                            return (
+                              <div className={`mb-2 p-2.5 rounded-xl border space-y-1.5 text-left ${
+                                isOwn
+                                  ? 'bg-primary-foreground/15 border-primary-foreground/25 text-primary-foreground'
+                                  : 'bg-card border-amber-500/40 text-card-foreground shadow-xs'
+                              }`}>
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                  <Badge variant="outline" className={`text-[10px] py-0 px-2 font-bold gap-1 ${
+                                    isOwn ? 'bg-primary-foreground/25 text-primary-foreground border-transparent' : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-400/40'
+                                  }`}>
+                                    <ClipboardList className="h-3 w-3" />
+                                    Action Item: {linkedAction.module_label || 'General'}
+                                  </Badge>
+                                  <Badge variant="outline" className={`text-[10px] py-0 px-2 capitalize font-semibold ${
+                                    linkedAction.status === 'completed'
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                      : linkedAction.status === 'acknowledged'
+                                      ? 'bg-amber-500/15 text-amber-600 border-amber-400/30'
+                                      : 'bg-destructive/15 text-destructive border-destructive/30'
+                                  }`}>
+                                    {linkedAction.status}
+                                  </Badge>
+                                </div>
+
+                                {linkedAction.due_date && (
+                                  <p className="text-[10px] opacity-85 flex items-center gap-1 font-medium">
+                                    <Calendar className="h-2.5 w-2.5" />
+                                    Due: {format(new Date(linkedAction.due_date), 'dd/MM/yyyy')}
+                                  </p>
+                                )}
+
+                                {linkedAction.completion_note && (
+                                  <p className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 p-1.5 rounded-md border border-emerald-500/20 font-medium">
+                                    ✓ Done: {linkedAction.completion_note}
+                                  </p>
+                                )}
+
+                                <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                                  <Button
+                                    size="sm"
+                                    variant={isOwn ? 'secondary' : 'outline'}
+                                    className="h-6 text-[10px] px-2 rounded-md font-medium"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(linkedAction.module_route || '/dashboard');
+                                    }}
+                                  >
+                                    <ExternalLink className="h-2.5 w-2.5 mr-1" />
+                                    Open {linkedAction.module_label || 'Module'}
+                                  </Button>
+
+                                  {linkedAction.assigned_to === user?.id && (linkedAction.status === 'open' || linkedAction.status === 'acknowledged') && (
+                                    <Button
+                                      size="sm"
+                                      className="h-6 text-[10px] px-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markDone(linkedAction.id);
+                                      }}
+                                    >
+                                      <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
+                                      Mark Done
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {msg.content && (
                             <p className="text-sm whitespace-pre-wrap">
                               {msg.content.split(/(@\w+(?:\s\w+)*)/g).map((part, i) => {
@@ -813,6 +1002,80 @@ export default function ChatArea({
         </div>
       )}
 
+      {/* Action Item Configuration Bar attached directly to typing space */}
+      {actionItemMode && (
+        <div className="px-4 py-2.5 border-t border-amber-500/30 bg-amber-500/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 max-w-4xl mx-auto">
+            <div className="flex items-center gap-2.5 flex-wrap flex-1">
+              <Badge className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold gap-1 py-1 shadow-xs">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Action Item
+              </Badge>
+
+              {/* Assignee Selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground font-medium">To:</span>
+                <Select value={actionAssignee} onValueChange={setActionAssignee}>
+                  <SelectTrigger className="h-8 text-xs min-w-[150px] sm:min-w-[180px] bg-background">
+                    <SelectValue placeholder="Select Assignee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignableUsers.map(u => (
+                      <SelectItem key={u.id} value={u.id} className="text-xs">
+                        <span className="font-medium">{u.name}</span>
+                        {u.role && (
+                          <span className="ml-1 text-[10px] text-muted-foreground uppercase">
+                            ({u.role === 'super_admin' ? 'Super Admin' : u.role === 'manager' ? 'Store' : u.role})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Module / Sidebar Section Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground font-medium">Module:</span>
+                <Select value={actionModuleKey} onValueChange={setActionModuleKey}>
+                  <SelectTrigger className="h-8 text-xs min-w-[140px] sm:min-w-[170px] bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACTION_MODULES.map(m => (
+                      <SelectItem key={m.key} value={m.key} className="text-xs">
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Optional Due Date */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground font-medium">Due:</span>
+                <Input
+                  type="date"
+                  value={actionDueDate}
+                  onChange={e => setActionDueDate(e.target.value)}
+                  className="h-8 text-xs w-36 bg-background"
+                />
+              </div>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={() => setActionItemMode(false)}
+              title="Close action item mode"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Message input */}
       <div className="p-4 border-t bg-background">
         <div className="flex items-center gap-2 max-w-4xl mx-auto relative">
@@ -830,14 +1093,38 @@ export default function ChatArea({
             className="shrink-0"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
+            title="Attach file"
           >
             <Paperclip className="h-5 w-5" />
+          </Button>
+
+          {/* Action Item Tagging Button in the typing bar */}
+          <Button
+            type="button"
+            variant={actionItemMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActionItemMode(v => !v)}
+            className={`h-9 px-3 rounded-full text-xs font-semibold gap-1.5 shrink-0 transition-all ${
+              actionItemMode
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs ring-2 ring-amber-400/40'
+                : 'text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-500/10'
+            }`}
+            title="Tag as Action Item with Module dropdown"
+          >
+            <ClipboardList className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {actionItemMode ? `Action: ${getActionModuleByKey(actionModuleKey).label}` : 'Action Item'}
+            </span>
           </Button>
 
           <div className="relative flex-1">
             <Input
               ref={inputRef}
-              placeholder="Type your message... Use @ to mention"
+              placeholder={
+                actionItemMode
+                  ? `Type action instructions for ${assignableUsers.find(u => u.id === actionAssignee)?.name || 'assignee'} (Module: ${getActionModuleByKey(actionModuleKey).label})...`
+                  : 'Type your message... Use @ to mention'
+              }
               value={newMessage}
               onChange={handleInputChange}
               onKeyDown={e => {
@@ -846,7 +1133,9 @@ export default function ChatArea({
                   handleSend();
                 }
               }}
-              className="rounded-full px-4 pr-10"
+              className={`rounded-full px-4 pr-10 transition-all ${
+                actionItemMode ? 'ring-2 ring-amber-500/40 border-amber-400' : ''
+              }`}
               disabled={sending}
             />
             <Button
@@ -882,7 +1171,10 @@ export default function ChatArea({
             onClick={handleSend}
             disabled={(!newMessage.trim() && attachments.length === 0) || sending}
             size="icon"
-            className="shrink-0 rounded-full"
+            className={`shrink-0 rounded-full transition-all ${
+              actionItemMode ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' : ''
+            }`}
+            title={actionItemMode ? 'Send & Raise Action Item' : 'Send message'}
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>

@@ -34,6 +34,7 @@ export interface ActionModule {
 }
 
 export const ACTION_MODULES: ActionModule[] = [
+  { key: 'general', label: 'General', route: '/dashboard' },
   { key: 'daily-reports', label: 'Daily Reports', route: '/dashboard/daily-reports' },
   { key: 'daily-sales-upload', label: 'Daily Sales Upload (Invoices/CSV)', route: '/dashboard/daily-sales-upload' },
   { key: 'documents', label: 'Documents', route: '/dashboard/documents' },
@@ -47,8 +48,16 @@ export const ACTION_MODULES: ActionModule[] = [
   { key: 'drive-offs', label: 'Drive Offs', route: '/dashboard/drive-offs' },
   { key: 'maintenance', label: 'Maintenance', route: '/dashboard/maintenance' },
   { key: 'safety-tasks', label: 'Safety Tasks', route: '/dashboard/safety-tasks' },
-  { key: 'daily-summary', label: 'Daily Summary', route: '/dashboard/daily-summary' },
+  { key: 'daily-summary', label: 'Sales Analysis / Daily Summary', route: '/dashboard/daily-summary' },
+  { key: 'clock-ins', label: 'Clock-ins', route: '/dashboard/clock-ins' },
+  { key: 'payroll', label: 'Payroll', route: '/dashboard/payroll' },
+  { key: 'training', label: 'Training / E-Learning', route: '/dashboard/elearning' },
+  { key: 'settings', label: 'Settings', route: '/dashboard/settings' },
 ];
+
+export const getActionModuleByKey = (key: string): ActionModule => {
+  return ACTION_MODULES.find(m => m.key === key) || ACTION_MODULES[0];
+};
 
 // The generated Supabase types may not yet include this table.
 const table = () => (supabase as unknown as { from: (t: string) => any }).from('message_action_items');

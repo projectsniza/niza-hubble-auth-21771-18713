@@ -238,6 +238,7 @@ export default function MessagingPanel() {
           sending={sending}
           typingUsers={typingUsers}
           participants={participants}
+          actionItems={actionItems}
           onSendMessage={handleSendMessage}
           onTogglePin={togglePin}
           settings={settings}
@@ -283,10 +284,6 @@ export default function MessagingPanel() {
         }}
       />
 
-      <ActionRequiredPopup
-        items={myOpenItems}
-        onAcknowledge={id => updateStatus(id, 'acknowledged')}
-      />
 
       <NewConversationDialog
         open={newDmOpen}

@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { OrgBranchProvider } from "./contexts/OrgBranchContext";
 import { DueFollowUpsProvider } from "./contexts/DueFollowUpsContext";
+import { ActionItemsProvider } from "./contexts/ActionItemsContext";
 import { NizaLoaderFullPage } from "@/components/ui/niza-loader";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 
@@ -113,7 +114,8 @@ const App = () => (
       <AuthProvider>
         <OrgBranchProvider>
           <DueFollowUpsProvider>
-            <TooltipProvider>
+            <ActionItemsProvider>
+              <TooltipProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -214,6 +216,7 @@ const App = () => (
             </Suspense>
           </BrowserRouter>
           </TooltipProvider>
+          </ActionItemsProvider>
         </DueFollowUpsProvider>
       </OrgBranchProvider>
     </AuthProvider>

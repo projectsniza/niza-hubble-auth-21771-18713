@@ -25,6 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import DeleteDocumentConfirmDialog from '@/components/documents/DeleteDocumentConfirmDialog';
+import { moveToRecycleBin } from '@/lib/recycleBin';
 
 interface FolderItem {
   id: string;
@@ -330,14 +332,23 @@ export default function SafeDocuments() {
   };
 
   const handleDeleteDocument = async () => {
-    if (!deleteDocId || !deleteDocPath) return;
+    if (!deleteDocId) return;
 
     try {
-      await supabase.storage.from('documents').remove([deleteDocPath]);
-      const { error } = await supabase.from('documents').delete().eq('id', deleteDocId);
-      if (error) throw error;
+      const docToDelete = documents.find(d => d.id === deleteDocId);
+      const currentFolder = folders.find(f => f.id === currentFolderId);
 
-      toast({ title: "Success", description: "Document deleted" });
+      if (docToDelete) {
+        await moveToRecycleBin(
+          docToDelete,
+          user?.name || user?.email,
+          currentFolder ? { name: currentFolder.name, path: currentFolder.path } : undefined
+        );
+      } else {
+        await supabase.from('documents').delete().eq('id', deleteDocId);
+      }
+
+      toast({ title: "Moved to Recycle Bin", description: "Document moved to Recycle Bin (retrievable for up to 90 days)" });
       setDeleteDocId(null);
       setDeleteDocPath(null);
       fetchFoldersAndDocuments();
@@ -659,23 +670,27 @@ export default function SafeDocuments() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Document Confirmation */}
-      <AlertDialog open={!!deleteDocId} onOpenChange={() => setDeleteDocId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this document? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteDocument} className="bg-destructive text-destructive-foreground">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Document Confirmation (Big Box Popup with 90-Day Retrieval Guarantee) */}
+      {(() => {
+        const docToDelete = documents.find(d => d.id === deleteDocId);
+        const folderOfDoc = folders.find(f => f.id === (docToDelete?.folder_id || currentFolderId));
+        return (
+          <DeleteDocumentConfirmDialog
+            open={!!deleteDocId}
+            onOpenChange={(open) => {
+              if (!open) {
+                setDeleteDocId(null);
+                setDeleteDocPath(null);
+              }
+            }}
+            documentName={docToDelete?.title || docToDelete?.file_name}
+            documentType={docToDelete?.file_type}
+            documentSize={docToDelete?.file_size}
+            folderName={folderOfDoc?.name}
+            onConfirm={handleDeleteDocument}
+          />
+        );
+      })()}
 
       {/* Delete Folder Confirmation */}
       <AlertDialog open={!!deleteFolderId} onOpenChange={() => setDeleteFolderId(null)}>
