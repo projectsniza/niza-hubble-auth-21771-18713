@@ -69,10 +69,11 @@ export function isTimesheetSessionVerified(): boolean {
 }
 
 /**
- * Mark the current timesheet session as verified (default 8 hours).
+ * Mark the current timesheet session as verified.
+ * For passcode mode, verification defaults to a 2-minute scheduling window so security remains tight.
  */
-export function setTimesheetSessionVerified(durationHours = 8): void {
-  memoryTimesheetVerifiedUntil = Date.now() + durationHours * 60 * 60 * 1000;
+export function setTimesheetSessionVerified(durationMinutes = 2): void {
+  memoryTimesheetVerifiedUntil = Date.now() + durationMinutes * 60 * 1000;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('niza_timesheet_session_unlocked'));
   }
@@ -83,6 +84,9 @@ export function setTimesheetSessionVerified(durationHours = 8): void {
  */
 export function clearTimesheetSessionVerified(): void {
   memoryTimesheetVerifiedUntil = 0;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('niza_timesheet_session_locked'));
+  }
 }
 
 /**
@@ -299,8 +303,8 @@ export async function verifyTimesheetPasscode(
       };
     }
 
-    // Unlock session on success!
-    setTimesheetSessionVerified(8);
+    // Unlock session on success for active scheduling
+    setTimesheetSessionVerified(2);
 
     return {
       success: true,
