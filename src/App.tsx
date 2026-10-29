@@ -94,6 +94,7 @@ const LivePreview = lazy(() => import("./pages/niza-analysis/LivePreview"));
 const UploadedFiles = lazy(() => import("./pages/niza-analysis/UploadedFiles"));
 const Formulas = lazy(() => import("./pages/niza-analysis/Formulas"));
 const DailySalesUpload = lazy(() => import("./pages/dashboard/DailySalesUpload"));
+const Visualization = lazy(() => import("./pages/dashboard/Visualization"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
@@ -126,6 +127,7 @@ const App = () => (
                 <Route path="/dashboard" element={<Dashboard />}>
                   <Route index element={<Home />} />
                   <Route path="overview" element={<Overview />} />
+                  <Route path="visualization" element={<Visualization />} />
                   <Route path="employees" element={<Employees />} />
                   <Route path="employees/:id" element={<EmployeeProfile />} />
                   <Route path="my-profile" element={<MyProfile />} />

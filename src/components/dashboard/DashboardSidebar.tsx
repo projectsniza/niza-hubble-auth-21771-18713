@@ -3,7 +3,7 @@ import {
   Home, Users, FileText, Clock, Calendar, 
   MapPin, DollarSign, TrendingUp,
   CalendarDays, GraduationCap, LogOut, LayoutDashboard, Settings,
-  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu, BarChart3
+  User, Wrench, ClipboardList, Shield, ClipboardCheck, MessageSquare, Ticket, CheckSquare, Car, Wallet, Menu, BarChart3, Orbit
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
 
 // Map sidebar paths to permission keys
 const pathToPermissionKey: Record<string, string> = {
+  '/dashboard/visualization': 'visualization',
   '/dashboard/employees': 'employee_management',
   '/dashboard/documents': 'documents',
   '/dashboard/documents/submit': 'documents',
@@ -119,6 +120,7 @@ const getMenuItems = (role: string) => {
   const items = [
     { title: 'Home', icon: Home, path: '/dashboard' },
     { title: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
+    ...(role === 'super_admin' ? [{ title: 'Visualization', icon: Orbit, path: '/dashboard/visualization' }] : []),
     { title: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
     { title: 'Reminders', icon: CheckSquare, path: '/dashboard/reminders' },
     { title: 'Employee Hub', icon: Users, path: '/dashboard/employees' },

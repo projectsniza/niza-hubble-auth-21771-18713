@@ -19,6 +19,16 @@ import {
   getTwoFactorAuthEnabled,
   subscribeToTwoFactorSetting
 } from '@/lib/twoFactorAuth';
+import {
+  isTimesheetSessionVerified,
+  setTimesheetSessionVerified,
+  getTimesheetVerificationModeSync,
+  isTimesheetPasscodeConfiguredSync,
+  getTimesheetSecurityConfig,
+  subscribeToTimesheetSecurity,
+  type TimesheetVerificationMode,
+} from '@/lib/timesheetSecurity';
+import { TimesheetPasscodeModal } from './TimesheetPasscodeModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -147,7 +157,7 @@ const getTimesheetBranchName = (timesheet?: Timesheet | null) =>
   timesheet?.branch?.name || timesheet?.employee?.branch?.name || 'Unassigned';
 
 // Sum a timesheet's hours restricted to dates within the payroll period
-// (21st → 20th). Falls back to stored totals only when entries aren't loaded.
+// (21st â†’ 20th). Falls back to stored totals only when entries aren't loaded.
 const getTsInPeriodTotals = (ts: any, payrollMonth: Date) => {
   const { start, end } = getPayrollPeriod(payrollMonth);
   const entries = ts?.entries as Array<any> | undefined;
@@ -193,7 +203,7 @@ export function TimesheetView() {
   useEffect(() => { localStorage.setItem('scheduling.entryView', entryView); }, [entryView]);
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
     const today = new Date();
-    // Payroll cycle is 21st → 20th. Before the 21st we are still in the previous month's payroll.
+    // Payroll cycle is 21st â†’ 20th. Before the 21st we are still in the previous month's payroll.
     return today.getDate() < 21 ? subMonths(today, 1) : today;
   });
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
@@ -210,8 +220,11 @@ export function TimesheetView() {
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Store Account 2-Step Mail Verification for Weekly Scheduling
-  const [isStoreVerified, setIsStoreVerified] = useState(() => isStoreSchedulingVerified());
+  // Timesheets & Rota Verification State (Passcode, 2FA, or Disabled)
+  const [isStoreVerified, setIsStoreVerified] = useState(() => isTimesheetSessionVerified());
+  const [tsVerificationMode, setTsVerificationMode] = useState<TimesheetVerificationMode>(() => getTimesheetVerificationModeSync());
+  const [isPasscodeConfigured, setIsPasscodeConfigured] = useState<boolean>(() => isTimesheetPasscodeConfiguredSync());
+  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
   const [store2FAOpen, setStore2FAOpen] = useState(false);
   const [storeChallengeToken, setStoreChallengeToken] = useState<string | null>(null);
   const [isSendingStore2FA, setIsSendingStore2FA] = useState(false);
@@ -255,38 +268,108 @@ export function TimesheetView() {
     }
   }, [user?.email, store2FAOpen, storeChallengeToken]);
 
-  const checkStore2FA = useCallback((action: () => void): boolean => {
-    if (user?.role !== 'manager' || !isTwoFactorAuthEnabledSync() || isStoreSchedulingVerified()) {
+  const checkStoreVerification = useCallback((action: () => void): boolean => {
+    // Non-managers bypass verification
+    if (user?.role !== 'manager') {
       setIsStoreVerified(true);
       action();
       return true;
     }
-    setIsStoreVerified(false);
-    setPendingStoreAction(() => action);
-    triggerStore2FA();
-    return false;
+
+    const mode = getTimesheetVerificationModeSync();
+
+    // 1. Disabled mode -> direct access without prompts
+    if (mode === 'disabled') {
+      setIsStoreVerified(true);
+      action();
+      return true;
+    }
+
+    // 2. Passcode mode
+    if (mode === 'passcode') {
+      // Until passcode is set by Super Admin, normal login/access only!
+      if (!isTimesheetPasscodeConfiguredSync()) {
+        setIsStoreVerified(true);
+        action();
+        return true;
+      }
+
+      if (isTimesheetSessionVerified()) {
+        setIsStoreVerified(true);
+        action();
+        return true;
+      }
+
+      setIsStoreVerified(false);
+      setPendingStoreAction(() => action);
+      setPasscodeModalOpen(true);
+      return false;
+    }
+
+    // 3. Two-Factor (2FA) mode
+    if (mode === 'two_factor') {
+      if (isTimesheetSessionVerified()) {
+        setIsStoreVerified(true);
+        action();
+        return true;
+      }
+
+      setIsStoreVerified(false);
+      setPendingStoreAction(() => action);
+      triggerStore2FA();
+      return false;
+    }
+
+    setIsStoreVerified(true);
+    action();
+    return true;
   }, [user?.role, triggerStore2FA]);
 
-  // Synchronize 2FA state so Timesheet unlocks immediately when 2FA is disabled
+  const checkStore2FA = checkStoreVerification;
+
+  // Synchronize Timesheet security settings and global 2FA
   useEffect(() => {
     let mounted = true;
-    getTwoFactorAuthEnabled().then((enabled) => {
-      if (mounted && !enabled) {
-        setIsStoreVerified(true);
-        setStore2FAOpen(false);
+
+    getTimesheetSecurityConfig().then((cfg) => {
+      if (mounted) {
+        setTsVerificationMode(cfg.mode);
+        setIsPasscodeConfigured(cfg.isPasscodeSet);
+        if (cfg.mode === 'disabled' || (cfg.mode === 'passcode' && !cfg.isPasscodeSet)) {
+          setIsStoreVerified(true);
+          setStore2FAOpen(false);
+          setPasscodeModalOpen(false);
+        } else {
+          setIsStoreVerified(isTimesheetSessionVerified());
+        }
       }
     });
 
-    const unsubscribe = subscribeToTwoFactorSetting((enabled) => {
-      if (!enabled) {
+    const unsubscribeTs = subscribeToTimesheetSecurity((cfg) => {
+      setTsVerificationMode(cfg.mode);
+      setIsPasscodeConfigured(cfg.isPasscodeSet);
+      if (cfg.mode === 'disabled' || (cfg.mode === 'passcode' && !cfg.isPasscodeSet)) {
         setIsStoreVerified(true);
         setStore2FAOpen(false);
+        setPasscodeModalOpen(false);
+      } else {
+        setIsStoreVerified(isTimesheetSessionVerified());
       }
+    });
+
+    const unsubscribe2FA = subscribeToTwoFactorSetting(() => {
+      getTimesheetSecurityConfig().then((cfg) => {
+        if (mounted) {
+          setTsVerificationMode(cfg.mode);
+          setIsPasscodeConfigured(cfg.isPasscodeSet);
+        }
+      });
     });
 
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubscribeTs();
+      unsubscribe2FA();
     };
   }, []);
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
@@ -320,7 +403,7 @@ export function TimesheetView() {
     if (canViewFilters) fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
 
-  // Fetch weekly hour targets (one row per branch) — accessible to all roles via RLS
+  // Fetch weekly hour targets (one row per branch) â€” accessible to all roles via RLS
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -367,7 +450,7 @@ export function TimesheetView() {
     })();
   }, [currentWeekStart && format(currentWeekStart, 'yyyy-MM-dd')]);
 
-  // Monthly temporary-staff consolidation — sums temp entries strictly within
+  // Monthly temporary-staff consolidation â€” sums temp entries strictly within
   // the 21st-20th payroll period, bucketed per (branch -> temp -> week).
   useEffect(() => {
     (async () => {
@@ -417,7 +500,7 @@ export function TimesheetView() {
           if (canViewFilters && filterMode === 'organization' && selectedOrg && t.organization_id !== selectedOrg) return;
           if (canViewFilters && filterMode === 'branch' && selectedBranch && t.branch_id !== selectedBranch) return;
 
-          const branchName = t.branch?.name || '—';
+          const branchName = t.branch?.name || 'â€”';
           // Find week index by entry_date (the date the work happened)
           const dd = parseLocalDate(e.entry_date);
           const wIdx = monthWeeks.findIndex(w => {
@@ -813,7 +896,7 @@ export function TimesheetView() {
 
   const updateEntry = (index: number, field: keyof TimesheetEntry, value: string | number | null) => {
     if (!isDateStringInPayrollPeriod(entries[index]?.entry_date, currentMonth)) {
-      toast.error('This date is outside the selected 21st–20th payroll period.');
+      toast.error('This date is outside the selected 21stâ€“20th payroll period.');
       return;
     }
     const updated = [...entries];
@@ -952,7 +1035,7 @@ export function TimesheetView() {
     const entry = timesheet.entries?.find(e => e.day_of_week === dayOfWeek);
     if (!entry?.id) return;
     if (!isDateStringInPayrollPeriod(entry.entry_date, currentMonth)) {
-      toast.error('This date is outside the selected 21st–20th payroll period.');
+      toast.error('This date is outside the selected 21stâ€“20th payroll period.');
       return;
     }
 
@@ -986,7 +1069,7 @@ export function TimesheetView() {
     }
 
 
-    // Do NOT manually update total_worked_hours here — the database trigger
+    // Do NOT manually update total_worked_hours here â€” the database trigger
     // (update_timesheet_totals_trigger) recalculates totals from all entries
     // automatically. Manually overwriting from a possibly-stale local
     // `timesheet.entries` snapshot caused race conditions where 0.5h / 1h
@@ -1002,7 +1085,7 @@ export function TimesheetView() {
 
     const totalWorked = Number(refreshed?.total_worked_hours) || 0;
 
-    // Optimistically update local timesheets state — no full refetch (prevents refresh that interrupts editing)
+    // Optimistically update local timesheets state â€” no full refetch (prevents refresh that interrupts editing)
     const patchTs = (ts: Timesheet): Timesheet => ({
       ...ts,
       total_worked_hours: totalWorked,
@@ -1095,7 +1178,7 @@ export function TimesheetView() {
     const grouped = dedupedTimesheets.reduce((acc, ts) => {
       const branchName = getTimesheetBranchName(ts);
       // Skip employees with no branch (avoids stray "Unassigned" group when
-      // viewing a specific branch — e.g. WELCOME SHEPERDSBush).
+      // viewing a specific branch â€” e.g. WELCOME SHEPERDSBush).
       if (!branchName || branchName === 'Unassigned') return acc;
       if (!acc[branchName]) acc[branchName] = { timesheets: [], totals: { worked: 0, holiday: 0, sick: 0, adj: 0, total: 0 } };
       acc[branchName].timesheets.push(ts);
@@ -1169,7 +1252,7 @@ export function TimesheetView() {
     // The dated entry is the authoritative source. Parent week_start_date can
     // be stale on legacy rows and previously pushed several weeks into Week 5.
     // Pick one best entry per employee/date so duplicate parent timesheets do
-    // not double payroll, then bucket that date into its real Week 1–6 column.
+    // not double payroll, then bucket that date into its real Week 1â€“6 column.
     const bestEntryByRowDate = new Map<string, { rowKey: string; entry: TimesheetEntry; total: number }>();
 
     scopedMonthTs.forEach(ts => {
@@ -1437,7 +1520,7 @@ export function TimesheetView() {
       ));
 
       const filename = `Timesheet_${format(payroll.end, 'MMM_yyyy')}.xlsx`;
-      exportTimesheetWorkbook(weeks, monthlyWithTemporary, filename, `${format(payroll.start, 'dd MMM yyyy')} – ${format(payroll.end, 'dd MMM yyyy')}`);
+      exportTimesheetWorkbook(weeks, monthlyWithTemporary, filename, `${format(payroll.start, 'dd MMM yyyy')} â€“ ${format(payroll.end, 'dd MMM yyyy')}`);
       toast.success('Formatted Excel timesheet exported.');
     } catch (error) {
       console.error('Timesheet Excel export failed:', error);
@@ -1473,7 +1556,7 @@ export function TimesheetView() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Staff Attendance Details</h1>
                 <p className="text-muted-foreground">
-                  Payroll: {format(getPayrollPeriod(currentMonth).start, 'dd MMM yyyy')} – {format(getPayrollPeriod(currentMonth).end, 'dd MMM yyyy')}
+                  Payroll: {format(getPayrollPeriod(currentMonth).start, 'dd MMM yyyy')} â€“ {format(getPayrollPeriod(currentMonth).end, 'dd MMM yyyy')}
                 </p>
               </div>
             </div>
@@ -1596,52 +1679,95 @@ export function TimesheetView() {
         </Card>
       </div>
 
-      {/* Store Account 2FA Security Banner for Weekly Scheduling (only shown when 2FA is active) */}
-      {user?.role === 'manager' && isTwoFactorAuthEnabledSync() && (
-        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm transition-all ${
-          isStoreVerified
-            ? 'bg-emerald-500/10 border-emerald-500/30'
-            : 'bg-amber-500/10 border-amber-500/30'
-        }`}>
-          <div className="flex items-center gap-3">
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+      {/* Store Account Security Banner for Weekly Scheduling */}
+      {user?.role === 'manager' && (
+        <>
+          {/* Two-Factor Mode Banner */}
+          {tsVerificationMode === 'two_factor' && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm transition-all ${
               isStoreVerified
-                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-amber-500/10 border-amber-500/30'
             }`}>
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {isStoreVerified ? 'Weekly Scheduling Unlocked' : '2-Step Mail Verification Required for Weekly Scheduling'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isStoreVerified
-                  ? `Store account session verified via Resend (${user?.email}). You can create and edit weekly shifts.`
-                  : `Before store accounts can do scheduling in Weekly View, confirm your identity with a code sent to ${user?.email}.`}
-              </p>
-            </div>
-          </div>
-          {!isStoreVerified && (
-            <Button
-              onClick={triggerStore2FA}
-              disabled={isSendingStore2FA}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-medium"
-            >
-              {isSendingStore2FA ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Sending code...
-                </>
-              ) : (
-                <>
-                  <Lock className="h-4 w-4 mr-2" />
-                  Verify with Email Code
-                </>
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+                  isStoreVerified
+                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                }`}>
+                  <Shield className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {isStoreVerified ? 'Weekly Scheduling Unlocked' : '2-Step Mail Verification Required for Weekly Scheduling'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isStoreVerified
+                      ? `Store account session verified via Resend (${user?.email}). You can create and edit weekly shifts.`
+                      : `Before store accounts can do scheduling in Weekly View, confirm your identity with a code sent to ${user?.email}.`}
+                  </p>
+                </div>
+              </div>
+              {!isStoreVerified && (
+                <Button
+                  onClick={triggerStore2FA}
+                  disabled={isSendingStore2FA}
+                  className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                >
+                  {isSendingStore2FA ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Sending code...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4 mr-2" />
+                      Verify with Email Code
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
+            </div>
           )}
-        </div>
+
+          {/* Passcode Mode Banner (Only shown if passcode is configured) */}
+          {tsVerificationMode === 'passcode' && isPasscodeConfigured && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm transition-all ${
+              isStoreVerified
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-amber-500/10 border-amber-500/30'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+                  isStoreVerified
+                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                }`}>
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {isStoreVerified ? 'Weekly Scheduling Unlocked (Passcode Authorized)' : 'Super Admin Passcode Required for Weekly Scheduling'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isStoreVerified
+                      ? 'Timesheets and rota are unlocked for your active session. You can create and update weekly shifts.'
+                      : 'Store managers must enter the security passcode authorized by Super Admin to create and update weekly shifts.'}
+                  </p>
+                </div>
+              </div>
+              {!isStoreVerified && (
+                <Button
+                  onClick={() => setPasscodeModalOpen(true)}
+                  className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                >
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Enter Passcode
+                </Button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Search and Actions */}
@@ -1682,10 +1808,10 @@ export function TimesheetView() {
           <CardHeader className="py-3 px-4 bg-gradient-to-r from-primary/5 to-transparent border-b">
             <CardTitle className="text-sm font-semibold flex items-center gap-2 flex-wrap">
               <Calendar className="h-4 w-4 text-primary" />
-              WEEK {selectedWeekIndex + 1} • {currentWeekStart && format(currentWeekStart, 'dd MMM')} - {weekEnd && format(weekEnd, 'dd MMM yyyy')}
+              WEEK {selectedWeekIndex + 1} â€¢ {currentWeekStart && format(currentWeekStart, 'dd MMM')} - {weekEnd && format(weekEnd, 'dd MMM yyyy')}
               {editingDisabled && (
                 <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-800 text-[10px] gap-1">
-                  <Lock className="h-3 w-3" /> Locked — Read-Only
+                  <Lock className="h-3 w-3" /> Locked â€” Read-Only
                 </Badge>
               )}
             </CardTitle>
@@ -1720,7 +1846,7 @@ export function TimesheetView() {
                       <TableRow className="bg-primary/5 hover:bg-primary/10">
                         <TableCell colSpan={21} className="py-2 font-semibold text-primary text-xs sticky left-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span>📍 {branchName}</span>
+                            <span>ðŸ“ {branchName}</span>
                             <Badge variant="secondary" className="text-[10px]">{data.timesheets.length} staff</Badge>
                             {(() => {
                               const branchId = data.timesheets[0]?.employee?.branch_id;
@@ -1743,7 +1869,7 @@ export function TimesheetView() {
                                   ? 'bg-amber-100 text-amber-700 border-amber-300'
                                   : 'bg-emerald-100 text-emerald-700 border-emerald-300';
                               const label = status === 'high' ? 'HIGH' : status === 'low' ? 'LOW' : 'ON TARGET';
-                              const tooltip = `Scheduled: ${scheduled.toFixed(1)}h (perm ${data.totals.worked.toFixed(1)}h${tempHrs > 0 ? ` + temp ${tempHrs.toFixed(1)}h` : ''}) • Target ${target.target}h • Low ≤ ${target.low}h • High ≥ ${target.high}h`;
+                              const tooltip = `Scheduled: ${scheduled.toFixed(1)}h (perm ${data.totals.worked.toFixed(1)}h${tempHrs > 0 ? ` + temp ${tempHrs.toFixed(1)}h` : ''}) â€¢ Target ${target.target}h â€¢ Low â‰¤ ${target.low}h â€¢ High â‰¥ ${target.high}h`;
                               return (
                                 <>
                                   <Badge
@@ -1751,7 +1877,7 @@ export function TimesheetView() {
                                     className={`text-[10px] font-bold border ${colorCls}`}
                                     title={tooltip}
                                   >
-                                    {scheduled.toFixed(1)}h / {target.target}h • {label}
+                                    {scheduled.toFixed(1)}h / {target.target}h â€¢ {label}
                                   </Badge>
                                   {tempHrs > 0 && (
                                     <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200" title="Temporary staff hours included in scheduled total">
@@ -1798,7 +1924,7 @@ export function TimesheetView() {
                                 <React.Fragment key={dayIdx}>
                                   <TableCell className={`text-center px-1 border-l text-[10px] ${cellBgClass}`}>
                                     {!inPayroll && !hasShiftData ? (
-                                      <span className="text-muted-foreground">—</span>
+                                      <span className="text-muted-foreground">â€”</span>
                                     ) : hasEdit ? (
                                       <Input
                                         type="time"
@@ -1823,12 +1949,12 @@ export function TimesheetView() {
                                          className={`${inPayroll ? 'cursor-pointer hover:bg-primary/10' : 'italic opacity-70 cursor-not-allowed'} px-1 py-0.5 rounded`}
                                          onClick={() => {
                                            if (!inPayroll) {
-                                             toast.error('This date is outside the selected 21st–20th payroll period.');
+                                             toast.error('This date is outside the selected 21stâ€“20th payroll period.');
                                              return;
                                            }
                                            handleInlineTimeChange(ts.id, day, 'start', entry?.shift_start_time || '');
                                          }}
-                                         title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle)' : ''}
+                                         title={!inPayroll ? 'Date is outside current payroll period (21stâ€“20th cycle)' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_start_time || null) || (isHoliday ? 'HOL' : isSick ? 'SICK' : '-')}
                                       </span>
@@ -1836,7 +1962,7 @@ export function TimesheetView() {
                                   </TableCell>
                                   <TableCell className={`text-center px-1 border-r text-[10px] ${cellBgClass}`}>
                                     {!inPayroll && !hasShiftData ? (
-                                      <span className="text-muted-foreground">—</span>
+                                      <span className="text-muted-foreground">â€”</span>
                                     ) : hasEdit ? (
                                       <div className="flex items-center gap-0.5">
                                         <Input
@@ -1873,12 +1999,12 @@ export function TimesheetView() {
                                          className={`${inPayroll ? 'cursor-pointer hover:bg-primary/10' : 'italic opacity-70 cursor-not-allowed'} px-1 py-0.5 rounded`}
                                          onClick={() => {
                                            if (!inPayroll) {
-                                             toast.error('This date is outside the selected 21st–20th payroll period.');
+                                             toast.error('This date is outside the selected 21stâ€“20th payroll period.');
                                              return;
                                            }
                                            handleInlineTimeChange(ts.id, day, 'end', entry?.shift_end_time || '');
                                          }}
-                                         title={!inPayroll ? 'Date is outside current payroll period (21st–20th cycle)' : ''}
+                                         title={!inPayroll ? 'Date is outside current payroll period (21stâ€“20th cycle)' : ''}
                                       >
                                         {formatTimeDisplay(entry?.shift_end_time || null) || (isHoliday ? `${holidayHours}h` : isSick ? `${sickHours}h` : '-')}
                                       </span>
@@ -2014,7 +2140,7 @@ export function TimesheetView() {
                       <React.Fragment key={branchName}>
                         <TableRow className="bg-primary/5 hover:bg-primary/10">
                           <TableCell colSpan={12} className="py-2 font-semibold text-primary text-xs sticky left-0">
-                            📍 {branchName}
+                            ðŸ“ {branchName}
                           </TableCell>
                         </TableRow>
                         {Object.values(branchData).map((emp, idx) => (
@@ -2128,7 +2254,7 @@ export function TimesheetView() {
               Edit Timesheet
             </SheetTitle>
             <SheetDescription>
-              {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name} • Week {selectedWeekIndex + 1}
+              {selectedTimesheet?.employee?.first_name} {selectedTimesheet?.employee?.last_name} â€¢ Week {selectedWeekIndex + 1}
             </SheetDescription>
           </SheetHeader>
           
@@ -2153,7 +2279,7 @@ export function TimesheetView() {
                       onClick={() => {
                         const firstEntry = entries.find(e => isDateStringInPayrollPeriod(e.entry_date, currentMonth));
                         if (!firstEntry) {
-                          toast.error('No editable day is inside the selected 21st–20th payroll period.');
+                          toast.error('No editable day is inside the selected 21stâ€“20th payroll period.');
                           return;
                         }
                         if (!firstEntry.shift_start_time || !firstEntry.shift_end_time) return;
@@ -2232,7 +2358,7 @@ export function TimesheetView() {
                         disabled={!canEditDate}
                         onClick={() => {
                           if (!canEditDate) {
-                            toast.error('This date is outside the selected 21st–20th payroll period.');
+                            toast.error('This date is outside the selected 21stâ€“20th payroll period.');
                             return;
                           }
                           const updated = [...entries];
@@ -2390,6 +2516,21 @@ export function TimesheetView() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Store Account Passcode Verification Modal */}
+      <TimesheetPasscodeModal
+        open={passcodeModalOpen}
+        onOpenChange={setPasscodeModalOpen}
+        onSuccess={() => {
+          setStoreSchedulingVerified(8);
+          setIsStoreVerified(true);
+          setPasscodeModalOpen(false);
+          if (pendingStoreAction) {
+            pendingStoreAction();
+            setPendingStoreAction(null);
+          }
+        }}
+      />
     </div>
   );
 }

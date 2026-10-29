@@ -69,6 +69,84 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
+// AES-GCM Key derivation for secure reversible storage of passcode for super admin
+async function getAesKey(secret: string): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest("SHA-256", enc.encode(secret + ":niza-passcode-salt"));
+  return crypto.subtle.importKey(
+    "raw",
+    hash,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+// Reversible encryption for Super Admin passcode retrieval
+async function encryptPasscode(passcode: string, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await getAesKey(secret);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    enc.encode(passcode)
+  );
+  const ivB64 = base64UrlEncode(iv);
+  const cipherB64 = base64UrlEncode(new Uint8Array(encrypted));
+  return `${ivB64}:${cipherB64}`;
+}
+
+// Reversible decryption for Super Admin
+async function decryptPasscode(encryptedStr: string, secret: string): Promise<string | null> {
+  try {
+    const parts = encryptedStr.split(":");
+    if (parts.length !== 2) return null;
+    const [ivB64, cipherB64] = parts;
+    const iv = base64UrlDecode(ivB64);
+    const cipher = base64UrlDecode(cipherB64);
+    const key = await getAesKey(secret);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      cipher
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch {
+    return null;
+  }
+}
+
+// Helper: check if caller has super_admin role
+async function checkCallerIsSuperAdmin(
+  req: Request,
+  supabaseAdmin: any
+): Promise<{ isSuperAdmin: boolean; userId?: string; userEmail?: string }> {
+  try {
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+    if (!authHeader) return { isSuperAdmin: false };
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return { isSuperAdmin: false };
+
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) return { isSuperAdmin: false };
+
+    const { data: roleData } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    return {
+      isSuperAdmin: roleData?.role === "super_admin",
+      userId: user.id,
+      userEmail: user.email,
+    };
+  } catch {
+    return { isSuperAdmin: false };
+  }
+}
+
 // Sign payload into challenge token
 async function createChallengeToken(
   payload: Record<string, unknown>,
@@ -348,6 +426,329 @@ serve(async (req) => {
     }
 
     // -----------------------------------------------------------------
+    // ACTION: GET TIMESHEET SECURITY CONFIGURATION
+    // -----------------------------------------------------------------
+    if (action === "get_timesheet_security_config") {
+      const { data: modeData } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value, updated_at, description")
+        .eq("setting_key", "timesheet_verification_mode")
+        .maybeSingle();
+
+      const { data: passcodeData } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value")
+        .eq("setting_key", "timesheet_passcode_config")
+        .maybeSingle();
+
+      let mode: "disabled" | "passcode" | "two_factor" = "disabled";
+      if (modeData?.setting_value !== undefined && modeData?.setting_value !== null) {
+        const v = modeData.setting_value;
+        const parsed = typeof v === "string" ? v.replace(/^"|"$/g, "") : (v as any).mode || v;
+        if (parsed === "disabled" || parsed === "passcode" || parsed === "two_factor") {
+          mode = parsed;
+        }
+      }
+
+      let isPasscodeSet = false;
+      let rawEncryptedPasscode = "";
+      if (passcodeData?.setting_value) {
+        const pv = passcodeData.setting_value;
+        if (typeof pv === "object" && pv !== null) {
+          isPasscodeSet = Boolean((pv as any).is_set);
+          rawEncryptedPasscode = (pv as any).encrypted || "";
+        }
+      }
+
+      // Check if caller is super_admin to conditionally reveal passcode
+      const adminCheck = await checkCallerIsSuperAdmin(req, supabaseAdmin);
+
+      let decryptedPasscode: string | undefined = undefined;
+      if (adminCheck.isSuperAdmin && rawEncryptedPasscode) {
+        decryptedPasscode = (await decryptPasscode(rawEncryptedPasscode, supabaseServiceKey)) || undefined;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode,
+          isPasscodeSet,
+          // STRICT SECURITY: Only Super Admin receives the plain passcode
+          passcode: adminCheck.isSuperAdmin ? (decryptedPasscode || "") : undefined,
+          updatedAt: modeData?.updated_at || null,
+          updatedBy: modeData?.description || null,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // ACTION: SET TIMESHEET SECURITY CONFIGURATION (Super Admin Only)
+    // -----------------------------------------------------------------
+    if (action === "set_timesheet_security_config") {
+      const adminCheck = await checkCallerIsSuperAdmin(req, supabaseAdmin);
+      if (!adminCheck.isSuperAdmin) {
+        throw new Error("Only super admins can configure timesheet security and passcode settings");
+      }
+
+      const { mode, passcode, updatedBy = "Super Admin" } = body;
+      const nowIso = new Date().toISOString();
+      const updaterInfo = adminCheck.userEmail || updatedBy;
+
+      if (mode && !["disabled", "passcode", "two_factor"].includes(mode)) {
+        throw new Error("Invalid timesheet verification mode. Must be disabled, passcode, or two_factor.");
+      }
+
+      let finalMode: "disabled" | "passcode" | "two_factor" = "disabled";
+
+      // Update mode if passed
+      if (mode) {
+        finalMode = mode;
+        await supabaseAdmin
+          .from("message_settings")
+          .upsert(
+            {
+              setting_key: "timesheet_verification_mode",
+              setting_value: mode,
+              description: `Timesheet verification mode set to '${mode}' by ${updaterInfo}`,
+              updated_at: nowIso,
+            },
+            { onConflict: "setting_key" }
+          );
+      } else {
+        const { data: currentMode } = await supabaseAdmin
+          .from("message_settings")
+          .select("setting_value")
+          .eq("setting_key", "timesheet_verification_mode")
+          .maybeSingle();
+        if (currentMode?.setting_value) {
+          finalMode = (currentMode.setting_value as any);
+        }
+      }
+
+      let plainPasscodeForAdmin = "";
+      let isPasscodeSet = false;
+
+      // Update passcode if passed
+      if (passcode !== undefined) {
+        const cleanPasscode = String(passcode).trim();
+        if (cleanPasscode.length > 0) {
+          const encrypted = await encryptPasscode(cleanPasscode, supabaseServiceKey);
+          const salt = "niza-ts-salt-2026";
+          const hash = await sha256Hex(`${cleanPasscode}:${salt}`);
+
+          await supabaseAdmin
+            .from("message_settings")
+            .upsert(
+              {
+                setting_key: "timesheet_passcode_config",
+                setting_value: {
+                  is_set: true,
+                  encrypted,
+                  hash,
+                  salt,
+                  updated_at: nowIso,
+                  updated_by: updaterInfo,
+                },
+                description: `Timesheet passcode set by ${updaterInfo}`,
+                updated_at: nowIso,
+              },
+              { onConflict: "setting_key" }
+            );
+
+          plainPasscodeForAdmin = cleanPasscode;
+          isPasscodeSet = true;
+        } else {
+          // Cleared passcode
+          await supabaseAdmin
+            .from("message_settings")
+            .upsert(
+              {
+                setting_key: "timesheet_passcode_config",
+                setting_value: {
+                  is_set: false,
+                  encrypted: "",
+                  hash: "",
+                  updated_at: nowIso,
+                  updated_by: updaterInfo,
+                },
+                description: `Timesheet passcode cleared by ${updaterInfo}`,
+                updated_at: nowIso,
+              },
+              { onConflict: "setting_key" }
+            );
+          isPasscodeSet = false;
+        }
+      } else {
+        // Read existing passcode status
+        const { data: existingData } = await supabaseAdmin
+          .from("message_settings")
+          .select("setting_value")
+          .eq("setting_key", "timesheet_passcode_config")
+          .maybeSingle();
+
+        if (existingData?.setting_value?.encrypted) {
+          plainPasscodeForAdmin = (await decryptPasscode(existingData.setting_value.encrypted, supabaseServiceKey)) || "";
+          isPasscodeSet = Boolean(existingData.setting_value.is_set && plainPasscodeForAdmin);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: finalMode,
+          isPasscodeSet,
+          passcode: plainPasscodeForAdmin,
+          updatedAt: nowIso,
+          updatedBy: updaterInfo,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // ACTION: VERIFY TIMESHEET PASSCODE
+    // -----------------------------------------------------------------
+    if (action === "verify_timesheet_passcode") {
+      const { passcode = "" } = body;
+
+      // 1. Check current mode
+      const { data: modeData } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value")
+        .eq("setting_key", "timesheet_verification_mode")
+        .maybeSingle();
+
+      let mode = "disabled";
+      if (modeData?.setting_value !== undefined && modeData?.setting_value !== null) {
+        const v = modeData.setting_value;
+        const parsed = typeof v === "string" ? v.replace(/^"|"$/g, "") : (v as any).mode || v;
+        if (parsed) mode = parsed;
+      }
+
+      if (mode === "disabled") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            verified: true,
+            message: "Timesheet verification is disabled",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+
+      // 2. Fetch stored passcode configuration
+      const { data: passcodeData } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value")
+        .eq("setting_key", "timesheet_passcode_config")
+        .maybeSingle();
+
+      let isPasscodeSet = false;
+      let storedHash = "";
+      let rawEncryptedPasscode = "";
+
+      if (passcodeData?.setting_value) {
+        const pv = passcodeData.setting_value;
+        if (typeof pv === "object" && pv !== null) {
+          isPasscodeSet = Boolean((pv as any).is_set);
+          storedHash = (pv as any).hash || "";
+          rawEncryptedPasscode = (pv as any).encrypted || "";
+        }
+      }
+
+      // "UNTILL THIS PASSCODE IS SET IT SHOULD GIVE NORMAL LOGIN ONLY"
+      if (!isPasscodeSet || (!storedHash && !rawEncryptedPasscode)) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            verified: true,
+            isDefaultDirectAccess: true,
+            message: "No passcode configured by Super Admin. Normal access granted.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+
+      const cleanInput = String(passcode).trim();
+      if (!cleanInput) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            verified: false,
+            error: "Please enter the passcode",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+
+      const salt = "niza-ts-salt-2026";
+      const inputHash = await sha256Hex(`${cleanInput}:${salt}`);
+
+      let isMatch = false;
+      if (storedHash && inputHash === storedHash) {
+        isMatch = true;
+      } else if (rawEncryptedPasscode) {
+        const decrypted = await decryptPasscode(rawEncryptedPasscode, supabaseServiceKey);
+        if (decrypted && decrypted.trim() === cleanInput) {
+          isMatch = true;
+        }
+      }
+
+      if (!isMatch) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            verified: false,
+            error: "Incorrect passcode. Please enter the valid authorization passcode provided by Super Admin.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+
+      // Verified! Issue scheduling session access token
+      const schedulingAccessToken = await createChallengeToken(
+        {
+          purpose: "store_scheduling_authorized",
+          verifiedAt: Date.now(),
+          expiresAt: Date.now() + 8 * 60 * 60 * 1000,
+        },
+        supabaseServiceKey
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          verified: true,
+          schedulingAccessToken,
+          message: "Timesheet passcode verified successfully",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // -----------------------------------------------------------------
     // ACTION: SEND 2FA CODE
     // -----------------------------------------------------------------
     if (action === "send_code") {
@@ -357,8 +758,8 @@ serve(async (req) => {
         throw new Error("Missing required fields: email and purpose");
       }
 
-      // Check if 2FA is globally disabled by Super Admin
-      if (purpose === "login" || purpose === "store_scheduling" || purpose === "admin_password_change") {
+      // 1. For general login and admin_password_change, check system-wide 2FA toggle
+      if (purpose === "login" || purpose === "admin_password_change") {
         const { data: configData } = await supabaseAdmin
           .from("message_settings")
           .select("setting_value")
@@ -374,6 +775,41 @@ serve(async (req) => {
               success: true,
               disabled: true,
               message: "Two-factor authentication is currently disabled by administrator.",
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            }
+          );
+        }
+      }
+
+      // 2. For store_scheduling, check timesheet_verification_mode independently!
+      // This allows enabling Timesheets 2FA even when system 2FA is off,
+      // or disabling Timesheets 2FA even when system 2FA is on!
+      if (purpose === "store_scheduling") {
+        const { data: modeData } = await supabaseAdmin
+          .from("message_settings")
+          .select("setting_value")
+          .eq("setting_key", "timesheet_verification_mode")
+          .maybeSingle();
+
+        let tsMode: "disabled" | "passcode" | "two_factor" = "disabled";
+        if (modeData?.setting_value !== undefined && modeData?.setting_value !== null) {
+          const v = modeData.setting_value;
+          const parsed = typeof v === "string" ? v.replace(/^"|"$/g, "") : (v as any).mode || v;
+          if (parsed === "disabled" || parsed === "passcode" || parsed === "two_factor") {
+            tsMode = parsed;
+          }
+        }
+
+        // If mode is NOT two_factor (i.e. disabled or passcode), skip sending 2FA code
+        if (tsMode !== "two_factor") {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              disabled: true,
+              message: `Timesheet verification mode is '${tsMode}'. Email 2FA is disabled for timesheets.`,
             }),
             {
               headers: { ...corsHeaders, "Content-Type": "application/json" },

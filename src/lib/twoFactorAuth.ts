@@ -1,4 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
+import {
+  getTimesheetVerificationModeSync,
+  isTimesheetPasscodeConfiguredSync,
+  isTimesheetSessionVerified,
+  setTimesheetSessionVerified,
+  clearTimesheetSessionVerified,
+  isTimesheetVerificationRequiredSync,
+} from './timesheetSecurity';
+
+export * from './timesheetSecurity';
 
 export type TwoFactorPurpose =
   | 'login'
@@ -36,8 +46,16 @@ export async function send2FACode(
   purpose: TwoFactorPurpose,
   metadata?: Record<string, unknown>
 ): Promise<Send2FAResponse> {
-  // If 2FA is disabled system-wide, skip sending code for auth purposes
-  if (!isTwoFactorAuthEnabledSync() && (purpose === 'login' || purpose === 'store_scheduling' || purpose === 'admin_password_change')) {
+  // For login and admin password changes, respect system-wide 2FA toggle
+  if (!isTwoFactorAuthEnabledSync() && (purpose === 'login' || purpose === 'admin_password_change')) {
+    return {
+      success: true,
+      disabled: true,
+    };
+  }
+
+  // For store scheduling, respect Timesheet Verification Mode independently
+  if (purpose === 'store_scheduling' && getTimesheetVerificationModeSync() !== 'two_factor') {
     return {
       success: true,
       disabled: true,
@@ -224,16 +242,11 @@ export function clearUserSessionStart(): void {
 let memoryStoreSchedulingVerifiedUntil = 0;
 
 export function isStoreSchedulingVerified(): boolean {
-  // If 2FA is disabled system-wide, store scheduling is immediately unlocked!
-  if (!isTwoFactorAuthEnabledSync()) {
-    return true;
-  }
-  return Date.now() < memoryStoreSchedulingVerifiedUntil;
+  return isTimesheetSessionVerified();
 }
 
-export function setStoreSchedulingVerified(durationHours = 2): void {
-  // Stored strictly in runtime memory for the active app session
-  memoryStoreSchedulingVerifiedUntil = Date.now() + durationHours * 60 * 60 * 1000;
+export function setStoreSchedulingVerified(durationHours = 8): void {
+  setTimesheetSessionVerified(durationHours);
   try {
     sessionStorage.removeItem(STORE_SCHEDULING_KEY);
     localStorage.removeItem(STORE_SCHEDULING_KEY);
@@ -243,7 +256,7 @@ export function setStoreSchedulingVerified(durationHours = 2): void {
 }
 
 export function clearStoreSchedulingVerified(): void {
-  memoryStoreSchedulingVerifiedUntil = 0;
+  clearTimesheetSessionVerified();
   try {
     sessionStorage.removeItem(STORE_SCHEDULING_KEY);
     localStorage.removeItem(STORE_SCHEDULING_KEY);
