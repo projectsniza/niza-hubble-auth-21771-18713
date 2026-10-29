@@ -37,7 +37,8 @@ import { Separator } from '@/components/ui/separator';
 import { 
   ChevronLeft, ChevronRight, Save, Check, 
   Download, Loader2, Users, Plus, Search, Calendar, Clock,
-  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X, Shield
+  FileSpreadsheet, Edit3, CheckCircle2, XCircle, X, Shield,
+  KeyRound, Lock
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
@@ -46,7 +47,6 @@ import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { TimesheetMonthLock } from './TimesheetMonthLock';
 import { MonthCloseReminder } from './MonthCloseReminder';
 import { TempStaffSection } from './TempStaffSection';
-import { Lock } from 'lucide-react';
 import { snapToHalfHour, HALF_HOUR_TIME_STEP } from '@/lib/timeSnap';
 import { FullMonthEntryView } from './FullMonthEntryView';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';

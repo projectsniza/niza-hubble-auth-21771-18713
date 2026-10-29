@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -351,7 +351,15 @@ export default function Employees() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [activeTab, setActiveTab] = useState('employees');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam || 'employees');
+
+  useEffect(() => {
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const { counts } = useNotificationCounts();
 
   useEffect(() => {

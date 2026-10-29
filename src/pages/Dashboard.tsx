@@ -11,6 +11,7 @@ import NotificationBell from '@/components/notifications/NotificationBell';
 import OpenItemsHeaderWidget from '@/components/dashboard/OpenItemsHeaderWidget';
 import ActionItemsHeaderWidget from '@/components/dashboard/ActionItemsHeaderWidget';
 import ActionRequiredPopup from '@/components/messaging/ActionRequiredPopup';
+import ContractWorkflowPopup from '@/components/onboarding/ContractWorkflowPopup';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, CheckSquare } from 'lucide-react';
@@ -39,6 +40,7 @@ export default function Dashboard() {
       {(user?.role === 'super_admin' || user?.role === 'hr') && <ReminderDuePopup />}
       <ActionRequiredPopup />
       <TodayEventsPopup />
+      <ContractWorkflowPopup />
       {/* Desktop Sidebar */}
       {!isMobile && (
         <DashboardSidebar

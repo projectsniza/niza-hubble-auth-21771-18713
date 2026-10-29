@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -265,7 +266,16 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
 }
 
 function OnboardingProgressTab() {
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const empParam = searchParams.get('employeeId');
+  const tabParam = searchParams.get('tab');
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(empParam || null);
+
+  useEffect(() => {
+    if (empParam) {
+      setSelectedEmployee(empParam);
+    }
+  }, [empParam]);
   const [activeSection, setActiveSection] = useState<'progress' | 'approved'>('progress');
 
   if (selectedEmployee) {
@@ -316,8 +326,17 @@ function OnboardingProgressTab() {
 
 export default function Onboarding() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('onboarding');
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(tabParam === 'contracts' ? 'contracts' : 'onboarding');
+  const [searchParams] = useSearchParams();
+  const empParam = searchParams.get('employeeId');
+  const tabParam = searchParams.get('tab');
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(empParam || null);
+
+  useEffect(() => {
+    if (empParam) {
+      setSelectedEmployee(empParam);
+    }
+  }, [empParam]);
 
   // Super Admin sees approval workflow + approved contracts
   if (user?.role === 'super_admin') {
