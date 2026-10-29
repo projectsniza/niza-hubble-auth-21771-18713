@@ -196,11 +196,12 @@ export default function ActionRequiredPopup({ items: propsItems, onAcknowledge: 
 
         <DialogFooter className="px-6 py-4 border-t bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="w-full sm:w-auto text-xs text-muted-foreground hover:text-foreground"
+            className="w-full sm:w-auto text-xs font-semibold h-9 px-4 rounded-xl border border-border/80 shadow-xs hover:bg-muted text-foreground gap-1.5 cursor-pointer"
             onClick={handleLater}
           >
+            <Clock className="h-3.5 w-3.5 text-amber-500" />
             Remind Later
           </Button>
 

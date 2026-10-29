@@ -748,14 +748,15 @@ export default function ContractWorkflowPopup() {
               <span>Compliant with UK Employment Rights Act & Onboarding Governance</span>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="text-xs h-7 text-muted-foreground"
+              className="text-xs h-9 px-4 font-semibold rounded-xl border border-border/80 shadow-xs hover:bg-muted/80 text-foreground gap-2 transition-all cursor-pointer"
               onClick={() => {
                 setIsDismissed(true);
                 setIsOpen(false);
               }}
             >
+              <Clock className="h-3.5 w-3.5 text-amber-500" />
               Remind Later
             </Button>
           </div>
