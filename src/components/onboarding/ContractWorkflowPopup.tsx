@@ -99,8 +99,25 @@ export default function ContractWorkflowPopup() {
   // Selected employee for embedded 3-stage activation view
   const [activeActivationEmployeeId, setActiveActivationEmployeeId] = useState<string | null>(null);
 
-  // Session dismissal state
-  const [isDismissed, setIsDismissed] = useState(false);
+  const dismissKey = `contract-workflow-remind-later-${user?.id || 'anon'}`;
+
+  // Session dismissal state with sessionStorage persistence
+  const [isDismissed, setIsDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(`contract-workflow-remind-later-${user?.id || 'anon'}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleRemindLater = useCallback(() => {
+    try {
+      sessionStorage.setItem(dismissKey, 'true');
+    } catch {}
+    setIsDismissed(true);
+    setIsOpen(false);
+    setActiveActivationEmployeeId(null);
+  }, [dismissKey]);
 
   // 1. Fetch pending contract approvals (Super Admin alone)
   const fetchPendingApprovals = useCallback(async () => {
@@ -244,7 +261,19 @@ export default function ContractWorkflowPopup() {
   useEffect(() => {
     if (loading) return;
 
-    if (totalWorkflowActionCount > 0 && !isDismissed) {
+    let isSnoozed = isDismissed;
+    try {
+      if (sessionStorage.getItem(dismissKey) === 'true') {
+        isSnoozed = true;
+      }
+    } catch {}
+
+    if (isSnoozed) {
+      setIsOpen(false);
+      return;
+    }
+
+    if (totalWorkflowActionCount > 0) {
       setIsOpen(true);
       // Pick initial active tab based on role and pending counts
       if (isSuperAdmin && totalPendingApprovals > 0) {
@@ -252,12 +281,12 @@ export default function ContractWorkflowPopup() {
       } else if (totalApprovedAwaitingActivation > 0) {
         setActiveTab('approved');
       }
-    } else if (totalWorkflowActionCount === 0) {
+    } else {
       // Automatically close if all items completed!
       setIsOpen(false);
       setActiveActivationEmployeeId(null);
     }
-  }, [loading, totalWorkflowActionCount, isDismissed, isSuperAdmin, totalPendingApprovals, totalApprovedAwaitingActivation]);
+  }, [loading, totalWorkflowActionCount, isDismissed, isSuperAdmin, totalPendingApprovals, totalApprovedAwaitingActivation, dismissKey]);
 
   // Handle Super Admin Approving a Contract
   const handleApproveContract = async (
@@ -380,51 +409,15 @@ export default function ContractWorkflowPopup() {
 
   return (
     <>
-      {/* 1. Persistent Top-Bar Notification Banner / Pill if minimized while items still pending */}
-      {!isOpen && totalWorkflowActionCount > 0 && (
-        <div className="fixed bottom-4 right-4 z-40 animate-in fade-in slide-in-from-bottom-2">
-          <div className="bg-background/95 backdrop-blur-md border border-primary/30 shadow-2xl rounded-2xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-              <FileSignature className="h-5 w-5 animate-pulse" />
-            </div>
-            <div className="text-xs pr-2">
-              <div className="font-semibold text-foreground flex items-center gap-1.5">
-                <span>Onboarding Action Required</span>
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping inline-block" />
-              </div>
-              <div className="text-muted-foreground flex gap-2 mt-0.5">
-                {isSuperAdmin && totalPendingApprovals > 0 && (
-                  <span>{totalPendingApprovals} Contract Approvals</span>
-                )}
-                {totalApprovedAwaitingActivation > 0 && (
-                  <span>• {totalApprovedAwaitingActivation} Final Activations</span>
-                )}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="h-8 text-xs font-medium rounded-xl gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => {
-                setIsDismissed(false);
-                setIsOpen(true);
-              }}
-            >
-              Open Actions
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Main Executive Workflow Popup Modal */}
+      {/* Main Executive Workflow Popup Modal */}
       <Dialog
         open={isOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setIsDismissed(true);
-            setActiveActivationEmployeeId(null);
+            handleRemindLater();
+          } else {
+            setIsOpen(true);
           }
-          setIsOpen(open);
         }}
       >
         <DialogContent className="max-w-3xl p-0 overflow-hidden border border-border/80 shadow-2xl rounded-2xl bg-card max-h-[90vh] flex flex-col">
@@ -751,10 +744,7 @@ export default function ContractWorkflowPopup() {
               variant="outline"
               size="sm"
               className="text-xs h-9 px-4 font-semibold rounded-xl border border-border/80 shadow-xs hover:bg-muted/80 text-foreground gap-2 transition-all cursor-pointer"
-              onClick={() => {
-                setIsDismissed(true);
-                setIsOpen(false);
-              }}
+              onClick={handleRemindLater}
             >
               <Clock className="h-3.5 w-3.5 text-amber-500" />
               Remind Later
