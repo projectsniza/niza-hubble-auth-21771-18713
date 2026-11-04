@@ -18,6 +18,8 @@ interface TimesheetPasscodeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  branchId?: string;
+  branchName?: string;
   title?: string;
   description?: string;
 }
@@ -26,14 +28,20 @@ export function TimesheetPasscodeModal({
   open,
   onOpenChange,
   onSuccess,
+  branchId,
+  branchName,
   title = 'Timesheet & Rota Passcode Authorization',
-  description = 'Enter the Super Admin security passcode to unlock store weekly timesheets and rota scheduling.',
+  description,
 }: TimesheetPasscodeModalProps) {
   const [passcode, setPasscode] = useState('');
   const [showPasscode, setShowPasscode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const displayDescription = description || (branchName
+    ? `Enter the Super Admin security passcode authorized for ${branchName} to unlock weekly scheduling.`
+    : 'Enter the Super Admin security passcode to unlock store weekly timesheets and rota scheduling.');
 
   useEffect(() => {
     if (open) {
@@ -56,7 +64,7 @@ export function TimesheetPasscodeModal({
     setErrorMessage(null);
 
     try {
-      const res = await verifyTimesheetPasscode(passcode.trim());
+      const res = await verifyTimesheetPasscode(passcode.trim(), branchId);
 
       if (!res.success || !res.verified) {
         setErrorMessage(res.error || 'Incorrect passcode. Please try again.');
@@ -64,7 +72,7 @@ export function TimesheetPasscodeModal({
         return;
       }
 
-      toast.success('Timesheets & Rota unlocked successfully');
+      toast.success(branchName ? `${branchName} scheduling unlocked successfully` : 'Timesheets & Rota unlocked successfully');
       onOpenChange(false);
       onSuccess();
     } catch (err: any) {
@@ -93,7 +101,7 @@ export function TimesheetPasscodeModal({
             </div>
           </div>
           <DialogDescription className="text-xs text-muted-foreground leading-relaxed pt-1">
-            {description}
+            {displayDescription}
           </DialogDescription>
         </DialogHeader>
 

@@ -221,6 +221,23 @@ export function TimesheetView() {
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
+  const [filterMode, setFilterMode] = useState<'all' | 'organization' | 'branch'>('all');
+  const [selectedOrg, setSelectedOrg] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
+  const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
+  const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
+  // Per-branch weekly hour targets (Super Admin configures via the "Hour Targets" tab)
+  const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
+  // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
+  const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
+  // Monthly temp staff consolidation: branch -> array of { name, weekly[], total }
+  const [monthlyTempByBranch, setMonthlyTempByBranch] = useState<Record<string, Array<{
+    id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number;
+  }>>>({});
+
   // Timesheets & Rota Verification State (Passcode, 2FA, or Disabled)
   const [isStoreVerified, setIsStoreVerified] = useState(() => isTimesheetSessionVerified());
   const [tsVerificationMode, setTsVerificationMode] = useState<TimesheetVerificationMode>(() => getTimesheetVerificationModeSync());
@@ -269,7 +286,21 @@ export function TimesheetView() {
     }
   }, [user?.email, store2FAOpen, storeChallengeToken]);
 
-  const checkStoreVerification = useCallback((action: () => void): boolean => {
+  // Active branch context for branch-wise passcode enforcement
+  const activeBranchId = useMemo(() => {
+    if (selectedBranch && selectedBranch !== 'all') return selectedBranch;
+    if (user?.branchId) return user.branchId;
+    if (user?.branchIds && user.branchIds.length > 0) return user.branchIds[0];
+    return undefined;
+  }, [selectedBranch, user?.branchId, user?.branchIds]);
+
+  const activeBranchName = useMemo(() => {
+    if (!activeBranchId) return undefined;
+    const found = branches.find(b => b.id === activeBranchId);
+    return found?.name;
+  }, [activeBranchId, branches]);
+
+  const checkStoreVerification = useCallback((action: () => void, targetBranchId?: string): boolean => {
     const mode = getTimesheetVerificationModeSync();
 
     // 1. Disabled mode -> direct access without prompts
@@ -279,16 +310,18 @@ export function TimesheetView() {
       return true;
     }
 
+    const branchToCheck = targetBranchId || activeBranchId;
+
     // 2. Passcode mode: Store managers and scheduling users must enter the Super Admin passcode
     if (mode === 'passcode') {
-      // Until passcode is set by Super Admin, normal access only
-      if (!isTimesheetPasscodeConfiguredSync()) {
+      // Until passcode is set by Super Admin (branch or global default), normal access only
+      if (!isTimesheetPasscodeConfiguredSync(branchToCheck)) {
         setIsStoreVerified(true);
         action();
         return true;
       }
 
-      if (isTimesheetSessionVerified()) {
+      if (isTimesheetSessionVerified(branchToCheck)) {
         setIsStoreVerified(true);
         action();
         return true;
@@ -302,7 +335,7 @@ export function TimesheetView() {
 
     // 3. Two-Factor (2FA) mode
     if (mode === 'two_factor') {
-      if (isTimesheetSessionVerified()) {
+      if (isTimesheetSessionVerified(branchToCheck)) {
         setIsStoreVerified(true);
         action();
         return true;
@@ -317,7 +350,7 @@ export function TimesheetView() {
     setIsStoreVerified(true);
     action();
     return true;
-  }, [triggerStore2FA]);
+  }, [triggerStore2FA, activeBranchId]);
 
   const checkStore2FA = checkStoreVerification;
 
@@ -393,24 +426,7 @@ export function TimesheetView() {
       unsubscribe2FA();
     };
   }, []);
-  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
-  const [filterMode, setFilterMode] = useState<'all' | 'organization' | 'branch'>('all');
-  const [selectedOrg, setSelectedOrg] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('');
-  const [lastMonthAdjustment, setLastMonthAdjustment] = useState<Record<string, number>>({});
-  const [inlineEditing, setInlineEditing] = useState<Record<string, Record<string, { start: string; end: string }>>>({});
-  const [isMonthLocked, setIsMonthLocked] = useState<boolean>(false);
-  // Per-branch weekly hour targets (Super Admin configures via the "Hour Targets" tab)
-  const [branchTargets, setBranchTargets] = useState<Record<string, { target: number; low: number; high: number }>>({});
-  // Per-branch temporary-staff hours for the current week (used in target indicator + summary)
-  const [tempHoursByBranch, setTempHoursByBranch] = useState<Record<string, number>>({});
-  // Monthly temp staff consolidation: branch -> array of { name, weekly[], total }
-  const [monthlyTempByBranch, setMonthlyTempByBranch] = useState<Record<string, Array<{
-    id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number;
-  }>>>({});
 
-  
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
   const scopedBranchIds = useMemo(() => user?.branchIds?.length ? user.branchIds : [], [user?.branchIds]);
   
@@ -2592,6 +2608,8 @@ export function TimesheetView() {
       <TimesheetPasscodeModal
         open={passcodeModalOpen}
         onOpenChange={setPasscodeModalOpen}
+        branchId={activeBranchId}
+        branchName={activeBranchName}
         onSuccess={() => {
           setTimesheetSessionVerified(2);
           setIsStoreVerified(true);

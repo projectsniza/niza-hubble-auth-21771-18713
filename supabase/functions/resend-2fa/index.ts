@@ -452,11 +452,16 @@ serve(async (req) => {
 
       let isPasscodeSet = false;
       let rawEncryptedPasscode = "";
+      let rawBranches: Record<string, any> = {};
+
       if (passcodeData?.setting_value) {
         const pv = passcodeData.setting_value;
         if (typeof pv === "object" && pv !== null) {
           isPasscodeSet = Boolean((pv as any).is_set);
           rawEncryptedPasscode = (pv as any).encrypted || "";
+          if ((pv as any).branches && typeof (pv as any).branches === "object") {
+            rawBranches = (pv as any).branches;
+          }
         }
       }
 
@@ -464,8 +469,36 @@ serve(async (req) => {
       const adminCheck = await checkCallerIsSuperAdmin(req, supabaseAdmin);
 
       let decryptedPasscode: string | undefined = undefined;
-      if (adminCheck.isSuperAdmin && rawEncryptedPasscode) {
-        decryptedPasscode = (await decryptPasscode(rawEncryptedPasscode, supabaseServiceKey)) || undefined;
+      const decryptedBranches: Record<string, { isPasscodeSet: boolean; passcode?: string; updatedAt?: string; updatedBy?: string }> = {};
+
+      if (adminCheck.isSuperAdmin) {
+        if (rawEncryptedPasscode) {
+          decryptedPasscode = (await decryptPasscode(rawEncryptedPasscode, supabaseServiceKey)) || undefined;
+        }
+
+        for (const [bId, bConfig] of Object.entries(rawBranches)) {
+          if (bConfig && typeof bConfig === "object") {
+            let bDecrypted = "";
+            if (bConfig.encrypted) {
+              bDecrypted = (await decryptPasscode(bConfig.encrypted, supabaseServiceKey)) || "";
+            }
+            decryptedBranches[bId] = {
+              isPasscodeSet: Boolean(bConfig.is_set && bDecrypted),
+              passcode: bDecrypted,
+              updatedAt: bConfig.updated_at || null,
+              updatedBy: bConfig.updated_by || null,
+            };
+          }
+        }
+      } else {
+        // Non-admin callers only receive boolean flags, NEVER the secret passcodes
+        for (const [bId, bConfig] of Object.entries(rawBranches)) {
+          if (bConfig && typeof bConfig === "object") {
+            decryptedBranches[bId] = {
+              isPasscodeSet: Boolean(bConfig.is_set),
+            };
+          }
+        }
       }
 
       return new Response(
@@ -473,8 +506,9 @@ serve(async (req) => {
           success: true,
           mode,
           isPasscodeSet,
-          // STRICT SECURITY: Only Super Admin receives the plain passcode
+          // STRICT SECURITY: Only Super Admin receives the plain passcodes
           passcode: adminCheck.isSuperAdmin ? (decryptedPasscode || "") : undefined,
+          branchPasscodes: decryptedBranches,
           updatedAt: modeData?.updated_at || null,
           updatedBy: modeData?.description || null,
         }),
@@ -494,7 +528,7 @@ serve(async (req) => {
         throw new Error("Only super admins can configure timesheet security and passcode settings");
       }
 
-      const { mode, passcode, updatedBy = "Super Admin" } = body;
+      const { mode, passcode, branchId, updatedBy = "Super Admin" } = body;
       const nowIso = new Date().toISOString();
       const updaterInfo = adminCheck.userEmail || updatedBy;
 
@@ -529,70 +563,120 @@ serve(async (req) => {
         }
       }
 
-      let plainPasscodeForAdmin = "";
-      let isPasscodeSet = false;
+      // Fetch existing passcode config
+      const { data: existingData } = await supabaseAdmin
+        .from("message_settings")
+        .select("setting_value")
+        .eq("setting_key", "timesheet_passcode_config")
+        .maybeSingle();
 
-      // Update passcode if passed
-      if (passcode !== undefined) {
+      let currentConfig: Record<string, any> = {
+        is_set: false,
+        encrypted: "",
+        hash: "",
+        branches: {},
+      };
+
+      if (existingData?.setting_value && typeof existingData.setting_value === "object") {
+        currentConfig = {
+          ...existingData.setting_value,
+          branches: { ...(existingData.setting_value.branches || {}) },
+        };
+      }
+
+      const salt = "niza-ts-salt-2026";
+      let plainPasscodeForAdmin = "";
+      let isGlobalPasscodeSet = Boolean(currentConfig.is_set);
+
+      if (branchId && typeof branchId === "string") {
+        // Specific branch passcode update / removal
+        const cleanBranchPasscode = passcode !== undefined ? String(passcode).trim() : undefined;
+        if (cleanBranchPasscode !== undefined) {
+          if (cleanBranchPasscode.length > 0) {
+            const encrypted = await encryptPasscode(cleanBranchPasscode, supabaseServiceKey);
+            const hash = await sha256Hex(`${cleanBranchPasscode}:${salt}`);
+            currentConfig.branches[branchId] = {
+              is_set: true,
+              encrypted,
+              hash,
+              salt,
+              updated_at: nowIso,
+              updated_by: updaterInfo,
+            };
+          } else {
+            // Remove / reset this branch's unique passcode
+            delete currentConfig.branches[branchId];
+          }
+
+          await supabaseAdmin
+            .from("message_settings")
+            .upsert(
+              {
+                setting_key: "timesheet_passcode_config",
+                setting_value: currentConfig,
+                description: `Timesheet passcode for branch ${branchId} updated by ${updaterInfo}`,
+                updated_at: nowIso,
+              },
+              { onConflict: "setting_key" }
+            );
+        }
+      } else if (passcode !== undefined) {
+        // Global default passcode update / removal
         const cleanPasscode = String(passcode).trim();
         if (cleanPasscode.length > 0) {
           const encrypted = await encryptPasscode(cleanPasscode, supabaseServiceKey);
-          const salt = "niza-ts-salt-2026";
           const hash = await sha256Hex(`${cleanPasscode}:${salt}`);
-
-          await supabaseAdmin
-            .from("message_settings")
-            .upsert(
-              {
-                setting_key: "timesheet_passcode_config",
-                setting_value: {
-                  is_set: true,
-                  encrypted,
-                  hash,
-                  salt,
-                  updated_at: nowIso,
-                  updated_by: updaterInfo,
-                },
-                description: `Timesheet passcode set by ${updaterInfo}`,
-                updated_at: nowIso,
-              },
-              { onConflict: "setting_key" }
-            );
+          currentConfig.is_set = true;
+          currentConfig.encrypted = encrypted;
+          currentConfig.hash = hash;
+          currentConfig.salt = salt;
+          currentConfig.updated_at = nowIso;
+          currentConfig.updated_by = updaterInfo;
 
           plainPasscodeForAdmin = cleanPasscode;
-          isPasscodeSet = true;
+          isGlobalPasscodeSet = true;
         } else {
-          // Cleared passcode
-          await supabaseAdmin
-            .from("message_settings")
-            .upsert(
-              {
-                setting_key: "timesheet_passcode_config",
-                setting_value: {
-                  is_set: false,
-                  encrypted: "",
-                  hash: "",
-                  updated_at: nowIso,
-                  updated_by: updaterInfo,
-                },
-                description: `Timesheet passcode cleared by ${updaterInfo}`,
-                updated_at: nowIso,
-              },
-              { onConflict: "setting_key" }
-            );
-          isPasscodeSet = false;
-        }
-      } else {
-        // Read existing passcode status
-        const { data: existingData } = await supabaseAdmin
-          .from("message_settings")
-          .select("setting_value")
-          .eq("setting_key", "timesheet_passcode_config")
-          .maybeSingle();
+          currentConfig.is_set = false;
+          currentConfig.encrypted = "";
+          currentConfig.hash = "";
+          currentConfig.updated_at = nowIso;
+          currentConfig.updated_by = updaterInfo;
 
-        if (existingData?.setting_value?.encrypted) {
-          plainPasscodeForAdmin = (await decryptPasscode(existingData.setting_value.encrypted, supabaseServiceKey)) || "";
-          isPasscodeSet = Boolean(existingData.setting_value.is_set && plainPasscodeForAdmin);
+          plainPasscodeForAdmin = "";
+          isGlobalPasscodeSet = false;
+        }
+
+        await supabaseAdmin
+          .from("message_settings")
+          .upsert(
+            {
+              setting_key: "timesheet_passcode_config",
+              setting_value: currentConfig,
+              description: `Global timesheet passcode updated by ${updaterInfo}`,
+              updated_at: nowIso,
+            },
+            { onConflict: "setting_key" }
+          );
+      }
+
+      // Prepare decrypted branch passcodes response for Super Admin
+      if (!plainPasscodeForAdmin && currentConfig.encrypted) {
+        plainPasscodeForAdmin = (await decryptPasscode(currentConfig.encrypted, supabaseServiceKey)) || "";
+      }
+
+      const decryptedBranches: Record<string, { isPasscodeSet: boolean; passcode?: string; updatedAt?: string; updatedBy?: string }> = {};
+      for (const [bId, bConfig] of Object.entries(currentConfig.branches || {})) {
+        if (bConfig && typeof bConfig === "object") {
+          let bDecrypted = "";
+          if ((bConfig as any).encrypted) {
+            bDecrypted = (await decryptPasscode((bConfig as any).encrypted, supabaseServiceKey)) || "";
+          }
+          decryptedBranches[bId] = {
+            isPasscodeSet: Boolean((bConfig as any).is_set && bDecrypted),
+            passcode: bDecrypted,
+            updatedAt: (bConfig as any).updated_at || null,
+            updatedBy: (bConfig as any).updated_by || null,
+          };
         }
       }
 
@@ -600,8 +684,9 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           mode: finalMode,
-          isPasscodeSet,
+          isPasscodeSet: isGlobalPasscodeSet,
           passcode: plainPasscodeForAdmin,
+          branchPasscodes: decryptedBranches,
           updatedAt: nowIso,
           updatedBy: updaterInfo,
         }),
@@ -616,7 +701,7 @@ serve(async (req) => {
     // ACTION: VERIFY TIMESHEET PASSCODE
     // -----------------------------------------------------------------
     if (action === "verify_timesheet_passcode") {
-      const { passcode = "" } = body;
+      const { passcode = "", branchId = "" } = body;
 
       // 1. Check current mode
       const { data: modeData } = await supabaseAdmin
@@ -653,27 +738,52 @@ serve(async (req) => {
         .eq("setting_key", "timesheet_passcode_config")
         .maybeSingle();
 
-      let isPasscodeSet = false;
-      let storedHash = "";
-      let rawEncryptedPasscode = "";
+      let isGlobalPasscodeSet = false;
+      let globalStoredHash = "";
+      let globalRawEncrypted = "";
+      let branchConfigs: Record<string, any> = {};
 
       if (passcodeData?.setting_value) {
         const pv = passcodeData.setting_value;
         if (typeof pv === "object" && pv !== null) {
-          isPasscodeSet = Boolean((pv as any).is_set);
-          storedHash = (pv as any).hash || "";
-          rawEncryptedPasscode = (pv as any).encrypted || "";
+          isGlobalPasscodeSet = Boolean((pv as any).is_set);
+          globalStoredHash = (pv as any).hash || "";
+          globalRawEncrypted = (pv as any).encrypted || "";
+          if ((pv as any).branches && typeof (pv as any).branches === "object") {
+            branchConfigs = (pv as any).branches;
+          }
         }
       }
 
-      // "UNTILL THIS PASSCODE IS SET IT SHOULD GIVE NORMAL LOGIN ONLY"
-      if (!isPasscodeSet || (!storedHash && !rawEncryptedPasscode)) {
+      // Check if this specific branch has its own passcode
+      const specificBranchConfig = branchId && branchConfigs[branchId] ? branchConfigs[branchId] : null;
+      const isBranchPasscodeSet = Boolean(specificBranchConfig?.is_set);
+
+      // Determine active target hash / encrypted passcode:
+      // If branch has unique passcode -> use branch passcode.
+      // Else -> fallback to global default passcode.
+      let targetHash = "";
+      let targetEncrypted = "";
+      let hasConfiguredPasscode = false;
+
+      if (isBranchPasscodeSet && specificBranchConfig) {
+        targetHash = specificBranchConfig.hash || "";
+        targetEncrypted = specificBranchConfig.encrypted || "";
+        hasConfiguredPasscode = Boolean(targetHash || targetEncrypted);
+      } else if (isGlobalPasscodeSet && (globalStoredHash || globalRawEncrypted)) {
+        targetHash = globalStoredHash;
+        targetEncrypted = globalRawEncrypted;
+        hasConfiguredPasscode = true;
+      }
+
+      // UNTIL A PASSCODE IS CONFIGURED, GRANT NORMAL DIRECT ACCESS
+      if (!hasConfiguredPasscode) {
         return new Response(
           JSON.stringify({
             success: true,
             verified: true,
             isDefaultDirectAccess: true,
-            message: "No passcode configured by Super Admin. Normal access granted.",
+            message: "No passcode configured for this branch. Normal access granted.",
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -701,12 +811,24 @@ serve(async (req) => {
       const inputHash = await sha256Hex(`${cleanInput}:${salt}`);
 
       let isMatch = false;
-      if (storedHash && inputHash === storedHash) {
+      if (targetHash && inputHash === targetHash) {
         isMatch = true;
-      } else if (rawEncryptedPasscode) {
-        const decrypted = await decryptPasscode(rawEncryptedPasscode, supabaseServiceKey);
+      } else if (targetEncrypted) {
+        const decrypted = await decryptPasscode(targetEncrypted, supabaseServiceKey);
         if (decrypted && decrypted.trim() === cleanInput) {
           isMatch = true;
+        }
+      }
+
+      // Also allow the Super Admin global master passcode to unlock any branch as failover
+      if (!isMatch && (globalStoredHash || globalRawEncrypted)) {
+        if (globalStoredHash && inputHash === globalStoredHash) {
+          isMatch = true;
+        } else if (globalRawEncrypted) {
+          const decryptedGlobal = await decryptPasscode(globalRawEncrypted, supabaseServiceKey);
+          if (decryptedGlobal && decryptedGlobal.trim() === cleanInput) {
+            isMatch = true;
+          }
         }
       }
 
@@ -715,7 +837,7 @@ serve(async (req) => {
           JSON.stringify({
             success: false,
             verified: false,
-            error: "Incorrect passcode. Please enter the valid authorization passcode provided by Super Admin.",
+            error: "Incorrect passcode. Please enter the valid authorization passcode provided by Super Admin for this branch.",
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
