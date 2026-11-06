@@ -142,6 +142,8 @@ export default function ContractTemplate({
         .from('contract_approvals')
         .select('*')
         .eq('employee_id', employeeId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (data?.contract_content) {
@@ -182,6 +184,8 @@ export default function ContractTemplate({
         .from('contract_approvals')
         .select('id')
         .eq('employee_id', employeeId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (existing) {
@@ -218,6 +222,8 @@ export default function ContractTemplate({
         .from('contract_approvals')
         .select('id')
         .eq('employee_id', employeeId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (existing) {

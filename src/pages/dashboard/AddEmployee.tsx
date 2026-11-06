@@ -10,11 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { 
   ArrowLeft, ArrowRight, User, Briefcase, FileCheck, 
-  ClipboardList, Wallet, Edit, Check, ShieldCheck, Clock, Info
+  ClipboardList, Wallet, Edit, Check, ShieldCheck, Clock, Info, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import ApplicationForm from '@/components/onboarding/ApplicationForm';
 import StarterChecklist from '@/components/onboarding/StarterChecklist';
 import BankDetailsForm from '@/components/onboarding/BankDetailsForm';
@@ -82,6 +92,11 @@ export default function AddEmployee() {
   const [employeeRecord, setEmployeeRecord] = useState<any>(null);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const documentUploadRef = useRef<DocumentUploadStepRef>(null);
+
+  // Duplicate candidate warning state
+  const [duplicateWarningOpen, setDuplicateWarningOpen] = useState(false);
+  const [duplicateEmployeeData, setDuplicateEmployeeData] = useState<any>(null);
+  const [duplicateMatchReason, setDuplicateMatchReason] = useState<string>('');
   
   // Form settings from database
   const [formSettings, setFormSettings] = useState<FormSettings>({
@@ -310,6 +325,80 @@ export default function AddEmployee() {
     setFormData(prev => ({ ...prev, ...updates }));
   };
 
+  const checkForDuplicateEmployee = async (): Promise<{ isDuplicate: boolean; matchReason?: string; existingEmployee?: any }> => {
+    try {
+      const email = formData.email?.trim();
+      const nino = formData.nationalInsuranceNumber?.trim().replace(/\s/g, '').toUpperCase();
+      const firstName = formData.firstName?.trim();
+      const lastName = formData.lastName?.trim();
+      const branchId = formData.branchId;
+
+      // Check 1: Email match
+      if (email) {
+        const { data: emailMatch } = await supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, national_insurance_number, status, branch_id, branches(name)')
+          .ilike('email', email)
+          .limit(1)
+          .maybeSingle();
+
+        if (emailMatch) {
+          return {
+            isDuplicate: true,
+            matchReason: `An employee profile with email "${email}" already exists.`,
+            existingEmployee: emailMatch,
+          };
+        }
+      }
+
+      // Check 2: NINO match
+      if (nino && nino.length >= 6) {
+        const { data: allNino } = await supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, national_insurance_number, status, branch_id, branches(name)')
+          .not('national_insurance_number', 'is', null)
+          .limit(100);
+
+        const ninoMatch = allNino?.find(e => 
+          e.national_insurance_number && 
+          e.national_insurance_number.replace(/\s/g, '').toUpperCase() === nino
+        );
+
+        if (ninoMatch) {
+          return {
+            isDuplicate: true,
+            matchReason: `An employee profile with National Insurance Number "${formData.nationalInsuranceNumber}" already exists.`,
+            existingEmployee: ninoMatch,
+          };
+        }
+      }
+
+      // Check 3: Same First + Last Name in same Branch
+      if (firstName && lastName && branchId) {
+        const { data: nameMatch } = await supabase
+          .from('employees')
+          .select('id, first_name, last_name, email, national_insurance_number, status, branch_id, branches(name)')
+          .ilike('first_name', firstName)
+          .ilike('last_name', lastName)
+          .eq('branch_id', branchId)
+          .limit(1)
+          .maybeSingle();
+
+        if (nameMatch) {
+          return {
+            isDuplicate: true,
+            matchReason: `An employee named "${firstName} ${lastName}" is already registered in this branch.`,
+            existingEmployee: nameMatch,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Duplicate employee check error:', err);
+    }
+
+    return { isDuplicate: false };
+  };
+
   const handleNext = async () => {
     const currentStepId = STEPS[currentStep]?.id;
     
@@ -334,6 +423,15 @@ export default function AddEmployee() {
       }
       
       if (!employeeRecord) {
+        setLoading(true);
+        const dupCheck = await checkForDuplicateEmployee();
+        setLoading(false);
+        if (dupCheck.isDuplicate) {
+          setDuplicateEmployeeData(dupCheck.existingEmployee);
+          setDuplicateMatchReason(dupCheck.matchReason || 'Possible duplicate employee detected.');
+          setDuplicateWarningOpen(true);
+          return;
+        }
         await saveBasicDetails();
       } else {
         await updateBasicDetails();
@@ -802,6 +900,60 @@ export default function AddEmployee() {
             </div>
           )}
         </Card>
+
+        {/* Duplicate Employee Warning Modal */}
+        <AlertDialog open={duplicateWarningOpen} onOpenChange={setDuplicateWarningOpen}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-5 w-5" />
+                <AlertDialogTitle>Possible Duplicate Employee Detected</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="space-y-3 pt-2 text-left">
+                <p className="text-sm text-foreground font-medium">
+                  {duplicateMatchReason}
+                </p>
+                {duplicateEmployeeData && (
+                  <div className="rounded-lg border bg-muted/40 p-3 text-xs space-y-1">
+                    <p><strong>Existing Name:</strong> {duplicateEmployeeData.first_name || ''} {duplicateEmployeeData.last_name || ''}</p>
+                    {duplicateEmployeeData.email && <p><strong>Email:</strong> {duplicateEmployeeData.email}</p>}
+                    {duplicateEmployeeData.national_insurance_number && <p><strong>NINO:</strong> {duplicateEmployeeData.national_insurance_number}</p>}
+                    <p><strong>Status:</strong> <span className="capitalize">{duplicateEmployeeData.status || 'Active'}</span></p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Creating another record will cause duplicate onboarding workflows and multiple contract approval requests. We recommend opening the existing profile.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+              <AlertDialogCancel onClick={() => setDuplicateWarningOpen(false)}>
+                Go Back & Edit
+              </AlertDialogCancel>
+              <Button
+                variant="outline"
+                className="text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                onClick={async () => {
+                  setDuplicateWarningOpen(false);
+                  await saveBasicDetails();
+                }}
+              >
+                Create Profile Anyway
+              </Button>
+              {duplicateEmployeeData?.id && (
+                <AlertDialogAction
+                  className="bg-primary text-primary-foreground text-xs"
+                  onClick={() => {
+                    setDuplicateWarningOpen(false);
+                    navigate(`/dashboard/onboarding/${duplicateEmployeeData.id}`);
+                  }}
+                >
+                  Open Existing Profile
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -342,6 +342,25 @@ export function usePendingApprovals() {
     }
   }, [user?.id]);
 
+  const dismissDuplicateApproval = useCallback(async (approvalId: string) => {
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', approvalId);
+
+      if (error) throw error;
+
+      setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
+      toast.success('Duplicate submission removed successfully');
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      toast.error(message);
+      return { success: false, error: message };
+    }
+  }, []);
+
   useEffect(() => {
     if (user && !fetchedRef.current) {
       fetchedRef.current = true;
@@ -356,7 +375,8 @@ export function usePendingApprovals() {
     fetchPendingApprovals,
     refetch: fetchPendingApprovals,
     approveContract,
-    rejectContract
+    rejectContract,
+    dismissDuplicateApproval
   };
 }
 
@@ -410,9 +430,29 @@ export function useOnboarding(employeeId?: string) {
     if (!employeeId) return { error: 'No employee ID' };
     
     try {
-      // Create contract approval and update onboarding in parallel
-      const [approvalResult, onboardingResult] = await Promise.all([
-        supabase
+      // Check if a pending or draft approval already exists for this employee to prevent duplicates
+      const { data: existingApprovals } = await supabase
+        .from('contract_approvals')
+        .select('id, status')
+        .eq('employee_id', employeeId)
+        .order('created_at', { ascending: false });
+
+      const pendingExisting = existingApprovals?.find(a => a.status === 'pending' || a.status === 'draft');
+
+      let approvalResult;
+      if (pendingExisting) {
+        approvalResult = await supabase
+          .from('contract_approvals')
+          .update({
+            contract_file_path: contractFilePath,
+            contract_file_name: contractFileName,
+            submitted_by: user?.id,
+            submitted_at: new Date().toISOString(),
+            status: 'pending'
+          })
+          .eq('id', pendingExisting.id);
+      } else {
+        approvalResult = await supabase
           .from('contract_approvals')
           .insert({
             employee_id: employeeId,
@@ -420,16 +460,17 @@ export function useOnboarding(employeeId?: string) {
             contract_file_name: contractFileName,
             submitted_by: user?.id,
             status: 'pending'
-          }),
-        supabase
-          .from('employee_onboarding')
-          .update({
-            contract_uploaded: true,
-            contract_submitted_for_approval: true,
-            current_step: 3
-          })
-          .eq('employee_id', employeeId)
-      ]);
+          });
+      }
+
+      const onboardingResult = await supabase
+        .from('employee_onboarding')
+        .update({
+          contract_uploaded: true,
+          contract_submitted_for_approval: true,
+          current_step: 3
+        })
+        .eq('employee_id', employeeId);
 
       if (approvalResult.error) throw approvalResult.error;
       if (onboardingResult.error) throw onboardingResult.error;

@@ -29,7 +29,19 @@ import {
   Sparkles,
   ArrowLeft,
   X,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -95,6 +107,64 @@ export default function ContractWorkflowPopup() {
 
   // Selected approval for Super Admin review dialog
   const [selectedApprovalForSign, setSelectedApprovalForSign] = useState<any>(null);
+
+  // Redundant/duplicate approval item pending dismissal
+  const [approvalToDismiss, setApprovalToDismiss] = useState<PendingApprovalItem | null>(null);
+  const [dismissing, setDismissing] = useState(false);
+
+  // Detect duplicate candidates in pending approvals list
+  const duplicateApprovalIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < pendingApprovals.length; i++) {
+      for (let j = i + 1; j < pendingApprovals.length; j++) {
+        const a = pendingApprovals[i];
+        const b = pendingApprovals[j];
+        const aFirst = (a.employee?.first_name || '').trim().toLowerCase();
+        const aLast = (a.employee?.last_name || '').trim().toLowerCase();
+        const bFirst = (b.employee?.first_name || '').trim().toLowerCase();
+        const bLast = (b.employee?.last_name || '').trim().toLowerCase();
+
+        const exactNameMatch = aFirst && bFirst && aFirst === bFirst && aLast && bLast && aLast === bLast;
+        const matchingLastNameAndBranch = Boolean(
+          aLast && bLast && aLast === bLast && 
+          a.employee?.branch?.name && b.employee?.branch?.name && 
+          a.employee.branch.name === b.employee.branch.name
+        );
+        const nameContained = Boolean(
+          (aLast.includes(bLast) || bLast.includes(aLast)) &&
+          a.employee?.branch?.name && b.employee?.branch?.name &&
+          a.employee.branch.name === b.employee.branch.name
+        );
+
+        if (exactNameMatch || matchingLastNameAndBranch || nameContained) {
+          ids.add(a.id);
+          ids.add(b.id);
+        }
+      }
+    }
+    return ids;
+  }, [pendingApprovals]);
+
+  const handleDismissDuplicate = async () => {
+    if (!approvalToDismiss) return;
+    setDismissing(true);
+    try {
+      const { error } = await supabase
+        .from('contract_approvals')
+        .delete()
+        .eq('id', approvalToDismiss.id);
+
+      if (error) throw error;
+
+      setPendingApprovals(prev => prev.filter(item => item.id !== approvalToDismiss.id));
+      toast.success('Duplicate approval submission dismissed.');
+      setApprovalToDismiss(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dismiss approval');
+    } finally {
+      setDismissing(false);
+    }
+  };
 
   // Selected employee for embedded 3-stage activation view
   const [activeActivationEmployeeId, setActiveActivationEmployeeId] = useState<string | null>(null);
@@ -571,21 +641,36 @@ export default function ContractWorkflowPopup() {
                       <div className="space-y-3">
                         {pendingApprovals.map((item) => {
                           const emp = item.employee;
+                          const isDuplicate = duplicateApprovalIds.has(item.id);
                           return (
                             <Card
                               key={item.id}
-                              className="p-4 border hover:border-primary/40 hover:shadow-sm transition-all"
+                              className={`p-4 border transition-all ${
+                                isDuplicate 
+                                  ? 'border-amber-400/60 bg-amber-500/[0.02] hover:border-amber-500/80' 
+                                  : 'hover:border-primary/40 hover:shadow-sm'
+                              }`}
                             >
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                      {emp?.first_name?.charAt(0)}{emp?.last_name?.charAt(0)}
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                                      isDuplicate ? 'bg-amber-500/20 text-amber-700' : 'bg-amber-500/10 text-amber-600'
+                                    }`}>
+                                      {emp?.first_name?.charAt(0) || ''}{emp?.last_name?.charAt(0) || 'E'}
                                     </div>
                                     <div>
-                                      <h4 className="text-sm font-semibold text-foreground">
-                                        {emp?.first_name} {emp?.last_name}
-                                      </h4>
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-sm font-semibold text-foreground">
+                                          {emp?.first_name ? `${emp.first_name} ` : ''}{emp?.last_name}
+                                        </h4>
+                                        {isDuplicate && (
+                                          <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400 gap-1 font-semibold">
+                                            <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                            Possible Duplicate
+                                          </Badge>
+                                        )}
+                                      </div>
                                       <p className="text-xs text-muted-foreground">
                                         {emp?.job_title || 'Position'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
                                       </p>
@@ -603,6 +688,18 @@ export default function ContractWorkflowPopup() {
                                 </div>
 
                                 <div className="flex items-center gap-2 self-end sm:self-center">
+                                  {isDuplicate && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2.5"
+                                      onClick={() => setApprovalToDismiss(item)}
+                                      title="Dismiss duplicate approval submission"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span>Dismiss</span>
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
@@ -763,6 +860,50 @@ export default function ContractWorkflowPopup() {
           onReject={handleRejectContract}
         />
       )}
+
+      {/* 4. Dismiss Duplicate Submission Confirmation Dialog */}
+      <AlertDialog open={!!approvalToDismiss} onOpenChange={(open) => !open && setApprovalToDismiss(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              <AlertDialogTitle>Dismiss Duplicate Submission?</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-2 pt-1 text-left text-xs">
+              <p className="text-foreground font-medium">
+                Are you sure you want to dismiss this contract approval submission for{' '}
+                <strong>
+                  {approvalToDismiss?.employee?.first_name ? `${approvalToDismiss.employee.first_name} ` : ''}
+                  {approvalToDismiss?.employee?.last_name || 'Employee'}
+                </strong>
+                ?
+              </p>
+              <p className="text-muted-foreground">
+                This will delete the duplicate approval request from your queue. The employee's primary profile and any other active submissions will remain untouched.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={dismissing} onClick={() => setApprovalToDismiss(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={dismissing}
+              className="bg-destructive hover:bg-destructive/90 text-white font-medium"
+              onClick={handleDismissDuplicate}
+            >
+              {dismissing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  Dismissing...
+                </>
+              ) : (
+                'Yes, Dismiss Duplicate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

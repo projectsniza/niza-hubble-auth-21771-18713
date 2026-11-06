@@ -1,12 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Search, CheckCircle2, User, Building, Calendar, 
-  FileSignature, FileText, Clock, ShieldAlert, Check, ArrowRight
+  FileSignature, FileText, Clock, ShieldAlert, Check, ArrowRight,
+  AlertTriangle, Trash2, Loader2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { usePendingApprovals } from '@/hooks/useEmployees';
 import ContractApprovalDialog from '@/components/onboarding/ContractApprovalDialog';
@@ -19,8 +30,10 @@ export default function ContractApprovalsTab() {
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
   const [awaitingCount, setAwaitingCount] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
+  const [approvalToDismiss, setApprovalToDismiss] = useState<any>(null);
+  const [dismissing, setDismissing] = useState(false);
   
-  const { pendingApprovals, isLoading, approveContract, rejectContract, refetch } = usePendingApprovals();
+  const { pendingApprovals, isLoading, approveContract, rejectContract, dismissDuplicateApproval, refetch } = usePendingApprovals();
 
   useEffect(() => {
     fetchStats();
@@ -64,6 +77,50 @@ export default function ContractApprovalsTab() {
       refetch?.();
     }
   };
+
+  const handleDismissDuplicate = async () => {
+    if (!approvalToDismiss) return;
+    setDismissing(true);
+    try {
+      await dismissDuplicateApproval(approvalToDismiss.id);
+      setApprovalToDismiss(null);
+      fetchStats();
+    } finally {
+      setDismissing(false);
+    }
+  };
+
+  const duplicateApprovalIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < pendingApprovals.length; i++) {
+      for (let j = i + 1; j < pendingApprovals.length; j++) {
+        const a = pendingApprovals[i];
+        const b = pendingApprovals[j];
+        const aFirst = (a.employee?.first_name || '').trim().toLowerCase();
+        const aLast = (a.employee?.last_name || '').trim().toLowerCase();
+        const bFirst = (b.employee?.first_name || '').trim().toLowerCase();
+        const bLast = (b.employee?.last_name || '').trim().toLowerCase();
+
+        const exactNameMatch = aFirst && bFirst && aFirst === bFirst && aLast && bLast && aLast === bLast;
+        const matchingLastNameAndBranch = Boolean(
+          aLast && bLast && aLast === bLast && 
+          a.employee?.branch?.name && b.employee?.branch?.name && 
+          a.employee.branch.name === b.employee.branch.name
+        );
+        const nameContained = Boolean(
+          (aLast.includes(bLast) || bLast.includes(aLast)) &&
+          a.employee?.branch?.name && b.employee?.branch?.name &&
+          a.employee.branch.name === b.employee.branch.name
+        );
+
+        if (exactNameMatch || matchingLastNameAndBranch || nameContained) {
+          ids.add(a.id);
+          ids.add(b.id);
+        }
+      }
+    }
+    return ids;
+  }, [pendingApprovals]);
 
   const filteredApprovals = pendingApprovals.filter(approval => {
     const employee = approval.employee;
@@ -155,20 +212,36 @@ export default function ContractApprovalsTab() {
           {filteredApprovals.map((approval) => {
             const employee = approval.employee;
             if (!employee) return null;
+            const isDuplicate = duplicateApprovalIds.has(approval.id);
             
             return (
-              <Card key={approval.id} className="p-5 border hover:shadow-xs transition-all">
+              <Card 
+                key={approval.id} 
+                className={`p-5 border transition-all ${
+                  isDuplicate 
+                    ? 'border-amber-400/60 bg-amber-500/[0.02] hover:border-amber-500/80' 
+                    : 'hover:shadow-xs'
+                }`}
+              >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary font-semibold text-sm">
-                        {employee.first_name?.[0]}{employee.last_name?.[0]}
+                      <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 font-semibold text-sm ${
+                        isDuplicate ? 'bg-amber-500/20 text-amber-700' : 'bg-primary/10 text-primary'
+                      }`}>
+                        {employee.first_name?.[0] || ''}{employee.last_name?.[0] || 'E'}
                       </div>
                       <div className="truncate">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-sm text-foreground truncate">
-                            {employee.first_name} {employee.last_name}
+                            {employee.first_name ? `${employee.first_name} ` : ''}{employee.last_name}
                           </h3>
+                          {isDuplicate && (
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400 gap-1 font-semibold">
+                              <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                              Possible Duplicate
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-300">
                             Awaiting Admin Signature
                           </Badge>
@@ -194,6 +267,18 @@ export default function ContractApprovalsTab() {
                   </div>
                   
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {isDuplicate && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2.5"
+                        onClick={() => setApprovalToDismiss(approval)}
+                        title="Dismiss duplicate approval"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Dismiss</span>
+                      </Button>
+                    )}
                     <Button onClick={() => setSelectedApproval(approval)} size="sm" className="h-8 text-xs gap-1.5">
                       <span>Review & Sign</span>
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -213,6 +298,50 @@ export default function ContractApprovalsTab() {
         onApprove={handleApprove}
         onReject={handleReject}
       />
+
+      {/* Dismiss Duplicate Submission Dialog */}
+      <AlertDialog open={!!approvalToDismiss} onOpenChange={(open) => !open && setApprovalToDismiss(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              <AlertDialogTitle>Dismiss Duplicate Submission?</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-2 pt-1 text-left text-xs">
+              <p className="text-foreground font-medium">
+                Are you sure you want to dismiss this contract approval submission for{' '}
+                <strong>
+                  {approvalToDismiss?.employee?.first_name ? `${approvalToDismiss.employee.first_name} ` : ''}
+                  {approvalToDismiss?.employee?.last_name || 'Employee'}
+                </strong>
+                ?
+              </p>
+              <p className="text-muted-foreground">
+                This will delete the redundant approval request. The candidate's primary profile and active submissions will not be affected.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={dismissing} onClick={() => setApprovalToDismiss(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={dismissing}
+              className="bg-destructive hover:bg-destructive/90 text-white font-medium"
+              onClick={handleDismissDuplicate}
+            >
+              {dismissing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  Dismissing...
+                </>
+              ) : (
+                'Yes, Dismiss Duplicate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -832,42 +832,43 @@ export default function SecuritySettingsPanel() {
                                   </Badge>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-                                <span>Code:</span>
-                                {hasCustom && bData?.passcode ? (
-                                  <>
-                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                      {isVisible ? bData.passcode : '••••••••'}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-600/80 font-sans font-medium">(Branch Secret)</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleBranchPasscodeVisibility(branch.id)}
-                                      className="hover:text-foreground p-0.5"
-                                      title={isVisible ? 'Hide' : 'Reveal'}
-                                    >
-                                      {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                    </button>
-                                  </>
-                                ) : storedPasscode ? (
-                                  <>
-                                    <span className="font-medium text-muted-foreground">
-                                      {isVisible ? storedPasscode : '••••••••'}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground/70 font-sans italic">(Global Fallback)</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleBranchPasscodeVisibility(branch.id)}
-                                      className="hover:text-foreground p-0.5"
-                                      title={isVisible ? 'Hide' : 'Reveal'}
-                                    >
-                                      {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span className="italic text-muted-foreground/70 font-sans">Not set</span>
-                                )}
-                              </div>
+                                <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                                  {hasCustom && bData?.passcode ? (
+                                    <>
+                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">Unique Code:</span>
+                                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                        {isVisible ? bData.passcode : '••••••••'}
+                                      </span>
+                                      <span className="text-[10px] text-emerald-600/80 font-sans font-medium">(Branch Secret)</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBranchPasscodeVisibility(branch.id)}
+                                        className="hover:text-foreground p-0.5"
+                                        title={isVisible ? 'Hide' : 'Reveal'}
+                                      >
+                                        {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                      </button>
+                                    </>
+                                  ) : storedPasscode ? (
+                                    <>
+                                      <span className="font-medium text-muted-foreground">Global Default:</span>
+                                      <span className="font-medium text-muted-foreground">
+                                        {isVisible ? storedPasscode : '••••••••'}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground/70 font-sans italic">(Fallback)</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBranchPasscodeVisibility(branch.id)}
+                                        className="hover:text-foreground p-0.5"
+                                        title={isVisible ? 'Hide' : 'Reveal'}
+                                      >
+                                        {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span className="italic text-muted-foreground/70 font-sans">No passcode set</span>
+                                  )}
+                                </div>
                             </div>
                           </div>
 
