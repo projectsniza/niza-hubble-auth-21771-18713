@@ -32,17 +32,21 @@ export async function getOrCreateEmployeeFolder(
 
     const empName = `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || 'Employee';
 
-    // 1. Find or create root folder "Company Documents"
+    // 1. Find or create root folder (finds root even if renamed to "Employee Documents", etc.)
     let rootFolderId: string | null = null;
+    let currentPath = 'Company Documents';
+
     const { data: rootFolder } = await supabase
       .from('folders')
-      .select('id, path')
-      .eq('folder_type', 'root')
-      .eq('path', 'Company Documents')
+      .select('id, path, name')
+      .or('folder_type.eq.root,parent_id.is.null')
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (rootFolder) {
       rootFolderId = rootFolder.id;
+      currentPath = rootFolder.path || rootFolder.name || 'Company Documents';
     } else {
       const { data: newRoot } = await supabase
         .from('folders')
@@ -58,7 +62,6 @@ export async function getOrCreateEmployeeFolder(
     }
 
     let parentFolderId = rootFolderId;
-    let currentPath = 'Company Documents';
 
     // Direct resolution of branch and organization from DB to guarantee accurate names
     let branchName = employee.branches?.name;

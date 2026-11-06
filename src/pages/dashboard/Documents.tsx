@@ -24,6 +24,7 @@ import DeleteDocumentConfirmDialog from '@/components/documents/DeleteDocumentCo
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
 import { moveToRecycleBin, getRecycleBinDocuments } from '@/lib/recycleBin';
+import { fetchAllPages } from '@/lib/supabasePagination';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,6 +84,7 @@ export default function Documents() {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
+  const [totalDocumentCount, setTotalDocumentCount] = useState<number | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([]);
@@ -109,18 +111,52 @@ export default function Documents() {
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
-  useEffect(() => {
-    const initializeRoot = async () => {
-      const { data: rootFolder } = await supabase
+
+  // Resolve root folder dynamically: works even if renamed to "Employee Documents", "emploe documnts", etc.
+  const resolveRootFolder = async (): Promise<FolderItem | null> => {
+    try {
+      const { data: rootCandidates } = await supabase
+        .from('folders')
+        .select('*')
+        .or('folder_type.eq.root,parent_id.is.null')
+        .order('created_at', { ascending: true });
+
+      if (rootCandidates && rootCandidates.length > 0) {
+        if (rootCandidates.length === 1) return rootCandidates[0];
+
+        // If multiple root candidates exist, pick the one that has child folders
+        for (const candidate of rootCandidates) {
+          const { count } = await supabase
+            .from('folders')
+            .select('*', { count: 'exact', head: true })
+            .eq('parent_id', candidate.id);
+          if (count && count > 0) {
+            return candidate;
+          }
+        }
+        return rootCandidates.find(c => c.folder_type === 'root') || rootCandidates[0];
+      }
+
+      // Fallback: check by folder_type = 'root'
+      const { data: fallbackByType } = await supabase
         .from('folders')
         .select('*')
         .eq('folder_type', 'root')
-        .eq('path', 'Company Documents')
-        .single();
-      
+        .limit(1)
+        .maybeSingle();
+
+      return fallbackByType || null;
+    } catch (err) {
+      console.error('Error resolving root folder:', err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const initializeRoot = async () => {
+      const rootFolder = await resolveRootFolder();
       if (rootFolder) {
         setRootFolderId(rootFolder.id);
-        // Start at null to show Company Documents as the first folder
         setCurrentFolderId(null);
       }
     };
@@ -141,14 +177,35 @@ export default function Documents() {
     fetchFollowUpSettings();
   }, []);
 
-  // Fetch all documents for global stats
-  useEffect(() => {
-    const fetchAllDocuments = async () => {
-      const { data } = await supabase
+  // Fetch all documents for global stats & search without 1000 limit
+  const fetchAllDocuments = async () => {
+    try {
+      // 1. Fetch exact total count first so it isn't limited to 1000
+      const { count, error: countErr } = await supabase
         .from('documents')
-        .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)');
-      setAllDocuments(data || []);
-    };
+        .select('*', { count: 'exact', head: true });
+      if (!countErr && typeof count === 'number') {
+        setTotalDocumentCount(count);
+      }
+
+      // 2. Paginate all rows to get complete document list without 1000 row truncation
+      const allDocs = await fetchAllPages<DocumentItem>((from, to) =>
+        supabase
+          .from('documents')
+          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      );
+      setAllDocuments(allDocs || []);
+      if (allDocs && allDocs.length > (count || 0)) {
+        setTotalDocumentCount(allDocs.length);
+      }
+    } catch (err) {
+      console.error('Error fetching all documents:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchAllDocuments();
   }, []);
 
@@ -167,16 +224,35 @@ export default function Documents() {
   const fetchFoldersAndDocuments = async () => {
     setLoading(true);
     try {
-      // If currentFolderId is null, show the root Company Documents folder
-      if (currentFolderId === null && rootFolderId) {
-        // Fetch the root folder to display it
-        const { data: rootFolder } = await supabase
-          .from('folders')
-          .select('*')
-          .eq('id', rootFolderId)
-          .single();
-        
-        setFolders(rootFolder ? [rootFolder] : []);
+      // Ensure root folder ID is resolved
+      let activeRootId = rootFolderId;
+      if (!activeRootId) {
+        const root = await resolveRootFolder();
+        if (root) {
+          activeRootId = root.id;
+          setRootFolderId(root.id);
+        }
+      }
+
+      // If currentFolderId is null, show the root folder
+      if (currentFolderId === null) {
+        if (activeRootId) {
+          const { data: rootFolder } = await supabase
+            .from('folders')
+            .select('*')
+            .eq('id', activeRootId)
+            .maybeSingle();
+          
+          setFolders(rootFolder ? [rootFolder] : []);
+        } else {
+          // Fallback: show top-level folders
+          const { data: topFolders } = await supabase
+            .from('folders')
+            .select('*')
+            .is('parent_id', null)
+            .order('name');
+          setFolders(topFolders || []);
+        }
         setDocuments([]);
         setBreadcrumbs([]);
       } else if (currentFolderId) {
@@ -317,6 +393,7 @@ export default function Documents() {
 
       setDocuments(prev => prev.filter(d => d.id !== deleteDocId));
       setAllDocuments(prev => prev.filter(d => d.id !== deleteDocId));
+      setTotalDocumentCount(prev => prev !== null ? Math.max(0, prev - 1) : null);
       setRecycleBinCount(getRecycleBinDocuments().length);
       toast.success('Document moved to Recycle Bin (available for 90 days)');
     } catch (err: any) {
@@ -333,7 +410,7 @@ export default function Documents() {
     setIsRenaming(true);
     try {
       // Build new path
-      const pathParts = renameFolder.path.split('/');
+      const pathParts = (renameFolder.path || renameFolder.name || '').split('/');
       pathParts[pathParts.length - 1] = newFolderName.trim();
       const newPath = pathParts.join('/');
 
@@ -347,7 +424,7 @@ export default function Documents() {
       toast.success('Folder renamed successfully');
       setRenameFolder(null);
       setNewFolderName('');
-      fetchFoldersAndDocuments();
+      await fetchFoldersAndDocuments();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -408,7 +485,7 @@ export default function Documents() {
   // Use allDocuments for global stats
   const globalOverdueCount = allDocuments.filter(d => getDocumentStatus(d) === 'overdue').length;
   const globalUpcomingCount = allDocuments.filter(d => getDocumentStatus(d) === 'upcoming').length;
-  const globalTotalCount = allDocuments.length;
+  const globalTotalCount = totalDocumentCount !== null ? totalDocumentCount : allDocuments.length;
 
   const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
   const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
@@ -547,6 +624,7 @@ export default function Documents() {
     if (success > 0) toast.success(`Uploaded ${success} file(s)`);
     if (failed > 0) toast.error(`${failed} file(s) failed to upload`);
     fetchFoldersAndDocuments();
+    fetchAllDocuments();
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -1050,7 +1128,10 @@ export default function Documents() {
         open={showUpload}
         onOpenChange={setShowUpload}
         folderId={currentFolderId}
-        onSuccess={fetchFoldersAndDocuments}
+        onSuccess={() => {
+          fetchFoldersAndDocuments();
+          fetchAllDocuments();
+        }}
       />
 
       {/* Delete Document Confirmation (Big Box Popup with 90-Day Retrieval Guarantee) */}

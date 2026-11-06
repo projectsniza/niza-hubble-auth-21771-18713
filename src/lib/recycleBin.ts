@@ -129,12 +129,12 @@ export async function restoreFromRecycleBin(docId: string): Promise<boolean> {
         .maybeSingle();
 
       if (!folderCheck) {
-        // Fallback: look for root folder
+        // Fallback: look for root folder regardless of rename
         const { data: rootFolder } = await supabase
           .from('folders')
           .select('id')
-          .eq('folder_type', 'root')
-          .eq('path', 'Company Documents')
+          .or('folder_type.eq.root,parent_id.is.null')
+          .limit(1)
           .maybeSingle();
         targetFolderId = rootFolder?.id || null;
       }
