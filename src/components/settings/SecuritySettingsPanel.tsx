@@ -698,14 +698,14 @@ export default function SecuritySettingsPanel() {
               </div>
             )}
 
-            {/* Change or Set New Passcode Form */}
+            {/* Super Admin Master Passcode Override Form */}
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
                 <Label htmlFor="superadmin-passcode-input" className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                  {isPasscodeSet ? 'Change Global Default Passcode' : 'Set Global Default Passcode'}
+                  {isPasscodeSet ? 'Change Super Admin Master Passcode' : 'Set Super Admin Master Passcode'}
                 </Label>
-                <span className="text-[11px] text-muted-foreground">Applies as fallback to branches without a unique code</span>
+                <span className="text-[11px] text-muted-foreground">Emergency master key: Super Admin can use this to access any branch</span>
               </div>
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <div className="relative flex-1">
@@ -717,7 +717,7 @@ export default function SecuritySettingsPanel() {
                     type={showInputPasscode ? 'text' : 'password'}
                     value={passcodeInput}
                     onChange={(e) => setPasscodeInput(e.target.value)}
-                    placeholder={isPasscodeSet ? 'Enter new global default passcode (e.g. 582910)' : 'Enter passcode (e.g. 582910 or STORE-PIN)'}
+                    placeholder={isPasscodeSet ? 'Enter new master passcode (e.g. 582910)' : 'Enter master passcode (e.g. 582910)'}
                     className="pl-9 pr-10 font-mono tracking-wider text-sm"
                     autoComplete="off"
                     disabled={savingTs || loading}
@@ -744,13 +744,13 @@ export default function SecuritySettingsPanel() {
                   ) : (
                     <>
                       <KeyRound className="h-4 w-4" />
-                      {isPasscodeSet ? 'Update Global Default' : 'Save Global Default'}
+                      {isPasscodeSet ? 'Update Master Passcode' : 'Save Master Passcode'}
                     </>
                   )}
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                This serves as the default fallback passcode for any branch that does not have its own custom passcode assigned below.
+                This secret master passcode is exclusive to Super Admin for emergency override. It is never assigned or reflected onto branch stores.
               </p>
             </div>
 
@@ -822,53 +822,35 @@ export default function SecuritySettingsPanel() {
                                   <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 h-4 font-semibold">
                                     Unique Passcode
                                   </Badge>
-                                ) : isPasscodeSet ? (
-                                  <Badge variant="outline" className="text-muted-foreground text-[9px] px-1.5 py-0 h-4 bg-muted/30">
-                                    Using Global Default
-                                  </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-amber-600 border-amber-300 text-[9px] px-1.5 py-0 h-4">
-                                    No Passcode
+                                  <Badge variant="outline" className="text-amber-700 dark:text-amber-300 border-amber-400/60 bg-amber-500/10 text-[9px] px-1.5 py-0 h-4 font-medium">
+                                    No Passcode Set
                                   </Badge>
                                 )}
                               </div>
-                                <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-                                  {hasCustom && bData?.passcode ? (
-                                    <>
-                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">Unique Code:</span>
-                                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                        {isVisible ? bData.passcode : '••••••••'}
-                                      </span>
-                                      <span className="text-[10px] text-emerald-600/80 font-sans font-medium">(Branch Secret)</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleBranchPasscodeVisibility(branch.id)}
-                                        className="hover:text-foreground p-0.5"
-                                        title={isVisible ? 'Hide' : 'Reveal'}
-                                      >
-                                        {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                      </button>
-                                    </>
-                                  ) : storedPasscode ? (
-                                    <>
-                                      <span className="font-medium text-muted-foreground">Global Default:</span>
-                                      <span className="font-medium text-muted-foreground">
-                                        {isVisible ? storedPasscode : '••••••••'}
-                                      </span>
-                                      <span className="text-[10px] text-muted-foreground/70 font-sans italic">(Fallback)</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleBranchPasscodeVisibility(branch.id)}
-                                        className="hover:text-foreground p-0.5"
-                                        title={isVisible ? 'Hide' : 'Reveal'}
-                                      >
-                                        {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <span className="italic text-muted-foreground/70 font-sans">No passcode set</span>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                                {hasCustom && bData?.passcode ? (
+                                  <>
+                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">Unique Code:</span>
+                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                      {isVisible ? bData.passcode : '••••••••'}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600/80 font-sans font-medium">(Branch Secret)</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleBranchPasscodeVisibility(branch.id)}
+                                      className="hover:text-foreground p-0.5"
+                                      title={isVisible ? 'Hide' : 'Reveal'}
+                                    >
+                                      {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="italic text-muted-foreground/70 font-sans">
+                                    No unique passcode configured (Direct access)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -917,11 +899,11 @@ export default function SecuritySettingsPanel() {
                               </div>
                             ) : (
                               <>
-                                {(hasCustom ? bData?.passcode : storedPasscode) && (
+                                {hasCustom && bData?.passcode && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleCopyBranchPasscode(branch.id, (hasCustom ? bData?.passcode : storedPasscode)!)}
+                                    onClick={() => handleCopyBranchPasscode(branch.id, bData.passcode!)}
                                     className="h-7 px-2 text-[11px] gap-1"
                                     title="Copy secret passcode for this branch"
                                   >
@@ -943,7 +925,7 @@ export default function SecuritySettingsPanel() {
                                   }`}
                                 >
                                   <KeyRound className="h-3 w-3" />
-                                  <span>{hasCustom ? 'Change' : 'Set Unique'}</span>
+                                  <span>{hasCustom ? 'Change' : 'Set Passcode'}</span>
                                 </Button>
                                 {hasCustom && (
                                   <Button
@@ -954,7 +936,7 @@ export default function SecuritySettingsPanel() {
                                       setBranchClearDialogOpen(true);
                                     }}
                                     className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10 text-[11px]"
-                                    title="Reset to global default passcode"
+                                    title="Remove passcode for this branch"
                                   >
                                     Reset
                                   </Button>
@@ -1280,14 +1262,14 @@ export default function SecuritySettingsPanel() {
               <div className="p-2.5 rounded-xl bg-destructive/15 text-destructive">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <AlertDialogTitle className="text-lg">Reset Branch Passcode?</AlertDialogTitle>
+              <AlertDialogTitle className="text-lg">Remove Branch Passcode?</AlertDialogTitle>
             </div>
             <AlertDialogDescription className="text-sm text-muted-foreground pt-1 space-y-2">
               <p>
                 Are you sure you want to remove the unique passcode for <strong className="text-foreground">{branchToClear?.name}</strong>?
               </p>
               <p className="text-foreground font-medium">
-                • This branch will automatically revert to using the Global Default Passcode ({isPasscodeSet ? 'active' : 'not configured'}).
+                • This branch will have direct access without passcode prompts until a new passcode is assigned.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1301,10 +1283,10 @@ export default function SecuritySettingsPanel() {
               {savingTs ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Resetting...
+                  Removing...
                 </>
               ) : (
-                'Reset to Global Default'
+                'Yes, Remove Passcode'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

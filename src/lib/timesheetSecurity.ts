@@ -77,8 +77,8 @@ export function getTimesheetVerificationModeSync(): TimesheetVerificationMode {
  * Returns true if a passcode is configured in Super Admin settings (globally or for the specified branch).
  */
 export function isTimesheetPasscodeConfiguredSync(branchId?: string): boolean {
-  if (branchId && memoryBranchPasscodes[branchId]) {
-    return Boolean(memoryBranchPasscodes[branchId].isPasscodeSet);
+  if (branchId) {
+    return Boolean(memoryBranchPasscodes[branchId]?.isPasscodeSet && memoryBranchPasscodes[branchId]?.passcode);
   }
   return memoryPasscodeConfigured;
 }
