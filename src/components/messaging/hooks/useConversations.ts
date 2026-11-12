@@ -102,6 +102,13 @@ export function useConversations() {
           const lastMessage = lastMessageMap.get(conv.id);
           const lastReadAt = readAtMap.get(conv.id);
 
+          const isFromMe = lastMessage?.sender_id === user?.id;
+          const isUnread = Boolean(
+            lastMessage &&
+            !isFromMe &&
+            (!lastReadAt || new Date(lastMessage.created_at) > new Date(lastReadAt))
+          );
+
           return {
             ...conv,
             participants,
@@ -117,8 +124,7 @@ export function useConversations() {
                   attachments: lastMessage.attachments as unknown as null,
                 }
               : undefined,
-            unread_count:
-              lastMessage && lastReadAt && new Date(lastMessage.created_at) > new Date(lastReadAt) ? 1 : 0,
+            unread_count: isUnread ? 1 : 0,
           };
         })
         .filter(conv => {
@@ -277,7 +283,41 @@ export function useConversations() {
 
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+
+    if (!user?.id) return;
+
+    // Realtime subscription for incoming messages across conversations
+    const channel = supabase
+      .channel(`conversations-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversation_participants',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchConversations, user?.id]);
 
   const deleteConversation = useCallback(async (conversationId: string): Promise<boolean> => {
     if (!user?.id) return false;
@@ -324,12 +364,53 @@ export function useConversations() {
     }
   }, [user?.id, fetchConversations]);
 
+  const createGroupConversation = useCallback(
+    async (groupName: string, participantUserIds: string[]): Promise<string | null> => {
+      if (!user?.id || !groupName.trim() || participantUserIds.length === 0) return null;
+
+      try {
+        const { data: newConvo, error } = await supabase
+          .from('conversations')
+          .insert({
+            name: groupName.trim(),
+            is_group: true,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Add current user plus all selected participants
+        const uniqueUserIds = Array.from(new Set([user.id, ...participantUserIds]));
+        const participantRows = uniqueUserIds.map(uid => ({
+          conversation_id: newConvo.id,
+          user_id: uid,
+        }));
+
+        const { error: partError } = await supabase
+          .from('conversation_participants')
+          .insert(participantRows);
+
+        if (partError) throw partError;
+
+        await fetchConversations();
+        return newConvo.id;
+      } catch (error) {
+        console.error('Error creating group chat:', error);
+        return null;
+      }
+    },
+    [user?.id, fetchConversations]
+  );
+
   return {
     conversations,
     loading,
     fetchConversations,
     initializeOrgChat,
     createDirectMessage,
+    createGroupConversation,
     deleteConversation,
   };
 }

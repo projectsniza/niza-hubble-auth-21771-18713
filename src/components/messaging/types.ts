@@ -29,6 +29,7 @@ export interface UserProfile {
   name: string;
   email: string;
   role?: string;
+  branchName?: string;
 }
 
 export interface Conversation {

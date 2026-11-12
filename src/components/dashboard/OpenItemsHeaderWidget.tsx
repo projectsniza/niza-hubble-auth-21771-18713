@@ -17,6 +17,8 @@ import {
   User, 
   Building, 
   MapPin, 
+  Store,
+  Folder,
   ChevronRight, 
   ChevronDown,
   Layers, 
@@ -488,9 +490,14 @@ function ItemCard({
   const now = new Date();
   const isOverdue = item.sourceType === 'document_overdue';
   const isUpcoming = item.sourceType === 'document_upcoming';
-  const empName = item.employee
-    ? `${item.employee.first_name || ''} ${item.employee.last_name || ''}`.trim()
-    : null;
+  const empName = item.employee_name || (
+    item.employee
+      ? `${item.employee.first_name || ''} ${item.employee.last_name || ''}`.trim()
+      : null
+  ) || null;
+  const storeName = item.store_name || item.branch_name || (item.employee?.branch as any)?.name || (item.employee?.branches as any)?.name || null;
+  const orgName = item.organization_name || (item.employee?.organization as any)?.name || (item.employee?.organizations as any)?.name || null;
+  const folderPath = item.document?.folder_path || null;
 
   return (
     <div
@@ -571,17 +578,43 @@ function ItemCard({
         </div>
       </div>
 
-      {/* Employee Info if document */}
-      {empName && (
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-background/60 rounded-lg px-2 py-1 border border-border/50">
-          <span className="flex items-center gap-1 font-medium text-foreground truncate">
-            <User className="h-3 w-3 text-primary flex-shrink-0" />
-            {empName}
-          </span>
-          {(item.employee?.branches?.name || item.employee?.organizations?.name) && (
-            <span className="truncate text-[10px] ml-1.5 opacity-80">
-              {item.employee?.branches?.name || item.employee?.organizations?.name}
-            </span>
+      {/* To Whom & Which Store Information */}
+      {(empName || storeName || orgName || folderPath) && (
+        <div className="bg-muted/40 rounded-lg p-2 border border-border/60 space-y-1 text-[11px]">
+          {empName && (
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <span className="flex items-center gap-1.5 font-semibold text-foreground truncate">
+                <User className="h-3 w-3 text-primary flex-shrink-0" />
+                <span className="truncate">{empName}</span>
+                {item.employee_job_title && (
+                  <span className="text-[10px] font-normal text-muted-foreground hidden sm:inline">
+                    • {item.employee_job_title}
+                  </span>
+                )}
+              </span>
+              {item.employee_email && (
+                <span className="text-[10px] text-muted-foreground truncate max-w-[130px]" title={item.employee_email}>
+                  {item.employee_email}
+                </span>
+              )}
+            </div>
+          )}
+          {(storeName || orgName) && (
+            <div className={`flex items-center gap-1.5 text-muted-foreground font-medium truncate ${empName ? 'pt-1 border-t border-border/40' : ''}`}>
+              <Store className="h-3 w-3 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+              <span className="text-foreground font-semibold truncate">{storeName || 'All Stores'}</span>
+              {orgName && (
+                <span className="text-[10px] opacity-75 truncate">
+                  • {orgName}
+                </span>
+              )}
+            </div>
+          )}
+          {!storeName && !orgName && folderPath && (
+            <div className={`flex items-center gap-1 text-[10px] text-muted-foreground font-mono truncate ${empName ? 'pt-1 border-t border-border/40' : ''}`} title={folderPath}>
+              <Folder className="h-2.5 w-2.5 text-amber-500 flex-shrink-0" />
+              <span className="truncate">{folderPath}</span>
+            </div>
           )}
         </div>
       )}

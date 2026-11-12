@@ -67,6 +67,7 @@ const WEEKS_PER_YEAR = 52;
 
 export function HolidayBalance() {
   const { user } = useAuth();
+  const canExport = ['super_admin', 'admin', 'hr'].includes(user?.role || '');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
@@ -367,6 +368,10 @@ export function HolidayBalance() {
   }), [filteredBalances]);
 
   const exportToCSV = () => {
+    if (!canExport) {
+      toast.error('Only Super Admin, Admin, and HR can export holiday balances.');
+      return;
+    }
     let headers: string[];
     let rows: string[][];
 
@@ -488,9 +493,11 @@ export function HolidayBalance() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${recalculating ? 'animate-spin' : ''}`} />
                 Recalculate
               </Button>
-              <Button variant="outline" size="sm" onClick={exportToCSV} className="shadow-sm">
-                <Download className="h-4 w-4 mr-2" />Export
-              </Button>
+              {canExport && (
+                <Button variant="outline" size="sm" onClick={exportToCSV} className="shadow-sm">
+                  <Download className="h-4 w-4 mr-2" />Export
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

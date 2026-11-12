@@ -832,6 +832,26 @@ serve(async (req) => {
         }
       }
 
+      // Check if cleanInput matches ANY configured branch unique passcode in branchConfigs
+      if (!isMatch && branchConfigs && typeof branchConfigs === "object") {
+        for (const [bId, bConfig] of Object.entries(branchConfigs)) {
+          if (bConfig && typeof bConfig === "object" && (bConfig as any).is_set) {
+            const bHash = (bConfig as any).hash || "";
+            const bEncrypted = (bConfig as any).encrypted || "";
+            if (bHash && inputHash === bHash) {
+              isMatch = true;
+              break;
+            } else if (bEncrypted) {
+              const decryptedBranch = await decryptPasscode(bEncrypted, supabaseServiceKey);
+              if (decryptedBranch && decryptedBranch.trim() === cleanInput) {
+                isMatch = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
       if (!isMatch) {
         return new Response(
           JSON.stringify({

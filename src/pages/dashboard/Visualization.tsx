@@ -1,263 +1,251 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
-import { useDigitalTwinData } from '@/components/visualization/useDigitalTwinData';
-import { DigitalTwinCanvas } from '@/components/visualization/DigitalTwinCanvas';
-import { GamifiedDock } from '@/components/visualization/GamifiedDock';
-import { DataHUDPanel } from '@/components/visualization/DataHUDPanel';
-import { Fallback2DGrid } from '@/components/visualization/Fallback2DGrid';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Maximize2,
-  Minimize2,
-  RefreshCw,
-  Building2,
-  ArrowLeft,
-  Plus,
-  Minus,
-  Compass,
-} from 'lucide-react';
-
-function checkWebGLSupport(): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    return !!(
-      window.WebGLRenderingContext &&
-      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-    );
-  } catch {
-    return false;
-  }
-}
 
 export default function Visualization() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { branches } = useOrgBranch();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
 
-  // Selected branch: super_admin can view all branches or filter by branch
-  const [selectedBranchId, setSelectedBranchId] = useState<string | 'all'>('all');
-  const [focusedZone, setFocusedZone] = useState<string | null>(null);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d');
-  const [hasWebGL, setHasWebGL] = useState<boolean>(true);
+  const branchList = useMemo(() => {
+    return [
+      { id: 'all', name: 'All Branches (Overview)', m: 1 },
+      ...(branches || []).map((b) => ({
+        id: b.id,
+        name: b.name,
+        m: Math.max(0.2, Number((0.6 / Math.max(1, branches.length)).toFixed(2))),
+      })),
+    ];
+  }, [branches]);
 
-  // Check WebGL availability on mount
-  useEffect(() => {
-    const supported = checkWebGLSupport();
-    setHasWebGL(supported);
-    if (!supported) {
-      setViewMode('2d');
+  const fetchLiveMetrics = useCallback(async (targetBranchId: string = 'all') => {
+    if (!user) return;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString();
+      const isFiltered = targetBranchId !== 'all';
+
+      // 1. Employees: real active employees & branch breakdown
+      let empQuery = supabase
+        .from('employees')
+        .select('id, first_name, last_name, job_title, branch_id, status, branches(id, name)');
+      if (isFiltered) empQuery = empQuery.eq('branch_id', targetBranchId);
+      const empRes = await empQuery;
+      const allEmployees = empRes.data || [];
+      const activeEmployees = allEmployees.filter((e: any) => e.status === 'active');
+      const totalActiveEmployees = activeEmployees.length;
+
+      // Group active employees by branch for realistic deployment breakdown
+      const branchStaffMap: Record<string, number> = {};
+      activeEmployees.forEach((e: any) => {
+        const bName = e.branches?.name || 'Main Station';
+        branchStaffMap[bName] = (branchStaffMap[bName] || 0) + 1;
+      });
+
+      const staffRows = isFiltered
+        ? activeEmployees.slice(0, 8).map((e: any) => [`${e.first_name} ${e.last_name}`, e.job_title || 'Team Member'])
+        : Object.entries(branchStaffMap).map(([name, count]) => [name, `${count} staff`]);
+
+      const finalStaffRows = staffRows.length > 0
+        ? staffRows
+        : (branches || []).map((b) => [b.name, '0 staff']);
+
+      // 2. Real Active Clock-ins (currently clocked in)
+      let clockInQuery = supabase
+        .from('clock_ins')
+        .select('id, user_id, clock_in_time, branch_id')
+        .is('clock_out_time', null);
+      if (isFiltered) clockInQuery = clockInQuery.eq('branch_id', targetBranchId);
+      const clockInRes = await clockInQuery;
+      const activeClockins = clockInRes.data?.length || 0;
+
+      // 3. Real Pending Onboarding
+      let onbQuery = supabase
+        .from('employees')
+        .select('id, branch_id, onboarding:employee_onboarding(contract_approved, contract_submitted_for_approval), contract_approval:contract_approvals(status)')
+        .in('status', ['onboarding', 'awaiting_signature', 'awaiting_approval']);
+      if (isFiltered) onbQuery = onbQuery.eq('branch_id', targetBranchId);
+      const onbRes = await onbQuery;
+      const pendingOnboarding = (onbRes.data || []).filter((emp: any) => {
+        const onb = emp.onboarding?.[0];
+        const ca = emp.contract_approval?.[0];
+        if (onb?.contract_approved) return false;
+        if (onb?.contract_submitted_for_approval) return false;
+        if (ca?.status === 'pending' || ca?.status === 'approved') return false;
+        return true;
+      }).length;
+
+      // 4. Real Contract Approvals
+      let caQuery = supabase
+        .from('contract_approvals')
+        .select('id, status', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      const caRes = await caQuery;
+      const contractApprovals = caRes.count || 0;
+
+      // 5. Real Drive-Offs: open / unpaid
+      let driveOffsQuery = supabase
+        .from('drive_offs')
+        .select('id, vehicle_registration, amount_drive_off, total_amount_received, payment_received_date');
+      if (isFiltered) driveOffsQuery = driveOffsQuery.eq('branch_id', targetBranchId);
+      const driveOffsRes = await driveOffsQuery.limit(20);
+      const openDriveOffs = (driveOffsRes.data || []).filter(
+        (d: any) => !d.payment_received_date && Number(d.total_amount_received || 0) < Number(d.amount_drive_off || 0)
+      );
+      const driveOffsCount = openDriveOffs.length;
+      const driveOffsUnpaid = openDriveOffs.reduce(
+        (acc: number, d: any) => acc + (Number(d.amount_drive_off) - Number(d.total_amount_received || 0)),
+        0
+      );
+      const driveOffsPlates = openDriveOffs.map((d: any) => [d.vehicle_registration, Number(d.amount_drive_off) || 45]);
+
+      // 6. Real Lottery: active games & flagged records
+      let lotteryGamesQuery = supabase
+        .from('lottery_games')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true);
+      if (isFiltered) lotteryGamesQuery = lotteryGamesQuery.eq('branch_id', targetBranchId);
+      const lotteryRes = await lotteryGamesQuery;
+      const activeLotterySlots = lotteryRes.count || 0;
+
+      let lotteryRecordsQuery = supabase
+        .from('lottery_daily_records')
+        .select('id, stock_begin, activated_tickets, stock_end, tickets_sold')
+        .gte('record_date', todayISO);
+      if (isFiltered) lotteryRecordsQuery = lotteryRecordsQuery.eq('branch_id', targetBranchId);
+      const lotteryRecsRes = await lotteryRecordsQuery.limit(20);
+      const variancesCount = (lotteryRecsRes.data || []).filter((r: any) => {
+        const expected = (Number(r.stock_begin) || 0) + (Number(r.activated_tickets) || 0) - (Number(r.tickets_sold) || 0);
+        return Math.abs(expected - (Number(r.stock_end) || 0)) > 0;
+      }).length;
+
+      // 7. Real Daily Reports
+      let repQuery = supabase.from('daily_reports').select('id, status', { count: 'exact' }).gte('created_at', todayISO);
+      if (isFiltered) repQuery = repQuery.eq('branch_id', targetBranchId);
+      const repRes = await repQuery;
+      const reportsReconciled = repRes.count || 0;
+
+      // 8. Real Maintenance Tickets
+      let maintQuery = supabase
+        .from('maintenance_tickets')
+        .select('id, title, priority, status, created_at')
+        .in('status', ['open', 'in_progress']);
+      if (isFiltered) maintQuery = maintQuery.eq('branch_id', targetBranchId);
+      const maintRes = await maintQuery.limit(8);
+      const openTickets = maintRes.data || [];
+      const maintTicketRows = openTickets.map((t: any) => [
+        t.title || 'Equipment maintenance',
+        t.priority || 'Normal',
+        t.priority === 'urgent' ? 'alert' : 'warn',
+      ]);
+
+      // 9. Real Scheduling / Leave requests
+      let leaveQuery = supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+      if (isFiltered) leaveQuery = leaveQuery.eq('branch_id', targetBranchId);
+      const leaveRes = await leaveQuery;
+      const holidayPending = leaveRes.count || 0;
+
+      const hrBanner =
+        contractApprovals > 0 || pendingOnboarding > 0
+          ? `${contractApprovals} contract approval(s) • ${pendingOnboarding} onboarding pending`
+          : 'All staff records and store rosters active';
+
+      const payload = {
+        totalEmployees: totalActiveEmployees,
+        onShift: totalActiveEmployees,
+        activeClockins: activeClockins,
+        pendingOnboarding: pendingOnboarding,
+        contractApprovals: contractApprovals,
+        staffRowsTitle: isFiltered ? 'Branch Staff Roster' : 'Staff Deployment by Branch',
+        staffRows: finalStaffRows,
+        hrBanner: hrBanner,
+        driveoffs: {
+          count: driveOffsCount,
+          unpaid: driveOffsUnpaid,
+          plates: driveOffsPlates,
+        },
+        lottery: {
+          activeSlots: activeLotterySlots,
+          variances: variancesCount,
+        },
+        reports: {
+          reconciled: reportsReconciled,
+          pending: Math.max(0, (branches?.length || 1) - reportsReconciled),
+        },
+        maintenance: {
+          tickets: openTickets.length,
+          overdue: 0,
+          ticketRows: maintTicketRows,
+        },
+        scheduling: {
+          holidayPending,
+        },
+      };
+
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          {
+            type: 'SET_LIVE_DATA',
+            branches: branchList,
+            liveData: payload,
+          },
+          '*'
+        );
+      }
+    } catch (err) {
+      console.error('Error fetching live digital twin telemetry:', err);
     }
-  }, []);
+  }, [user, branchList, branches]);
 
-  // Sync digital twin live telemetry
-  const { metrics, loading, pulseTriggeredZones, refetch } =
-    useDigitalTwinData(selectedBranchId);
-
-  // Handle ESC key to reset camera to overview
+  // Initial fetch and message listener
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setFocusedZone(null);
+    const handleMessage = (e: MessageEvent) => {
+      if (!e.data || typeof e.data !== 'object') return;
+
+      if (e.data.type === 'NAVIGATE' && e.data.route) {
+        navigate(e.data.route);
+      }
+
+      if (e.data.type === 'VISUALIZATION_READY') {
+        fetchLiveMetrics(selectedBranchId);
+      }
+
+      if (e.data.type === 'BRANCH_CHANGED' && e.data.branchId) {
+        setSelectedBranchId(e.data.branchId);
+        fetchLiveMetrics(e.data.branchId);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
-  // Toggle true fullscreen
-  const toggleFullScreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullScreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      }
-      setIsFullScreen(false);
-    }
-  }, []);
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [navigate, fetchLiveMetrics, selectedBranchId]);
 
+  // Periodic polling every 30 seconds for live synchronization
   useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullScreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
-
-  // Filter branches visible to current user
-  const userBranches = useMemo(() => {
-    if (user?.role === 'super_admin') return branches;
-    if (user?.branchIds && user.branchIds.length > 0) {
-      return branches.filter((b) => user.branchIds?.includes(b.id));
-    }
-    return branches;
-  }, [branches, user]);
-
-  const handleZoom = (delta: number) => {
-    const canvasEl = document.querySelector('canvas');
-    if (canvasEl) {
-      canvasEl.dispatchEvent(new WheelEvent('wheel', { deltaY: delta, bubbles: true }));
-    }
-  };
+    fetchLiveMetrics(selectedBranchId);
+    const interval = setInterval(() => {
+      fetchLiveMetrics(selectedBranchId);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchLiveMetrics, selectedBranchId]);
 
   return (
-    <div
-      className={`relative w-full bg-slate-950 text-slate-100 flex flex-col overflow-hidden select-none ${
-        isFullScreen ? 'fixed inset-0 z-50 h-screen' : 'h-[calc(100vh-3.5rem)]'
-      }`}
-    >
-      {/* Top Floating Control Bar */}
-      <header className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between gap-3 pointer-events-none">
-        {/* Left Side: Back & Branch Selector */}
-        <div className="flex items-center gap-2 pointer-events-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-            className="h-9 px-3 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-200 backdrop-blur-md shadow-lg gap-1.5"
-            title="Back to Dashboard"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline text-xs font-medium">Dashboard</span>
-          </Button>
-
-          {/* Branch Switcher for Super Admin and Multi-branch Managers */}
-          {userBranches.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md border border-primary/30 rounded-xl px-2.5 py-1 shadow-lg">
-              <Building2 className="h-4 w-4 text-primary" />
-              <Select
-                value={selectedBranchId}
-                onValueChange={(val) => setSelectedBranchId(val)}
-              >
-                <SelectTrigger className="h-7 border-0 bg-transparent text-xs font-medium focus:ring-0 text-slate-200 px-1 gap-1">
-                  <SelectValue placeholder="Select Branch" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-primary/40 text-slate-200 shadow-xl">
-                  <SelectItem value="all">All Branches (Overview)</SelectItem>
-                  {userBranches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-
-        {/* Right Side: Refresh & Fullscreen */}
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Refresh Data */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            className="h-9 w-9 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-300 backdrop-blur-md shadow-lg"
-            title="Refresh Live Data"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-primary' : ''}`} />
-          </Button>
-
-          {/* Fullscreen Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleFullScreen}
-            className="h-9 w-9 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-300 backdrop-blur-md shadow-lg"
-            title={isFullScreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-          >
-            {isFullScreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </header>
-
-      {/* Main View Area */}
-      <div className="flex-1 w-full h-full relative overflow-hidden">
-        {viewMode === '3d' && hasWebGL ? (
-          <>
-            <DigitalTwinCanvas
-              focusedZone={focusedZone}
-              onSelectZone={(zoneId) => setFocusedZone(zoneId)}
-              metrics={metrics}
-              pulseTriggeredZones={pulseTriggeredZones}
-            />
-
-            {/* Floating Zoom & Overview Controls (Bottom Right) */}
-            <div className="absolute bottom-6 right-6 z-40 flex flex-col gap-1.5 pointer-events-auto">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleZoom(-250)}
-                className="h-9 w-9 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-200 backdrop-blur-md shadow-xl hover:scale-105 active:scale-95 transition-all"
-                title="Zoom In (or scroll up)"
-                aria-label="Zoom in"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleZoom(250)}
-                className="h-9 w-9 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-200 backdrop-blur-md shadow-xl hover:scale-105 active:scale-95 transition-all"
-                title="Zoom Out (or scroll down)"
-                aria-label="Zoom out"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setFocusedZone(null)}
-                className="h-9 w-9 rounded-xl border border-primary/30 bg-slate-900/90 hover:bg-slate-800 text-slate-200 backdrop-blur-md shadow-xl hover:scale-105 active:scale-95 transition-all"
-                title="Reset Camera to Site Overview (Esc)"
-                aria-label="Reset camera view"
-              >
-                <Compass className="h-4 w-4 text-primary" />
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="w-full h-full overflow-y-auto pt-24 pb-28">
-            <Fallback2DGrid
-              metrics={metrics}
-              onSelectModule={(modId) => setFocusedZone(modId)}
-            />
-          </div>
-        )}
-
-        {/* Gamified Pill Dock - Floating at bottom center, guaranteed visible */}
-        <GamifiedDock
-          activeZone={focusedZone}
-          onSelectZone={(zoneId) => setFocusedZone(zoneId)}
-          metrics={metrics}
-          pulseTriggeredZones={pulseTriggeredZones}
-        />
-
-        {/* 2D HUD Telemetry Panel on Focus */}
-        {focusedZone && (
-          <DataHUDPanel
-            focusedZone={focusedZone}
-            onClose={() => setFocusedZone(null)}
-            metrics={metrics}
-          />
-        )}
-      </div>
+    <div className="w-full h-[calc(100vh-3.5rem)] relative overflow-hidden bg-[#050912]">
+      <iframe
+        ref={iframeRef}
+        src="/visualization.html"
+        title="NIZA Cloud – 3D Station Visualization"
+        className="w-full h-full border-0 block"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        onLoad={() => {
+          fetchLiveMetrics(selectedBranchId);
+        }}
+      />
     </div>
   );
 }

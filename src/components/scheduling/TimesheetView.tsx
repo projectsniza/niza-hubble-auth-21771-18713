@@ -238,8 +238,18 @@ export function TimesheetView() {
     id: string; name: string; source: string | null; weeklyHours: number[]; totalHours: number;
   }>>>({});
 
+  // Role & Permissions for Scheduling
+  const isStoreAccount = user?.role === 'manager' || !['super_admin', 'admin', 'hr'].includes(user?.role || '');
+  const canExport = ['super_admin', 'admin', 'hr'].includes(user?.role || '');
+
   // Timesheets & Rota Verification State (Passcode, 2FA, or Disabled)
-  const [isStoreVerified, setIsStoreVerified] = useState(() => isTimesheetSessionVerified());
+  const [isStoreVerified, setIsStoreVerified] = useState(() => {
+    if (['super_admin', 'admin', 'hr'].includes(user?.role || '')) return true;
+    const mode = getTimesheetVerificationModeSync();
+    if (mode === 'disabled') return true;
+    if (mode === 'passcode' && !isTimesheetPasscodeConfiguredSync()) return true;
+    return false;
+  });
   const [tsVerificationMode, setTsVerificationMode] = useState<TimesheetVerificationMode>(() => getTimesheetVerificationModeSync());
   const [isPasscodeConfigured, setIsPasscodeConfigured] = useState<boolean>(() => isTimesheetPasscodeConfiguredSync());
   const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
@@ -249,6 +259,19 @@ export function TimesheetView() {
   const [pendingStoreAction, setPendingStoreAction] = useState<(() => void) | null>(null);
   const isSendingStore2FARef = useRef(false);
   const lastStore2FATriggerTimeRef = useRef<number>(0);
+  const hasPromptedInitialModalRef = useRef(false);
+
+  // When store accounts open the scheduling module, require entering the passcode each time
+  useEffect(() => {
+    if (isStoreAccount && tsVerificationMode === 'passcode' && isPasscodeConfigured && !hasPromptedInitialModalRef.current) {
+      hasPromptedInitialModalRef.current = true;
+      clearTimesheetSessionVerified();
+      setIsStoreVerified(false);
+      setPasscodeModalOpen(true);
+    }
+  }, [isStoreAccount, tsVerificationMode, isPasscodeConfigured]);
+
+  const isTimesheetLockedForStore = isStoreAccount && !isStoreVerified && tsVerificationMode === 'passcode' && isPasscodeConfigured;
 
   const triggerStore2FA = useCallback(async () => {
     if (!user?.email) {
@@ -291,8 +314,13 @@ export function TimesheetView() {
     if (selectedBranch && selectedBranch !== 'all') return selectedBranch;
     if (user?.branchId) return user.branchId;
     if (user?.branchIds && user.branchIds.length > 0) return user.branchIds[0];
+    if (branches && branches.length === 1) return branches[0].id;
+    if (employees && employees.length > 0) {
+      const empBranchIds = Array.from(new Set(employees.map(e => e.branch_id).filter(Boolean)));
+      if (empBranchIds.length === 1) return empBranchIds[0];
+    }
     return undefined;
-  }, [selectedBranch, user?.branchId, user?.branchIds]);
+  }, [selectedBranch, user?.branchId, user?.branchIds, branches, employees]);
 
   const activeBranchName = useMemo(() => {
     if (!activeBranchId) return undefined;
@@ -393,6 +421,8 @@ export function TimesheetView() {
           setIsStoreVerified(true);
           setStore2FAOpen(false);
           setPasscodeModalOpen(false);
+        } else if (isStoreAccount && cfg.mode === 'passcode') {
+          setIsStoreVerified((prev) => prev && isTimesheetSessionVerified());
         } else {
           setIsStoreVerified(isTimesheetSessionVerified());
         }
@@ -406,6 +436,8 @@ export function TimesheetView() {
         setIsStoreVerified(true);
         setStore2FAOpen(false);
         setPasscodeModalOpen(false);
+      } else if (isStoreAccount && cfg.mode === 'passcode') {
+        setIsStoreVerified((prev) => prev && isTimesheetSessionVerified());
       } else {
         setIsStoreVerified(isTimesheetSessionVerified());
       }
@@ -437,7 +469,7 @@ export function TimesheetView() {
 
   useEffect(() => {
     fetchData();
-    if (canViewFilters) fetchOrganizationsAndBranches();
+    fetchOrganizationsAndBranches();
   }, [currentMonth, selectedWeekIndex]);
 
   // Fetch weekly hour targets (one row per branch) - accessible to all roles via RLS
@@ -1389,6 +1421,10 @@ export function TimesheetView() {
 
 
   const exportToExcel = async () => {
+    if (!canExport) {
+      toast.error('Only Super Admin, Admin, and HR can export timesheets.');
+      return;
+    }
     try {
       const payroll = getPayrollPeriod(currentMonth);
       const firstWeek = monthWeeks[0];
@@ -1663,9 +1699,11 @@ export function TimesheetView() {
                 </Select>
               )}
               
-              <Button variant="outline" size="sm" onClick={exportToExcel} className="shadow-sm">
-                <Download className="h-4 w-4 mr-2" />Export
-              </Button>
+              {canExport && (
+                <Button variant="outline" size="sm" onClick={exportToExcel} className="shadow-sm">
+                  <Download className="h-4 w-4 mr-2" />Export
+                </Button>
+              )}
               
               {/* Monthly Lock/Submit */}
               <TimesheetMonthLock
@@ -1693,7 +1731,30 @@ export function TimesheetView() {
         />
       )}
 
-      {/* Summary Cards */}
+      {isTimesheetLockedForStore ? (
+        <Card className="border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 shadow-sm p-12 text-center my-6">
+          <div className="max-w-md mx-auto space-y-4">
+            <div className="h-16 w-16 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-inner ring-1 ring-amber-500/20">
+              <Lock className="h-8 w-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Passcode Verification Required</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Shift timings, employee entries, and weekly totals are locked. Enter the Super Admin security passcode to view and edit timesheets.
+              </p>
+            </div>
+            <Button
+              onClick={() => setPasscodeModalOpen(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-6 shadow"
+            >
+              <KeyRound className="h-4 w-4 mr-2" />
+              Enter Passcode
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
           <CardContent className="p-4 flex items-center gap-3">
@@ -2330,6 +2391,8 @@ export function TimesheetView() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </Card>
+      )}
+        </>
       )}
 
       {/* Edit Side Panel */}

@@ -48,6 +48,7 @@ interface Employee {
 
 export function ActiveRotas() {
   const { user } = useAuth();
+  const canExport = ['super_admin', 'admin', 'hr'].includes(user?.role || '');
   const [rotas, setRotas] = useState<Rota[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -241,6 +242,10 @@ export function ActiveRotas() {
   };
 
   const handleDownload = async (rota: Rota) => {
+    if (!canExport) {
+      toast.error('Only Super Admin, Admin, and HR can export rotas.');
+      return;
+    }
     const { data: shifts } = await supabase
       .from('rota_shifts')
       .select('*, employee:employees(first_name, last_name)')
@@ -457,10 +462,12 @@ export function ActiveRotas() {
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDownload(rota)}>
-                          <Download className="h-4 w-4 mr-2" />
-                          Export
-                        </DropdownMenuItem>
+                        {canExport && (
+                          <DropdownMenuItem onClick={() => handleDownload(rota)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

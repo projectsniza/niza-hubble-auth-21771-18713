@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .maybeSingle(),
         supabase
           .from('employees')
-          .select('status, deactivation_reason, email')
+          .select('status, deactivation_reason, email, branch_id, organization_id')
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(1)
@@ -91,10 +91,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       let employeeStatus = employeeByUserResult.data?.status ?? null;
       let employeeDeactivationReason = employeeByUserResult.data?.deactivation_reason ?? null;
 
+      let employeeByEmailData: any = null;
       if ((!employeeStatus || !employeeDeactivationReason) && profile.email) {
         const { data: employeeByEmail, error: employeeByEmailError } = await supabase
           .from('employees')
-          .select('status, deactivation_reason')
+          .select('status, deactivation_reason, branch_id, organization_id')
           .ilike('email', profile.email)
           .order('updated_at', { ascending: false })
           .limit(1)
@@ -104,6 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error('Error fetching employee status by email:', employeeByEmailError);
         }
 
+        employeeByEmailData = employeeByEmail;
         employeeStatus = employeeByEmail?.status ?? employeeStatus;
         employeeDeactivationReason = employeeByEmail?.deactivation_reason ?? employeeDeactivationReason;
       }
@@ -143,13 +145,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
+      const resolvedBranchId = profile.branch_id || employeeByUserResult.data?.branch_id || employeeByEmailData?.branch_id || undefined;
+      const resolvedOrgId = profile.organization_id || employeeByUserResult.data?.organization_id || employeeByEmailData?.organization_id || undefined;
+
       const appUser: AppUser = {
         id: profile.id,
         email: profile.email,
         name: profile.name,
         role: (roleResult.data?.role as UserRole) ?? 'employee',
-        organizationId: profile.organization_id || undefined,
-        branchId: profile.branch_id || undefined,
+        organizationId: resolvedOrgId,
+        branchId: resolvedBranchId,
         branchIds,
         hrAccessLevel: (profile.hr_access_level as HRAccessLevel) || 'full',
       };

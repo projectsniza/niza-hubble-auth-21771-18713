@@ -158,6 +158,58 @@ export async function getTimesheetSecurityConfig(): Promise<TimesheetSecurityCon
   let updatedAt = localStorage.getItem(TIMESHEET_LAST_UPDATED_KEY);
   let updatedBy = localStorage.getItem(TIMESHEET_UPDATED_BY_KEY);
 
+  // 1. Direct DB check on dedicated Master Passcode row (immune to branch overrides)
+  try {
+    const { data: masterRow } = await supabase
+      .from('message_settings')
+      .select('setting_value, updated_at, description')
+      .eq('setting_key', 'timesheet_master_passcode')
+      .maybeSingle();
+
+    if (masterRow?.setting_value && typeof masterRow.setting_value === 'object') {
+      const mv = masterRow.setting_value as any;
+      if (mv.passcode_plain !== undefined && mv.passcode_plain !== '') {
+        passcode = mv.passcode_plain;
+        isPasscodeSet = Boolean(mv.is_set !== false && mv.passcode_plain);
+        memoryGlobalPasscode = passcode;
+        memoryPasscodeConfigured = isPasscodeSet;
+        try {
+          localStorage.setItem(TIMESHEET_GLOBAL_PASSCODE_KEY, passcode);
+          localStorage.setItem(TIMESHEET_PASSCODE_CONFIGURED_KEY, String(isPasscodeSet));
+        } catch {}
+      }
+    }
+  } catch {}
+
+  // 2. Direct DB check on dedicated Branch Passcodes row
+  try {
+    const { data: branchRow } = await supabase
+      .from('message_settings')
+      .select('setting_value')
+      .eq('setting_key', 'timesheet_branch_passcodes_config')
+      .maybeSingle();
+
+    if (branchRow?.setting_value && typeof branchRow.setting_value === 'object') {
+      const bMap = branchRow.setting_value as Record<string, any>;
+      for (const [bId, bObj] of Object.entries(bMap)) {
+        if (bObj && typeof bObj === 'object') {
+          branchPasscodes[bId] = {
+            branchId: bId,
+            isPasscodeSet: Boolean(bObj.is_set),
+            passcode: bObj.passcode_plain || branchPasscodes[bId]?.passcode,
+            updatedAt: bObj.updated_at || null,
+            updatedBy: bObj.updated_by || null,
+          };
+        }
+      }
+      memoryBranchPasscodes = branchPasscodes;
+      try {
+        localStorage.setItem(TIMESHEET_BRANCH_PASSCODES_KEY, JSON.stringify(branchPasscodes));
+      } catch {}
+    }
+  } catch {}
+
+  // 3. Query Edge Function
   try {
     const { data: edgeData, error } = await supabase.functions.invoke('resend-2fa', {
       body: { action: 'get_timesheet_security_config' },
@@ -168,11 +220,12 @@ export async function getTimesheetSecurityConfig(): Promise<TimesheetSecurityCon
         mode = edgeData.mode;
         memoryTimesheetMode = mode;
       }
-      if (edgeData.isPasscodeSet !== undefined) {
+      if (edgeData.isPasscodeSet !== undefined && !passcode) {
         isPasscodeSet = Boolean(edgeData.isPasscodeSet);
         memoryPasscodeConfigured = isPasscodeSet;
       }
-      if (edgeData.passcode !== undefined && edgeData.passcode !== '') {
+      // Only adopt edgeData.passcode if master passcode wasn't already loaded from dedicated row
+      if (!passcode && edgeData.passcode !== undefined && edgeData.passcode !== '') {
         passcode = edgeData.passcode;
         memoryGlobalPasscode = passcode;
         try {
@@ -180,7 +233,15 @@ export async function getTimesheetSecurityConfig(): Promise<TimesheetSecurityCon
         } catch {}
       }
       if (edgeData.branchPasscodes && Object.keys(edgeData.branchPasscodes).length > 0) {
-        branchPasscodes = { ...branchPasscodes, ...edgeData.branchPasscodes };
+        const mergedBranches: Record<string, BranchPasscodeInfo> = { ...branchPasscodes };
+        for (const [bId, incoming] of Object.entries(edgeData.branchPasscodes as Record<string, any>)) {
+          mergedBranches[bId] = {
+            ...mergedBranches[bId],
+            ...incoming,
+            passcode: incoming.passcode || mergedBranches[bId]?.passcode,
+          };
+        }
+        branchPasscodes = mergedBranches;
         memoryBranchPasscodes = branchPasscodes;
         try {
           localStorage.setItem(TIMESHEET_BRANCH_PASSCODES_KEY, JSON.stringify(branchPasscodes));
@@ -192,6 +253,58 @@ export async function getTimesheetSecurityConfig(): Promise<TimesheetSecurityCon
   } catch (err) {
     console.warn('Error fetching timesheet security config via edge function, using local cache:', err);
   }
+
+  // 4. Retrieve any stored local branch passcode secrets (to survive edge function redactions)
+  try {
+    const rawSecrets = localStorage.getItem('niza_timesheet_branch_passcodes_local_secrets');
+    if (rawSecrets) {
+      const secretsMap = JSON.parse(rawSecrets);
+      for (const [bId, sec] of Object.entries(secretsMap)) {
+        if (sec && typeof sec === 'string') {
+          if (!branchPasscodes[bId]) {
+            branchPasscodes[bId] = { branchId: bId, isPasscodeSet: true, passcode: sec };
+          } else {
+            branchPasscodes[bId].passcode = sec;
+            branchPasscodes[bId].isPasscodeSet = true;
+          }
+        }
+      }
+      memoryBranchPasscodes = branchPasscodes;
+      try {
+        localStorage.setItem(TIMESHEET_BRANCH_PASSCODES_KEY, JSON.stringify(branchPasscodes));
+      } catch {}
+    }
+  } catch {}
+
+  // 5. Direct DB check on legacy message_settings timesheet_passcode_config as fallback
+  try {
+    const { data: dbData } = await supabase
+      .from('message_settings')
+      .select('setting_value')
+      .eq('setting_key', 'timesheet_passcode_config')
+      .maybeSingle();
+
+    if (dbData?.setting_value && typeof dbData.setting_value === 'object') {
+      const val = dbData.setting_value as any;
+      if (val.branches && typeof val.branches === 'object') {
+        for (const [bId, bObj] of Object.entries(val.branches as Record<string, any>)) {
+          if (bObj && typeof bObj === 'object') {
+            if (!branchPasscodes[bId]) {
+              branchPasscodes[bId] = { branchId: bId, isPasscodeSet: Boolean(bObj.is_set) };
+            }
+            if (bObj.passcode_plain) {
+              branchPasscodes[bId].passcode = bObj.passcode_plain;
+              branchPasscodes[bId].isPasscodeSet = true;
+            }
+          }
+        }
+        memoryBranchPasscodes = branchPasscodes;
+        try {
+          localStorage.setItem(TIMESHEET_BRANCH_PASSCODES_KEY, JSON.stringify(branchPasscodes));
+        } catch {}
+      }
+    }
+  } catch {}
 
   try {
     localStorage.setItem(TIMESHEET_MODE_STORAGE_KEY, mode);
@@ -211,7 +324,7 @@ export async function getTimesheetSecurityConfig(): Promise<TimesheetSecurityCon
 }
 
 /**
- * Super Admin updates timesheet verification mode and/or passcode (global or branch-specific).
+ * Super Admin updates timesheet verification mode and/or passcode (global master or branch-specific).
  */
 export async function setTimesheetSecurityConfig(
   mode: TimesheetVerificationMode,
@@ -224,7 +337,7 @@ export async function setTimesheetSecurityConfig(
     const nowIso = new Date().toISOString();
 
     // =========================================================================
-    // CASE 1: BRANCH-SPECIFIC PASSCODE UPDATE (Does NOT affect global passcode)
+    // CASE 1: BRANCH-SPECIFIC PASSCODE UPDATE (Does NOT touch Super Admin Master Passcode)
     // =========================================================================
     if (branchId) {
       const currentBranches = { ...memoryBranchPasscodes };
@@ -239,34 +352,101 @@ export async function setTimesheetSecurityConfig(
           updatedBy: updaterInfo,
         };
       } else if (cleanBranchPasscode === '') {
-        // Clearing branch passcode -> revert to global default
+        // Clearing branch passcode -> revert to global master default
         delete currentBranches[branchId];
       }
 
       memoryBranchPasscodes = currentBranches;
       try {
         localStorage.setItem(TIMESHEET_BRANCH_PASSCODES_KEY, JSON.stringify(currentBranches));
+        const secretsRaw = localStorage.getItem('niza_timesheet_branch_passcodes_local_secrets');
+        const secretsMap = secretsRaw ? JSON.parse(secretsRaw) : {};
+        if (cleanBranchPasscode) {
+          secretsMap[branchId] = cleanBranchPasscode;
+        } else {
+          delete secretsMap[branchId];
+        }
+        localStorage.setItem('niza_timesheet_branch_passcodes_local_secrets', JSON.stringify(secretsMap));
       } catch {}
 
-      // Best effort remote update
+      // 1a. Persist to dedicated timesheet_branch_passcodes_config table row
       try {
-        await supabase.functions.invoke('resend-2fa', {
-          body: {
-            action: 'set_timesheet_security_config',
-            mode,
-            passcode: cleanBranchPasscode,
-            branchId,
-            updatedBy: updaterInfo,
-          },
-        });
-      } catch (invokeErr) {
-        console.warn('Could not sync branch passcode to edge function (using local persistence):', invokeErr);
+        const { data: currentBranchDb } = await supabase
+          .from('message_settings')
+          .select('setting_value')
+          .eq('setting_key', 'timesheet_branch_passcodes_config')
+          .maybeSingle();
+
+        const branchMap = (currentBranchDb?.setting_value && typeof currentBranchDb.setting_value === 'object')
+          ? { ...(currentBranchDb.setting_value as Record<string, any>) }
+          : {};
+
+        if (cleanBranchPasscode) {
+          branchMap[branchId] = {
+            is_set: true,
+            passcode_plain: cleanBranchPasscode,
+            updated_at: nowIso,
+            updated_by: updaterInfo,
+          };
+        } else {
+          delete branchMap[branchId];
+        }
+
+        await supabase
+          .from('message_settings')
+          .upsert({
+            setting_key: 'timesheet_branch_passcodes_config',
+            setting_value: branchMap,
+            description: `Branch passcodes dictionary updated for ${branchId} by ${updaterInfo}`,
+            updated_at: nowIso,
+          }, { onConflict: 'setting_key' });
+      } catch (dbErr) {
+        console.warn('Could not sync to timesheet_branch_passcodes_config:', dbErr);
       }
+
+      // 1b. Sync branch map in legacy timesheet_passcode_config row WITHOUT touching global is_set or encrypted
+      try {
+        const { data: currentDbSetting } = await supabase
+          .from('message_settings')
+          .select('setting_value')
+          .eq('setting_key', 'timesheet_passcode_config')
+          .maybeSingle();
+
+        const currentVal = (currentDbSetting?.setting_value && typeof currentDbSetting.setting_value === 'object')
+          ? { ...currentDbSetting.setting_value }
+          : { is_set: false, encrypted: '', hash: '', branches: {} };
+        if (!currentVal.branches) currentVal.branches = {};
+
+        if (cleanBranchPasscode) {
+          currentVal.branches[branchId] = {
+            is_set: true,
+            passcode_plain: cleanBranchPasscode,
+            updated_at: nowIso,
+            updated_by: updaterInfo,
+          };
+        } else {
+          delete currentVal.branches[branchId];
+        }
+
+        await supabase
+          .from('message_settings')
+          .upsert({
+            setting_key: 'timesheet_passcode_config',
+            setting_value: currentVal,
+            description: `Timesheet passcode for branch ${branchId} updated by ${updaterInfo}`,
+            updated_at: nowIso,
+          }, { onConflict: 'setting_key' });
+      } catch (dbErr) {
+        console.warn('Could not sync branch passcode directly to message_settings:', dbErr);
+      }
+
+      // Note: We deliberately do NOT invoke resend-2fa with the root passcode field here,
+      // preventing older cloud edge functions from treating a branch passcode as the global master passcode!
 
       const resultConfig: TimesheetSecurityConfig = {
         mode: memoryTimesheetMode,
         isPasscodeSet: memoryPasscodeConfigured,
-        passcode: memoryGlobalPasscode,
+        passcode: memoryGlobalPasscode, // Master passcode remains 100% UNTOUCHED!
         branchPasscodes: { ...memoryBranchPasscodes },
         updatedAt: nowIso,
         updatedBy: updaterInfo,
@@ -287,7 +467,7 @@ export async function setTimesheetSecurityConfig(
     }
 
     // =========================================================================
-    // CASE 2: GLOBAL DEFAULT PASSCODE & MODE UPDATE
+    // CASE 2: GLOBAL MASTER PASSCODE & MODE UPDATE
     // =========================================================================
     memoryTimesheetMode = mode;
     try {
@@ -307,6 +487,25 @@ export async function setTimesheetSecurityConfig(
           localStorage.setItem(TIMESHEET_PASSCODE_CONFIGURED_KEY, 'false');
         }
       } catch {}
+
+      // Persist to dedicated timesheet_master_passcode setting
+      try {
+        await supabase
+          .from('message_settings')
+          .upsert({
+            setting_key: 'timesheet_master_passcode',
+            setting_value: {
+              is_set: cleanPasscode.length > 0,
+              passcode_plain: cleanPasscode,
+              updated_at: nowIso,
+              updated_by: updaterInfo,
+            },
+            description: `Super Admin Master Passcode updated by ${updaterInfo}`,
+            updated_at: nowIso,
+          }, { onConflict: 'setting_key' });
+      } catch (e) {
+        console.warn('Could not save to timesheet_master_passcode:', e);
+      }
     }
 
     try {
@@ -394,11 +593,21 @@ export async function verifyTimesheetPasscode(
     return memoryBranchPasscodes;
   })();
 
-  const bData = branchId ? currentBranches[branchId] : null;
-  const hasBranchPasscode = Boolean(bData?.isPasscodeSet && bData?.passcode);
+  // 1b-i. If specific branchId provided, check that branch first
+  if (branchId) {
+    const bData = currentBranches[branchId];
+    const hasBranchPasscode = Boolean(bData?.isPasscodeSet && bData?.passcode);
+    if (hasBranchPasscode && bData?.passcode) {
+      if (cleanInput === bData.passcode.trim()) {
+        setTimesheetSessionVerified(2);
+        return { success: true, verified: true, message: 'Passcode verified successfully' };
+      }
+    }
+  }
 
-  if (hasBranchPasscode && bData?.passcode) {
-    if (cleanInput === bData.passcode.trim()) {
+  // 1b-ii. Check if cleanInput matches ANY branch's unique passcode in memory / localStorage
+  for (const [bId, bInfo] of Object.entries(currentBranches)) {
+    if (bInfo?.isPasscodeSet && bInfo?.passcode && cleanInput === bInfo.passcode.trim()) {
       setTimesheetSessionVerified(2);
       return { success: true, verified: true, message: 'Passcode verified successfully' };
     }
@@ -443,6 +652,88 @@ export async function verifyTimesheetPasscode(
         verified: true,
         message: globalRes.message || 'Authorized by universal master passcode',
       };
+    }
+  } catch {}
+
+  // 2c. Multi-branch verification check via edge function:
+  // If specific branchId was omitted or failed, check all candidate branches that have custom passcodes
+  const candidateBranchIds = Object.keys(currentBranches).filter(
+    (bId) => currentBranches[bId]?.isPasscodeSet && bId !== branchId
+  );
+
+  // If memory/cache didn't have candidate branches, try fetching the latest list of branch IDs
+  if (candidateBranchIds.length === 0) {
+    try {
+      const cfg = await getTimesheetSecurityConfig();
+      if (cfg.branchPasscodes) {
+        for (const [bId, bInfo] of Object.entries(cfg.branchPasscodes)) {
+          if (bInfo?.isPasscodeSet && bId !== branchId && !candidateBranchIds.includes(bId)) {
+            candidateBranchIds.push(bId);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Also query branches table to get all branch IDs if candidate list is still empty
+  if (candidateBranchIds.length === 0) {
+    try {
+      const { data: bList } = await supabase.from('branches').select('id');
+      if (bList) {
+        for (const b of bList) {
+          if (b.id !== branchId && !candidateBranchIds.includes(b.id)) {
+            candidateBranchIds.push(b.id);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Test candidate branches against edge function
+  for (const candBranchId of candidateBranchIds) {
+    try {
+      const { data: candRes } = await supabase.functions.invoke('resend-2fa', {
+        body: {
+          action: 'verify_timesheet_passcode',
+          passcode: cleanInput,
+          branchId: candBranchId,
+        },
+      });
+      if (candRes?.verified) {
+        setTimesheetSessionVerified(2);
+        return {
+          success: true,
+          verified: true,
+          message: candRes.message || 'Passcode verified successfully',
+        };
+      }
+    } catch {}
+  }
+
+  // 2d. Direct database check against message_settings table as failover
+  try {
+    const { data: dbData } = await supabase
+      .from('message_settings')
+      .select('setting_value')
+      .eq('setting_key', 'timesheet_passcode_config')
+      .maybeSingle();
+
+    if (dbData?.setting_value && typeof dbData.setting_value === 'object') {
+      const val = dbData.setting_value as any;
+      if (val.branches && typeof val.branches === 'object') {
+        if (branchId && val.branches[branchId]?.passcode_plain) {
+          if (val.branches[branchId].passcode_plain.trim() === cleanInput) {
+            setTimesheetSessionVerified(2);
+            return { success: true, verified: true, message: 'Passcode verified successfully' };
+          }
+        }
+        for (const [bId, bObj] of Object.entries(val.branches as Record<string, any>)) {
+          if (bObj?.passcode_plain && bObj.passcode_plain.trim() === cleanInput) {
+            setTimesheetSessionVerified(2);
+            return { success: true, verified: true, message: 'Passcode verified successfully' };
+          }
+        }
+      }
     }
   } catch {}
 

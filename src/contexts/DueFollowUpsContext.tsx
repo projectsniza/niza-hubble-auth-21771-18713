@@ -15,11 +15,20 @@ export interface DueItem {
   snoozedUntil?: string | null;
   isDismissed?: boolean;
   isCompleted?: boolean;
+  employee_name?: string | null;
+  employee_email?: string | null;
+  employee_job_title?: string | null;
+  branch_name?: string | null;
+  store_name?: string | null;
+  organization_name?: string | null;
   employee?: {
     id?: string;
     first_name?: string;
     last_name?: string;
     email?: string;
+    job_title?: string | null;
+    organization?: { name?: string } | null;
+    branch?: { name?: string } | null;
     organizations?: { name?: string } | null;
     branches?: { name?: string } | null;
   } | null;
@@ -30,6 +39,7 @@ export interface DueItem {
     expiry_date?: string | null;
     follow_up_date?: string | null;
     folder_path?: string | null;
+    folder_name?: string | null;
   } | null;
 }
 
@@ -92,11 +102,43 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
     const nowIso = now.toISOString();
     const fetchedList: DueItem[] = [];
 
+    // 0. Pre-fetch branch reference data for instant, reliable Store & Org resolution
+    let branchById = new Map<string, { name: string; orgName: string | null }>();
+    let branchByName = new Map<string, { id: string; name: string; orgName: string | null }>();
+    try {
+      const { data: bData } = await supabase
+        .from('branches')
+        .select('id, name, organization_id, organizations(id, name)');
+      if (bData) {
+        bData.forEach((b: any) => {
+          const orgName = (b.organizations as any)?.name || null;
+          branchById.set(b.id, { name: b.name, orgName });
+          if (b.name) {
+            branchByName.set(b.name.trim().toLowerCase(), { id: b.id, name: b.name, orgName });
+          }
+        });
+      }
+    } catch (bErr) {
+      console.error('Error prefetching branches for due items:', bErr);
+    }
+
     // 1. Fetch Due Reminders
     try {
       const { data: reminderData, error: remError } = await supabase
         .from('reminders')
-        .select('id,title,description,reminder_date,is_completed,is_dismissed,snoozed_until')
+        .select(`
+          id,
+          title,
+          description,
+          reminder_date,
+          is_completed,
+          is_dismissed,
+          snoozed_until,
+          branch_id,
+          organization_id,
+          related_entity_type,
+          related_entity_id
+        `)
         .or(`created_by.eq.${user.id},assigned_to.eq.${user.id}`)
         .eq('is_completed', false)
         .lte('reminder_date', nowIso)
@@ -107,6 +149,7 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
         reminderData.forEach((r: any) => {
           const isSnoozed = !!(r.snoozed_until && new Date(r.snoozed_until) > now);
           const isDismissed = !!r.is_dismissed;
+          const bInfo = r.branch_id ? branchById.get(r.branch_id) : null;
 
           fetchedList.push({
             id: `rem_${r.id}`,
@@ -118,6 +161,9 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
             isSnoozed,
             snoozedUntil: r.snoozed_until,
             isDismissed,
+            branch_name: bInfo?.name || null,
+            store_name: bInfo?.name || null,
+            organization_name: bInfo?.orgName || null,
           });
         });
       }
@@ -152,22 +198,71 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
             follow_up_date,
             created_at,
             folder_id,
+            employee_id,
             verified_at,
             employee:employees(
               id,
               first_name,
               last_name,
               email,
+              job_title,
+              branch_id,
+              organization_id,
               organizations(name),
               branches(name)
             ),
-            folder:folders(id, name, path)
+            folder:folders(
+              id,
+              name,
+              path,
+              folder_type,
+              parent_id,
+              employee_id,
+              branch_id,
+              organization_id
+            )
           `)
           .or('expiry_date.not.is.null,follow_up_date.not.is.null')
           .is('verified_at', null)
           .limit(200);
 
         if (!docError && docsData) {
+          // Identify any missing employee IDs to batch resolve
+          const missingEmpIds = new Set<string>();
+          docsData.forEach((doc: any) => {
+            if (!doc.employee) {
+              if (doc.employee_id) missingEmpIds.add(doc.employee_id);
+              if (doc.folder?.employee_id) missingEmpIds.add(doc.folder.employee_id);
+              if (doc.file_path) {
+                const match = doc.file_path.match(/employees\/([0-9a-fA-F-]{36})/);
+                if (match) missingEmpIds.add(match[1]);
+              }
+            }
+          });
+
+          const empMap = new Map<string, any>();
+          if (missingEmpIds.size > 0) {
+            try {
+              const { data: extraEmps } = await supabase
+                .from('employees')
+                .select(`
+                  id,
+                  first_name,
+                  last_name,
+                  email,
+                  job_title,
+                  branch_id,
+                  organization_id
+                `)
+                .in('id', Array.from(missingEmpIds));
+              if (extraEmps) {
+                extraEmps.forEach((e: any) => empMap.set(e.id, e));
+              }
+            } catch (empErr) {
+              console.error('Error fetching missing employees for due items:', empErr);
+            }
+          }
+
           docsData.forEach((doc: any) => {
             const isCompletedLocal = localStorage.getItem(`doc_completed_${doc.id}`);
             if (isCompletedLocal) return;
@@ -206,6 +301,117 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
             }
 
             if (isOverdue || isUpcoming) {
+              // 1. Resolve employee object
+              let emp = doc.employee || null;
+              if (!emp) {
+                if (doc.employee_id && empMap.has(doc.employee_id)) {
+                  emp = empMap.get(doc.employee_id);
+                } else if (doc.folder?.employee_id && empMap.has(doc.folder.employee_id)) {
+                  emp = empMap.get(doc.folder.employee_id);
+                } else if (doc.file_path) {
+                  const m = doc.file_path.match(/employees\/([0-9a-fA-F-]{36})/);
+                  if (m && empMap.has(m[1])) {
+                    emp = empMap.get(m[1]);
+                  }
+                }
+              }
+
+              // 2. Resolve employee display fields
+              let empName: string | null = null;
+              let empEmail: string | null = null;
+              let empJobTitle: string | null = null;
+
+              if (emp) {
+                const fn = (emp.first_name || '').trim();
+                const ln = (emp.last_name || '').trim();
+                empName = `${fn} ${ln}`.trim() || null;
+                empEmail = emp.email || null;
+                empJobTitle = emp.job_title || null;
+              }
+
+              // 3. Resolve Branch (Store) and Organization
+              let branchName: string | null = null;
+              let orgName: string | null = null;
+
+              if (emp) {
+                const bRel = Array.isArray(emp.branches) ? emp.branches[0] : (emp.branches || (Array.isArray(emp.branch) ? emp.branch[0] : emp.branch));
+                if (bRel?.name) branchName = bRel.name;
+                const oRel = Array.isArray(emp.organizations) ? emp.organizations[0] : (emp.organizations || (Array.isArray(emp.organization) ? emp.organization[0] : emp.organization));
+                if (oRel?.name) orgName = oRel.name;
+
+                if (!branchName && emp.branch_id && branchById.has(emp.branch_id)) {
+                  const bInfo = branchById.get(emp.branch_id)!;
+                  branchName = bInfo.name;
+                  if (!orgName) orgName = bInfo.orgName;
+                }
+              }
+
+              if (!branchName && doc.folder?.branch_id && branchById.has(doc.folder.branch_id)) {
+                const bInfo = branchById.get(doc.folder.branch_id)!;
+                branchName = bInfo.name;
+                if (!orgName) orgName = bInfo.orgName;
+              }
+
+              // 4. Fallback: Parse from folder path (e.g. "Company Documents/TEXACO - NISA LLANGOLLEN/Harry Jones")
+              const folderPath: string = doc.folder?.path || '';
+              if (folderPath) {
+                const segments = folderPath
+                  .split(/[\\/]/)
+                  .map((s: string) => s.trim())
+                  .filter((s: string) => s.length > 0);
+
+                // Match any segment against known branches
+                for (const seg of segments) {
+                  const lower = seg.toLowerCase();
+                  if (branchByName.has(lower)) {
+                    if (!branchName) {
+                      const match = branchByName.get(lower)!;
+                      branchName = match.name;
+                      if (!orgName) orgName = match.orgName;
+                    }
+                  }
+                }
+
+                // If employee name still not resolved, check folder name or path segments
+                if (!empName) {
+                  if (doc.folder?.folder_type === 'employee' && doc.folder?.name) {
+                    empName = doc.folder.name;
+                  } else if (segments.length >= 2) {
+                    const lastSeg = segments[segments.length - 1];
+                    const lastLower = lastSeg.toLowerCase();
+                    if (
+                      !branchByName.has(lastLower) &&
+                      !['company documents', 'employee documents', 'documents', 'general', 'root'].includes(lastLower)
+                    ) {
+                      empName = lastSeg;
+                    }
+                  }
+                }
+
+                // If branch still missing, check non-root segments
+                if (!branchName && segments.length >= 2) {
+                  const nonRoots = segments.filter(
+                    (s: string) => !['company documents', 'employee documents', 'documents', 'root'].includes(s.toLowerCase())
+                  );
+                  if (nonRoots.length === 2) {
+                    branchName = nonRoots[0];
+                    if (!empName) empName = nonRoots[1];
+                  } else if (nonRoots.length >= 3) {
+                    if (!orgName) orgName = nonRoots[0];
+                    branchName = nonRoots[1];
+                    if (!empName) empName = nonRoots[2];
+                  }
+                }
+              }
+
+              // Doc title fallback (e.g. "Right to Work - Harry Jones")
+              if (!empName && doc.title && doc.title.includes(' - ')) {
+                const parts = doc.title.split(' - ');
+                if (parts.length >= 2 && parts[parts.length - 1].trim().length > 2) {
+                  empName = parts[parts.length - 1].trim();
+                }
+              }
+
               fetchedList.push({
                 id: `doc_${doc.id}`,
                 rawId: doc.id,
@@ -216,14 +422,31 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
                 isSnoozed,
                 snoozedUntil: isSnoozed ? snoozedUntilStr : null,
                 isDismissed: isDismissedSession,
-                employee: doc.employee,
+                employee_name: empName,
+                employee_email: empEmail,
+                employee_job_title: empJobTitle,
+                branch_name: branchName,
+                store_name: branchName,
+                organization_name: orgName,
+                employee: emp ? {
+                  id: emp.id,
+                  first_name: emp.first_name,
+                  last_name: emp.last_name,
+                  email: emp.email,
+                  job_title: emp.job_title,
+                  branch: branchName ? { name: branchName } : null,
+                  organization: orgName ? { name: orgName } : null,
+                  branches: branchName ? { name: branchName } : null,
+                  organizations: orgName ? { name: orgName } : null,
+                } : null,
                 document: {
                   id: doc.id,
                   file_name: doc.file_name,
                   file_path: doc.file_path,
                   expiry_date: doc.expiry_date,
                   follow_up_date: doc.follow_up_date,
-                  folder_path: doc.folder?.path,
+                  folder_path: doc.folder?.path || null,
+                  folder_name: doc.folder?.name || null,
                 },
               });
             }
@@ -488,15 +711,15 @@ export function DueFollowUpsProvider({ children }: { children: React.ReactNode }
 
       localStorage.setItem(`doc_completed_${item.rawId}`, new Date().toISOString());
 
-      const empName = item.employee
+      const empName = item.employee_name || (item.employee
         ? `${item.employee.first_name || ''} ${item.employee.last_name || ''}`.trim()
-        : 'Employee';
+        : null);
 
       if (error) {
         toast.error('Failed to mark document complete');
         return;
       }
-      toast.success(`Document follow-up for ${empName} marked complete`);
+      toast.success(empName ? `Document follow-up for ${empName} marked complete` : 'Document follow-up marked complete');
     }
 
     setAllItems((prev) => prev.filter((i) => i.id !== item.id));

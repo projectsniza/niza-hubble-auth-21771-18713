@@ -27,6 +27,7 @@ export default function MessagingPanel() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [newDmOpen, setNewDmOpen] = useState(false);
+  const [newChatInitialTab, setNewChatInitialTab] = useState<'dm' | 'group'>('dm');
   const [participants, setParticipants] = useState<UserProfile[]>([]);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
@@ -36,7 +37,7 @@ export default function MessagingPanel() {
     senderId: string;
   } | null>(null);
 
-  const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, deleteConversation } =
+  const { conversations, loading: convoLoading, fetchConversations, initializeOrgChat, createDirectMessage, createGroupConversation, deleteConversation } =
     useConversations();
 
   const { messages, pinnedMessages, loading: msgLoading, sending, sendMessage, togglePin } =
@@ -149,6 +150,11 @@ export default function MessagingPanel() {
     [sendMessage, fetchConversations]
   );
 
+  const handleOpenNewChat = useCallback((tab: 'dm' | 'group' = 'dm') => {
+    setNewChatInitialTab(tab);
+    setNewDmOpen(true);
+  }, []);
+
   const handleCreateDM = useCallback(
     async (targetUserId: string) => {
       const conversationId = await createDirectMessage(targetUserId);
@@ -159,6 +165,18 @@ export default function MessagingPanel() {
       return conversationId;
     },
     [createDirectMessage]
+  );
+
+  const handleCreateGroup = useCallback(
+    async (groupName: string, participantUserIds: string[]) => {
+      const conversationId = await createGroupConversation(groupName, participantUserIds);
+      if (conversationId) {
+        setSelectedConversationId(conversationId);
+        toast.success(`Group "${groupName}" created`);
+      }
+      return conversationId;
+    },
+    [createGroupConversation]
   );
 
   const handleDeleteConversation = useCallback(

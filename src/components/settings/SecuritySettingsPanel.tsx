@@ -340,7 +340,7 @@ export default function SecuritySettingsPanel() {
 
       setSelectedBranchIdForEdit(null);
       setBranchPasscodeInput('');
-      toast.success(`Unique passcode saved for "${branchName}"! Other branches remain unaffected.`);
+      toast.success(`Unique passcode saved for "${branchName}"! Super Admin Master Passcode and other branches remain unaffected.`);
     } catch (err: any) {
       toast.error(err.message || 'Error saving branch passcode');
     } finally {
@@ -656,8 +656,9 @@ export default function SecuritySettingsPanel() {
             {isPasscodeSet && storedPasscode && (
               <div className="p-3 bg-card rounded-lg border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Current Configured Passcode
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="h-3 w-3 text-primary" />
+                    Super Admin Master Passcode (Emergency Global Key)
                   </span>
                   <div className="flex items-center gap-2 font-mono text-base font-bold text-foreground">
                     <span>

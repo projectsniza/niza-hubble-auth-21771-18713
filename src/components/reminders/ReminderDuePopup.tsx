@@ -15,6 +15,8 @@ import {
   User, 
   Building, 
   MapPin, 
+  Store,
+  Folder,
   Eye, 
   Calendar, 
   ChevronLeft, 
@@ -67,9 +69,16 @@ export default function ReminderDuePopup() {
   const dueDate = parseISO(current.due_date);
   const isOverdue = current.sourceType === 'document_overdue';
   const isUpcoming = current.sourceType === 'document_upcoming';
-  const empName = current.employee 
-    ? `${current.employee.first_name || ''} ${current.employee.last_name || ''}`.trim()
-    : null;
+  const empName = current.employee_name || (
+    current.employee 
+      ? `${current.employee.first_name || ''} ${current.employee.last_name || ''}`.trim()
+      : null
+  ) || null;
+  const empEmail = current.employee_email || current.employee?.email || null;
+  const empJobTitle = current.employee_job_title || (current.employee as any)?.job_title || null;
+  const storeName = current.store_name || current.branch_name || (current.employee?.branch as any)?.name || (current.employee?.branches as any)?.name || null;
+  const orgName = current.organization_name || (current.employee?.organization as any)?.name || (current.employee?.organizations as any)?.name || null;
+  const folderPath = current.document?.folder_path || null;
 
   const handlePrev = () => {
     setCurrentItemIndex(Math.max(0, currentItemIndex - 1));
@@ -242,34 +251,58 @@ export default function ReminderDuePopup() {
             )}
           </div>
 
-          {/* Employee Details Card */}
-          {empName && (
-            <div className="bg-slate-50 dark:bg-slate-900/60 border rounded-xl p-3 sm:p-3.5 space-y-2 text-xs">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="font-semibold text-foreground flex items-center gap-2">
-                  <User className="h-3.5 w-3.5 text-primary" />
-                  {empName}
-                </span>
-                {current.employee?.email && (
-                  <span className="text-[11px] text-muted-foreground truncate">{current.employee.email}</span>
-                )}
+          {/* TO WHOM & WHICH STORE INFORMATION CARD */}
+          <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 text-xs shadow-xs space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:divide-x divide-border/60">
+              {/* TO WHOM (Employee) */}
+              <div className="space-y-1 sm:pr-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                  <User className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>To Whom (Employee)</span>
+                </div>
+                <div className="pl-5 space-y-0.5">
+                  <p className="font-bold text-sm text-foreground leading-tight">
+                    {empName || 'Unassigned / Store-wide'}
+                  </p>
+                  {empJobTitle && (
+                    <p className="text-[11px] text-muted-foreground font-medium">
+                      {empJobTitle}
+                    </p>
+                  )}
+                  {empEmail && (
+                    <p className="text-[11px] text-muted-foreground truncate" title={empEmail}>
+                      {empEmail}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-muted-foreground pt-1.5 border-t">
-                {current.employee?.organizations?.name && (
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Building className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                    <span className="truncate">{current.employee.organizations.name}</span>
-                  </div>
-                )}
-                {current.employee?.branches?.name && (
-                  <div className="flex items-center gap-1.5 truncate">
-                    <MapPin className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                    <span className="truncate">{current.employee.branches.name}</span>
-                  </div>
-                )}
+
+              {/* WHICH STORE (Branch / Store) */}
+              <div className="space-y-1 sm:pl-3.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  <Store className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>Which Store (Branch)</span>
+                </div>
+                <div className="pl-5 space-y-0.5">
+                  <p className="font-bold text-sm text-foreground leading-tight">
+                    {storeName || 'All Stores / Company Wide'}
+                  </p>
+                  {orgName && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+                      <Building className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                      <span className="truncate">{orgName}</span>
+                    </p>
+                  )}
+                  {folderPath && (
+                    <p className="text-[10px] text-muted-foreground/80 flex items-center gap-1 mt-1 truncate font-mono bg-background/60 px-1.5 py-0.5 rounded border border-border/40" title={folderPath}>
+                      <Folder className="h-2.5 w-2.5 flex-shrink-0 text-amber-500" />
+                      <span className="truncate">{folderPath}</span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Timeline & Schedule Dates */}
           <div className="space-y-2 bg-muted/40 rounded-xl p-3 sm:p-3.5 border text-xs">

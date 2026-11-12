@@ -122,6 +122,15 @@ export default function ChatArea({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isSuperAdmin = user?.role === 'super_admin';
+  const isGroup = Boolean(conversation?.is_group);
+
+  const otherParticipant = useMemo(() => {
+    return (
+      conversation?.participants?.find(p => p.id !== user?.id) ||
+      participants.find(p => p.id !== user?.id) ||
+      null
+    );
+  }, [conversation?.participants, participants, user?.id]);
 
   // Fetch admin and store manager profiles so store accounts can ALWAYS raise for superadmin and vice-versa
   useEffect(() => {
@@ -188,10 +197,14 @@ export default function ChatArea({
   }, [participants, extraAssignees, user]);
 
   useEffect(() => {
-    if (!actionAssignee && assignableUsers.length > 0) {
-      setActionAssignee(assignableUsers[0].id);
+    if (!isGroup && otherParticipant?.id) {
+      setActionAssignee(otherParticipant.id);
+    } else if (isGroup && (!actionAssignee || !assignableUsers.some(u => u.id === actionAssignee))) {
+      if (assignableUsers.length > 0) {
+        setActionAssignee(assignableUsers[0].id);
+      }
     }
-  }, [assignableUsers, actionAssignee]);
+  }, [isGroup, otherParticipant?.id, assignableUsers, actionAssignee]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -344,16 +357,18 @@ export default function ChatArea({
     setNewMessage(value);
     setCursorPosition(e.target.selectionStart || 0);
 
-    // Check for @ mentions
-    const textBeforeCursor = value.slice(0, e.target.selectionStart || 0);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    // Check for @ mentions only in group conversations
+    if (isGroup) {
+      const textBeforeCursor = value.slice(0, e.target.selectionStart || 0);
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
-      if (!textAfterAt.includes(' ')) {
-        setMentionFilter(textAfterAt.toLowerCase());
-        setShowMentions(true);
-        return;
+      if (lastAtIndex !== -1) {
+        const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+        if (!textAfterAt.includes(' ')) {
+          setMentionFilter(textAfterAt.toLowerCase());
+          setShowMentions(true);
+          return;
+        }
       }
     }
 
@@ -400,7 +415,7 @@ export default function ChatArea({
         uploadedAttachments = await uploadAttachments();
       }
 
-      const mentions = extractMentions(newMessage);
+      const mentions = isGroup ? extractMentions(newMessage) : [];
       const success = await onSendMessage(
         newMessage,
         uploadedAttachments,
@@ -410,7 +425,9 @@ export default function ChatArea({
 
       if (success) {
         if (actionItemMode && conversation) {
-          const targetAssignee = actionAssignee || assignableUsers[0]?.id;
+          const targetAssignee = (!isGroup && otherParticipant?.id)
+            ? otherParticipant.id
+            : (actionAssignee || assignableUsers[0]?.id);
           if (targetAssignee) {
             const mod = getActionModuleByKey(actionModuleKey);
             const msgId = typeof success === 'object' && (success as any)?.id ? (success as any).id : null;
@@ -1012,27 +1029,45 @@ export default function ChatArea({
                 Action Item
               </Badge>
 
-              {/* Assignee Selector */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium">To:</span>
-                <Select value={actionAssignee} onValueChange={setActionAssignee}>
-                  <SelectTrigger className="h-8 text-xs min-w-[150px] sm:min-w-[180px] bg-background">
-                    <SelectValue placeholder="Select Assignee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assignableUsers.map(u => (
-                      <SelectItem key={u.id} value={u.id} className="text-xs">
-                        <span className="font-medium">{u.name}</span>
-                        {u.role && (
-                          <span className="ml-1 text-[10px] text-muted-foreground uppercase">
-                            ({u.role === 'super_admin' ? 'Super Admin' : u.role === 'manager' ? 'Store' : u.role})
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Assignee Indicator / Selector */}
+              {isGroup ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-medium">To:</span>
+                  <Select value={actionAssignee} onValueChange={setActionAssignee}>
+                    <SelectTrigger className="h-8 text-xs min-w-[150px] sm:min-w-[180px] bg-background">
+                      <SelectValue placeholder="Select Assignee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id} className="text-xs">
+                          <span className="font-medium">{u.name}</span>
+                          {u.role && (
+                            <span className="ml-1 text-[10px] text-muted-foreground uppercase">
+                              ({u.role === 'super_admin' ? 'Super Admin' : u.role === 'manager' ? 'Store' : u.role})
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background/80 border text-xs shadow-xs">
+                  <span className="text-muted-foreground font-medium">To:</span>
+                  <span className="font-semibold text-foreground">
+                    {otherParticipant?.name || 'Store'}
+                  </span>
+                  {(otherParticipant?.role || (conversation as any)?.branch_id) && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 uppercase">
+                      {otherParticipant?.role === 'super_admin'
+                        ? 'Super Admin'
+                        : otherParticipant?.role === 'manager'
+                        ? 'Store'
+                        : otherParticipant?.role || 'Store'}
+                    </Badge>
+                  )}
+                </div>
+              )}
 
               {/* Module / Sidebar Section Dropdown */}
               <div className="flex items-center gap-1.5">
@@ -1122,8 +1157,12 @@ export default function ChatArea({
               ref={inputRef}
               placeholder={
                 actionItemMode
-                  ? `Type action instructions for ${assignableUsers.find(u => u.id === actionAssignee)?.name || 'assignee'} (Module: ${getActionModuleByKey(actionModuleKey).label})...`
-                  : 'Type your message... Use @ to mention'
+                  ? isGroup
+                    ? `Type action instructions for ${assignableUsers.find(u => u.id === actionAssignee)?.name || 'assignee'} (Module: ${getActionModuleByKey(actionModuleKey).label})...`
+                    : `Type action instructions (Module: ${getActionModuleByKey(actionModuleKey).label})...`
+                  : isGroup
+                  ? 'Type your message... Use @ to mention'
+                  : 'Type your message...'
               }
               value={newMessage}
               onChange={handleInputChange}
@@ -1133,22 +1172,25 @@ export default function ChatArea({
                   handleSend();
                 }
               }}
-              className={`rounded-full px-4 pr-10 transition-all ${
+              className={`rounded-full px-4 ${isGroup ? 'pr-10' : 'pr-4'} transition-all ${
                 actionItemMode ? 'ring-2 ring-amber-500/40 border-amber-400' : ''
               }`}
               disabled={sending}
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-              onClick={() => setShowMentions(!showMentions)}
-            >
-              <AtSign className="h-4 w-4 text-muted-foreground" />
-            </Button>
+            {isGroup && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                onClick={() => setShowMentions(!showMentions)}
+                title="Mention someone"
+              >
+                <AtSign className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            )}
 
-            {/* Mentions dropdown */}
-            {showMentions && filteredMentionUsers.length > 0 && (
+            {/* Mentions dropdown - only in group chat */}
+            {isGroup && showMentions && filteredMentionUsers.length > 0 && (
               <div className="absolute bottom-full left-0 mb-2 w-64 bg-popover border rounded-lg shadow-lg p-1 z-50">
                 {filteredMentionUsers.slice(0, 5).map(u => (
                   <button
