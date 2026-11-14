@@ -81,7 +81,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return null;
       }
 
-      const profile = profileResult.data;
+      let profile = profileResult.data;
+
+      // Auto-heal missing profile from auth user metadata if needed
+      if (!profile) {
+        try {
+          const { data: authUserData } = await supabase.auth.getUser();
+          if (authUserData?.user && authUserData.user.id === userId) {
+            const meta = authUserData.user.user_metadata || {};
+            const fallbackRole = (meta.role as UserRole) || 'employee';
+            const { data: healedProfile } = await supabase
+              .from('profiles')
+              .upsert({
+                id: userId,
+                email: authUserData.user.email || '',
+                name: meta.name || authUserData.user.email || 'User',
+                organization_id: meta.organization_id || null,
+                branch_id: meta.branch_id || null,
+                custom_role_id: meta.custom_role_id || null,
+                hr_access_level: meta.hr_access_level || 'full',
+                is_active: true,
+              })
+              .select('id, email, name, organization_id, branch_id, hr_access_level, is_active, custom_role_id')
+              .maybeSingle();
+
+            if (healedProfile) {
+              profile = healedProfile;
+              // Also ensure user_roles row exists
+              await supabase.from('user_roles').upsert({
+                user_id: userId,
+                role: fallbackRole,
+              });
+            }
+          }
+        } catch (healErr) {
+          console.warn('Auto-healing profile error:', healErr);
+        }
+      }
+
       if (!profile) return null;
 
       if (employeeByUserResult.error && employeeByUserResult.error.code !== 'PGRST116') {
@@ -110,39 +147,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         employeeDeactivationReason = employeeByEmail?.deactivation_reason ?? employeeDeactivationReason;
       }
 
-      const isEmployeeDeactivated =
-        employeeStatus === 'inactive' ||
-        employeeStatus === 'terminated' ||
-        !!employeeDeactivationReason;
+      // Determine user role with fallback for custom roles
+      let resolvedRole: UserRole = (roleResult.data?.role as UserRole) || 'employee';
 
-      // Check if user is deactivated in either profiles or employees
-      if (profile.is_active === false || isEmployeeDeactivated) {
-        return 'deactivated';
-      }
-
-      if (roleResult.error) {
-        if (roleResult.error.code !== 'PGRST116') {
-          console.error('Error fetching role:', roleResult.error);
-        }
-        return null;
-      }
-
+      // Check custom role if attached
       let branchIds: string[] = [];
       if (profile.custom_role_id) {
         const { data: customRole } = await (supabase as any)
           .from('custom_roles')
-          .select('branch_ids, branch_id, organization_id, is_active')
+          .select('base_role, branch_ids, branch_id, organization_id, is_active')
           .eq('id', profile.custom_role_id)
-          .eq('is_active', true)
           .maybeSingle();
 
         if (customRole) {
+          // If the custom role itself has been deactivated by Super Admin, block access
+          if (customRole.is_active === false) {
+            return 'deactivated';
+          }
+          if (customRole.base_role && !roleResult.data?.role) {
+            resolvedRole = customRole.base_role as UserRole;
+          }
           branchIds = Array.isArray(customRole.branch_ids)
             ? customRole.branch_ids.filter(Boolean)
             : customRole.branch_id
               ? [customRole.branch_id]
               : [];
         }
+      }
+
+      // Only evaluate employee status for pure staff employees (not custom roles or administrative roles)
+      const isCustomRoleUser = Boolean(profile.custom_role_id);
+      const isPureStaffEmployee = resolvedRole === 'employee' && !isCustomRoleUser;
+
+      const isEmployeeDeactivated = isPureStaffEmployee && (
+        employeeStatus === 'inactive' ||
+        employeeStatus === 'terminated' ||
+        Boolean(employeeDeactivationReason)
+      );
+
+      // Check if user is deactivated in profile or (for staff employees) in employee record
+      if (profile.is_active === false || isEmployeeDeactivated) {
+        return 'deactivated';
       }
 
       const resolvedBranchId = profile.branch_id || employeeByUserResult.data?.branch_id || employeeByEmailData?.branch_id || undefined;
@@ -152,7 +197,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: profile.id,
         email: profile.email,
         name: profile.name,
-        role: (roleResult.data?.role as UserRole) ?? 'employee',
+        role: resolvedRole,
         organizationId: resolvedOrgId,
         branchId: resolvedBranchId,
         branchIds,

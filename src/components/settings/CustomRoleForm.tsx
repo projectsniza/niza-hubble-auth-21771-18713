@@ -1,12 +1,14 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Settings2, ShieldCheck, Eye, EyeOff } from "lucide-react";
-import { useState as useFormState } from "react";
+import { Building2, Settings2, ShieldCheck, Eye, EyeOff, Mail, User, Copy, Check, KeyRound, Power, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export type BaseRole = "manager" | "hr" | "employee";
 
@@ -34,6 +36,13 @@ export interface CustomRoleFormData {
 export interface OrganizationOption { id: string; name: string; }
 export interface BranchOption { id: string; name: string; organization_id: string; }
 
+export interface LinkedUserInfo {
+  id: string;
+  email: string;
+  name: string;
+  is_active: boolean;
+}
+
 interface Props {
   isEditMode: boolean;
   formData: CustomRoleFormData;
@@ -46,10 +55,13 @@ interface Props {
   features: FeatureGroups;
   toggleAllInGroup: (features: { key: string }[], enable: boolean) => void;
   togglePermission: (key: string) => void;
+  linkedUser?: LinkedUserInfo | null;
+  onOpenResetPassword?: (user: { id: string; email: string; name: string }) => void;
+  onToggleUserActive?: (userId: string, currentActive: boolean) => Promise<void>;
 }
 
 function PasswordFieldWithToggle({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
-  const [show, setShow] = useFormState(false);
+  const [show, setShow] = useState(false);
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -67,6 +79,7 @@ function CustomRoleFormImpl({
   isEditMode, formData, setFormData, organizations, filteredBranches,
   userEmail, setUserEmail, userPassword, setUserPassword, userName, setUserName,
   features, togglePermission,
+  linkedUser, onOpenResetPassword, onToggleUserActive,
 }: Props) {
   const selectedBranchIds = formData.branch_ids || [];
   const allBranchesSelected = selectedBranchIds.length === 0;
@@ -108,8 +121,138 @@ function CustomRoleFormImpl({
         </div>
       </div>
 
-      {!isEditMode && (
+      {/* User Account Section */}
+      {isEditMode ? (
+        <div className="space-y-3 border-t pt-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm flex items-center gap-2 text-foreground">
+              <User className="h-4 w-4 text-primary" />
+              Assigned Login Account
+            </h4>
+            {linkedUser ? (
+              <Badge variant={linkedUser.is_active ? "default" : "destructive"} className="text-xs">
+                {linkedUser.is_active ? "Active" : "Deactivated"}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                No Account Linked
+              </Badge>
+            )}
+          </div>
+
+          {linkedUser ? (
+            <div className="p-3.5 rounded-xl border bg-muted/30 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Login Email</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground truncate select-all">{linkedUser.email}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        navigator.clipboard.writeText(linkedUser.email);
+                        toast.success("Email copied to clipboard");
+                      }}
+                      title="Copy email address"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Full Name</span>
+                  <p className="text-sm font-medium text-foreground truncate">{linkedUser.name || '—'}</p>
+                </div>
+              </div>
+
+              {/* Status and Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
+                {onOpenResetPassword && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    onClick={() => onOpenResetPassword({ id: linkedUser.id, email: linkedUser.email, name: linkedUser.name })}
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Reset Password
+                  </Button>
+                )}
+
+                {onToggleUserActive && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={`h-8 text-xs gap-1.5 ${
+                      linkedUser.is_active
+                        ? "text-destructive border-destructive/30 hover:bg-destructive/10"
+                        : "text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950/30"
+                    }`}
+                    onClick={() => onToggleUserActive(linkedUser.id, linkedUser.is_active)}
+                  >
+                    <Power className="h-3.5 w-3.5" />
+                    {linkedUser.is_active ? "Deactivate Account" : "Reactivate Account"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 space-y-3">
+              <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <p>
+                  No user login account is currently linked to this custom role. You can enter credentials below to create a login account.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Email Address *</Label>
+                  <Input
+                    type="email"
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                    placeholder="user@company.com"
+                    className="h-9 text-xs"
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Password *</Label>
+                  <Input
+                    type="password"
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    placeholder="Minimum 6 characters"
+                    className="h-9 text-xs"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Full Name *</Label>
+                  <Input
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder="Enter full name"
+                    className="h-9 text-xs"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="space-y-4 border-t pt-4">
+          <h4 className="font-semibold text-sm flex items-center gap-2 text-foreground">
+            <User className="h-4 w-4 text-primary" />
+            Account Credentials (Used to sign in with this role)
+          </h4>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Email Address *</Label>

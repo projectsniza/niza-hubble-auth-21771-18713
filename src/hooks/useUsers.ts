@@ -4,9 +4,11 @@ import { Profile, UserRole, HRAccessLevel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-interface UserWithRole extends Profile {
+export interface UserWithRole extends Profile {
   role: UserRole;
   pending_count?: number;
+  custom_role_name?: string;
+  is_active?: boolean;
 }
 
 export function useUsers() {
@@ -19,7 +21,7 @@ export function useUsers() {
   const fetchPendingCounts = async (managerUsers: UserWithRole[]) => {
     // Get pending employee counts for each manager's branch
     const counts = new Map<string, number>();
-    
+
     for (const manager of managerUsers.filter(u => u.role === 'manager' && u.branch_id)) {
       const { count, error } = await supabase
         .from('employees')
@@ -32,7 +34,7 @@ export function useUsers() {
         counts.set(manager.id, count);
       }
     }
-    
+
     setManagerPendingCounts(counts);
     return counts;
   };
@@ -40,7 +42,7 @@ export function useUsers() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -49,24 +51,30 @@ export function useUsers() {
 
       if (profilesError) throw profilesError;
 
-      // Fetch roles
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*');
+      // Fetch roles and custom roles in parallel
+      const [rolesRes, customRolesRes] = await Promise.all([
+        supabase.from('user_roles').select('*'),
+        supabase.from('custom_roles').select('id, name')
+      ]);
 
-      if (rolesError) throw rolesError;
+      if (rolesRes.error) throw rolesRes.error;
+
+      const roles = rolesRes.data;
+      const customRoleMap = new Map((customRolesRes.data || []).map(r => [r.id, r.name]));
 
       // Combine profiles with roles
       const usersWithRoles = profiles?.map(profile => {
         const userRole = roles?.find(r => r.user_id === profile.id);
+        const customRoleName = profile.custom_role_id ? customRoleMap.get(profile.custom_role_id) : undefined;
         return {
           ...profile,
-          role: (userRole?.role as UserRole) || 'employee'
+          role: (userRole?.role as UserRole) || 'employee',
+          custom_role_name: customRoleName,
         };
       }) || [];
 
       setUsers(usersWithRoles);
-      
+
       // Fetch pending counts for managers
       await fetchPendingCounts(usersWithRoles);
     } catch (err: unknown) {
@@ -105,7 +113,7 @@ export function useUsers() {
 
         if (error) throw error;
       }
-      
+
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
       toast.success('User role updated');
       return { error: null };
@@ -117,7 +125,7 @@ export function useUsers() {
   };
 
   const updateUserProfile = async (
-    userId: string, 
+    userId: string,
     updates: {
       name?: string;
       organization_id?: string | null;
@@ -160,8 +168,8 @@ export function useUsers() {
   };
 
   const getHRByOrganization = (organizationId: string) => {
-    return users.filter(u => 
-      u.role === 'hr' && 
+    return users.filter(u =>
+      u.role === 'hr' &&
       (u.hr_access_level === 'full' || u.organization_id === organizationId)
     );
   };

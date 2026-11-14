@@ -1,18 +1,26 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Building2, MapPin, Loader2, KeyRound, Copy, User, Mail, Power, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganizations, useBranches } from '@/hooks/useOrganizations';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { CustomRoleForm, type AppAccess, type BaseRole, type FeatureGroups, type CustomRoleFormData } from './CustomRoleForm';
+import { CustomRoleForm, type AppAccess, type BaseRole, type FeatureGroups, type CustomRoleFormData, type LinkedUserInfo } from './CustomRoleForm';
 
+export interface LinkedAccount {
+  id: string;
+  email: string;
+  name: string;
+  is_active: boolean;
+}
 
 interface CustomRole {
   id: string;
@@ -26,6 +34,8 @@ interface CustomRole {
   app_access: AppAccess;
   is_active: boolean;
   created_at: string;
+  linkedUser?: LinkedAccount | null;
+  linkedUsers?: LinkedAccount[];
 }
 
 // Define feature groups - simplified to module-level toggles
@@ -70,6 +80,12 @@ export default function CustomRolesManagement() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
+  const [resetUser, setResetUser] = useState<{ id: string; email: string; name: string } | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showResetPasswordPlain, setShowResetPasswordPlain] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<CustomRole | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -106,15 +122,22 @@ export default function CustomRolesManagement() {
   const fetchRoles = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('custom_roles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [rolesRes, profilesRes] = await Promise.all([
+        supabase
+          .from('custom_roles')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id, email, name, is_active, custom_role_id')
+      ]);
 
-      if (error) throw error;
+      if (rolesRes.error) throw rolesRes.error;
+      const data = rolesRes.data || [];
+      const profilesData = profilesRes.data || [];
       
-      // Parse database rows with proper type safety
-      const typedRoles: CustomRole[] = (data || []).map(role => {
+      // Parse database rows with proper type safety and linked accounts
+      const typedRoles: CustomRole[] = data.map(role => {
         // Safely parse permissions
         let permissions: Record<string, boolean> = {};
         if (role.permissions && typeof role.permissions === 'object' && !Array.isArray(role.permissions)) {
@@ -138,6 +161,17 @@ export default function CustomRolesManagement() {
         const base_role: BaseRole = validBaseRoles.includes(role.base_role as BaseRole) 
           ? (role.base_role as BaseRole) 
           : 'manager';
+
+        // Find linked user profile(s)
+        const linkedUsers: LinkedAccount[] = profilesData
+          .filter(p => p.custom_role_id === role.id)
+          .map(p => ({
+            id: p.id,
+            email: p.email,
+            name: p.name,
+            is_active: p.is_active ?? true,
+          }));
+        const linkedUser = linkedUsers[0] || null;
         
         return {
           id: role.id,
@@ -151,6 +185,8 @@ export default function CustomRolesManagement() {
           app_access,
           is_active: role.is_active ?? true,
           created_at: role.created_at ?? new Date().toISOString(),
+          linkedUser,
+          linkedUsers,
         };
       });
       
@@ -197,6 +233,14 @@ export default function CustomRolesManagement() {
       permissions: role.permissions || {},
       app_access: role.app_access || { ...defaultAppAccess },
     });
+    if (role.linkedUser) {
+      setUserEmail(role.linkedUser.email);
+      setUserName(role.linkedUser.name);
+    } else {
+      setUserEmail('');
+      setUserName('');
+    }
+    setUserPassword('');
     setShowEditDialog(true);
   };
 
@@ -313,6 +357,26 @@ export default function CustomRolesManagement() {
 
       if (error) throw error;
 
+      // If this role had no user, and admin entered credentials, create user now!
+      if (!selectedRole.linkedUser && userEmail.trim() && userPassword.trim() && userName.trim()) {
+        const createRes = await supabase.functions.invoke('create-user', {
+          body: {
+            email: userEmail.trim(),
+            password: userPassword,
+            name: userName.trim(),
+            role: formData.base_role,
+            organization_id: formData.organization_id || '',
+            branch_id: effectiveBranchId || '',
+            custom_role_id: selectedRole.id,
+          },
+        });
+        if (createRes.data?.success) {
+          toast.success('User account created and linked to role');
+        } else if (createRes.error || createRes.data?.error) {
+          toast.error('Role updated but user creation failed: ' + (createRes.error?.message || createRes.data?.error));
+        }
+      }
+
       toast.success('Custom role updated successfully');
       setShowEditDialog(false);
       setSelectedRole(null);
@@ -323,6 +387,83 @@ export default function CustomRolesManagement() {
       toast.error('Failed to update role: ' + message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleUserActive = async (userId: string, currentActive: boolean) => {
+    try {
+      const nextActive = !currentActive;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_active: nextActive })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      if (nextActive && selectedRole?.linkedUser?.email) {
+        await supabase
+          .from('employees')
+          .update({ status: 'active', deactivation_reason: null })
+          .ilike('email', selectedRole.linkedUser.email);
+      }
+
+      toast.success(nextActive ? 'Account reactivated successfully' : 'Account deactivated');
+      await fetchRoles();
+    } catch (err: any) {
+      toast.error('Failed to update account status: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetUser || !resetNewPassword) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    if (resetNewPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      const response = await supabase.functions.invoke('reset-password', {
+        body: {
+          userId: resetUser.id,
+          newPassword: resetNewPassword,
+        },
+      });
+
+      if (response.error || response.data?.error) {
+        throw new Error(response.error?.message || response.data?.error || 'Failed to reset password');
+      }
+
+      // Ensure profile is marked active upon password reset
+      await supabase
+        .from('profiles')
+        .update({ is_active: true })
+        .eq('id', resetUser.id);
+
+      if (resetUser.email) {
+        await supabase
+          .from('employees')
+          .update({ status: 'active', deactivation_reason: null })
+          .ilike('email', resetUser.email);
+      }
+
+      toast.success(`Password reset successfully for ${resetUser.email}! The account is now active.`);
+      setShowResetPasswordDialog(false);
+      setResetUser(null);
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      await fetchRoles();
+    } catch (err: any) {
+      toast.error('Password reset failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -379,14 +520,35 @@ export default function CustomRolesManagement() {
 
   const toggleRoleActive = async (role: CustomRole) => {
     try {
+      const nextActive = !role.is_active;
       const { error } = await supabase
         .from('custom_roles')
-        .update({ is_active: !role.is_active })
+        .update({ is_active: nextActive })
         .eq('id', role.id);
 
       if (error) throw error;
 
-      toast.success(role.is_active ? 'Role deactivated' : 'Role activated');
+      // Also synchronize the linked users' active status
+      if (role.linkedUsers && role.linkedUsers.length > 0) {
+        const userIds = role.linkedUsers.map(u => u.id);
+        await supabase
+          .from('profiles')
+          .update({ is_active: nextActive })
+          .in('id', userIds);
+
+        // If reactivating, clear any employees deactivation flag for their emails
+        if (nextActive) {
+          const emails = role.linkedUsers.map(u => u.email).filter(Boolean);
+          for (const email of emails) {
+            await supabase
+              .from('employees')
+              .update({ status: 'active', deactivation_reason: null })
+              .ilike('email', email);
+          }
+        }
+      }
+
+      toast.success(nextActive ? 'Role and linked account activated' : 'Role and linked account deactivated');
       fetchRoles();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -542,6 +704,55 @@ export default function CustomRolesManagement() {
                   </div>
                 )}
 
+                {/* Linked Account info on role card */}
+                <div className="p-2.5 rounded-xl border bg-muted/30 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider flex items-center gap-1">
+                      <User className="h-3 w-3 text-primary" />
+                      Assigned Account
+                    </span>
+                    {role.linkedUser ? (
+                      <Badge variant={role.linkedUser.is_active ? "default" : "destructive"} className="text-[10px] h-4 px-1.5">
+                        {role.linkedUser.is_active ? "Active" : "Deactivated"}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-amber-600 border-amber-300">
+                        No User Linked
+                      </Badge>
+                    )}
+                  </div>
+                  {role.linkedUser ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1 text-foreground font-medium">
+                        <span className="truncate" title={role.linkedUser.email}>
+                          ✉️ {role.linkedUser.email}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(role.linkedUser!.email);
+                            toast.success("Email copied to clipboard");
+                          }}
+                          title="Copy email address"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="text-muted-foreground truncate text-[11px]">
+                        👤 {role.linkedUser.name || 'Unnamed User'}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic text-[11px]">
+                      No login credentials created yet
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap gap-1">
                   {role.app_access?.niza_safe && (
                     <Badge variant="outline" className="text-xs">Safe</Badge>
@@ -554,7 +765,7 @@ export default function CustomRolesManagement() {
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex items-center gap-2 pt-2">
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -564,11 +775,32 @@ export default function CustomRolesManagement() {
                     <Edit className="h-3 w-3 mr-1" />
                     Edit
                   </Button>
+                  {role.linkedUser && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                      onClick={() => {
+                        setResetUser({
+                          id: role.linkedUser!.id,
+                          email: role.linkedUser!.email,
+                          name: role.linkedUser!.name,
+                        });
+                        setResetNewPassword('');
+                        setResetConfirmPassword('');
+                        setShowResetPasswordDialog(true);
+                      }}
+                      title="Reset password for this custom account"
+                    >
+                      <KeyRound className="h-3 w-3" />
+                    </Button>
+                  )}
                   <Button 
                     variant="outline" 
                     size="sm" 
                     className="text-destructive hover:bg-destructive/10"
                     onClick={() => openDeleteDialog(role)}
+                    title="Delete role"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -648,6 +880,14 @@ export default function CustomRolesManagement() {
             features={features}
             toggleAllInGroup={toggleAllInGroup}
             togglePermission={togglePermission}
+            linkedUser={selectedRole?.linkedUser}
+            onOpenResetPassword={(u) => {
+              setResetUser(u);
+              setResetNewPassword('');
+              setResetConfirmPassword('');
+              setShowResetPasswordDialog(true);
+            }}
+            onToggleUserActive={handleToggleUserActive}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
@@ -656,6 +896,73 @@ export default function CustomRolesManagement() {
             <Button onClick={handleUpdate} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={showResetPasswordDialog} onOpenChange={setShowResetPasswordDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-amber-600" />
+              Reset Account Password
+            </DialogTitle>
+            <DialogDescription>
+              Set a new password for <strong className="text-foreground">{resetUser?.email}</strong>.
+              This will also ensure the account is active.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Account Email</Label>
+              <Input value={resetUser?.email || ''} disabled className="bg-muted text-muted-foreground" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>New Password *</Label>
+              <div className="relative">
+                <Input
+                  type={showResetPasswordPlain ? 'text' : 'password'}
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="pr-10"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPasswordPlain(!showResetPasswordPlain)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showResetPasswordPlain ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Confirm Password *</Label>
+              <Input
+                type={showResetPasswordPlain ? 'text' : 'password'}
+                value={resetConfirmPassword}
+                onChange={(e) => setResetConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetPasswordDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={isResettingPassword || !resetNewPassword || !resetConfirmPassword}
+              className="bg-primary text-white"
+            >
+              {isResettingPassword ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Update Password
             </Button>
           </DialogFooter>
         </DialogContent>

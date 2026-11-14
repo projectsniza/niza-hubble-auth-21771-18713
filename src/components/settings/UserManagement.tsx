@@ -540,6 +540,11 @@ export default function UserManagement() {
               <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
                 {getRoleLabel(user.role)}
               </Badge>
+              {user.custom_role_name && (
+                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300">
+                  Custom: {user.custom_role_name}
+                </Badge>
+              )}
               {user.is_active === false && (
                 <Badge variant="destructive" className="text-xs">Deactivated</Badge>
               )}
