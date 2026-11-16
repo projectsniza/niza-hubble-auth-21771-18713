@@ -472,7 +472,7 @@ export default function ContractWorkflowPopup() {
     return {
       stage: 2,
       title: 'Stage 2 & 3: Mandatory Documents & Activation',
-      badge: 'Stage 2/3 of 3',
+      badge: 'Stage 2 & 3 of 3',
       description: 'Physical signed documents and final profile activation in progress.',
     };
   };
@@ -490,7 +490,7 @@ export default function ContractWorkflowPopup() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl p-0 overflow-hidden border border-border/80 shadow-2xl rounded-2xl bg-card max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl lg:max-w-5xl w-[95vw] p-0 overflow-hidden border border-border/80 shadow-2xl rounded-2xl bg-card max-h-[90vh] flex flex-col">
           {/* Header Banner */}
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white p-6 border-b border-white/10 shrink-0">
             <div className="flex items-center justify-between">
@@ -651,48 +651,46 @@ export default function ContractWorkflowPopup() {
                                   : 'hover:border-primary/40 hover:shadow-sm'
                               }`}
                             >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                                      isDuplicate ? 'bg-amber-500/20 text-amber-700' : 'bg-amber-500/10 text-amber-600'
-                                    }`}>
-                                      {emp?.first_name?.charAt(0) || ''}{emp?.last_name?.charAt(0) || 'E'}
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <h4 className="text-sm font-semibold text-foreground">
-                                          {emp?.first_name ? `${emp.first_name} ` : ''}{emp?.last_name}
-                                        </h4>
-                                        {isDuplicate && (
-                                          <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400 gap-1 font-semibold">
-                                            <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
-                                            Possible Duplicate
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        {emp?.job_title || 'Position'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
-                                      </p>
-                                    </div>
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                                    isDuplicate ? 'bg-amber-500/20 text-amber-700' : 'bg-amber-500/10 text-amber-600'
+                                  }`}>
+                                    {emp?.first_name?.charAt(0) || ''}{emp?.last_name?.charAt(0) || 'E'}
                                   </div>
-                                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground pl-10">
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3 text-amber-500" />
-                                      Submitted: {item.submitted_at ? format(new Date(item.submitted_at), 'dd MMM yyyy') : 'Recent'}
-                                    </span>
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-300">
-                                      Awaiting Super Admin Signature
-                                    </Badge>
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="text-sm font-semibold text-foreground">
+                                        {emp?.first_name ? `${emp.first_name} ` : ''}{emp?.last_name}
+                                      </h4>
+                                      {isDuplicate && (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400 gap-1 font-semibold whitespace-nowrap shrink-0">
+                                          <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                          Possible Duplicate
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {emp?.job_title || 'Position'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
+                                    </p>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground pt-0.5 flex-wrap">
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                        Submitted: {item.submitted_at ? format(new Date(item.submitted_at), 'dd MMM yyyy') : 'Recent'}
+                                      </span>
+                                      <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-300 whitespace-nowrap shrink-0">
+                                        Awaiting Super Admin Signature
+                                      </Badge>
+                                    </div>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap sm:flex-nowrap pt-2 md:pt-0 border-t md:border-t-0 border-border/50">
                                   {isDuplicate && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2.5"
+                                      className="h-8.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2.5 whitespace-nowrap"
                                       onClick={() => setApprovalToDismiss(item)}
                                       title="Dismiss duplicate approval submission"
                                     >
@@ -702,7 +700,7 @@ export default function ContractWorkflowPopup() {
                                   )}
                                   <Button
                                     size="sm"
-                                    className="h-8 text-xs font-medium gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+                                    className="h-8.5 text-xs font-semibold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap shadow-xs"
                                     onClick={() => setSelectedApprovalForSign(item)}
                                   >
                                     <FileSignature className="h-3.5 w-3.5" />
@@ -766,44 +764,41 @@ export default function ContractWorkflowPopup() {
                           return (
                             <Card
                               key={contract.id}
-                              className="p-4 border border-emerald-500/20 bg-emerald-500/[0.02] hover:border-emerald-500/50 hover:shadow-sm transition-all"
+                              className="p-4 sm:p-5 border border-emerald-500/20 bg-emerald-500/[0.02] hover:border-emerald-500/50 hover:shadow-sm transition-all"
                             >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                      {emp?.first_name?.charAt(0)}{emp?.last_name?.charAt(0)}
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <h4 className="text-sm font-semibold text-foreground">
-                                          {emp?.first_name} {emp?.last_name}
-                                        </h4>
-                                        <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0 h-4">
-                                          Contract Approved
-                                        </Badge>
-                                      </div>
-                                      <p className="text-xs text-muted-foreground mt-0.5">
-                                        {emp?.job_title || 'Employee'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
-                                      </p>
-                                    </div>
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                                    {emp?.first_name?.charAt(0)}{emp?.last_name?.charAt(0)}
                                   </div>
-
-                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground pl-10.5">
-                                    <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
-                                      {stageInfo.badge}
-                                    </Badge>
-                                    <span className="text-muted-foreground text-xs">
-                                      {stageInfo.title}
-                                    </span>
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="text-sm font-semibold text-foreground">
+                                        {emp?.first_name} {emp?.last_name}
+                                      </h4>
+                                      <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 h-auto whitespace-nowrap shrink-0">
+                                        Contract Approved
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {emp?.job_title || 'Employee'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground pt-0.5 flex-wrap">
+                                      <Badge variant="outline" className="text-[10px] font-medium border-emerald-300 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 whitespace-nowrap shrink-0">
+                                        {stageInfo.badge}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        {stageInfo.title}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap sm:flex-nowrap pt-2 md:pt-0 border-t md:border-t-0 border-border/50">
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-8 text-xs gap-1"
+                                    className="h-8.5 text-xs gap-1.5 font-medium whitespace-nowrap"
                                     onClick={() => handleDownloadApprovedContract(contract)}
                                     title="Download approved contract PDF to print"
                                   >
@@ -812,11 +807,11 @@ export default function ContractWorkflowPopup() {
                                   </Button>
                                   <Button
                                     size="sm"
-                                    className="h-8 text-xs font-medium gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                                    className="h-8.5 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs whitespace-nowrap"
                                     onClick={() => setActiveActivationEmployeeId(contract.employee_id)}
                                   >
                                     <Upload className="h-3.5 w-3.5" />
-                                    Final Physical Upload & Activation
+                                    Final Upload & Activate
                                   </Button>
                                 </div>
                               </div>
