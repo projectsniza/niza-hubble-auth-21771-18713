@@ -490,9 +490,9 @@ export default function ContractWorkflowPopup() {
           }
         }}
       >
-        <DialogContent className="max-w-4xl lg:max-w-5xl w-[95vw] p-0 overflow-hidden border border-border/80 shadow-2xl rounded-2xl bg-card max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl lg:max-w-5xl w-[95vw] p-0 gap-0 overflow-hidden border border-border shadow-2xl rounded-2xl bg-background max-h-[90vh] flex flex-col">
           {/* Header Banner */}
-          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white p-6 border-b border-white/10 shrink-0">
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white p-5 sm:p-6 border-b border-white/10 shrink-0 relative z-10 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -531,7 +531,7 @@ export default function ContractWorkflowPopup() {
           </div>
 
           {/* Body Section */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-background space-y-4">
             {/* If user clicked to continue 3-stage activation on a specific employee */}
             {activeActivationEmployeeId ? (
               <div className="space-y-4">
@@ -645,22 +645,22 @@ export default function ContractWorkflowPopup() {
                           return (
                             <Card
                               key={item.id}
-                              className={`p-4 border transition-all ${
+                              className={`p-4 sm:p-5 border transition-all rounded-xl bg-card shadow-xs ${
                                 isDuplicate 
-                                  ? 'border-amber-400/60 bg-amber-500/[0.02] hover:border-amber-500/80' 
-                                  : 'hover:border-primary/40 hover:shadow-sm'
+                                  ? 'border-amber-400/80 bg-amber-500/[0.04] hover:border-amber-500' 
+                                  : 'border-border/80 hover:border-primary/50 hover:shadow-md'
                               }`}
                             >
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                                    isDuplicate ? 'bg-amber-500/20 text-amber-700' : 'bg-amber-500/10 text-amber-600'
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 border shadow-2xs ${
+                                    isDuplicate ? 'bg-amber-500/20 text-amber-700 border-amber-400/40' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
                                   }`}>
-                                    {emp?.first_name?.charAt(0) || ''}{emp?.last_name?.charAt(0) || 'E'}
+                                    {(emp?.first_name?.charAt(0) || '').toUpperCase()}{(emp?.last_name?.charAt(0) || 'E').toUpperCase()}
                                   </div>
-                                  <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="space-y-1.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="text-sm font-semibold text-foreground">
+                                      <h4 className="text-sm font-bold text-foreground">
                                         {emp?.first_name ? `${emp.first_name} ` : ''}{emp?.last_name}
                                       </h4>
                                       {isDuplicate && (
@@ -669,23 +669,26 @@ export default function ContractWorkflowPopup() {
                                           Possible Duplicate
                                         </Badge>
                                       )}
+                                      <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-400/60 whitespace-nowrap shrink-0">
+                                        Awaiting Super Admin Signature
+                                      </Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground truncate">
-                                      {emp?.job_title || 'Position'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
+                                      <span className="font-medium text-foreground/80">{emp?.job_title || 'Position'}</span>
+                                      {(emp?.branch?.name || emp?.organization?.name) && (
+                                        <span> • {emp?.branch?.name || emp?.organization?.name}</span>
+                                      )}
                                     </p>
                                     <div className="flex items-center gap-3 text-xs text-muted-foreground pt-0.5 flex-wrap">
                                       <span className="flex items-center gap-1">
                                         <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                         Submitted: {item.submitted_at ? format(new Date(item.submitted_at), 'dd MMM yyyy') : 'Recent'}
                                       </span>
-                                      <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-300 whitespace-nowrap shrink-0">
-                                        Awaiting Super Admin Signature
-                                      </Badge>
                                     </div>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap sm:flex-nowrap pt-2 md:pt-0 border-t md:border-t-0 border-border/50">
+                                <div className="flex items-center gap-2 shrink-0 self-start lg:self-center flex-wrap sm:flex-nowrap pt-2 lg:pt-0 border-t lg:border-t-0 border-border/50 w-full lg:w-auto justify-end">
                                   {isDuplicate && (
                                     <Button
                                       variant="ghost"
@@ -764,45 +767,49 @@ export default function ContractWorkflowPopup() {
                           return (
                             <Card
                               key={contract.id}
-                              className="p-4 sm:p-5 border border-emerald-500/20 bg-emerald-500/[0.02] hover:border-emerald-500/50 hover:shadow-sm transition-all"
+                              className="p-4 sm:p-5 border border-border/80 bg-card hover:border-emerald-500/60 hover:shadow-md transition-all rounded-xl shadow-xs"
                             >
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                                    {emp?.first_name?.charAt(0)}{emp?.last_name?.charAt(0)}
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5 border border-emerald-500/30 shadow-2xs">
+                                    {(emp?.first_name?.charAt(0) || '').toUpperCase()}{(emp?.last_name?.charAt(0) || '').toUpperCase()}
                                   </div>
-                                  <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="space-y-1.5 min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="text-sm font-semibold text-foreground">
-                                        {emp?.first_name} {emp?.last_name}
+                                      <h4 className="text-sm font-bold text-foreground">
+                                        {emp?.first_name ? `${emp.first_name} ` : ''}{emp?.last_name}
                                       </h4>
-                                      <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 h-auto whitespace-nowrap shrink-0">
+                                      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] px-2 py-0.5 font-semibold whitespace-nowrap shrink-0 shadow-2xs">
                                         Contract Approved
+                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px] font-medium border-emerald-400 text-emerald-700 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 whitespace-nowrap shrink-0">
+                                        {stageInfo.badge}
                                       </Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground truncate">
-                                      {emp?.job_title || 'Employee'} • {emp?.branch?.name || emp?.organization?.name || 'General Branch'}
+                                      <span className="font-medium text-foreground/80">{emp?.job_title || 'Employee'}</span>
+                                      {(emp?.branch?.name || emp?.organization?.name) && (
+                                        <span> • {emp?.branch?.name || emp?.organization?.name}</span>
+                                      )}
                                     </p>
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground pt-0.5 flex-wrap">
-                                      <Badge variant="outline" className="text-[10px] font-medium border-emerald-300 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 whitespace-nowrap shrink-0">
-                                        {stageInfo.badge}
-                                      </Badge>
-                                      <span className="text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-0.5">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                      <span className="text-xs text-foreground/75 font-medium truncate">
                                         {stageInfo.title}
                                       </span>
                                     </div>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap sm:flex-nowrap pt-2 md:pt-0 border-t md:border-t-0 border-border/50">
+                                <div className="flex items-center gap-2 shrink-0 self-start lg:self-center flex-wrap sm:flex-nowrap pt-2 lg:pt-0 border-t lg:border-t-0 border-border/50 w-full lg:w-auto justify-end">
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-8.5 text-xs gap-1.5 font-medium whitespace-nowrap"
+                                    className="h-8.5 text-xs gap-1.5 font-medium border-border/80 hover:bg-muted/80 whitespace-nowrap shadow-2xs"
                                     onClick={() => handleDownloadApprovedContract(contract)}
                                     title="Download approved contract PDF to print"
                                   >
-                                    <Download className="h-3.5 w-3.5" />
+                                    <Download className="h-3.5 w-3.5 text-muted-foreground" />
                                     Download PDF
                                   </Button>
                                   <Button

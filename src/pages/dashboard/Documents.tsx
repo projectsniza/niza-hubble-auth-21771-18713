@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ShieldX, Upload, FolderPlus, FileText, ChevronRight, Folder, File, 
-  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home, FileSignature
+  Search, Clock, AlertTriangle, Eye, Download, Trash2, Lock, Edit2, Home, FileSignature, ClipboardCheck, Files, Inbox
 } from 'lucide-react';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +20,7 @@ import UploadDocumentDialog from '@/components/documents/UploadDocumentDialog';
 import DocumentDetailsDialog from '@/components/documents/DocumentDetailsDialog';
 import DocumentSubmissionsTab from '@/components/documents/DocumentSubmissionsTab';
 import DocumentRecycleBinTab from '@/components/documents/DocumentRecycleBinTab';
+import StaffDocumentAuditTab from '@/components/documents/StaffDocumentAuditTab';
 import DeleteDocumentConfirmDialog from '@/components/documents/DeleteDocumentConfirmDialog';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
@@ -93,7 +94,7 @@ export default function Documents() {
   const [showUpload, setShowUpload] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     const filter = searchParams.get('filter');
-    return filter === 'overdue' || filter === 'upcoming' ? filter : 'all';
+    return filter === 'overdue' || filter === 'upcoming' || filter === 'audit-checklist' ? filter : 'all';
   });
   const [loading, setLoading] = useState(true);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
@@ -212,7 +213,7 @@ export default function Documents() {
   // Update activeTab when URL filter changes
   useEffect(() => {
     const filter = searchParams.get('filter');
-    if (filter === 'overdue' || filter === 'upcoming') {
+    if (filter === 'overdue' || filter === 'upcoming' || filter === 'audit-checklist') {
       setActiveTab(filter);
     }
   }, [searchParams]);
@@ -713,7 +714,7 @@ export default function Documents() {
       <div className="border-b bg-background p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Documents</h1>
+            <h1 className="text-2xl font-semibold text-foreground">All Documents</h1>
             <p className="text-muted-foreground">Manage all company and employee documents</p>
           </div>
           <div className="flex gap-2">
@@ -841,37 +842,118 @@ export default function Documents() {
           </div>
         )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="overdue" className="gap-2">
-              Overdue
-              {overdueCount > 0 && <Badge variant="destructive">{overdueCount}</Badge>}
+          <TabsList className="flex flex-wrap items-center h-auto gap-2 p-1.5 bg-muted/40 border border-border/70 rounded-xl">
+            {/* All Documents */}
+            <TabsTrigger
+              value="all"
+              className="gap-2 px-3.5 py-2 font-semibold border border-slate-300/80 dark:border-slate-700 bg-slate-500/10 text-slate-800 dark:text-slate-200 hover:bg-slate-500/20 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:border-slate-800 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900 shadow-2xs transition-all"
+            >
+              <Files className="h-4 w-4 text-slate-700 dark:text-slate-300 data-[state=active]:text-white dark:data-[state=active]:text-slate-900 shrink-0" />
+              <span>All Documents</span>
+              {globalTotalCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white/20 data-[state=active]:text-white dark:data-[state=active]:bg-slate-900/20 dark:data-[state=active]:text-slate-900"
+                >
+                  {globalTotalCount}
+                </Badge>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="upcoming" className="gap-2">
-              Upcoming
-              {upcomingCount > 0 && <Badge variant="secondary">{upcomingCount}</Badge>}
+
+            {/* Staff Document Checklist - Highlighted with Audit tag */}
+            <TabsTrigger
+              value="audit-checklist"
+              className="gap-2 px-3.5 py-2 font-semibold border border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/20 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:border-emerald-600 shadow-2xs transition-all ring-1 ring-emerald-500/20"
+            >
+              <ClipboardCheck className="h-4 w-4 text-emerald-600 data-[state=active]:text-white shrink-0" />
+              <span>Staff Document Checklist</span>
+              <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-emerald-700 shadow-2xs">
+                Audit
+              </Badge>
             </TabsTrigger>
+
+            {/* Overdue */}
+            <TabsTrigger
+              value="overdue"
+              className="gap-2 px-3.5 py-2 font-semibold border border-rose-500/50 bg-rose-500/10 text-rose-800 dark:text-rose-300 hover:bg-rose-500/20 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:border-rose-600 shadow-2xs transition-all"
+            >
+              <AlertTriangle className="h-4 w-4 text-rose-600 data-[state=active]:text-white shrink-0" />
+              <span>Overdue</span>
+              {overdueCount > 0 ? (
+                <Badge className="bg-rose-600 text-white hover:bg-rose-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-rose-700">
+                  {overdueCount}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-rose-400/40 text-rose-700 dark:text-rose-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
+                  0
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            {/* Upcoming */}
+            <TabsTrigger
+              value="upcoming"
+              className="gap-2 px-3.5 py-2 font-semibold border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 data-[state=active]:bg-amber-600 data-[state=active]:text-white data-[state=active]:border-amber-600 shadow-2xs transition-all"
+            >
+              <Clock className="h-4 w-4 text-amber-600 data-[state=active]:text-white shrink-0" />
+              <span>Upcoming</span>
+              {upcomingCount > 0 ? (
+                <Badge className="bg-amber-600 text-white hover:bg-amber-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-amber-700">
+                  {upcomingCount}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-amber-400/40 text-amber-700 dark:text-amber-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
+                  0
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            {/* Submissions (Super Admin) */}
             {user?.role === 'super_admin' && (
-              <TabsTrigger value="submissions" className="gap-2">
-                Submissions
-                {submissionsPendingCount > 0 && (
-                  <Badge variant="default" className="animate-pulse">{submissionsPendingCount}</Badge>
+              <TabsTrigger
+                value="submissions"
+                className="gap-2 px-3.5 py-2 font-semibold border border-blue-500/50 bg-blue-500/10 text-blue-800 dark:text-blue-300 hover:bg-blue-500/20 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:border-blue-600 shadow-2xs transition-all"
+              >
+                <Inbox className="h-4 w-4 text-blue-600 data-[state=active]:text-white shrink-0" />
+                <span>Submissions</span>
+                {submissionsPendingCount > 0 ? (
+                  <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-blue-700 animate-pulse">
+                    {submissionsPendingCount}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-blue-400/40 text-blue-700 dark:text-blue-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
+                    0
+                  </Badge>
                 )}
               </TabsTrigger>
             )}
-            <TabsTrigger value="recycle-bin" className="gap-2">
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-              Recycle Bin
-              {recycleBinCount > 0 && (
-                <Badge variant="outline" className="bg-muted text-xs">
+
+            {/* Recycle Bin */}
+            <TabsTrigger
+              value="recycle-bin"
+              className="gap-2 px-3.5 py-2 font-semibold border border-slate-400/40 dark:border-slate-700/80 bg-slate-500/10 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20 data-[state=active]:bg-slate-700 data-[state=active]:text-white data-[state=active]:border-slate-700 dark:data-[state=active]:bg-slate-600 shadow-2xs transition-all"
+            >
+              <Trash2 className="h-4 w-4 text-slate-500 data-[state=active]:text-white shrink-0" />
+              <span>Recycle Bin</span>
+              {recycleBinCount > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 font-bold tracking-wide border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 data-[state=active]:border-white/30 data-[state=active]:text-white"
+                >
                   {recycleBinCount}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal border-slate-300/40 text-slate-500 data-[state=active]:border-white/30 data-[state=active]:text-white">
+                  0
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {activeTab === 'recycle-bin' ? (
+        {activeTab === 'audit-checklist' ? (
+          <StaffDocumentAuditTab />
+        ) : activeTab === 'recycle-bin' ? (
           <DocumentRecycleBinTab
             onDocumentRestored={() => {
               fetchFoldersAndDocuments();
