@@ -142,30 +142,13 @@ export function MonthlyHoursPanel() {
           totals.holiday += Number(entry.holiday_hours) || 0;
         });
 
-        // We need contract data for earned-to-date pro-rata.
-        const contracts: any[] = [];
-        for (const idChunk of chunkValues(ids)) contracts.push(...await fetchAllPages((from, to) => supabase
-          .from('employee_contracts').select('employee_id, weekly_contracted_hours, holiday_entitlement_days, effective_from, effective_to')
-          .in('employee_id', idChunk).order('id').range(from, to)));
-        const contractByEmp: Record<string, any> = {};
-        (contracts || []).forEach((c: any) => {
-          const prior = contractByEmp[c.employee_id];
-          if (!prior || new Date(c.effective_from) > new Date(prior.effective_from)) {
-            contractByEmp[c.employee_id] = c;
-          }
-        });
-
         const built: Row[] = empList.map((e: any) => {
           const m = entriesByEmp[e.id] || { w: 0, h: 0, s: 0 };
-          const c = contractByEmp[e.id];
-          const weekly = Number(c?.weekly_contracted_hours) || 40;
-          const days = Number(c?.holiday_entitlement_days) || 28;
-          const hoursPerDay = weekly / 5;
-          const annual = hoursPerDay * days;
+          // Holiday accrual - same rule as the Holiday Balance tab / Holiday Working sheet:
+          //   earned = (worked hours + holiday hours taken) / 52 weeks * 5.6 weeks
           const worked = ytdEntriesByEmp[e.id]?.worked || 0;
           const taken = ytdEntriesByEmp[e.id]?.holiday || 0;
-          const weeksWorked = weekly ? (worked + taken) / weekly : 0;
-          const earned = (annual / 52) * weeksWorked;
+          const earned = ((worked + taken) / 52) * 5.6;
           return {
             employee_id: e.id,
             name: `${e.first_name} ${e.last_name}`,

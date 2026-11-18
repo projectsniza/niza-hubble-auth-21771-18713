@@ -20,6 +20,7 @@ import { format, parseISO, addMonths, startOfMonth, endOfMonth, subMonths } from
 import { toast } from 'sonner';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { chunkValues, fetchAllPages } from '@/lib/supabasePagination';
+import { calculateEntryWorkedHours } from '@/lib/timesheetCalculations';
 
 interface Employee {
   id: string;
@@ -192,25 +193,38 @@ export function HolidayBalance() {
       const tsToEmp = new Map<string, string>();
       (timesheets || []).forEach(t => tsToEmp.set(t.id, t.employee_id));
 
-      let entries: Array<{ timesheet_id: string; entry_date: string; actual_hours: number | null; holiday_hours: number | null }> = [];
+      let entries: any[] = [];
       if (tsIds.length) {
         for (const slice of chunkValues(tsIds)) {
           entries = entries.concat(await fetchAllPages((from, to) => supabase.from('timesheet_entries')
-            .select('timesheet_id, entry_date, actual_hours, holiday_hours')
+            .select('timesheet_id, entry_date, actual_hours, shift_start_time, shift_end_time, break_duration_minutes, holiday_hours, sick_hours')
             .in('timesheet_id', slice).order('id').range(from, to)) as any);
         }
       }
 
-      const entriesByEmpDate = new Map<string, Map<string, { w: number; h: number }>>();
+      // Same rules as Weekly Timesheets / Monthly Hours (read-only reuse, no change to them):
+      //  - worked hours per day come from calculateEntryWorkedHours (shift times minus break,
+      //    falling back to the stored actual hours)
+      //  - if an employee has more than one entry for the same day, only the entry with the
+      //    most activity counts, so duplicates are never added twice
+      const bestByEmpDate = new Map<string, { empId: string; entry: any; activity: number }>();
       entries.forEach(e => {
         const empId = tsToEmp.get(e.timesheet_id);
         if (!empId) return;
+        const activity = calculateEntryWorkedHours(e) + (Number(e.holiday_hours) || 0) + (Number(e.sick_hours) || 0);
+        const key = `${empId}|${e.entry_date}`;
+        const existing = bestByEmpDate.get(key);
+        if (!existing || activity > existing.activity) bestByEmpDate.set(key, { empId, entry: e, activity });
+      });
+
+      const entriesByEmpDate = new Map<string, Map<string, { w: number; h: number }>>();
+      bestByEmpDate.forEach(({ empId, entry }) => {
         let dateMap = entriesByEmpDate.get(empId);
         if (!dateMap) { dateMap = new Map(); entriesByEmpDate.set(empId, dateMap); }
-        const cur = dateMap.get(e.entry_date) || { w: 0, h: 0 };
-        cur.w += Number(e.actual_hours) || 0;
-        cur.h += Number(e.holiday_hours) || 0;
-        dateMap.set(e.entry_date, cur);
+        dateMap.set(entry.entry_date, {
+          w: calculateEntryWorkedHours(entry),
+          h: Number(entry.holiday_hours) || 0,
+        });
       });
 
       const employeeIds = employees.map(employee => employee.id);
