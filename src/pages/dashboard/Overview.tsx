@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import HeroArt from '@/components/ui/hero-art';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Users, Clock, TrendingUp, Calendar, ArrowUpRight, Sparkles, Bell, FileText, UserPlus, Wrench } from 'lucide-react';
@@ -191,23 +192,15 @@ export default function Overview() {
   if (user?.role === 'employee') {
     return (
       <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
-        <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
-          <path d="M8.44398 0.617329H592.052V469.547C592.052 48.6499 274.052 498.547 366.552 250.047C459.052 1.5472 419.436 102.82 419.436 102.82C419.436 102.82 343.17 209.048 201.552 208.547C124.426 208.274 104.783 140.619 188.052 102.82C319.337 43.2233 149.498 31.3712 120.052 23.0472C56.1705 4.98889 22.6081 1.25634 8.44398 0.617329H0.0516663C0.0516663 0.617329 2.59244 0.353338 8.44398 0.617329Z" fill="url(#paint0_linear_emp)" stroke="hsl(var(--border))"/>
-          <defs>
-            <linearGradient id="paint0_linear_emp" x1="592.659" y1="0.617318" x2="376.315" y2="504.04" gradientUnits="userSpaceOnUse">
-              <stop offset="0.0734679" stopColor="hsl(var(--accent))"/>
-              <stop offset="0.458691" stopColor="hsl(var(--primary))"/>
-            </linearGradient>
-          </defs>
-        </svg>
 
-        <div className="relative z-10 overflow-hidden rounded-2xl border niza-tile p-6 md:p-8">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="niza-rise relative z-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 p-6 md:p-10 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
+        <HeroArt className="absolute bottom-0 right-0 h-full w-[65%] max-w-[700px] hidden md:block" />
+          <div className="relative flex items-center gap-2 mb-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
           </div>
-          <h1 className="text-2xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">{user?.name}</h1>
-          <p className="text-muted-foreground text-base md:text-lg">Here's your overview for today</p>
+          <h1 className="relative text-3xl md:text-[44px] md:leading-[1.1] font-bold tracking-tight mb-2 text-foreground">{user?.name}</h1>
+          <p className="relative text-muted-foreground text-base md:text-lg">Here's your overview for today</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 relative z-10">
@@ -266,24 +259,16 @@ export default function Overview() {
   // Admin/HR/Manager View
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
-      <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
-        <path d="M8.44398 0.617329H592.052V469.547C592.052 48.6499 274.052 498.547 366.552 250.047C459.052 1.5472 419.436 102.82 419.436 102.82C419.436 102.82 343.17 209.048 201.552 208.547C124.426 208.274 104.783 140.619 188.052 102.82C319.337 43.2233 149.498 31.3712 120.052 23.0472C56.1705 4.98889 22.6081 1.25634 8.44398 0.617329H0.0516663C0.0516663 0.617329 2.59244 0.353338 8.44398 0.617329Z" fill="url(#paint0_linear)" stroke="hsl(var(--border))"/>
-        <defs>
-          <linearGradient id="paint0_linear" x1="592.659" y1="0.617318" x2="376.315" y2="504.04" gradientUnits="userSpaceOnUse">
-            <stop offset="0.0734679" stopColor="hsl(var(--accent))"/>
-            <stop offset="0.458691" stopColor="hsl(var(--primary))"/>
-          </linearGradient>
-        </defs>
-      </svg>
 
       {/* Welcome Header */}
-      <div className="relative z-10 overflow-hidden rounded-2xl border niza-tile p-6 md:p-8">
-        <div className="flex items-center gap-2 mb-2">
+      <div className="niza-rise relative z-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 p-6 md:p-10 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
+        <HeroArt className="absolute bottom-0 right-0 h-full w-[65%] max-w-[700px] hidden md:block" />
+        <div className="relative flex items-center gap-2 mb-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
         </div>
-        <h1 className="text-2xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">{user?.name}</h1>
-        <p className="text-muted-foreground text-base md:text-lg">Here's your team overview for today</p>
+        <h1 className="relative text-3xl md:text-[44px] md:leading-[1.1] font-bold tracking-tight mb-2 text-foreground">{user?.name}</h1>
+        <p className="relative text-muted-foreground text-base md:text-lg">Here's your team overview for today</p>
       </div>
 
       {/* Stats Grid */}

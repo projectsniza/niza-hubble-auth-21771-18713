@@ -6,6 +6,7 @@ import {
   CheckSquare, Car, Ticket, Wallet, BarChart3
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import HeroArt from '@/components/ui/hero-art';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
@@ -113,42 +114,23 @@ export default function DashboardGrid() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="relative max-w-[1400px] mx-auto px-5 py-8 md:px-10 md:py-10">
-      {/* Hero */}
-      <div className="relative mb-10 md:mb-12 min-h-[150px]">
-        <div className="relative z-10 max-w-2xl niza-rise">
+    <div className="relative max-w-[1400px] mx-auto px-5 py-6 md:px-8 md:py-8">
+      {/* Hero banner */}
+      <div className="niza-rise relative mb-8 md:mb-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
+        <HeroArt className="absolute bottom-0 right-0 h-full w-[70%] max-w-[760px] hidden md:block" />
+        <div className="relative z-10 max-w-xl px-6 py-8 md:px-10 md:py-12">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
             Dashboard
           </p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
-            {greeting}{firstName ? `, ${firstName}` : ''} <span className="inline-block origin-[70%_70%] animate-[niza-pop_2.4s_ease-in-out_infinite]">👋</span>
+          <h2 className="text-3xl md:text-[44px] md:leading-[1.1] font-bold tracking-tight text-foreground">
+            {greeting}{firstName ? `, ${firstName}` : ''}{' '}
+            <span className="inline-block origin-[70%_70%] animate-[niza-pop_2.4s_ease-in-out_infinite]">👋</span>
           </h2>
           <p className="mt-3 text-base md:text-lg text-muted-foreground">
             Select a module to get started and manage your organization seamlessly.
           </p>
         </div>
-
-        {/* Hero artwork: rolling hills, sun and rising bars */}
-        <svg className="pointer-events-none absolute -top-6 right-0 hidden h-[210px] w-[460px] lg:block" viewBox="0 0 460 210" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="gHillA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#bdf0d4" /><stop offset="1" stopColor="#34c48b" /></linearGradient>
-            <linearGradient id="gHillB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e8f8c8" /><stop offset="1" stopColor="#8fd16a" /></linearGradient>
-            <radialGradient id="gSun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stopColor="#fff3b8" /><stop offset="1" stopColor="#fcd34d" stopOpacity="0" /></radialGradient>
-          </defs>
-          <circle cx="360" cy="52" r="62" fill="url(#gSun)"><animate attributeName="r" values="56;70;56" dur="6s" repeatCount="indefinite" /></circle>
-          <g opacity="0.95">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <rect key={i} x={250 + i * 34} y={150 - (i + 1) * 20} width="20" rx="6" height={(i + 1) * 20 + 40} fill="url(#gHillA)" opacity={0.45 + i * 0.1}>
-                <animate attributeName="height" values={`${(i + 1) * 20 + 40};${(i + 1) * 20 + 52};${(i + 1) * 20 + 40}`} dur={`${4 + i * 0.7}s`} repeatCount="indefinite" />
-              </rect>
-            ))}
-          </g>
-          <path d="M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z" fill="url(#gHillB)" opacity="0.85">
-            <animate attributeName="d" dur="9s" repeatCount="indefinite" values="M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z;M0 165 C 70 150, 140 125, 220 150 C 300 178, 380 140, 460 138 L 460 210 L 0 210 Z;M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z" />
-          </path>
-          <path d="M0 192 C 90 160, 170 190, 250 178 C 330 166, 400 176, 460 168 L 460 210 L 0 210 Z" fill="url(#gHillA)" opacity="0.8" />
-        </svg>
       </div>
 
       {/* Module tiles */}
@@ -160,15 +142,22 @@ export default function DashboardGrid() {
             <Link key={item.path} to={item.path} className="group niza-rise" style={{ animationDelay: `${Math.min(i, 14) * 45}ms` }}>
               <div className="niza-tile h-36 md:h-40 p-5">
                 {/* graphic */}
-                <svg className="pointer-events-none absolute -bottom-1 -right-1 h-24 w-3/4 transition-transform duration-700 group-hover:scale-110 group-hover:-translate-x-1" viewBox="0 0 240 96" fill="none" aria-hidden="true">
+                <svg
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-20 w-full transition-transform duration-700 ease-out group-hover:scale-105"
+                  style={{ WebkitMaskImage: 'linear-gradient(to right, transparent 5%, #000 60%)', maskImage: 'linear-gradient(to right, transparent 5%, #000 60%)' }}
+                  viewBox="0 0 300 80"
+                  preserveAspectRatio="none"
+                  fill="none"
+                  aria-hidden="true"
+                >
                   <defs>
-                    <linearGradient id={`tw${i}`} x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stopColor={tone.art} stopOpacity="0.05" />
-                      <stop offset="1" stopColor={tone.art} stopOpacity="0.38" />
+                    <linearGradient id={`tw${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor={tone.art} stopOpacity="0.32" />
+                      <stop offset="1" stopColor={tone.art} stopOpacity="0.08" />
                     </linearGradient>
                   </defs>
-                  <path d="M0 70 C 50 30, 110 90, 170 50 C 200 30, 225 36, 240 24 L 240 96 L 0 96 Z" fill={`url(#tw${i})`} />
-                  <path d="M60 96 C 100 60, 150 80, 240 52 L 240 96 Z" fill={`url(#tw${i})`} opacity="0.7" />
+                  <path d="M0 58 C 60 40, 120 70, 180 48 C 230 30, 270 36, 300 26 L 300 80 L 0 80 Z" fill={`url(#tw${i})`} />
+                  <path d="M0 70 C 80 56, 160 76, 230 58 C 260 50, 285 52, 300 46 L 300 80 L 0 80 Z" fill={`url(#tw${i})`} opacity="0.8" />
                 </svg>
 
                 <div className="relative z-10 flex h-full flex-col justify-between">
