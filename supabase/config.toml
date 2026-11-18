@@ -14,3 +14,5 @@ verify_jwt = false
 
 [functions.resend-2fa]
 verify_jwt = false
+[functions.ai-assistant]
+verify_jwt = false

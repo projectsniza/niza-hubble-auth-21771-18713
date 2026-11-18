@@ -6,6 +6,7 @@ import AppsDialog from '@/components/dashboard/AppsDialog';
 import TaskReminderListener from '@/components/reminders/TaskReminderListener';
 import ReminderDuePopup from '@/components/reminders/ReminderDuePopup';
 import RemindersSidebar from '@/components/reminders/RemindersSidebar';
+import AiAssistantSidebar from '@/components/ai/AiAssistantSidebar';
 import TodayEventsPopup from '@/components/dashboard/TodayEventsPopup';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import OpenItemsHeaderWidget from '@/components/dashboard/OpenItemsHeaderWidget';
@@ -107,6 +108,9 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto">
           <Outlet />
         </div>
+
+        {/* AI Assistant - available to every signed-in user, scoped by role */}
+        <AiAssistantSidebar />
       </main>
     </div>
   );
