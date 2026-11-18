@@ -10,6 +10,7 @@ import { DueFollowUpsProvider } from "./contexts/DueFollowUpsContext";
 import { ActionItemsProvider } from "./contexts/ActionItemsContext";
 import { NizaLoaderFullPage } from "@/components/ui/niza-loader";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import AiAssistantSidebar from "@/components/ai/AiAssistantSidebar";
 
 // Lazy load all route components for better initial bundle size
 const Index = lazy(() => import("./pages/Index"));
@@ -216,6 +217,8 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            {/* AI assistant: available on every signed-in page and module */}
+            <AiAssistantSidebar />
           </BrowserRouter>
           </TooltipProvider>
           </ActionItemsProvider>

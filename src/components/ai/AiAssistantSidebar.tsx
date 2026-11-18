@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { ArrowUp, Eraser, Loader2, ShieldCheck, Sparkles, Square, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, Eraser, Loader2, ShieldCheck, Sparkles, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,10 +75,10 @@ function RichText({ text }: { text: string }) {
 
 const SUGGESTIONS: Record<string, string[]> = {
   super_admin: [
-    'Who is scheduled today but hasn’t clocked in?',
+    'Which stores haven’t sent today’s daily report?',
     'Which onboardings are stuck and what’s the next step?',
     'Which documents are overdue or expiring this month?',
-    'Which stores haven’t sent today’s daily report?',
+    'Who is working today across all stores?',
     'Who is on leave this week?',
   ],
   hr: [
@@ -84,26 +86,38 @@ const SUGGESTIONS: Record<string, string[]> = {
     'Which contracts are waiting for approval?',
     'Which documents are overdue or expiring this month?',
     'Who is on leave or has pending leave requests?',
-    'Who is scheduled today but hasn’t clocked in?',
+    'Which shifts are still waiting for staff to confirm?',
   ],
   manager: [
     'Who is working at my store today?',
-    'Who is scheduled but hasn’t clocked in yet?',
     'Has my store sent today’s daily report?',
     'Who is on leave this week?',
     'Which shifts are still waiting for staff to confirm?',
+    'Any open maintenance tickets at my store?',
   ],
   employee: [
     'When is my next shift?',
     'What shifts do I have this week?',
     'What is the status of my leave requests?',
-    'When did I last clock in?',
     'How do I request leave?',
+    'Any upcoming events?',
   ],
 };
 
+const WIDGET_CSS = `
+@keyframes nzai-pulse { 0% { transform: scale(1); opacity: .55 } 70% { transform: scale(1.55); opacity: 0 } 100% { opacity: 0 } }
+@keyframes nzai-spin { to { transform: rotate(360deg) } }
+@keyframes nzai-drift { 0%,100% { transform: translate3d(0,0,0) } 50% { transform: translate3d(-18px,8px,0) } }
+.nzai-halo { background: rgba(52,199,120,.55); animation: nzai-pulse 2.6s ease-out infinite; }
+.nzai-ring { background: conic-gradient(from 0deg, transparent 0 60%, rgba(255,255,255,.9) 75%, transparent 90%); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); animation: nzai-spin 3.2s linear infinite; }
+.nzai-aurora { background: radial-gradient(60% 80% at 85% 0%, rgba(253,224,71,.35), transparent 60%), radial-gradient(50% 70% at 10% 10%, rgba(255,255,255,.18), transparent 60%); animation: nzai-drift 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nzai-halo, .nzai-ring, .nzai-aurora { animation: none } }
+`;
+
 export default function AiAssistantSidebar() {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+  const isPublicPage = pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/reset-password') || pathname.startsWith('/verify');
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -242,19 +256,32 @@ export default function AiAssistantSidebar() {
   );
 
   if (!user) return null;
+  if (isPublicPage) return null;
 
-  return (
+  return createPortal(
     <>
+      <style>{WIDGET_CSS}</style>
       {/* Floating launcher */}
       {!open && (
         <button
           type="button"
           onClick={() => setOpen(true)}
+          aria-label="Ask Niza AI"
           title="Ask Niza AI (Ctrl+J)"
-          className="group fixed bottom-6 right-6 z-40 flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-primary to-accent pl-4 pr-5 text-white shadow-[0_10px_30px_-8px_rgba(6,95,70,0.6)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-8px_rgba(6,95,70,0.7)] active:scale-95"
+          className="nzai-launch group fixed bottom-5 right-5 z-[70] flex h-[60px] items-center rounded-full pl-[60px] pr-0 text-white transition-all duration-300 hover:pr-5 sm:bottom-7 sm:right-7"
         >
-          <Sparkles className="h-5 w-5 transition-transform group-hover:rotate-12" />
-          <span className="text-sm font-semibold">Ask AI</span>
+          {/* glow halo */}
+          <span className="nzai-halo pointer-events-none absolute left-0 top-0 h-[60px] w-[60px] rounded-full" />
+          {/* orb */}
+          <span className="absolute left-0 top-0 flex h-[60px] w-[60px] items-center justify-center rounded-full bg-gradient-to-br from-[#0b7a4f] via-[#14905c] to-[#7cc243] shadow-[0_12px_30px_-8px_rgba(6,95,70,0.7),inset_0_2px_6px_rgba(255,255,255,0.45)] ring-1 ring-white/40 transition-transform duration-300 group-hover:scale-105">
+            <span className="nzai-ring pointer-events-none absolute inset-[-3px] rounded-full" />
+            <Sparkles className="relative h-6 w-6 drop-shadow transition-transform duration-500 group-hover:rotate-[18deg]" />
+            <span className="absolute right-1 top-1 h-3 w-3 rounded-full border-2 border-white bg-lime-300" />
+          </span>
+          {/* label revealed on hover */}
+          <span className="pointer-events-none ml-0 max-w-0 overflow-hidden whitespace-nowrap rounded-full bg-gradient-to-r from-[#0b7a4f] to-[#4fae3e] py-2 text-sm font-semibold opacity-0 shadow-lg transition-all duration-300 group-hover:ml-3 group-hover:max-w-[160px] group-hover:px-4 group-hover:opacity-100">
+            Ask Niza AI
+          </span>
         </button>
       )}
 
@@ -262,30 +289,36 @@ export default function AiAssistantSidebar() {
       <aside
         aria-hidden={!open}
         className={cn(
-          'fixed inset-y-0 right-0 z-[60] flex w-full flex-col border-l border-border bg-card shadow-[-20px_0_50px_-20px_rgba(16,40,30,0.25)] transition-transform duration-300 ease-out sm:w-[420px]',
-          open ? 'translate-x-0' : 'translate-x-full',
+          'fixed z-[70] flex flex-col overflow-hidden bg-white/95 backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+          'inset-0 sm:inset-auto sm:bottom-7 sm:right-7 sm:h-[min(660px,calc(100dvh-56px))] sm:w-[410px] sm:rounded-[28px] sm:border sm:border-white',
+          'shadow-[0_30px_80px_-20px_rgba(6,60,40,0.45),0_0_0_1px_rgba(16,120,80,0.08)] origin-bottom-right',
+          open ? 'pointer-events-auto opacity-100 scale-100 translate-y-0' : 'pointer-events-none opacity-0 scale-90 translate-y-6',
         )}
       >
         {/* Header */}
-        <div className="relative overflow-hidden border-b border-border px-5 py-4">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 blur-2xl" />
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#0b6b45] via-[#11845a] to-[#5fae3c] px-5 pb-5 pt-5 text-white">
+          <div className="nzai-aurora pointer-events-none absolute inset-0" />
+          <svg className="pointer-events-none absolute -bottom-px left-0 h-6 w-full text-white/95" viewBox="0 0 400 24" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 24 L0 14 C 80 2, 160 22, 240 12 C 310 4, 360 10, 400 6 L400 24 Z" fill="currentColor" />
+          </svg>
           <div className="relative flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md">
+            <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/40 backdrop-blur">
               <Sparkles className="h-5 w-5" />
+              <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#11845a] bg-lime-300" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base font-semibold leading-tight text-foreground">Niza AI</h2>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3 w-3 text-primary" />
-                Scope: {scopeText}
+              <h2 className="text-[17px] font-semibold leading-tight">Niza AI</h2>
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
+                <ShieldCheck className="h-3 w-3" />
+                {scopeText}
               </p>
             </div>
             {messages.length > 0 && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Clear chat" onClick={() => (stop(), setMessages([]))}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-white hover:bg-white/15 hover:text-white" title="Clear chat" onClick={() => (stop(), setMessages([]))}>
                 <Eraser className="h-4 w-4" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8" title="Close" onClick={() => setOpen(false)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-white hover:bg-white/15 hover:text-white" title="Close" onClick={() => setOpen(false)}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -307,9 +340,10 @@ export default function AiAssistantSidebar() {
                     key={s}
                     type="button"
                     onClick={() => send(s)}
-                    className="w-full rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-foreground shadow-sm transition-all hover:border-primary/40 hover:bg-secondary"
+                    className="group/s flex w-full items-center gap-3 rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/60 px-4 py-3 text-left text-sm text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                   >
-                    {s}
+                    <span className="flex-1">{s}</span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-primary opacity-0 transition-all group-hover/s:translate-x-0.5 group-hover/s:opacity-100" />
                   </button>
                 ))}
               </div>
@@ -368,7 +402,7 @@ export default function AiAssistantSidebar() {
                   send(input);
                 }
               }}
-              placeholder="Ask about reports, staff, clock-ins…"
+              placeholder="Ask about shifts, reports, documents…"
               className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
             {busy ? (
@@ -386,6 +420,7 @@ export default function AiAssistantSidebar() {
           </p>
         </div>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
