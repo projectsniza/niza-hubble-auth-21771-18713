@@ -2,20 +2,18 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 /**
- * Animated hero graphic for the login page: a glass leaf with eight frosted glass cards.
+ * Login hero: a glossy glass leaf (gold at the base, fresh green to the tip) with eight
+ * frosted cards that weave behind and in front of it.
  *
- * Cards continuously weave around the leaf: at a short, random interval one card drifts
- * from in front of the leaf to behind it while another comes forward (and vice versa),
- * each moving to a new random free spot. Moves glide at a medium, calm speed. On top of
- * that each card has its own gentle float and tilt.
- *
- * Motion runs in requestAnimationFrame and writes straight to the DOM, so React never
- * re-renders while it animates. Respects "reduce motion".
+ * Performance notes (this page used to feel heavy):
+ *  - cards are positioned with transforms only (no left/top changes -> no layout per frame)
+ *  - no backdrop-filter or filter: blur on moving elements (those force full repaints)
+ *  - the leaf itself is a static SVG (no SMIL animations repainting it every frame)
+ *  - swaps pause while the tab is hidden
  */
 
-const REF_WIDTH = 620; // design width the pixel amplitudes are expressed in
 const SWAP_EVERY_MS: [number, number] = [700, 1200]; // short interval between depth swaps
-const GLIDE = 0.022; // per-frame easing toward the new spot (~1.6s glide = medium speed)
+const GLIDE = 0.022; // per-frame easing toward a new spot (~1.6s = medium speed)
 const LEAF_Z = 20;
 
 type Wave = { amp: number; freq: number; phase: number };
@@ -27,15 +25,14 @@ const wave = (amp: [number, number], freq: [number, number]): Wave => ({
 });
 const sample = (w: Wave, t: number) => w.amp * Math.sin(w.freq * t + w.phase);
 
-/** Spots (in % of the stage) the cards travel between, spread around the leaf. */
+/** Card centre points (in % of the stage), spread evenly around the leaf. */
 const SLOTS: Array<[number, number]> = [
-  // evenly spaced (~22% apart) so cards rarely cover each other when settled
-  [12, 28], [34, 22], [56, 18], [80, 24],
-  [16, 54], [39, 50], [62, 48], [84, 56],
-  [14, 82], [37, 80], [60, 78], [82, 84],
+  [12, 30], [34, 24], [57, 20], [80, 26],
+  [16, 56], [40, 52], [63, 50], [85, 58],
+  [15, 82], [38, 80], [61, 80], [83, 84],
 ];
 
-const ICON_SHADOW = 'drop-shadow(0 3px 8px rgba(5,150,105,0.28))';
+const ICON_SHADOW = 'drop-shadow(0 3px 6px rgba(5,150,105,0.25))';
 const iconCls = 'w-1/2';
 
 const CalendarIcon = () => (
@@ -48,7 +45,7 @@ const CalendarIcon = () => (
   </svg>
 );
 const PeopleIcon = () => (
-  <svg viewBox="0 0 56 56" fill="currentColor" className="w-[58%] text-[#1F9A62]" style={{ filter: 'drop-shadow(0 4px 12px rgba(5,150,105,0.35))' }}>
+  <svg viewBox="0 0 56 56" fill="currentColor" className="w-[58%] text-[#1F9A62]" style={{ filter: 'drop-shadow(0 4px 10px rgba(5,150,105,0.32))' }}>
     <circle cx="16" cy="22" r="5" opacity="0.85" />
     <path d="M7 38C7 32.5 11.2 29 16.5 29C20 29 23 30.5 24.5 33C20.5 34.5 18.5 37.5 18.5 41H7V38Z" opacity="0.85" />
     <circle cx="40" cy="22" r="5" opacity="0.85" />
@@ -103,14 +100,8 @@ const WalletIcon = () => (
   </svg>
 );
 
-interface CardDef {
-  id: string;
-  width: number; // % of stage width
-  icon: ReactNode;
-}
-
-const CARDS: CardDef[] = [
-  { id: 'people', width: 22, icon: <PeopleIcon /> },
+const CARDS: Array<{ id: string; width: number; icon: ReactNode }> = [
+  { id: 'people', width: 24, icon: <PeopleIcon /> },
   { id: 'calendar', width: 17, icon: <CalendarIcon /> },
   { id: 'chart', width: 18, icon: <ChartIcon /> },
   { id: 'document', width: 17, icon: <DocumentIcon /> },
@@ -122,20 +113,27 @@ const CARDS: CardDef[] = [
 
 interface CardState {
   slot: number;
-  x: number; // current anchor (%)
+  x: number;
   y: number;
+  tx: number;
+  ty: number;
   depth: number; // 0 = behind the leaf, 1 = in front
   targetDepth: number;
+  layer: number; // last z-index written (only written when it changes)
   float: { x: Wave; y: Wave; rz: Wave; rx: Wave; ry: Wave };
   baseRotate: number;
 }
 
+// Leaf geometry (viewBox 620 x 500): base tip bottom-left, pointed tip top-right,
+// a plump body with the widest part around the middle - matching the brand artwork.
+const LEAF = 'M34 476 C 70 360, 170 232, 318 146 C 410 92, 500 50, 586 14 C 574 122, 534 236, 462 322 C 392 404, 264 462, 34 476 Z';
+const LEAF_INNER = 'M78 452 C 120 360, 210 258, 330 184 C 412 134, 492 92, 556 56 C 540 140, 506 224, 446 296 C 384 368, 270 426, 78 452 Z';
+const MIDRIB = 'M58 462 C 190 360, 360 200, 566 32';
+
 export default function LoginHeroGraphic() {
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const leafRef = useRef<HTMLDivElement>(null);
 
-  // Initial layout: shuffled slots, alternating front/back so it starts balanced.
   const initial = useMemo<CardState[]>(() => {
     const slots = SLOTS.map((_, i) => i).sort(() => Math.random() - 0.5);
     return CARDS.map((_, i) => {
@@ -145,60 +143,65 @@ export default function LoginHeroGraphic() {
         slot,
         x: SLOTS[slot][0],
         y: SLOTS[slot][1],
+        tx: SLOTS[slot][0],
+        ty: SLOTS[slot][1],
         depth: front,
         targetDepth: front,
+        layer: -1,
         float: {
-          x: wave([4, 9], [0.4, 0.9]),
-          y: wave([5, 11], [0.35, 0.85]),
+          x: wave([0.6, 1.4], [0.4, 0.9]),
+          y: wave([0.8, 1.8], [0.35, 0.85]),
           rz: wave([2, 6], [0.3, 0.7]),
           rx: wave([5, 12], [0.3, 0.8]),
-          ry: wave([6, 16], [0.28, 0.75]),
+          ry: wave([6, 14], [0.28, 0.75]),
         },
         baseRotate: rand(-8, 8),
       };
     });
   }, []);
-  const leafWave = useMemo(() => ({ rz: wave([1, 2], [0.35, 0.6]), y: wave([4, 9], [0.3, 0.55]) }), []);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
     const state = initial.map((c) => ({ ...c }));
-
-    const paint = (t: number, scale: number) => {
-      CARDS.forEach((_, i) => {
-        const el = cardRefs.current[i];
-        if (!el) return;
-        const c = state[i];
-        const d = c.depth;
-        const fx = (sample(c.float.x, t) * scale).toFixed(2);
-        const fy = (sample(c.float.y, t) * scale).toFixed(2);
-        const s = (0.8 + 0.2 * d).toFixed(3); // behind = smaller, front = full size
-        el.style.left = `${c.x}%`;
-        el.style.top = `${c.y}%`;
-        el.style.zIndex = String(d > 0.5 ? LEAF_Z + 10 + Math.round(d * 10) : LEAF_Z - 10 + Math.round(d * 5));
-        el.style.opacity = (0.62 + 0.38 * d).toFixed(3);
-        el.style.filter = d < 0.98 ? `blur(${((1 - d) * 1.6).toFixed(2)}px) saturate(${(0.8 + 0.2 * d).toFixed(2)})` : 'none';
-        el.style.transform =
-          `translate(-50%, -50%) translate3d(${fx}px, ${fy}px, 0) ` +
-          `rotateX(${sample(c.float.rx, t).toFixed(2)}deg) rotateY(${sample(c.float.ry, t).toFixed(2)}deg) ` +
-          `rotateZ(${(c.baseRotate + sample(c.float.rz, t)).toFixed(2)}deg) scale(${s})`;
-        el.style.setProperty('--glint', `${(50 + sample(c.float.ry, t) * 2.4).toFixed(1)}%`);
-      });
-    };
-
-    let scale = stage.clientWidth / REF_WIDTH;
+    let W = stage.clientWidth;
+    let H = stage.clientHeight;
     const ro = new ResizeObserver(() => {
-      scale = stage.clientWidth / REF_WIDTH;
+      W = stage.clientWidth;
+      H = stage.clientHeight;
     });
     ro.observe(stage);
 
+    const paint = (t: number) => {
+      for (let i = 0; i < CARDS.length; i++) {
+        const el = cardRefs.current[i];
+        if (!el) continue;
+        const c = state[i];
+        const d = c.depth;
+        const size = (CARDS[i].width / 100) * W;
+        // float amplitude is a % of the stage so it scales with screen size
+        const px = ((c.x + sample(c.float.x, t)) / 100) * W - size / 2;
+        const py = ((c.y + sample(c.float.y, t)) / 100) * H - size / 2;
+        const scale = 0.82 + 0.18 * d;
+        el.style.transform =
+          `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) ` +
+          `rotateX(${sample(c.float.rx, t).toFixed(1)}deg) rotateY(${sample(c.float.ry, t).toFixed(1)}deg) ` +
+          `rotateZ(${(c.baseRotate + sample(c.float.rz, t)).toFixed(1)}deg) scale(${scale.toFixed(3)})`;
+        el.style.opacity = (0.55 + 0.45 * d).toFixed(3);
+        const layer = d > 0.5 ? LEAF_Z + 10 + Math.round(d * 5) : LEAF_Z - 10;
+        if (layer !== c.layer) {
+          el.style.zIndex = String(layer);
+          c.layer = layer;
+        }
+      }
+    };
+
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      paint(0, scale);
+      paint(0);
       return () => ro.disconnect();
     }
 
-    // ---- choreography: one card goes behind the leaf while another comes in front ----
+    // choreography: one card goes behind the leaf while another comes in front
     let swapTimer = 0;
     const freeSlot = (exclude: number) => {
       const used = new Set(state.map((c) => c.slot));
@@ -208,23 +211,25 @@ export default function LoginHeroGraphic() {
     const moveTo = (c: CardState, targetDepth: number) => {
       const slot = freeSlot(c.slot);
       c.slot = slot;
+      c.tx = SLOTS[slot][0];
+      c.ty = SLOTS[slot][1];
       c.targetDepth = targetDepth;
       c.baseRotate = rand(-9, 9);
-      (c as any).tx = SLOTS[slot][0];
-      (c as any).ty = SLOTS[slot][1];
     };
+    const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
     const scheduleSwap = () => {
       swapTimer = window.setTimeout(() => {
-        const settled = state.filter((c) => Math.abs(c.depth - c.targetDepth) < 0.05);
-        const fronts = settled.filter((c) => c.targetDepth === 1);
-        const backs = settled.filter((c) => c.targetDepth === 0);
-        const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-        if (fronts.length && backs.length) {
-          moveTo(pick(fronts), 0); // goes behind the leaf
-          moveTo(pick(backs), 1); // comes forward
-        } else if (settled.length) {
-          const c = pick(settled);
-          moveTo(c, c.targetDepth ? 0 : 1);
+        if (!document.hidden) {
+          const settled = state.filter((c) => Math.abs(c.depth - c.targetDepth) < 0.05);
+          const fronts = settled.filter((c) => c.targetDepth === 1);
+          const backs = settled.filter((c) => c.targetDepth === 0);
+          if (fronts.length && backs.length) {
+            moveTo(pick(fronts), 0);
+            moveTo(pick(backs), 1);
+          } else if (settled.length) {
+            const c = pick(settled);
+            moveTo(c, c.targetDepth ? 0 : 1);
+          }
         }
         scheduleSwap();
       }, rand(SWAP_EVERY_MS[0], SWAP_EVERY_MS[1]));
@@ -235,18 +240,12 @@ export default function LoginHeroGraphic() {
     const start = performance.now();
     const tick = (now: number) => {
       const t = (now - start) / 1000;
-      state.forEach((c: any) => {
-        if (c.tx !== undefined) {
-          c.x += (c.tx - c.x) * GLIDE;
-          c.y += (c.ty - c.y) * GLIDE;
-        }
+      for (const c of state) {
+        c.x += (c.tx - c.x) * GLIDE;
+        c.y += (c.ty - c.y) * GLIDE;
         c.depth += (c.targetDepth - c.depth) * GLIDE * 1.2;
-      });
-      paint(t, scale);
-      const leaf = leafRef.current;
-      if (leaf) {
-        leaf.style.transform = `translate3d(0, ${(sample(leafWave.y, t) * scale).toFixed(2)}px, 0) rotate(${sample(leafWave.rz, t).toFixed(2)}deg)`;
       }
+      paint(t);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -256,7 +255,7 @@ export default function LoginHeroGraphic() {
       clearTimeout(swapTimer);
       ro.disconnect();
     };
-  }, [initial, leafWave]);
+  }, [initial]);
 
   return (
     <div
@@ -265,101 +264,110 @@ export default function LoginHeroGraphic() {
       style={{ aspectRatio: '620 / 500', perspective: '1100px' }}
       aria-hidden="true"
     >
-      <style>{`@keyframes nz-glow { 0%,100% { opacity: .55; transform: scale(1) } 50% { opacity: .95; transform: scale(1.12) } }`}</style>
-
-      {/* Warm glow pooling at the leaf tip */}
-      <div
-        className="absolute rounded-full"
-        style={{
-          left: '2%', bottom: '-2%', width: '42%', height: '22%', zIndex: 1,
-          background: 'radial-gradient(closest-side, rgba(251,191,36,0.75), rgba(251,191,36,0) 70%)',
-          filter: 'blur(14px)',
-          animation: 'nz-glow 4.5s ease-in-out infinite',
-        }}
-      />
-
-      {/* Glass leaf (cards pass behind and in front of it) */}
-      <div ref={leafRef} className="absolute inset-0" style={{ transformOrigin: '8% 95%', willChange: 'transform', zIndex: LEAF_Z }}>
+      {/* Leaf (static SVG - cheap to render) */}
+      <div className="absolute inset-0" style={{ zIndex: LEAF_Z }}>
         <svg viewBox="0 0 620 500" className="h-full w-full overflow-visible" fill="none">
           <defs>
-            <linearGradient id="nzLeafBody" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0%" stopColor="#F5B73A" stopOpacity="0.9">
-                <animate attributeName="offset" values="0;0.08;0" dur="7s" repeatCount="indefinite" />
-              </stop>
-              <stop offset="22%" stopColor="#7FD9B0" stopOpacity="0.72" />
-              <stop offset="60%" stopColor="#B9EBD3" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="#E3F7EC" stopOpacity="0.42" />
+            {/* warm gold glow pooled at the base */}
+            <radialGradient id="nzlGlow" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stopColor="#FFE27A" stopOpacity="0.95" />
+              <stop offset="0.45" stopColor="#FBC531" stopOpacity="0.45" />
+              <stop offset="1" stopColor="#FBC531" stopOpacity="0" />
+            </radialGradient>
+            {/* body: gold at the base -> lime -> emerald -> pale mint glass at the tip */}
+            <linearGradient id="nzlBody" x1="40" y1="470" x2="580" y2="20" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#F5A70E" stopOpacity="1" />
+              <stop offset="0.14" stopColor="#F2CE2B" stopOpacity="0.97" />
+              <stop offset="0.3" stopColor="#8BD443" stopOpacity="0.92" />
+              <stop offset="0.5" stopColor="#25B86A" stopOpacity="0.86" />
+              <stop offset="0.75" stopColor="#4CCB8E" stopOpacity="0.74" />
+              <stop offset="1" stopColor="#BDEFD5" stopOpacity="0.7" />
             </linearGradient>
-            <linearGradient id="nzLeafBack" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0%" stopColor="#F5B73A" stopOpacity="0.7" />
-              <stop offset="35%" stopColor="#34C48B" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#CFF2E0" stopOpacity="0.32" />
+            {/* glassy inner light */}
+            <linearGradient id="nzlInner" x1="120" y1="420" x2="520" y2="70" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
+              <stop offset="0.45" stopColor="#FFFFFF" stopOpacity="0.22" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity="0.5" />
             </linearGradient>
-            <linearGradient id="nzSheen" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#fff" stopOpacity="0" />
-              <stop offset="50%" stopColor="#fff" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+            {/* bright rim along the edges */}
+            <linearGradient id="nzlRim" x1="40" y1="470" x2="580" y2="20" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#FFF4C2" stopOpacity="0.95" />
+              <stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#FFFFFF" stopOpacity="0.95" />
             </linearGradient>
-            <clipPath id="nzLeafClip">
-              <path d="M40 470 C 110 290, 290 110, 540 20 C 530 200, 470 350, 330 425 C 240 470, 130 490, 40 470 Z" />
-            </clipPath>
-            <filter id="nzSoft" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" />
+            {/* soft shadow under the leaf */}
+            <filter id="nzlShadow" x="-10%" y="-10%" width="120%" height="130%">
+              <feGaussianBlur stdDeviation="10" />
             </filter>
           </defs>
 
-          <path d="M30 482 C 90 330, 250 150, 520 40 C 440 150, 400 330, 290 430 C 200 480, 110 495, 30 482 Z" fill="url(#nzLeafBack)" opacity="0.7" />
-          <path
-            d="M40 470 C 110 290, 290 110, 540 20 C 530 200, 470 350, 330 425 C 240 470, 130 490, 40 470 Z"
-            fill="url(#nzLeafBody)"
-            stroke="#fff"
-            strokeOpacity="0.85"
-            strokeWidth="1.8"
-          />
-          <path d="M60 465 C 190 330, 340 190, 520 38" stroke="#fff" strokeOpacity="0.8" strokeWidth="2.2" strokeLinecap="round" filter="url(#nzSoft)" />
-          <path d="M60 465 C 190 330, 340 190, 520 38" stroke="#fff" strokeOpacity="0.9" strokeWidth="1.2" strokeLinecap="round" />
-          {[[170, 355, 215, 410], [250, 285, 300, 350], [330, 220, 385, 285], [410, 150, 465, 215]].map(([x1, y1, x2, y2], i) => (
-            <path key={i} d={`M${x1} ${y1} Q ${(x1 + x2) / 2 + 12} ${(y1 + y2) / 2 - 14} ${x2} ${y2}`} stroke="#fff" strokeOpacity="0.45" strokeWidth="1.2" strokeLinecap="round" />
+          {/* ground shadow + base glow */}
+          <path d={LEAF} fill="#0f8a57" opacity="0.12" transform="translate(10 18)" filter="url(#nzlShadow)" />
+          <ellipse cx="96" cy="452" rx="210" ry="80" fill="url(#nzlGlow)" />
+
+          {/* body */}
+          <path d={LEAF} fill="url(#nzlBody)" />
+          {/* inner glass highlight */}
+          <path d={LEAF_INNER} fill="url(#nzlInner)" />
+          {/* rim light */}
+          <path d={LEAF} stroke="url(#nzlRim)" strokeWidth="2.4" strokeLinejoin="round" />
+
+          {/* mid-rib and side veins */}
+          <path d={MIDRIB} stroke="#FFFFFF" strokeOpacity="0.95" strokeWidth="2.2" strokeLinecap="round" />
+          <path d={MIDRIB} stroke="#FFFFFF" strokeOpacity="0.35" strokeWidth="7" strokeLinecap="round" />
+          {[
+            [168, 378, 230, 420],
+            [246, 312, 318, 352],
+            [326, 244, 400, 280],
+            [406, 172, 470, 200],
+            [196, 352, 172, 300],
+            [282, 282, 262, 226],
+            [368, 210, 352, 158],
+          ].map(([x1, y1, x2, y2], i) => (
+            <path
+              key={i}
+              d={`M${x1} ${y1} Q ${(x1 + x2) / 2 + 10} ${(y1 + y2) / 2 - 10} ${x2} ${y2}`}
+              stroke="#FFFFFF"
+              strokeOpacity="0.4"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
           ))}
-          <g clipPath="url(#nzLeafClip)">
-            <rect x="-160" y="-40" width="140" height="560" fill="url(#nzSheen)" transform="skewX(-24)">
-              <animate attributeName="x" values="-200;760" dur="6.5s" repeatCount="indefinite" />
-            </rect>
-          </g>
+
+          {/* specular highlight near the tip */}
+          <path d="M468 92 C 510 70, 548 48, 574 30" stroke="#FFFFFF" strokeOpacity="0.9" strokeWidth="3" strokeLinecap="round" />
         </svg>
       </div>
 
-      {/* Frosted glass cards */}
+      {/* Frosted cards (no backdrop blur: they move every frame) */}
       {CARDS.map((card, i) => (
         <div
           key={card.id}
           ref={(el) => (cardRefs.current[i] = el)}
-          className="absolute flex items-center justify-center"
+          className="absolute left-0 top-0 flex items-center justify-center"
           style={
             {
-              left: `${initial[i].x}%`,
-              top: `${initial[i].y}%`,
               width: `${card.width}%`,
               aspectRatio: '1 / 1',
               zIndex: initial[i].depth ? LEAF_Z + 10 : LEAF_Z - 10,
+              opacity: initial[i].depth ? 1 : 0.55,
               borderRadius: '26%',
-              transform: 'translate(-50%, -50%)',
               transformStyle: 'preserve-3d',
-              willChange: 'transform, left, top, opacity, filter',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.82) 0%, rgba(236,253,245,0.52) 55%, rgba(209,250,229,0.32) 100%)',
-              backdropFilter: 'blur(14px)',
-              WebkitBackdropFilter: 'blur(14px)',
-              border: '1.5px solid rgba(255,255,255,0.9)',
-              boxShadow: '0 22px 40px -14px rgba(5,150,105,0.28), inset 0 2px 4px rgba(255,255,255,0.95), inset -3px -3px 8px rgba(245,158,11,0.18)',
-              '--glint': '50%',
+              willChange: 'transform, opacity',
+              background:
+                'linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(240,253,247,0.86) 50%, rgba(214,245,229,0.78) 100%)',
+              border: '1.5px solid rgba(255,255,255,0.95)',
+              boxShadow:
+                '0 22px 38px -16px rgba(5,150,105,0.32), inset 0 2px 4px rgba(255,255,255,1), inset -3px -3px 8px rgba(245,158,11,0.16)',
             } as CSSProperties
           }
         >
+          {/* static glass sheen */}
           <div
-            className="absolute inset-0 pointer-events-none"
+            className="pointer-events-none absolute inset-0"
             style={{
               borderRadius: 'inherit',
-              background: 'linear-gradient(115deg, transparent calc(var(--glint) - 22%), rgba(255,255,255,0.65) var(--glint), transparent calc(var(--glint) + 22%))',
+              background: 'linear-gradient(160deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 45%)',
             }}
           />
           {card.icon}

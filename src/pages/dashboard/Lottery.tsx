@@ -413,38 +413,79 @@ export default function Lottery() {
   // Walks backwards (up to 60 days) so a gap in data entry never breaks the
   // opening balance chain — e.g. 23rd closing must appear as 24th opening even
   // if the 23rd row was saved without a closing figure on the first attempt.
+  //
+  // Performance: the rule is unchanged, but instead of stepping through all 60 calendar
+  // days (2 x 60 date formats per cell, for every game and every day, several times per
+  // render - which froze the page with many games) we only visit the days that actually
+  // have a saved record or an unsaved edit, newest first. Days with neither were skipped
+  // by the old loop anyway, so the result is identical. Results are also cached per render.
+  const recordDatesByGameDesc = useMemo(() => {
+    const map: { [gameId: string]: string[] } = {};
+    Object.entries(recordsByGameAndDate).forEach(([gameId, byDate]) => {
+      map[gameId] = Object.keys(byDate).sort().reverse();
+    });
+    return map;
+  }, [recordsByGameAndDate]);
+
+  const previousClosingCache = useMemo(() => new Map<string, number | null>(), [editingData, recordsByGameAndDate]);
+
   const getPreviousDayClosingStock = useCallback((
     gameId: string,
     dateStr: string,
     explicitOnly = false,
   ): number | null => {
+    const cacheKey = `${gameId}|${dateStr}|${explicitOnly ? 1 : 0}`;
+    if (previousClosingCache.has(cacheKey)) return previousClosingCache.get(cacheKey)!;
+
+    // Same 60-day look-back window as before: (dateStr - 60 days) .. (dateStr - 1 day)
     const [y, m, d] = dateStr.split('-').map(Number);
-    let cursor = new Date(y, (m || 1) - 1, d || 1);
+    const lowerBound = format(subDays(new Date(y, (m || 1) - 1, d || 1), 60), 'yyyy-MM-dd');
+    const inWindow = (s: string) => s < dateStr && s >= lowerBound;
 
-    for (let step = 0; step < 60; step++) {
-      cursor = subDays(cursor, 1);
-      const prevDateStr = format(cursor, 'yyyy-MM-dd');
+    const editsForGame = editingData[gameId] || {};
+    const candidates = new Set<string>();
+    Object.keys(editsForGame).forEach(s => {
+      if (inWindow(s) && editsForGame[s]?.stockEnd != null) candidates.add(s);
+    });
+    for (const s of recordDatesByGameDesc[gameId] || []) {
+      if (s >= dateStr) continue;
+      if (s < lowerBound) break; // sorted newest first
+      candidates.add(s);
+    }
+    const ordered = Array.from(candidates).sort().reverse();
 
+    let result: number | null = null;
+    for (const prevDateStr of ordered) {
       // Prefer unsaved edits for that day (0 is a valid closing stock)
-      const editedPrev = editingData[gameId]?.[prevDateStr];
+      const editedPrev = editsForGame[prevDateStr];
       if (editedPrev?.stockEnd != null) {
-        return Number(editedPrev.stockEnd);
+        result = Number(editedPrev.stockEnd);
+        break;
       }
 
       const prevRecord = recordsByGameAndDate[gameId]?.[prevDateStr];
       if (!prevRecord) continue;
 
       if (prevRecord.stock_end != null) {
-        return Number(prevRecord.stock_end);
+        result = Number(prevRecord.stock_end);
+        break;
       }
-      if (explicitOnly) return null;
+      if (explicitOnly) {
+        result = null;
+        break;
+      }
       // Closing not entered — fall back to that day's total stock so the chain
       // keeps running instead of collapsing to blank.
       const total = Number(prevRecord.stock_begin || 0) + Number(prevRecord.activated_tickets || 0);
-      if (total > 0) return total;
+      if (total > 0) {
+        result = total;
+        break;
+      }
     }
-    return null;
-  }, [editingData, recordsByGameAndDate]);
+
+    previousClosingCache.set(cacheKey, result);
+    return result;
+  }, [editingData, recordsByGameAndDate, recordDatesByGameDesc, previousClosingCache]);
 
 
   // Get value for a cell (edited or from DB) with auto-carry-forward for stockBegin

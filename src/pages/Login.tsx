@@ -325,12 +325,10 @@ export default function Login() {
                 Performance
               </span>
             </h1>
-            <p className="mt-[2vh] max-w-[440px] shrink-0 text-[clamp(14px,2.3vh,22px)] leading-snug text-gray-600">
-              All in one secure cloud platform for your organization.
-            </p>
+
             <div className="mt-[2.6vh] h-[clamp(3px,0.5vh,5px)] w-[clamp(72px,11vh,108px)] shrink-0 rounded-full bg-gradient-to-r from-[#0F8A57] to-[#34C46F]" />
 
-            <div className="relative min-h-0 w-full flex-1 -mt-[9vh] -mb-[2vh]">
+            <div className="relative min-h-0 w-full flex-1 -mt-[4vh] -mb-[2vh]">
               <div className="absolute bottom-0 left-0 h-full max-w-full" style={{ aspectRatio: '620 / 500' }}>
                 <LoginHeroGraphic />
               </div>
@@ -342,7 +340,7 @@ export default function Login() {
           {/* ------------------------------------------------------- */}
           <div className="flex h-full w-full max-h-full items-center justify-center lg:w-auto lg:justify-end">
             <div
-              className="relative flex max-h-full w-full max-w-[460px] lg:w-[clamp(440px,62vh,580px)] lg:max-w-none flex-col overflow-y-auto overflow-x-hidden rounded-[clamp(28px,4.5vh,44px)] border border-white bg-white/85 px-[min(clamp(24px,5vh,52px),6vw)] py-[min(clamp(20px,4.2vh,48px),6vw)] backdrop-blur-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="relative flex max-h-full w-full max-w-[460px] lg:w-[clamp(440px,62vh,580px)] lg:max-w-none flex-col overflow-y-auto overflow-x-hidden rounded-[clamp(28px,4.5vh,44px)] border border-white bg-white/95 px-[min(clamp(24px,5vh,52px),6vw)] py-[min(clamp(20px,4.2vh,48px),6vw)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{
                 boxShadow: '0 30px 70px -20px rgba(16, 120, 80, 0.22), 0 0 0 6px rgba(255,255,255,0.45), inset 0 1px 2px rgba(255, 255, 255, 1)',
               }}
