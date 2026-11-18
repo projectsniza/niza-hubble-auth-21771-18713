@@ -295,17 +295,16 @@ All colors MUST be HSL.
 .niza-blob {
   position: fixed;
   border-radius: 9999px;
-  filter: blur(80px);
+  filter: blur(60px);
   pointer-events: none;
   z-index: 0;
-  animation: niza-drift 24s ease-in-out infinite alternate;
+  /* static on purpose: animating large blurred layers behind the content panel forced
+     a full-screen re-blur every frame and made the whole app slow */
 }
 
 /* Floating glass content panel */
 .niza-panel {
-  background: rgba(255, 255, 255, 0.62);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 30px 80px -30px rgba(10, 80, 55, 0.28);
 }
@@ -369,7 +368,7 @@ All colors MUST be HSL.
   background: radial-gradient(closest-side, rgba(170, 214, 70, 0.55), rgba(170, 214, 70, 0) 70%);
   filter: blur(18px);
   z-index: 0;
-  animation: niza-glow 7s ease-in-out infinite;
+  opacity: 0.75;
   pointer-events: none;
 }
 [data-niza-sidebar]::after {
@@ -408,7 +407,6 @@ All colors MUST be HSL.
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 18px;
-  backdrop-filter: blur(6px);
 }
 
 /* nav items */

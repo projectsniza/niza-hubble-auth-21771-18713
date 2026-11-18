@@ -70,7 +70,7 @@ export default function Dashboard() {
 
       <main className="relative z-10 flex-1 min-w-0 flex flex-col overflow-clip md:m-3 md:rounded-[28px] niza-panel">
         <header
-          className="h-16 border-b border-white/70 bg-white/55 backdrop-blur-xl flex items-center justify-between px-4 md:px-8 sticky top-0 z-50"
+          className="h-16 border-b border-white/70 bg-white/90 flex items-center justify-between px-4 md:px-8 sticky top-0 z-50"
         >
           <div className="flex items-center gap-3">
             {/* Mobile Menu Button */}
