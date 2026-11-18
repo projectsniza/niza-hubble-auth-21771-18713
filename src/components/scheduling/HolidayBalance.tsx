@@ -64,6 +64,25 @@ const MONTHS_SHORT = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'D
 const DEFAULT_WEEKLY_HOURS = 40;
 const DEFAULT_HOLIDAY_DAYS = 28;
 const WEEKS_PER_YEAR = 52;
+// Statutory holiday entitlement in weeks (UK 5.6 weeks), as used in the
+// "Holiday Working" sheet: Entitlement = (Total worked hours incl. holiday / 52) * 5.6
+const HOLIDAY_WEEKS = 5.6;
+
+/**
+ * Payroll-month window for column `idx` (0 = April ... 11 = March) of the holiday year,
+ * matching the holiday sheet:
+ *  - April : 1 Apr  -> 20 Apr          (year starts on 1 April)
+ *  - May..Feb : 21st of previous month -> 20th of the month
+ *  - March : 21 Feb -> 31 Mar          (year closes on 31 March)
+ * Together the 12 windows cover exactly 1 April - 31 March with no gaps or overlaps.
+ */
+const holidayMonthWindow = (yearStart: Date, idx: number): { start: string; end: string } => {
+  const y = yearStart.getFullYear();
+  const m = yearStart.getMonth();
+  const start = idx === 0 ? new Date(y, m, 1) : new Date(y, m + idx - 1, 21);
+  const end = idx === 11 ? new Date(y, m + 12, 0) : new Date(y, m + idx, 20);
+  return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') };
+};
 
 export function HolidayBalance() {
   const { user } = useAuth();
@@ -86,7 +105,7 @@ export function HolidayBalance() {
   const [editAnnum, setEditAnnum] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [currentRefMonth, setCurrentRefMonth] = useState<Date>(new Date());
-  
+
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
 
   const getFiscalYearLabel = () => {
@@ -127,7 +146,7 @@ export function HolidayBalance() {
       .from('employee_payroll_notes')
       .select('*')
       .eq('month_date', monthDate);
-    
+
     const notesMap: Record<string, PayrollNote> = {};
     data?.forEach(note => {
       notesMap[note.employee_id] = note;
@@ -153,7 +172,7 @@ export function HolidayBalance() {
       }
 
       const yearStart = parseISO(selectedYear);
-      const yearEnd = addMonths(yearStart, 12);
+      const yearEnd = addMonths(yearStart, 12); // exclusive: 1 April of the next year
 
       // Fetch timesheets for the fiscal year. We extend the lower bound by ~10 days
       // so we also catch weeks whose Monday falls before Apr 1 but whose days
@@ -237,28 +256,23 @@ export function HolidayBalance() {
             return { w, h };
           };
 
-          const monthly_actual: number[] = MONTHS.map((_, idx) => {
-            const monthDate = addMonths(yearStart, idx);
-            const payrollStart = format(new Date(monthDate.getFullYear(), monthDate.getMonth(), 21), 'yyyy-MM-dd');
-            const payrollEnd = format(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20), 'yyyy-MM-dd');
-            return sumRange(payrollStart, payrollEnd).w;
-          });
+          const monthWindows = MONTHS.map((_, idx) => holidayMonthWindow(yearStart, idx));
+          const monthSums = monthWindows.map(w => sumRange(w.start, w.end));
+          // Actual worked hours (holiday hours are NOT included, as in the sheet)
+          const monthly_actual: number[] = monthSums.map(m => m.w);
+          // Holiday hours taken
+          const monthly_holiday: number[] = monthSums.map(m => m.h);
 
-          const monthly_holiday: number[] = MONTHS.map((_, idx) => {
-            const monthDate = addMonths(yearStart, idx);
-            const payrollStart = format(new Date(monthDate.getFullYear(), monthDate.getMonth(), 21), 'yyyy-MM-dd');
-            const payrollEnd = format(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 20), 'yyyy-MM-dd');
-            return sumRange(payrollStart, payrollEnd).h;
-          });
-
+          // Holiday sheet logic:
+          //   E  Total Worked Hours With Holiday Hours = actual worked hours + holiday hours taken
+          //   F  No of Weeks = 52
+          //   G  Holiday Entitlement = (E / F) * 5.6
+          //   AH Holiday Hours Remaining = G - holiday hours taken (+ any carried-forward hours)
           const actualTotal = monthly_actual.reduce((sum, v) => sum + v, 0);
           const holidayTotal = monthly_holiday.reduce((sum, v) => sum + v, 0);
           const totalWorkedWithHoliday = actualTotal + holidayTotal;
-          
-          const hoursPerDay = weeklyHours / 5;
-          const totalHolidayHoursPerYear = holidayDays * hoursPerDay;
-          const weeksWorked = weeklyHours > 0 ? totalWorkedWithHoliday / weeklyHours : 0;
-          const holidayEntitlement = (totalHolidayHoursPerYear / WEEKS_PER_YEAR) * weeksWorked;
+          const weeksWorked = WEEKS_PER_YEAR;
+          const holidayEntitlement = (totalWorkedWithHoliday / WEEKS_PER_YEAR) * HOLIDAY_WEEKS;
           const holidayRemaining = holidayEntitlement + carryForward - holidayTotal;
 
           calculatedBalances.push({
@@ -378,7 +392,7 @@ export function HolidayBalance() {
     if (viewMode === 'ref') {
       headers = ['REF', 'Employee REF', 'EMPLOYEE NAME', 'SHOP NAME', 'TOTAL HOURS', 'HOLIDAY HOURS', 'ANNUM / PER HOUR', 'NOTES'];
       rows = [headers];
-      
+
       Object.entries(groupedByBranch).forEach(([branchName, branchBalances]) => {
         branchBalances.forEach((b) => {
           const note = payrollNotes[b.employee.id];
@@ -403,13 +417,13 @@ export function HolidayBalance() {
         ...MONTHS_SHORT, 'Total',
         'Holiday Hours Remaining'
       ];
-      
+
       rows = [headers];
       let rowNum = 1;
-      
+
       Object.entries(groupedByBranch).forEach(([branchName, branchBalances]) => {
         rows.push([branchName, ...Array(headers.length - 1).fill('')]);
-        
+
         branchBalances.forEach(b => {
           rows.push([
             String(rowNum++),
@@ -459,7 +473,7 @@ export function HolidayBalance() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-3">
               <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'ref' | 'monthly')} className="bg-background rounded-lg p-1 shadow-sm">
                 <TabsList className="grid grid-cols-2 gap-1">
@@ -753,7 +767,7 @@ export function HolidayBalance() {
                           <TableCell />
                           <TableCell />
                           <TableCell className="text-center">{branchTotals.workedWithHoliday.toFixed(1)}</TableCell>
-                          <TableCell className="text-center">{branchTotals.weeks.toFixed(1)}</TableCell>
+                          <TableCell className="text-center">{branchBalances.length ? WEEKS_PER_YEAR : ''}</TableCell>
                           <TableCell className="text-center">{branchTotals.entitlement.toFixed(1)}</TableCell>
                           {branchTotals.monthlyActual.map((v, i) => (
                             <TableCell key={`sub-actual-${i}`} className="text-center">{v > 0 ? v.toFixed(1) : ''}</TableCell>
@@ -811,7 +825,7 @@ export function HolidayBalance() {
               {editingEmployee?.employee.first_name} {editingEmployee?.employee.last_name} • {format(currentRefMonth, 'MMMM yyyy')}
             </SheetDescription>
           </SheetHeader>
-          
+
           <div className="py-6 space-y-6">
             <div className="space-y-2">
               <Label>ANNUM / PER HOUR</Label>
@@ -822,7 +836,7 @@ export function HolidayBalance() {
               />
               <p className="text-xs text-muted-foreground">Annual salary or hourly rate</p>
             </div>
-            
+
             <div className="space-y-2">
               <Label>NOTES</Label>
               <Textarea 
