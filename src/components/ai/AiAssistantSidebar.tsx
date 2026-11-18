@@ -17,6 +17,9 @@ interface ChatMessage {
 
 const uid = () => Math.random().toString(36).slice(2);
 
+// Which deployed slug answers (remembered for the session once found).
+let assistantSlug = 'ai-assistant';
+
 // ---- tiny, safe markdown renderer (bold, bullets, numbered lists, line breaks) ----
 function renderInline(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
@@ -194,16 +197,32 @@ export default function AiAssistantSidebar() {
         const token = data.session?.access_token;
         if (!token) throw new Error('Your session has expired. Please sign in again.');
 
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`, {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ messages: history.map(({ role, content }) => ({ role, content })) }),
-        });
+        // The Supabase dashboard sometimes creates the function with the slug "ai-assistant-",
+        // so try the expected name first and fall back to that one if it is not found.
+        const callAssistant = (slug: string) =>
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${slug}`, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({ messages: history.map(({ role, content }) => ({ role, content })) }),
+          });
+        let res: Response;
+        try {
+          res = await callAssistant(assistantSlug);
+          if (res.status === 404 && assistantSlug === 'ai-assistant') {
+            assistantSlug = 'ai-assistant-';
+            res = await callAssistant(assistantSlug);
+          }
+        } catch (err: any) {
+          // a 404 from Supabase has no CORS headers, so the browser reports it as "Failed to fetch"
+          if (err?.name === 'AbortError' || assistantSlug !== 'ai-assistant') throw err;
+          assistantSlug = 'ai-assistant-';
+          res = await callAssistant(assistantSlug);
+        }
 
         if (!res.ok || !res.body) {
           let msg = 'The assistant is unavailable right now.';
