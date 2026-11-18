@@ -2,6 +2,7 @@ import { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { isChunkLoadError, reloadForNewVersion } from '@/lib/chunkReload';
 
 interface Props {
   children: ReactNode;
@@ -21,6 +22,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info);
+    // A new version was deployed while this tab was open: load it instead of showing an error.
+    if (isChunkLoadError(error)) reloadForNewVersion();
   }
 
   componentDidMount() {
@@ -36,6 +39,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   handleRejection = (event: PromiseRejectionEvent) => {
+    // Stale page files after a deployment are handled by the global reload handler
+    if (isChunkLoadError(event.reason)) return;
     console.error('Unhandled promise rejection:', event.reason);
     const message =
       event.reason?.message ||
@@ -59,6 +64,28 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   render() {
+    if (this.state.hasError && isChunkLoadError(this.state.error)) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+          <div className="max-w-md w-full text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <RefreshCw className="h-6 w-6 text-primary animate-spin" />
+            </div>
+            <h1 className="text-xl font-semibold text-foreground">Updating to the latest version…</h1>
+            <p className="text-sm text-muted-foreground">
+              A new version of Niza Cloud is available. If this page doesn’t refresh on its own, click Reload.
+            </p>
+            <div className="flex justify-center pt-2">
+              <Button onClick={this.handleReload}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reload page
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-background">
