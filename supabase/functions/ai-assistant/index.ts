@@ -101,6 +101,9 @@ serve(async (req) => {
     const today = londonDate();
     const weekAgo = londonDate(new Date(Date.now() - 7 * 864e5));
     const todayStartIso = new Date(`${today}T00:00:00Z`).toISOString();
+    const in7 = londonDate(new Date(Date.now() + 7 * 864e5));
+    const in14 = londonDate(new Date(Date.now() + 14 * 864e5));
+    const in30 = londonDate(new Date(Date.now() + 30 * 864e5));
     const isStaff = role === "employee";
 
     // ---- scoped data helpers ----
@@ -126,15 +129,15 @@ serve(async (req) => {
 
     if (isStaff) {
       // ---------- Staff: own records only ----------
-      const [clocks, leave, events] = await Promise.all([
+      const { data: me } = await db.from("employees").select("id").eq("user_id", uid).limit(1).maybeSingle();
+      const none = Promise.resolve({ data: [] as any[] });
+      const [clocks, leave, events, shifts] = await Promise.all([
         db.from("clock_ins").select("clock_in_time, clock_out_time, branch_id").eq("user_id", uid).gte("clock_in_time", `${weekAgo}T00:00:00Z`).order("clock_in_time", { ascending: false }).limit(20),
-        (async () => {
-          const { data: me } = await db.from("employees").select("id").eq("user_id", uid).limit(1).maybeSingle();
-          if (!me) return { data: [] as any[] };
-          return db.from("leave_requests").select("start_date, end_date, status, reason").eq("employee_id", me.id).gte("end_date", weekAgo).order("start_date").limit(20);
-        })(),
+        me ? db.from("leave_requests").select("start_date, end_date, status, reason").eq("employee_id", me.id).gte("end_date", weekAgo).order("start_date").limit(20) : none,
         db.from("events").select("title, event_date, event_type").gte("event_date", today).order("event_date").limit(10),
+        me ? db.from("rota_shifts").select("shift_date, start_time, end_time, status, employee_response").eq("employee_id", me.id).gte("shift_date", today).lte("shift_date", in14).order("shift_date").limit(30) : none,
       ]);
+      ctx.my_upcoming_shifts = shifts.data || [];
       ctx.my_clock_ins_last_7_days = (clocks.data || []).map((c: any) => ({
         in: c.clock_in_time, out: c.clock_out_time, branch: branchName.get(c.branch_id) ?? null,
       }));
@@ -187,23 +190,89 @@ serve(async (req) => {
       }));
       ctx.currently_clocked_in = (clocks.data || []).filter((c: any) => !c.clock_out_time).length;
 
-      // Leave (only staff that are in scope)
-      const empById = new Map(E.map((e: any) => [e.id, `${e.first_name} ${e.last_name}`]));
-      if (empById.size) {
-        const { data: leave } = await db.from("leave_requests").select("employee_id, start_date, end_date, status").in("employee_id", [...empById.keys()]).gte("end_date", today).order("start_date").limit(80);
-        ctx.leave_upcoming_or_pending = (leave || []).map((l: any) => ({ employee: empById.get(l.employee_id), from: l.start_date, to: l.end_date, status: l.status }));
-      }
+      // Leave, scheduling and onboarding - always filtered to employees in this user's scope
+      const empById = new Map(E.map((e: any) => [e.id, e]));
+      const nameOf = (id: string) => {
+        const e: any = empById.get(id);
+        return e ? `${e.first_name} ${e.last_name}` : null;
+      };
+      const branchOf = (id: string) => branchName.get((empById.get(id) as any)?.branch_id) ?? "-";
+
+      const [leaveRes, shiftRes, onbRes, caRes] = await Promise.all([
+        db.from("leave_requests").select("employee_id, start_date, end_date, status").gte("end_date", today).order("start_date").limit(400),
+        db.from("rota_shifts").select("employee_id, shift_date, start_time, end_time, status, employee_response").gte("shift_date", today).lte("shift_date", in7).order("shift_date").order("start_time").limit(800),
+        db.from("employee_onboarding").select("employee_id, current_step, basic_details_completed, contract_uploaded, contract_submitted_for_approval, contract_approved, contract_signed, right_to_work_completed, documents_uploaded, updated_at").is("completed_at", null).limit(400),
+        db.from("contract_approvals").select("employee_id, status, submitted_at").eq("status", "pending").limit(200),
+      ]);
+
+      ctx.leave_upcoming_or_pending = (leaveRes.data || [])
+        .filter((l: any) => empById.has(l.employee_id))
+        .slice(0, 80)
+        .map((l: any) => ({ employee: nameOf(l.employee_id), branch: branchOf(l.employee_id), from: l.start_date, to: l.end_date, status: l.status }));
+
+      const shifts = (shiftRes.data || []).filter((sh: any) => empById.has(sh.employee_id));
+      const fmtShift = (sh: any) => ({
+        employee: nameOf(sh.employee_id),
+        branch: branchOf(sh.employee_id),
+        date: sh.shift_date,
+        time: `${String(sh.start_time ?? "").slice(0, 5)}-${String(sh.end_time ?? "").slice(0, 5)}`,
+        response: sh.employee_response ?? null,
+      });
+      ctx.shifts_today = shifts.filter((sh: any) => sh.shift_date === today).slice(0, 120).map(fmtShift);
+      ctx.shifts_next_7_days_count_by_branch = shifts.reduce((acc: Record<string, number>, sh: any) => {
+        const b = branchOf(sh.employee_id);
+        acc[b] = (acc[b] || 0) + 1;
+        return acc;
+      }, {});
+      ctx.shifts_awaiting_employee_response = shifts.filter((sh: any) => !sh.employee_response || sh.employee_response === "pending").slice(0, 40).map(fmtShift);
+      const clockedInUserIds = new Set((clocks.data || []).map((c: any) => c.user_id));
+      ctx.scheduled_today_but_not_clocked_in = shifts
+        .filter((sh: any) => sh.shift_date === today && !clockedInUserIds.has((empById.get(sh.employee_id) as any)?.user_id))
+        .slice(0, 40)
+        .map(fmtShift);
+
+      const nextStep = (o: any) =>
+        !o.basic_details_completed ? "Basic details"
+        : !o.contract_uploaded ? "Contract upload"
+        : !o.contract_submitted_for_approval ? "Submit contract for approval"
+        : !o.contract_approved ? "Awaiting contract approval"
+        : !o.contract_signed ? "Awaiting employee signature"
+        : !o.right_to_work_completed ? "Right to work check"
+        : !o.documents_uploaded ? "Document upload"
+        : "Final review";
+      ctx.onboarding_in_progress = (onbRes.data || [])
+        .filter((o: any) => empById.has(o.employee_id))
+        .slice(0, 60)
+        .map((o: any) => ({ employee: nameOf(o.employee_id), branch: branchOf(o.employee_id), next_step: nextStep(o), last_update: String(o.updated_at ?? "").slice(0, 10) }));
+      ctx.contracts_awaiting_approval = (caRes.data || [])
+        .filter((c: any) => empById.has(c.employee_id))
+        .map((c: any) => ({ employee: nameOf(c.employee_id), branch: branchOf(c.employee_id), submitted: String(c.submitted_at ?? "").slice(0, 10) }));
 
       ctx.open_maintenance_tickets = (tickets.data || []).map((t: any) => ({ title: t.title, status: t.status, priority: t.priority, branch: branchName.get(t.branch_id) ?? "?" }));
       ctx.upcoming_events = (events.data || []).map((e: any) => ({ title: e.title, date: e.event_date, type: e.event_type }));
 
       if (role === "super_admin" || role === "hr") {
-        const in30 = londonDate(new Date(Date.now() + 30 * 864e5));
-        const [{ count: overdue }, { count: upcoming }] = await Promise.all([
+        const docSel = "title, follow_up_date, expiry_date, employee:employees(first_name, last_name)";
+        const [{ count: overdue }, { count: upcoming }, overdueList, dueList, expiringList] = await Promise.all([
           db.from("documents").select("id", { count: "exact", head: true }).lt("follow_up_date", today),
           db.from("documents").select("id", { count: "exact", head: true }).gte("follow_up_date", today).lte("follow_up_date", in30),
+          db.from("documents").select(docSel).lt("follow_up_date", today).order("follow_up_date").limit(15),
+          db.from("documents").select(docSel).gte("follow_up_date", today).lte("follow_up_date", in30).order("follow_up_date").limit(15),
+          db.from("documents").select(docSel).gte("expiry_date", today).lte("expiry_date", in30).order("expiry_date").limit(15),
         ]);
-        ctx.documents = { follow_ups_overdue: overdue ?? 0, follow_ups_due_next_30_days: upcoming ?? 0 };
+        const docRow = (d: any) => ({
+          title: d.title,
+          employee: d.employee ? `${d.employee.first_name} ${d.employee.last_name}` : null,
+          follow_up: d.follow_up_date,
+          expires: d.expiry_date,
+        });
+        ctx.documents = {
+          follow_ups_overdue: overdue ?? 0,
+          follow_ups_due_next_30_days: upcoming ?? 0,
+          overdue_follow_ups: (overdueList.data || []).map(docRow),
+          follow_ups_due_soon: (dueList.data || []).map(docRow),
+          expiring_next_30_days: (expiringList.data || []).map(docRow),
+        };
       }
     }
 
@@ -214,6 +283,9 @@ Rules:
 - Be fast and concise: lead with the direct answer, then short bullet points if useful. No long preambles.
 - Times are UK local time. "Today" is ${today}.
 - For "who/which store submitted first", use daily_reports_today (order_submitted 1 = first) and say the time.
+- Scheduling: use shifts_today, scheduled_today_but_not_clocked_in, shifts_awaiting_employee_response (or my_upcoming_shifts for staff).
+- Onboarding: use onboarding_in_progress (with next_step) and contracts_awaiting_approval.
+- Documents: use documents (overdue_follow_ups, follow_ups_due_soon, expiring_next_30_days).
 - If asked about something outside the user's scope or not present in the data, say you don't have access to that data or it isn't in the current data. NEVER guess, never invent names, numbers or times, and never reveal anything beyond the data given.
 - Never output personal sensitive data (addresses, NI numbers, DOB, salary, passwords); you don't have them.
 - You may also explain how to use app modules (Employee Hub, Documents, Daily Reports, Clock-ins, Rota, Leave, Payroll, Lottery, Messages, Reminders) in a few steps.
