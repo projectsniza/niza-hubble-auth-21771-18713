@@ -117,15 +117,19 @@ export default function DashboardGrid() {
     <div className="relative max-w-[1400px] mx-auto px-5 py-6 md:px-8 md:py-8">
       {/* Hero banner */}
       <div className="niza-rise relative mb-8 md:mb-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
-        <HeroArt className="absolute bottom-0 right-0 h-full w-[70%] max-w-[760px] hidden md:block" />
-        <div className="relative z-10 max-w-xl px-6 py-8 md:px-10 md:py-12">
+        <HeroArt className="absolute bottom-0 right-0 h-full w-auto max-w-[72%] hidden md:block" />
+        <div className="relative z-10 max-w-2xl px-6 py-8 md:px-10 md:py-12 pointer-events-none [&_*]:pointer-events-auto">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
             Dashboard
           </p>
           <h2 className="text-3xl md:text-[44px] md:leading-[1.1] font-bold tracking-tight text-foreground">
-            {greeting}{firstName ? `, ${firstName}` : ''}{' '}
-            <span className="inline-block origin-[70%_70%] animate-[niza-pop_2.4s_ease-in-out_infinite]">👋</span>
+            {greeting}
+            {firstName ? ',' : ''}{' '}
+            <span className="whitespace-nowrap">
+              {firstName}{' '}
+              <span className="inline-block origin-[70%_70%] animate-[niza-pop_2.4s_ease-in-out_infinite]">👋</span>
+            </span>
           </h2>
           <p className="mt-3 text-base md:text-lg text-muted-foreground">
             Select a module to get started and manage your organization seamlessly.

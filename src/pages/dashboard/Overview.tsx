@@ -194,7 +194,7 @@ export default function Overview() {
       <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
 
         <div className="niza-rise relative z-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 p-6 md:p-10 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
-        <HeroArt className="absolute bottom-0 right-0 h-full w-[65%] max-w-[700px] hidden md:block" />
+        <HeroArt className="absolute bottom-0 right-0 h-full w-auto max-w-[72%] hidden md:block" />
           <div className="relative flex items-center gap-2 mb-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
@@ -262,7 +262,7 @@ export default function Overview() {
 
       {/* Welcome Header */}
       <div className="niza-rise relative z-10 overflow-hidden rounded-[28px] border border-white/90 bg-gradient-to-br from-white/95 via-emerald-50/70 to-lime-50/60 p-6 md:p-10 shadow-[0_1px_2px_rgba(16,60,45,0.05),0_18px_40px_-20px_rgba(10,90,60,0.35)]">
-        <HeroArt className="absolute bottom-0 right-0 h-full w-[65%] max-w-[700px] hidden md:block" />
+        <HeroArt className="absolute bottom-0 right-0 h-full w-auto max-w-[72%] hidden md:block" />
         <div className="relative flex items-center gap-2 mb-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
