@@ -43,12 +43,23 @@ export function OrgBranchProvider({ children }: { children: ReactNode }) {
         supabase.from('branches').select('id, name, organization_id').order('name')
       ]);
       
-      const scoped = user.branchIds && user.branchIds.length > 0 ? user.branchIds : null;
+      // Scope the org/branch pickers to what the user may see:
+      //  - specific branches (custom role)            -> only those branches
+      //  - organisation-level (custom role or profile) -> that organisation's branches
+      const scopedBranches = user.branchIds && user.branchIds.length > 0 ? user.branchIds : null;
+      const scopedOrg = !scopedBranches && user.role !== 'super_admin' && user.hrAccessLevel === 'organization' && user.organizationId
+        ? user.organizationId
+        : null;
       const allBranches = branchesRes.data || [];
-      const visibleBranches = scoped ? allBranches.filter(b => scoped.includes(b.id)) : allBranches;
+      const visibleBranches = scopedBranches
+        ? allBranches.filter(b => scopedBranches.includes(b.id))
+        : scopedOrg
+          ? allBranches.filter(b => b.organization_id === scopedOrg)
+          : allBranches;
       const allowedOrgIds = new Set(visibleBranches.map(b => b.organization_id));
+      if (scopedOrg) allowedOrgIds.add(scopedOrg);
 
-      setOrganizations(scoped ? (orgsRes.data || []).filter(o => allowedOrgIds.has(o.id)) : (orgsRes.data || []));
+      setOrganizations(scopedBranches || scopedOrg ? (orgsRes.data || []).filter(o => allowedOrgIds.has(o.id)) : (orgsRes.data || []));
       setBranches(visibleBranches);
     } catch (error) {
       console.error('Error fetching org/branch data:', error);

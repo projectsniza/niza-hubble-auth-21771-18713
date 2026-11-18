@@ -10,29 +10,10 @@ import HeroArt from '@/components/ui/hero-art';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
+import { canOpenPath } from '@/lib/permissions';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 
-// Map grid paths to permission keys
-const pathToPermissionKey: Record<string, string> = {
-  '/dashboard/employees': 'employee_management',
-  '/dashboard/documents': 'documents',
-  '/dashboard/drive-offs': 'drive_offs',
-  '/dashboard/lottery': 'lottery',
-  '/dashboard/daily-reports': 'daily_reports',
-  '/dashboard/maintenance': 'maintenance',
-  '/dashboard/elearning': 'training',
-  '/dashboard/attendance': 'attendance',
-  '/dashboard/scheduling': 'scheduling',
-  '/dashboard/clock-ins': 'clock_ins',
-  '/dashboard/events': 'events',
-  '/dashboard/payroll': 'payroll',
-  '/dashboard/performance': 'performance',
-  '/dashboard/messages': 'messages',
-  '/dashboard/reminders': 'reminders',
-  '/dashboard/settings': 'settings',
-  '/dashboard/customer-accounts': 'customer_accounts',
-  '/dashboard/daily-summary': 'daily_summary',
-};
+// Page -> permission mapping lives in '@/lib/permissions' (shared with the sidebar and route guard)
 
 // Map grid paths to notification count keys
 const pathToCountKey: Record<string, string> = {
@@ -90,12 +71,7 @@ export default function DashboardGrid() {
   // Super admins always see everything; HR with custom role gets filtered
   const displayItems = (user?.role === 'super_admin' || (user?.role === 'hr' && !customRole))
     ? allItems
-    : allItems.filter(item => {
-        const permKey = pathToPermissionKey[item.path];
-        if (!permKey) return true;
-        if (customRole) return hasPermission(permKey);
-        return true;
-      });
+    : allItems.filter(item => canOpenPath(item.path, !!customRole, hasPermission));
 
   const getCountForPath = (path: string): number => {
     const key = pathToCountKey[path];

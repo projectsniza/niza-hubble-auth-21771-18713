@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
@@ -17,9 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Menu, CheckSquare } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
+import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
+import { canOpenPath } from '@/lib/permissions';
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
+  const { customRole, hasPermission } = useCustomRoleAccess();
+  const { pathname } = useLocation();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,6 +38,16 @@ export default function Dashboard() {
     return <Navigate to="/login" replace />;
   }
 
+  // Route guard: a custom role can only open pages its permissions allow (same rules as the menu).
+  if (!canOpenPath(pathname, !!customRole, hasPermission)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Popups and header widgets only appear for modules the role can use.
+  const isAdminLike = user.role === 'super_admin' || user.role === 'hr';
+  // Without a custom role every user keeps their role's normal popups (unchanged behaviour).
+  const can = (key: string) => !customRole || hasPermission(key);
+
   return (
     <div className="min-h-screen flex w-full niza-canvas relative">
       {/* Living aurora backdrop */}
@@ -43,10 +57,10 @@ export default function Dashboard() {
         <div className="niza-blob" style={{ width: 560, height: 560, left: '38%', bottom: '-22%', background: 'rgba(110,231,183,0.32)', animationDelay: '-15s' }} />
       </div>
       <TaskReminderListener />
-      {(user?.role === 'super_admin' || user?.role === 'hr') && <ReminderDuePopup />}
-      <ActionRequiredPopup />
-      <TodayEventsPopup />
-      <ContractWorkflowPopup />
+      {isAdminLike && can('reminders') && <ReminderDuePopup />}
+      {can('messages') && <ActionRequiredPopup />}
+      {can('events') && <TodayEventsPopup />}
+      {(can('onboarding') || can('employee_management')) && <ContractWorkflowPopup />}
       {/* Desktop Sidebar */}
       {!isMobile && (
         <DashboardSidebar
@@ -89,8 +103,8 @@ export default function Dashboard() {
 
           {/* Open Items Widget, Notification Bell and Reminders Button */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {(user?.role === 'super_admin' || user?.role === 'hr') && <OpenItemsHeaderWidget />}
-            <ActionItemsHeaderWidget />
+            {isAdminLike && (can('documents') || can('reminders')) && <OpenItemsHeaderWidget />}
+            {can('messages') && <ActionItemsHeaderWidget />}
             <NotificationBell />
             <Button
               variant="ghost"

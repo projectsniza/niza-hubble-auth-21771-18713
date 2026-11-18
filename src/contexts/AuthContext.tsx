@@ -21,6 +21,19 @@ export interface AppUser {
   branchId?: string;
   branchIds?: string[];
   hrAccessLevel?: HRAccessLevel;
+  /** Active custom role, loaded with the profile so permissions apply from the first render. */
+  customRole?: AppCustomRole | null;
+}
+
+export interface AppCustomRole {
+  id: string;
+  name: string;
+  base_role: string;
+  permissions: Record<string, boolean>;
+  app_access: { niza_safe: boolean; niza_finance: boolean; niza_templates: boolean; niza_elearning: boolean };
+  organization_id: string | null;
+  branch_id: string | null;
+  branch_ids: string[];
 }
 
 interface AuthContextType {
@@ -152,10 +165,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Check custom role if attached
       let branchIds: string[] = [];
+      let appCustomRole: AppCustomRole | null = null;
       if (profile.custom_role_id) {
         const { data: customRole } = await (supabase as any)
           .from('custom_roles')
-          .select('base_role, branch_ids, branch_id, organization_id, is_active')
+          .select('id, name, base_role, permissions, app_access, branch_ids, branch_id, organization_id, is_active')
           .eq('id', profile.custom_role_id)
           .maybeSingle();
 
@@ -167,11 +181,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (customRole.base_role && !roleResult.data?.role) {
             resolvedRole = customRole.base_role as UserRole;
           }
-          branchIds = Array.isArray(customRole.branch_ids)
+          branchIds = Array.isArray(customRole.branch_ids) && customRole.branch_ids.filter(Boolean).length > 0
             ? customRole.branch_ids.filter(Boolean)
             : customRole.branch_id
               ? [customRole.branch_id]
               : [];
+          const access = (customRole.app_access && typeof customRole.app_access === 'object') ? customRole.app_access : {};
+          appCustomRole = {
+            id: customRole.id,
+            name: customRole.name,
+            base_role: customRole.base_role,
+            permissions: (customRole.permissions && typeof customRole.permissions === 'object' && !Array.isArray(customRole.permissions))
+              ? customRole.permissions
+              : {},
+            app_access: {
+              niza_safe: Boolean(access.niza_safe),
+              niza_finance: Boolean(access.niza_finance),
+              niza_templates: Boolean(access.niza_templates),
+              niza_elearning: Boolean(access.niza_elearning),
+            },
+            organization_id: customRole.organization_id ?? null,
+            branch_id: customRole.branch_id ?? null,
+            branch_ids: branchIds,
+          };
         }
       }
 
@@ -193,15 +225,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const resolvedBranchId = profile.branch_id || employeeByUserResult.data?.branch_id || employeeByEmailData?.branch_id || undefined;
       const resolvedOrgId = profile.organization_id || employeeByUserResult.data?.organization_id || employeeByEmailData?.organization_id || undefined;
 
+      // Effective scope: a custom role's organisation / branches override the profile defaults
+      // (mirrors get_my_profile_data() in the database, so screens and RLS agree).
+      let effectiveOrgId = resolvedOrgId;
+      let effectiveLevel: HRAccessLevel = (profile.hr_access_level as HRAccessLevel) || 'full';
+      if (appCustomRole) {
+        if (branchIds.length > 0) {
+          effectiveLevel = 'branch';
+          effectiveOrgId = appCustomRole.organization_id ?? resolvedOrgId;
+        } else if (appCustomRole.organization_id) {
+          effectiveLevel = 'organization';
+          effectiveOrgId = appCustomRole.organization_id;
+        }
+      }
+
       const appUser: AppUser = {
         id: profile.id,
         email: profile.email,
         name: profile.name,
         role: resolvedRole,
-        organizationId: resolvedOrgId,
-        branchId: resolvedBranchId,
+        organizationId: effectiveOrgId,
+        // store accounts whose store is only set on their custom role still get a "my branch"
+        branchId: resolvedBranchId ?? (branchIds.length > 0 ? branchIds[0] : undefined),
         branchIds,
-        hrAccessLevel: (profile.hr_access_level as HRAccessLevel) || 'full',
+        hrAccessLevel: effectiveLevel,
+        customRole: appCustomRole,
       };
 
       return appUser;

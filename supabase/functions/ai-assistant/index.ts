@@ -67,20 +67,33 @@ serve(async (req) => {
 
     let role: Role = (roleRow?.role as Role) || "employee";
     let customBranchIds: string[] = [];
+    let customOrgId: string | null = null;
+    let hasCustomRole = false;
     if (profile.custom_role_id) {
       const { data: cr } = await (db as any)
         .from("custom_roles")
-        .select("base_role, branch_ids, branch_id")
+        .select("base_role, branch_ids, branch_id, organization_id, is_active")
         .eq("id", profile.custom_role_id)
         .maybeSingle();
-      if (cr) {
+      if (cr && cr.is_active !== false) {
+        hasCustomRole = true;
         if (cr.base_role && !roleRow?.role) role = cr.base_role as Role;
-        customBranchIds = Array.isArray(cr.branch_ids) ? cr.branch_ids.filter(Boolean) : cr.branch_id ? [cr.branch_id] : [];
+        customBranchIds = Array.isArray(cr.branch_ids) && cr.branch_ids.filter(Boolean).length > 0
+          ? cr.branch_ids.filter(Boolean)
+          : cr.branch_id ? [cr.branch_id] : [];
+        customOrgId = cr.organization_id ?? null;
       }
     }
 
-    const hrLevel: string = profile.hr_access_level || "full";
-    const ownBranches = [...new Set([...(customBranchIds || []), ...(profile.branch_id ? [profile.branch_id] : [])])];
+    // Effective scope mirrors get_my_profile_data(): a custom role's organisation / branches
+    // override the profile's default "full" access.
+    let hrLevel: string = profile.hr_access_level || "full";
+    let scopeOrgId: string | null = profile.organization_id ?? null;
+    if (hasCustomRole && customBranchIds.length > 0) hrLevel = "branch";
+    else if (hasCustomRole && customOrgId) { hrLevel = "organization"; scopeOrgId = customOrgId; }
+    const ownBranches = customBranchIds.length > 0
+      ? customBranchIds
+      : [...new Set(profile.branch_id ? [profile.branch_id] : [])];
 
     // Branch/organisation scope. null => unrestricted.
     let scopeLabel = "";
@@ -88,8 +101,8 @@ serve(async (req) => {
     let branchFilter: string[] | null = null;
     if (role === "super_admin" || (role === "hr" && hrLevel === "full")) {
       scopeLabel = "ALL organisations and branches";
-    } else if (role === "hr" && hrLevel === "organization" && profile.organization_id) {
-      orgFilter = profile.organization_id;
+    } else if (role === "hr" && hrLevel === "organization" && scopeOrgId) {
+      orgFilter = scopeOrgId;
       scopeLabel = "their own organisation only";
     } else if (role === "hr" || role === "manager") {
       branchFilter = ownBranches;

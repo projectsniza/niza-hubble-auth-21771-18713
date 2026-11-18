@@ -40,6 +40,10 @@ export function OrgBranchFilter({
   const filteredBranches = selectedOrg 
     ? branches.filter(b => b.organization_id === selectedOrg)
     : branches;
+  // The lists passed in are already limited to the user's scope (database rules), so
+  // label the "all" option for what the user can actually see.
+  const singleOrg = organizations.length === 1;
+  const allLabel = singleOrg ? `All ${organizations[0].name}` : organizations.length === 0 ? 'All my branches' : 'All Company';
 
   return (
     <div className={`flex flex-wrap items-center gap-4 p-4 bg-muted/30 rounded-lg border ${className}`}>
@@ -54,16 +58,18 @@ export function OrgBranchFilter({
             onBranchChange('');
           }}
         >
-          All Company
+          {allLabel}
         </Button>
-        <Button 
-          variant={viewMode === 'organization' ? 'default' : 'outline'} 
-          size="sm"
-          onClick={() => onViewModeChange('organization')}
-        >
-          <Building2 className="h-4 w-4 mr-1" />
-          By Organization
-        </Button>
+        {organizations.length > 1 && (
+          <Button 
+            variant={viewMode === 'organization' ? 'default' : 'outline'} 
+            size="sm"
+            onClick={() => onViewModeChange('organization')}
+          >
+            <Building2 className="h-4 w-4 mr-1" />
+            By Organization
+          </Button>
+        )}
         <Button 
           variant={viewMode === 'branch' ? 'default' : 'outline'} 
           size="sm"
@@ -86,7 +92,7 @@ export function OrgBranchFilter({
             <SelectValue placeholder="Select Organization" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Organizations</SelectItem>
+            <SelectItem value="all">{organizations.length > 1 ? 'All Organizations' : allLabel}</SelectItem>
             {organizations.map(org => (
               <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
             ))}

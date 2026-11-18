@@ -12,33 +12,10 @@ import nizaCloudLogo from '@/assets/niza-cloud-logo.png';
 import nizaGroupIcon from '@/assets/niza-group-icon.png';
 import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
+import { canOpenPath } from '@/lib/permissions';
 
 // Map sidebar paths to permission keys
-const pathToPermissionKey: Record<string, string> = {
-  '/dashboard/visualization': 'visualization',
-  '/dashboard/employees': 'employee_management',
-  '/dashboard/documents': 'documents',
-  '/dashboard/documents/submit': 'documents',
-  '/dashboard/drive-offs': 'drive_offs',
-  '/dashboard/lottery': 'lottery',
-  '/dashboard/daily-reports': 'daily_reports',
-  '/dashboard/maintenance': 'maintenance',
-  '/dashboard/elearning': 'training',
-  '/dashboard/attendance': 'attendance',
-  '/dashboard/scheduling': 'scheduling',
-  '/dashboard/clock-ins': 'clock_ins',
-  '/dashboard/events': 'events',
-  '/dashboard/payroll': 'payroll',
-  '/dashboard/performance': 'performance',
-  '/dashboard/uk-compliance': 'uk_compliance',
-  '/dashboard/messages': 'messages',
-  '/dashboard/reminders': 'reminders',
-  '/dashboard/settings': 'settings',
-  '/dashboard/safety-tasks': 'safety',
-  '/dashboard/store-templates': 'templates',
-  '/dashboard/customer-accounts': 'customer_accounts',
-  '/dashboard/daily-summary': 'daily_summary',
-};
+// Page -> permission mapping lives in '@/lib/permissions' (shared with the Home grid and route guard)
 
 const getMenuItems = (role: string) => {
   // Employee gets restricted view
@@ -168,15 +145,7 @@ export default function DashboardSidebar({ collapsed, onToggle, onNavigate }: Da
   // Super admins always see everything; HR with custom role gets filtered
   const menuItems = (user.role === 'super_admin' || (user.role === 'hr' && !customRole))
     ? allMenuItems
-    : allMenuItems.filter(item => {
-        const permKey = pathToPermissionKey[item.path];
-        // Items without a permission mapping are always shown (Home, Overview, My Profile)
-        if (!permKey) return true;
-        // If user has a custom role, check permissions
-        if (customRole) return hasPermission(permKey);
-        // No custom role = show all (default behavior)
-        return true;
-      });
+    : allMenuItems.filter(item => canOpenPath(item.path, !!customRole, hasPermission));
 
   // Map paths to notification counts
   const getCountForPath = (path: string): number => {

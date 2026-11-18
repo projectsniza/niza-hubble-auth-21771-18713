@@ -40,6 +40,7 @@ interface CustomRole {
 
 // Define feature groups - simplified to module-level toggles
 const MANAGER_FEATURES: Record<string, { key: string; label: string }[]> = {
+  'Overview Dashboard': [{ key: 'overview', label: 'Overview Dashboard' }],
   'Employee Management': [{ key: 'employee_management', label: 'Employee Management' }],
   'Scheduling': [{ key: 'scheduling', label: 'Scheduling' }],
   'Attendance': [{ key: 'attendance', label: 'Attendance' }],
