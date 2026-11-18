@@ -142,7 +142,7 @@ const LIVE=[
 ];
 /* ═════════════ 4. ENGINE ═════════════ */
 const root=document.getElementById('niza3d'),cv=document.getElementById('c');
-const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,1.5));R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.outputEncoding=THREE.sRGBEncoding;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.25;
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,1.5));R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.shadowMap.autoUpdate=false;R.shadowMap.needsUpdate=true;R.outputEncoding=THREE.sRGBEncoding;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.25;
 const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(48,1,.8,500),look=new THREE.Vector3(2,0,-2);
 scene.fog=new THREE.Fog(0x9fd3f5,80,200);
 const hemi=new THREE.HemisphereLight(0xdff2ff,0x556070,.9),sun=new THREE.DirectionalLight(0xfff3dd,1.1);scene.add(hemi,sun);
@@ -764,16 +764,20 @@ $('bRain').onclick=function(){rain=rain?0:1;this.classList.toggle('on',!!rain);r
 const RN=1600,rg=new THREE.BufferGeometry(),ra=new Float32Array(RN*3);for(let i=0;i<RN;i++){ra[i*3]=Math.random()*90-35;ra[i*3+1]=Math.random()*30;ra[i*3+2]=Math.random()*70-30}
 rg.setAttribute('position',new THREE.BufferAttribute(ra,3));const rp=new THREE.Points(rg,new THREE.PointsMaterial({color:0xaac8ff,size:.09,transparent:true,opacity:.65}));rp.visible=false;scene.add(rp);
 let lastEI=-1;function env(dt){night+=(nightT-night)*Math.min(1,dt*2.5);const n=night,w=rain?.35:0;
- tmp.copy(SKY.d).lerp(SKY.r,w).lerp(SKY.n,n);scene.background=tmp.clone();scene.fog.color.copy(tmp).convertSRGBToLinear();const ei=1-.9*n;if(Math.abs(ei-lastEI)>.003){lastEI=ei;ENV.forEach(m=>m.envMapIntensity=ei)}
+ tmp.copy(SKY.d).lerp(SKY.r,w).lerp(SKY.n,n);(scene.background&&scene.background.isColor?scene.background.copy(tmp):(scene.background=tmp.clone()));scene.fog.color.copy(tmp).convertSRGBToLinear();const ei=1-.9*n;if(Math.abs(ei-lastEI)>.003){lastEI=ei;ENV.forEach(m=>m.envMapIntensity=ei)}
  hemi.intensity=.95-.7*n-.15*w;sun.intensity=(1.1-1.0*n)*(1-w);sun.color.set(n>.5?0x6b86c9:0xfff3dd);if(n>.5)sun.intensity=.22;
  glow.forEach(g=>g.m.emissiveIntensity=g.day+(g.night-g.day)*n);lamps.forEach((l,i)=>l.intensity=(i<3?1.1:.7)*n+(i>2?.25:0)*(1-n));
  if(rain){const a=rg.attributes.position;for(let i=0;i<RN;i++){a.array[i*3+1]-=26*dt;if(a.array[i*3+1]<0)a.array[i*3+1]=30}a.needsUpdate=true}}
 /* ── main loop ── */
 const sched=LIVE.map(e=>({e,n:Math.random()*3}));
-let last=performance.now(),acc=0;
+let last=performance.now(),acc=0,frame=0;
+/* adaptive quality: if frames are consistently slow, lower resolution, then shadow quality */
+const Q={lvl:0,sum:0,n:0};
+function adapt(dt){Q.sum+=dt;Q.n++;if(Q.n<90)return;const avg=Q.sum/Q.n;Q.sum=0;Q.n=0;
+ if(avg>.028&&Q.lvl<2){Q.lvl++;R.setPixelRatio(Q.lvl==1?1:.8);size()}}
 function size(){const w=root.clientWidth||innerWidth,h=root.clientHeight||innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
 addEventListener('resize',size);size();
-function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;acc+=dt;
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;acc+=dt;frame++;if(frame%(Q.lvl>1?8:3)==0)R.shadowMap.needsUpdate=true;adapt(dt);
  sched.forEach(s=>{s.n-=dt;if(s.n<=0){s.e.run();s.n=s.e.every[0]+Math.random()*(s.e.every[1]-s.e.every[0])}});
  updateCars(dt);updateCustomers(dt);updatePeople(dt);env(dt);
  boards.forEach((b,i)=>{const k=1+Math.sin(T*3+i)*.08+(b.m.id==cur||b.m.id==hotId?.18:0);b.ring.scale.set(k,k,1);const z=(b.m.id==cur||b.m.id==hotId)?1.1:1;b.sp.scale.set(.34*z,.085*z,1)});
@@ -783,6 +787,7 @@ for(let i=0;i<3;i++)setTimeout(spawnCar,i*2500);for(let i=0;i<4;i++)spawnCustome
 // warm-up: compile every shader + upload every texture once, so camera moves never hitch
 rp.visible=true;scene.traverse(o=>{o._fc=o.frustumCulled;o.frustumCulled=false});R.render(scene,cam);scene.traverse(o=>{o.frustumCulled=o._fc});rp.visible=false;
 refresh();cv.style.cursor='grab';requestAnimationFrame(loop);
+requestAnimationFrame(()=>requestAnimationFrame(()=>{try{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'VISUALIZATION_RENDERED'},'*')}catch(e){}}));
 window.NizaScene={focus,home,setNight,state:S,data:DATA,config:CFG,open:id=>CFG.openModule(CFG.modules.find(m=>m.id==id).route),
  addEvent:(name,every,run)=>sched.push({e:{name,every,run},n:every[0]}),feed};
 })();
