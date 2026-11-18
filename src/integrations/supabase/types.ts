@@ -3836,6 +3836,7 @@ export type Database = {
           game_id: string
           id: string
           record_date: string
+          returned_tickets: number
           stock_begin: number
           stock_end: number | null
           tickets_sold: number | null
@@ -3849,6 +3850,7 @@ export type Database = {
           game_id: string
           id?: string
           record_date: string
+          returned_tickets?: number
           stock_begin?: number
           stock_end?: number | null
           tickets_sold?: number | null
@@ -3862,6 +3864,7 @@ export type Database = {
           game_id?: string
           id?: string
           record_date?: string
+          returned_tickets?: number
           stock_begin?: number
           stock_end?: number | null
           tickets_sold?: number | null
@@ -3977,6 +3980,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           game_name: string
+          game_number: string | null
           id: string
           is_active: boolean
           organization_id: string | null
@@ -3988,6 +3992,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           game_name: string
+          game_number?: string | null
           id?: string
           is_active?: boolean
           organization_id?: string | null
@@ -3999,6 +4004,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           game_name?: string
+          game_number?: string | null
           id?: string
           is_active?: boolean
           organization_id?: string | null
@@ -4109,6 +4115,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lottery_planogram_changes: {
+        Row: {
+          branch_id: string
+          change_date: string
+          change_type: string
+          changed_by: string | null
+          created_at: string
+          from_slot: number | null
+          id: string
+          new_game_id: string | null
+          new_game_name: string | null
+          new_game_number: string | null
+          new_opening_activated: number | null
+          new_price: number | null
+          notes: string | null
+          old_final_closing: number | null
+          old_game_id: string | null
+          old_game_name: string | null
+          old_game_number: string | null
+          old_price: number | null
+          old_returned: number | null
+          to_slot: number | null
+        }
+        Insert: {
+          branch_id: string
+          change_date: string
+          change_type: string
+          changed_by?: string | null
+          created_at?: string
+          from_slot?: number | null
+          id?: string
+          new_game_id?: string | null
+          new_game_name?: string | null
+          new_game_number?: string | null
+          new_opening_activated?: number | null
+          new_price?: number | null
+          notes?: string | null
+          old_final_closing?: number | null
+          old_game_id?: string | null
+          old_game_name?: string | null
+          old_game_number?: string | null
+          old_price?: number | null
+          old_returned?: number | null
+          to_slot?: number | null
+        }
+        Update: {
+          branch_id?: string
+          change_date?: string
+          change_type?: string
+          changed_by?: string | null
+          created_at?: string
+          from_slot?: number | null
+          id?: string
+          new_game_id?: string | null
+          new_game_name?: string | null
+          new_game_number?: string | null
+          new_opening_activated?: number | null
+          new_price?: number | null
+          notes?: string | null
+          old_final_closing?: number | null
+          old_game_id?: string | null
+          old_game_name?: string | null
+          old_game_number?: string | null
+          old_price?: number | null
+          old_returned?: number | null
+          to_slot?: number | null
+        }
+        Relationships: []
       }
       lottery_slot_assignments: {
         Row: {
@@ -7983,6 +8058,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_lottery_game_to_slot: {
+        Args: {
+          p_branch_id: string
+          p_game_name?: string
+          p_game_number: string
+          p_slot_number: number
+          p_start_date?: string
+          p_ticket_price: number
+        }
+        Returns: string
+      }
+      apply_lottery_planogram_change: {
+        Args: {
+          p_branch_id: string
+          p_change_date: string
+          p_change_type: string
+          p_new_game_name?: string
+          p_new_game_number?: string
+          p_new_opening_activated?: number
+          p_new_slot_number?: number
+          p_new_ticket_price?: number
+          p_notes?: string
+          p_old_final_closing?: number
+          p_old_game_id: string
+          p_old_returned?: number
+          p_slot_number: number
+        }
+        Returns: string
+      }
       assign_lottery_game_to_slot: {
         Args: {
           p_branch_id: string

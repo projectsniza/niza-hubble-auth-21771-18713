@@ -74,7 +74,7 @@ export default function Visualization() {
             byBranch(supabase.from('drive_offs').select('id, vehicle_registration, amount_drive_off, total_amount_received, payment_received_date')).limit(20),
             byBranch(supabase.from('lottery_games').select('id', { count: 'exact', head: true }).eq('is_active', true)),
             byBranch(
-              supabase.from('lottery_daily_records').select('id, stock_begin, activated_tickets, stock_end, tickets_sold').gte('record_date', todayISO),
+              supabase.from('lottery_daily_records').select('id, stock_begin, activated_tickets, stock_end, tickets_sold, returned_tickets').gte('record_date', todayISO),
             ).limit(20),
             byBranch(supabase.from('daily_reports').select('id', { count: 'exact', head: true }).gte('created_at', todayISO)),
             byBranch(supabase.from('maintenance_tickets').select('id, title, priority, status, created_at').in('status', ['open', 'in_progress'])).limit(8),
@@ -123,7 +123,8 @@ export default function Visualization() {
         // 6. Lottery
         const activeLotterySlots = lotteryRes.count || 0;
         const variancesCount = (lotteryRecsRes.data || []).filter((r: any) => {
-          const expected = (Number(r.stock_begin) || 0) + (Number(r.activated_tickets) || 0) - (Number(r.tickets_sold) || 0);
+          // closing should equal opening + activated - sold - returned/removed (planogram swaps)
+          const expected = (Number(r.stock_begin) || 0) + (Number(r.activated_tickets) || 0) - (Number(r.tickets_sold) || 0) - (Number(r.returned_tickets) || 0);
           return Math.abs(expected - (Number(r.stock_end) || 0)) > 0;
         }).length;
 

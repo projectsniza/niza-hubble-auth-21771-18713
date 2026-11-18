@@ -21,12 +21,18 @@ import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, addDays, subDays, isToday } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, addDays, subDays, isToday } from 'date-fns';
+import { Repeat, MoveRight } from 'lucide-react';
+import { useSlotAssignments, usePlanogramChanges, changesForSlot } from '@/hooks/useLotteryPlanogram';
+import { buildSlotSegments, priceOnDate, segmentCovers, ticketsSold as calcTicketsSold, type SlotSegment } from '@/lib/lotteryCalculations';
+import { PlanogramChangeDialog } from '@/components/lottery/PlanogramChangeDialog';
+import { ChangeHistoryLog } from '@/components/lottery/ChangeHistoryLog';
 
 // Types
 interface LotteryGame {
   id: string;
   game_name: string;
+  game_number: string | null;
   ticket_price: number;
   is_active: boolean;
   branch_id: string;
@@ -40,6 +46,7 @@ interface DailyRecord {
   stock_begin: number;
   activated_tickets: number;
   stock_end: number | null;
+  returned_tickets: number;
   tickets_sold: number | null;
 }
 
@@ -56,7 +63,11 @@ interface GameDailyData {
   stockBegin: number;
   activatedTickets: number;
   stockEnd: number | null;
+  returnedTickets: number;
 }
+
+/** "Game 1503" when the official National Lottery number is known, otherwise the stored name. */
+const gameTitle = (g: { game_name: string; game_number: string | null }) => (g.game_number ? `Game ${g.game_number}` : g.game_name);
 
 interface EditingState {
   [gameId: string]: {
@@ -102,7 +113,7 @@ export default function Lottery() {
   const { user } = useAuth();
   const { organizations, branches } = useOrgBranch();
   const queryClient = useQueryClient();
-  
+
   // Sheet selection state
   const [activeSheet, setActiveSheet] = useState<SheetType>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
@@ -110,24 +121,25 @@ export default function Lottery() {
   const [showAddGameDialog, setShowAddGameDialog] = useState(false);
   const [showEditGameDialog, setShowEditGameDialog] = useState(false);
   const [editingGame, setEditingGame] = useState<LotteryGame | null>(null);
-  const [newGame, setNewGame] = useState({ name: '', ticketPrice: '1' });
+  const [newGame, setNewGame] = useState({ name: '', ticketPrice: '1', number: '', slot: '', startDate: format(new Date(), 'yyyy-MM-dd') });
+  const [planogramTarget, setPlanogramTarget] = useState<{ branchId: string; slot: number; gameId: string; minDate: string } | null>(null);
   const [editingData, setEditingData] = useState<EditingState>({});
   const [physicalStock, setPhysicalStock] = useState<{ [date: string]: number | '' }>({});
   const [activeTab, setActiveTab] = useState<'records' | 'summary' | 'games'>('records');
-  
+
   // Org/Branch filter state
   const [viewMode, setViewMode] = useState<'all' | 'organization' | 'branch'>('all');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
-  
+
   // For managers, lock to their branch
   const isManager = user?.role === 'manager';
   const effectiveBranchId = isManager ? user?.branchId : (viewMode === 'branch' && selectedBranch ? selectedBranch : null);
   const effectiveOrgId = viewMode === 'organization' && selectedOrg ? selectedOrg : null;
-  
+
   // Check if editing is allowed (only when single branch is selected)
   const isSingleBranchSelected = isManager || (viewMode === 'branch' && !!selectedBranch);
-  
+
   // Get filtered branch IDs for "all" or "organization" mode
   const filteredBranchIds = useMemo(() => {
     if (isManager) return user?.branchId ? [user.branchId] : [];
@@ -147,17 +159,34 @@ export default function Lottery() {
     });
   }, [selectedMonth]);
 
-  // Fetch lottery games for the selected scope
+  // Dated slot assignments (which game was in which dispenser slot on each day)
+  const monthStartStr = format(selectedMonth, 'yyyy-MM-dd');
+  const monthEndStr = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
+  const { data: slotAssignments = [] } = useSlotAssignments(filteredBranchIds, monthStartStr, monthEndStr);
+  const { data: planogramChanges = [] } = usePlanogramChanges(filteredBranchIds);
+  const assignedGameIds = useMemo(() => Array.from(new Set(slotAssignments.map(a => a.game_id))).sort(), [slotAssignments]);
+
+  // Fetch lottery games for the selected scope: active games plus any game that
+  // occupied a slot during this month (e.g. one replaced by a planogram change).
   const { data: games = [], isLoading: gamesLoading } = useQuery({
-    queryKey: ['lottery-games', filteredBranchIds, viewMode],
+    queryKey: ['lottery-games', filteredBranchIds, viewMode, assignedGameIds],
     queryFn: async () => {
       if (filteredBranchIds.length === 0) return [];
-      const { data, error } = await supabase
+      const { data: active, error } = await supabase
         .from('lottery_games')
         .select('*')
         .in('branch_id', filteredBranchIds)
         .eq('is_active', true);
       if (error) throw error;
+      const have = new Set((active || []).map(g => g.id));
+      const missing = assignedGameIds.filter(id => !have.has(id));
+      let extra: any[] = [];
+      if (missing.length) {
+        const res = await supabase.from('lottery_games').select('*').in('id', missing);
+        if (res.error) throw res.error;
+        extra = res.data || [];
+      }
+      const data = [...(active || []), ...extra];
       // Natural numeric sort: "game 1", "game 2", ..., "game 10"
       return (data as LotteryGame[]).sort((a, b) => {
         const an = Number(a.game_name.match(/\d+/)?.[0] ?? 0);
@@ -291,7 +320,7 @@ export default function Lottery() {
   // Ticket price history keeps old lottery records on the price that was active
   // on that date, instead of recalculating the whole month at today's price.
   const { data: priceHistory = [] } = useQuery({
-    queryKey: ['lottery-price-history', filteredBranchIds, format(selectedMonth, 'yyyy-MM')],
+    queryKey: ['lottery-price-history', filteredBranchIds, format(selectedMonth, 'yyyy-MM'), games.map(g => g.id).join(',')],
     queryFn: async () => {
       if (filteredBranchIds.length === 0 || games.length === 0) return [];
       const gameIds = games.map(g => g.id);
@@ -318,30 +347,45 @@ export default function Lottery() {
     return map;
   }, [priceHistory]);
 
+  // Price in force on a date. Days before a game's first history row use its EARLIEST
+  // known price (not today's), so a later price change never re-values earlier days.
   const getHistoricalTicketPrice = useCallback((game: LotteryGame, dateStr: string) => {
-    const history = priceHistoryByGame[game.id] || [];
-    let activePrice = Number(game.ticket_price) || 0;
-
-    for (const row of history) {
-      if (row.effective_date <= dateStr) {
-        activePrice = Number(row.ticket_price) || activePrice;
-      } else {
-        break;
-      }
-    }
-
-    return activePrice;
+    return priceOnDate(priceHistoryByGame[game.id] || [], dateStr, Number(game.ticket_price) || 0);
   }, [priceHistoryByGame]);
+
+  // ---- slot coverage: on which days was each game in a dispenser slot? ----
+  const coverageByGame = useMemo(() => {
+    const map: Record<string, Array<{ from: string; to: string; slot: number; branchId: string }>> = {};
+    slotAssignments.forEach(a => {
+      (map[a.game_id] ||= []).push({ from: a.effective_from, to: a.effective_to ?? '9999-12-31', slot: a.slot_number, branchId: a.branch_id });
+    });
+    return map;
+  }, [slotAssignments]);
+
+  /** Games without any slot history (legacy) are treated as active every day. */
+  const isGameActiveOn = useCallback((gameId: string, dateStr: string) => {
+    const ranges = coverageByGame[gameId];
+    if (!ranges || ranges.length === 0) return true;
+    return ranges.some(r => dateStr >= r.from && dateStr <= r.to);
+  }, [coverageByGame]);
+
+  const slotOf = useCallback((gameId: string, dateStr: string): number | null => {
+    const ranges = coverageByGame[gameId] || [];
+    // on a mid-day swap date the new assignment wins
+    const hit = [...ranges].reverse().find(r => dateStr >= r.from && dateStr <= r.to);
+    return hit ? hit.slot : null;
+  }, [coverageByGame]);
 
   const getMonthlyPriceLabel = useCallback((game: LotteryGame) => {
     const prices = new Set<string>();
     daysInMonth.forEach(day => {
-      prices.add(getHistoricalTicketPrice(game, format(day, 'yyyy-MM-dd')).toFixed(2));
+      const d = format(day, 'yyyy-MM-dd');
+      if (isGameActiveOn(game.id, d)) prices.add(getHistoricalTicketPrice(game, d).toFixed(2));
     });
     const values = Array.from(prices);
     if (values.length <= 1) return `£${values[0] || Number(game.ticket_price).toFixed(2)}`;
     return values.map(v => `£${v}`).join(' / ');
-  }, [daysInMonth, getHistoricalTicketPrice]);
+  }, [daysInMonth, getHistoricalTicketPrice, isGameActiveOn]);
 
   // Map till reports by date (sums across branches when viewing multiple)
   const tillReportByDate = useMemo(() => {
@@ -492,11 +536,11 @@ export default function Lottery() {
   const getCellValue = useCallback((gameId: string, dateStr: string, field: keyof GameDailyData) => {
     const edited = editingData[gameId]?.[dateStr];
     const record = recordsByGameAndDate[gameId]?.[dateStr];
-    
+
     if (edited && edited[field] !== undefined) {
       return edited[field];
     }
-    
+
     switch (field) {
       case 'stockBegin': {
         // A saved opening figure is authoritative (including 0) — never override
@@ -514,6 +558,7 @@ export default function Lottery() {
 
       case 'activatedTickets': return record?.activated_tickets ?? null;
       case 'stockEnd': return record?.stock_end ?? null;
+      case 'returnedTickets': return record?.returned_tickets ? record.returned_tickets : null;
       default: return null;
     }
   }, [editingData, recordsByGameAndDate, getPreviousDayClosingStock]);
@@ -521,47 +566,58 @@ export default function Lottery() {
 
   // Calculate derived values for a day
   const getDayCalculations = useCallback((gameId: string, dateStr: string, game: LotteryGame) => {
+    const ticketPrice = getHistoricalTicketPrice(game, dateStr);
+    // Days when the game was not in any slot contribute nothing (keeps totals, summaries
+    // and exports correct across planogram changes).
+    if (!isGameActiveOn(gameId, dateStr)) {
+      return { stockBegin: 0, activated: 0, totalStock: 0, stockEnd: null as number | null, returned: 0, ticketsSold: null as number | null, salesValue: null as number | null, ticketPrice, inactive: true };
+    }
     const stockBegin = getCellValue(gameId, dateStr, 'stockBegin') ?? 0;
     const activated = getCellValue(gameId, dateStr, 'activatedTickets') ?? 0;
     const stockEnd = getCellValue(gameId, dateStr, 'stockEnd');
-    const ticketPrice = getHistoricalTicketPrice(game, dateStr);
-    
+    const returned = getCellValue(gameId, dateStr, 'returnedTickets') ?? 0;
+
     // Total = Stock Begin + Activated
     const totalStock = stockBegin + activated;
-    
-    // Tickets Sold = Stock Begin + Activated - Stock End
-    // Only calculate if stock_end is entered
-    const ticketsSold = stockEnd !== null ? Math.max(0, totalStock - stockEnd) : null;
-    
-    // Sales Value = Tickets Sold × Ticket Price
+
+    // Tickets Sold = Stock Begin + Activated - Stock End - Returned/removed (only once a closing is entered)
+    const ticketsSold = calcTicketsSold(stockBegin, activated, stockEnd, returned);
+
+    // Sales Value = Tickets Sold x price in force on that day
     const salesValue = ticketsSold !== null ? ticketsSold * ticketPrice : null;
-    
-    return { stockBegin, activated, totalStock, stockEnd, ticketsSold, salesValue, ticketPrice };
-  }, [getCellValue, getHistoricalTicketPrice]);
+
+    return { stockBegin, activated, totalStock, stockEnd, returned, ticketsSold, salesValue, ticketPrice, inactive: false };
+  }, [getCellValue, getHistoricalTicketPrice, isGameActiveOn]);
 
   // Calculate game totals across all days
-  const getGameTotals = useCallback((gameId: string, game: LotteryGame) => {
+  const getGameTotals = useCallback((gameId: string, game: LotteryGame, range?: { from: string; to: string } | null) => {
+    let totalReturned = 0;
     let totalTicketsSold = 0;
     let totalSalesValue = 0;
     let initialStock = 0;
     let totalActivated = 0;
     let lastStockEnd = 0;
     let hasData = false;
-    
-    daysInMonth.forEach((day, index) => {
+
+    let first = true;
+    daysInMonth.forEach((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
+      if (range && (dateStr < range.from || dateStr > range.to)) return;
       const calc = getDayCalculations(gameId, dateStr, game);
-      
+      if (calc.inactive) return;
+
       if (calc.stockBegin || calc.activated || calc.stockEnd !== null) {
         hasData = true;
       }
-      
-      if (index === 0 && calc.stockBegin) {
-        initialStock = calc.stockBegin;
+
+      if (first) {
+        initialStock = calc.stockBegin || 0;
+        first = false;
       }
-      
+
       totalActivated += calc.activated;
-      
+      totalReturned += calc.returned || 0;
+
       if (calc.ticketsSold !== null) {
         totalTicketsSold += calc.ticketsSold;
       }
@@ -569,18 +625,19 @@ export default function Lottery() {
       if (calc.salesValue !== null) {
         totalSalesValue += calc.salesValue;
       }
-      
+
       if (calc.stockEnd !== null) {
         lastStockEnd = calc.stockEnd;
       }
     });
-    
+
     return {
       initialStock,
       totalActivated,
       totalTicketsSold,
       totalSalesValue,
       closingStock: lastStockEnd,
+      totalReturned,
       hasData
     };
   }, [daysInMonth, getDayCalculations]);
@@ -589,25 +646,25 @@ export default function Lottery() {
   const grandTotals = useMemo(() => {
     let totalSalesValue = 0;
     let totalClosingStock = 0;
-    
+
     games.forEach(game => {
       const gameTotals = getGameTotals(game.id, game);
       totalSalesValue += gameTotals.totalSalesValue;
       totalClosingStock += gameTotals.closingStock;
     });
-    
+
     return { totalSalesValue, totalClosingStock };
   }, [games, getGameTotals]);
 
   // Calculate daily totals across all games for the summary section
   const dailyTotals = useMemo(() => {
     const totals: { [date: string]: { closingStock: number; salesValue: number } } = {};
-    
+
     daysInMonth.forEach(day => {
       const dateStr = format(day, 'yyyy-MM-dd');
       let dayClosingStock = 0;
       let daySalesValue = 0;
-      
+
       games.forEach(game => {
         const calc = getDayCalculations(game.id, dateStr, game);
         if (calc.stockEnd !== null) {
@@ -617,79 +674,57 @@ export default function Lottery() {
           daySalesValue += calc.salesValue;
         }
       });
-      
+
       totals[dateStr] = { closingStock: dayClosingStock, salesValue: daySalesValue };
     });
-    
+
     return totals;
   }, [daysInMonth, games, getDayCalculations]);
 
-  // Add game mutation
+  // Add game mutation: a new game goes into a free dispenser slot from a chosen start date
   const addGameMutation = useMutation({
     mutationFn: async () => {
       if (!effectiveBranchId) throw new Error('No branch selected');
-      const branch = branches.find(b => b.id === effectiveBranchId);
-      
-      const { error } = await supabase
-        .from('lottery_games')
-        .insert({
-          game_name: newGame.name.trim(),
-          ticket_price: parseFloat(newGame.ticketPrice),
-          branch_id: effectiveBranchId,
-          organization_id: branch?.organization_id,
-          created_by: user?.id,
-        });
+      const { error } = await supabase.rpc('add_lottery_game_to_slot', {
+        p_branch_id: effectiveBranchId,
+        p_slot_number: parseInt(newGame.slot),
+        p_game_number: newGame.number.trim(),
+        p_ticket_price: parseFloat(newGame.ticketPrice),
+        p_start_date: newGame.startDate,
+        p_game_name: newGame.name.trim() || undefined,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lottery-games'] });
+      ['lottery-games', 'lottery-slot-assignments', 'lottery-price-history'].forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
       setShowAddGameDialog(false);
-      setNewGame({ name: '', ticketPrice: '1' });
-      toast.success('Game added successfully');
+      setNewGame({ name: '', ticketPrice: '1', number: '', slot: '', startDate: format(new Date(), 'yyyy-MM-dd') });
+      toast.success('Game added to its slot');
     },
     onError: (error) => {
       toast.error('Failed to add game: ' + error.message);
     },
   });
 
-  // Update game mutation
+  // Update game: title and official game number only. Prices change through Planogram Change.
   const updateGameMutation = useMutation({
     mutationFn: async () => {
       if (!editingGame) throw new Error('No game selected');
-      
-      const nextPrice = parseFloat(newGame.ticketPrice);
-      const priceChanged = Number(editingGame.ticket_price) !== nextPrice;
-
       const { error } = await supabase
         .from('lottery_games')
         .update({
-          game_name: newGame.name.trim(),
-          ticket_price: nextPrice,
+          game_name: newGame.name.trim() || gameTitle(editingGame),
+          game_number: newGame.number.trim() || null,
         })
         .eq('id', editingGame.id);
       if (error) throw error;
-
-      if (priceChanged) {
-        const { error: historyError } = await (supabase as any)
-          .from('lottery_game_price_history')
-          .upsert({
-            game_id: editingGame.id,
-            branch_id: editingGame.branch_id,
-            ticket_price: nextPrice,
-            effective_date: format(new Date(), 'yyyy-MM-dd'),
-            changed_by: user?.id,
-            notes: `Ticket price changed from £${Number(editingGame.ticket_price).toFixed(2)} to £${nextPrice.toFixed(2)}`,
-          }, { onConflict: 'game_id,effective_date' });
-        if (historyError) throw historyError;
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lottery-games'] });
-      queryClient.invalidateQueries({ queryKey: ['lottery-price-history'] });
       setShowEditGameDialog(false);
       setEditingGame(null);
-      setNewGame({ name: '', ticketPrice: '1' });
-      toast.success('Game updated. Price changes now apply from today only.');
+      setNewGame({ name: '', ticketPrice: '1', number: '', slot: '', startDate: format(new Date(), 'yyyy-MM-dd') });
+      toast.success('Game details updated');
     },
     onError: (error) => {
       toast.error('Failed to update game: ' + error.message);
@@ -698,18 +733,19 @@ export default function Lottery() {
 
   // Save daily record mutation
   const saveRecordMutation = useMutation({
-    mutationFn: async ({ gameId, date, stockBegin, activatedTickets, stockEnd }: {
+    mutationFn: async ({ gameId, date, stockBegin, activatedTickets, stockEnd, returnedTickets = 0 }: {
       gameId: string;
       date: string;
       stockBegin: number;
       activatedTickets: number;
       stockEnd: number | null;
+      returnedTickets?: number;
     }) => {
       if (!effectiveBranchId) throw new Error('No branch selected');
-      
+
       // Note: tickets_sold is a generated column in the database, calculated automatically
       // Formula: tickets_sold = GREATEST(0, stock_begin + activated_tickets - COALESCE(stock_end, 0))
-      
+
       const { error } = await supabase
         .from('lottery_daily_records')
         .upsert({
@@ -719,6 +755,7 @@ export default function Lottery() {
           stock_begin: stockBegin,
           activated_tickets: activatedTickets,
           stock_end: stockEnd,
+          returned_tickets: returnedTickets ?? 0,
           created_by: user?.id,
         }, {
           onConflict: 'game_id,record_date'
@@ -736,6 +773,13 @@ export default function Lottery() {
   // Delete game mutation
   const deleteGameMutation = useMutation({
     mutationFn: async (gameId: string) => {
+      // End the game's current slot assignment (history is kept); legacy games are just deactivated
+      const current = slotAssignments.find(a => a.game_id === gameId && !a.effective_to);
+      if (current) {
+        const { error } = await supabase.rpc('end_lottery_slot_game', { p_assignment_id: current.id });
+        if (error) throw error;
+        return;
+      }
       const { error } = await supabase
         .from('lottery_games')
         .update({ is_active: false })
@@ -743,18 +787,19 @@ export default function Lottery() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lottery-games'] });
-      toast.success('Game removed');
+      ['lottery-games', 'lottery-slot-assignments'].forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
+      toast.success('Game removed from its slot. Its history is kept.');
     },
+    onError: (error: any) => toast.error(error?.message || 'Could not remove the game'),
   });
 
   // Save monthly summary mutation
   const saveMonthlySummaryMutation = useMutation({
     mutationFn: async () => {
       if (!effectiveBranchId) throw new Error('No branch selected');
-      
+
       const lastDayPhysical = physicalStock[format(endOfMonth(selectedMonth), 'yyyy-MM-dd')];
-      
+
       const { error } = await supabase
         .from('lottery_monthly_summaries')
         .upsert({
@@ -783,13 +828,13 @@ export default function Lottery() {
     value: string
   ) => {
     const numValue = value === '' ? null : Math.max(0, parseInt(value) || 0);
-    
+
     setEditingData(prev => {
       const record = recordsByGameAndDate[gameId]?.[date];
       const existing = prev[gameId]?.[date];
       // Fall back to previous day's closing stock so editing other fields doesn't wipe begin stock
       const fallbackBegin = record?.stock_begin ?? getPreviousDayClosingStock(gameId, date) ?? 0;
-      
+
       return {
         ...prev,
         [gameId]: {
@@ -798,7 +843,8 @@ export default function Lottery() {
             stockBegin: existing?.stockBegin ?? fallbackBegin,
             activatedTickets: existing?.activatedTickets ?? record?.activated_tickets ?? 0,
             stockEnd: existing?.stockEnd ?? record?.stock_end ?? null,
-            [field]: numValue,
+            returnedTickets: existing?.returnedTickets ?? record?.returned_tickets ?? 0,
+            [field]: field === 'returnedTickets' ? (numValue ?? 0) : numValue,
           }
         }
       };
@@ -820,10 +866,13 @@ export default function Lottery() {
           stockBegin: finalBegin,
           activatedTickets: data.activatedTickets ?? 0,
           stockEnd: data.stockEnd,
+          returnedTickets: data.returnedTickets ?? 0,
         });
 
-        // If end stock was set, overwrite tomorrow's begin stock so it always carries forward
-        if (data.stockEnd !== null && data.stockEnd !== undefined && effectiveBranchId) {
+        // If end stock was set, overwrite tomorrow's begin stock so it always carries forward -
+        // but only while the game is still in a slot tomorrow (never after it was swapped out).
+        const tomorrowStr = format(addDays(new Date(date), 1), 'yyyy-MM-dd');
+        if (data.stockEnd !== null && data.stockEnd !== undefined && effectiveBranchId && isGameActiveOn(gameId, tomorrowStr)) {
           const tomorrow = format(addDays(new Date(date), 1), 'yyyy-MM-dd');
           const tomorrowRecord = recordsByGameAndDate[gameId]?.[tomorrow];
           await supabase.from('lottery_daily_records').upsert({
@@ -843,7 +892,7 @@ export default function Lottery() {
         delete newData[gameId];
         return newData;
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['lottery-daily-records'] });
       toast.success('Data saved successfully');
     } catch {
@@ -874,6 +923,7 @@ export default function Lottery() {
             stockBegin: data.stockBegin ?? 0,
             activatedTickets: data.activatedTickets ?? 0,
             stockEnd: data.stockEnd,
+            returnedTickets: data.returnedTickets ?? 0,
           });
         }
       }
@@ -892,50 +942,65 @@ export default function Lottery() {
   const exportToCSV = () => {
     const monthStr = format(selectedMonth, 'MMMM yyyy');
     const branchName = branches.find(b => b.id === effectiveBranchId)?.name || 'Branch';
-    
+
     const lines: string[] = [];
     lines.push('Niza Group of Companies');
     lines.push('Daily Lottery Reconciliation Form');
     lines.push(`For the month of ${monthStr}`);
     lines.push(`Branch: ${branchName}`);
     lines.push('');
-    
+
     // Headers
     const dateHeaders = daysInMonth.map(d => format(d, 'dd/MM'));
     lines.push(['', 'Scratchcards', '', '', ...dateHeaders, 'Total'].join(','));
     lines.push('');
-    
+
     games.forEach(game => {
       const gameTotals = getGameTotals(game.id, game);
-      
+
       // Stock Begin row
       const stockBeginValues = daysInMonth.map(day => {
-        const val = getCellValue(game.id, format(day, 'yyyy-MM-dd'), 'stockBegin');
+        const d = format(day, 'yyyy-MM-dd');
+        if (!isGameActiveOn(game.id, d)) return '-';
+        const val = getCellValue(game.id, d, 'stockBegin');
         return val ?? '-';
       });
-      lines.push(['', game.game_name, '', 'Instant Stock to begin', ...stockBeginValues, gameTotals.initialStock].join(','));
-      
+      const exportSlot = slotOf(game.id, format(endOfMonth(selectedMonth), 'yyyy-MM-dd')) ?? slotOf(game.id, format(selectedMonth, 'yyyy-MM-dd'));
+      const exportLabel = `${exportSlot ? `Slot ${exportSlot} - ` : ''}${gameTitle(game)}`;
+      lines.push(['', exportLabel, '', 'Instant Stock to begin', ...stockBeginValues, gameTotals.initialStock].join(','));
+
       // Activated row
       const activatedValues = daysInMonth.map(day => {
-        const val = getCellValue(game.id, format(day, 'yyyy-MM-dd'), 'activatedTickets');
+        const d = format(day, 'yyyy-MM-dd');
+        if (!isGameActiveOn(game.id, d)) return '-';
+        const val = getCellValue(game.id, d, 'activatedTickets');
         return val ?? '-';
       });
       lines.push(['', '', '', 'Activated Tickets', ...activatedValues, gameTotals.totalActivated].join(','));
-      
+
       // Total row
       const totalValues = daysInMonth.map(day => {
         const calc = getDayCalculations(game.id, format(day, 'yyyy-MM-dd'), game);
         return calc.totalStock || '-';
       });
       lines.push(['', '', '', 'Total', ...totalValues, gameTotals.initialStock + gameTotals.totalActivated].join(','));
-      
+
       // Stock End row
       const stockEndValues = daysInMonth.map(day => {
-        const val = getCellValue(game.id, format(day, 'yyyy-MM-dd'), 'stockEnd');
+        const d = format(day, 'yyyy-MM-dd');
+        if (!isGameActiveOn(game.id, d)) return '-';
+        const val = getCellValue(game.id, d, 'stockEnd');
         return val ?? '-';
       });
       lines.push(['', '', '', 'Instant Stock End', ...stockEndValues, gameTotals.closingStock].join(','));
-      
+
+      // Returned / removed row
+      const returnedValues = daysInMonth.map(day => {
+        const calc = getDayCalculations(game.id, format(day, 'yyyy-MM-dd'), game);
+        return calc.inactive ? '-' : (calc.returned || '-');
+      });
+      lines.push(['', '', '', 'Returned / Removed', ...returnedValues, gameTotals.totalReturned].join(','));
+
       // Tickets Sold row
       const soldValues = daysInMonth.map(day => {
         const calc = getDayCalculations(game.id, format(day, 'yyyy-MM-dd'), game);
@@ -944,17 +1009,17 @@ export default function Lottery() {
       const priceValues = daysInMonth.map(day => `£${getHistoricalTicketPrice(game, format(day, 'yyyy-MM-dd')).toFixed(2)}`);
       lines.push(['', '', getMonthlyPriceLabel(game), 'Ticket Price Used', ...priceValues, getMonthlyPriceLabel(game)].join(','));
       lines.push(['', '', getMonthlyPriceLabel(game), 'No of Tickets Sold', ...soldValues, gameTotals.totalTicketsSold].join(','));
-      
+
       // Sales Value row
       const salesValues = daysInMonth.map(day => {
         const calc = getDayCalculations(game.id, format(day, 'yyyy-MM-dd'), game);
         return calc.salesValue !== null ? `£${calc.salesValue.toFixed(2)}` : '-';
       });
       lines.push(['', '', '', 'Tickets Sale Value', ...salesValues, `£${gameTotals.totalSalesValue.toFixed(2)}`].join(','));
-      
+
       lines.push('');
     });
-    
+
     // Summary - Total Instant Lottery Sales (with daily values so they appear in Excel)
     lines.push('');
     const dailySalesValues = daysInMonth.map(day => {
@@ -987,14 +1052,14 @@ export default function Lottery() {
     // Daily closing stocks
     const dailyClosingStocks = daysInMonth.map(day => dailyTotals[format(day, 'yyyy-MM-dd')]?.closingStock || '-');
     lines.push(['', 'Closing Instant Lottery Stock -- As per the Working', '', '', ...dailyClosingStocks, grandTotals.totalClosingStock].join(','));
-    
+
     // Physical stock
     const physicalStockValues = daysInMonth.map(day => {
       const val = physicalStock[format(day, 'yyyy-MM-dd')];
       return val !== undefined && val !== '' ? val : '-';
     });
     lines.push(['', 'Closing Instant Lottery Stock -- Physically (Number of Tickets)', '', '', ...physicalStockValues, ''].join(','));
-    
+
     // Differences
     const differenceValues = daysInMonth.map(day => {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -1020,8 +1085,294 @@ export default function Lottery() {
   // Open edit game dialog
   const openEditGame = (game: LotteryGame) => {
     setEditingGame(game);
-    setNewGame({ name: game.game_name, ticketPrice: game.ticket_price.toString() });
+    setNewGame({ name: game.game_name, ticketPrice: game.ticket_price.toString(), number: game.game_number || '', slot: '', startDate: format(new Date(), 'yyyy-MM-dd') });
     setShowEditGameDialog(true);
+  };
+
+  // ---- monthly slot view ----
+  const gameById = useMemo(() => Object.fromEntries(games.map(g => [g.id, g])) as Record<string, LotteryGame>, [games]);
+  const legacyGames = useMemo(() => games.filter(g => !(coverageByGame[g.id]?.length)), [games, coverageByGame]);
+  const monthlySlotView = useMemo(() => filteredBranchIds
+    .map(branchId => ({
+      branchId,
+      branchName: branches.find(b => b.id === branchId)?.name || 'Branch',
+      groups: buildSlotSegments(slotAssignments.filter(a => a.branch_id === branchId), monthStartStr, monthEndStr),
+    }))
+    .filter(v => v.groups.length > 0), [filteredBranchIds, branches, slotAssignments, monthStartStr, monthEndStr]);
+
+  // games in a slot on the selected day (daily entry), ordered by slot
+  const dailyGames = useMemo(() => {
+    const d = format(selectedDate, 'yyyy-MM-dd');
+    return games
+      .filter(g => isGameActiveOn(g.id, d))
+      .sort((x, y) => (slotOf(x.id, d) ?? 9999) - (slotOf(y.id, d) ?? 9999));
+  }, [games, selectedDate, isGameActiveOn, slotOf]);
+
+  const openPlanogram = (branchId: string, slot: number, game: LotteryGame) => {
+    const assignment = slotAssignments.find(a => a.branch_id === branchId && a.slot_number === slot && a.game_id === game.id && !a.effective_to);
+    let minDate = assignment ? format(addDays(parseISO(assignment.effective_from), 1), 'yyyy-MM-dd') : format(selectedMonth, 'yyyy-MM-dd');
+    changesForSlot(planogramChanges, branchId, slot).forEach(c => {
+      const after = format(addDays(parseISO(c.change_date), 1), 'yyyy-MM-dd');
+      if (after > minDate) minDate = after;
+    });
+    setPlanogramTarget({ branchId, slot, gameId: game.id, minDate });
+  };
+
+  const renderMonthlyGame = (game: LotteryGame, seg: SlotSegment | null) => {
+    const gameTotals = getGameTotals(game.id, game, seg);
+    const hasUnsavedChanges = !!editingData[game.id];
+    const inSeg = (d: string) => !seg || segmentCovers(seg, d);
+    return (
+                        <div key={`${game.id}-${seg?.assignmentId ?? 'legacy'}`} className={seg ? 'mt-3 rounded-2xl border border-border/60 bg-card/70 p-3 sm:p-4' : 'p-4'}>
+                          {/* Game Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg text-xs">
+                                £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-lg flex flex-wrap items-center gap-2">
+                                  {gameTitle(game)}
+                                  {game.game_number && game.game_name && game.game_name !== `Game ${game.game_number}` && (
+                                    <span className="text-sm font-normal text-muted-foreground">{game.game_name}</span>
+                                  )}
+                                  {!game.game_number && (
+                                    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-[10px]">Add game number</Badge>
+                                  )}
+                                  {seg?.movedFromSlot && (
+                                    <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-700 text-[10px] gap-1">
+                                      <MoveRight className="h-3 w-3" />Moved from Slot {seg.movedFromSlot} on {format(parseISO(seg.from), 'dd MMM')}
+                                    </Badge>
+                                  )}
+                                </h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {seg ? `${format(parseISO(seg.from), 'dd MMM')}${seg.from === seg.to ? '' : ` – ${format(parseISO(seg.to), 'dd MMM')}`}${seg.endsAfter ? ' (current)' : ''} · ` : ''}
+                                  {gameTotals.totalTicketsSold} tickets sold
+                                </p>
+                              </div>
+                              {hasUnsavedChanges && (
+                                <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Unsaved
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-2xl font-bold text-green-600">
+                                  £{gameTotals.totalSalesValue.toFixed(2)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Total Sales</p>
+                              </div>
+                              {hasUnsavedChanges && isSingleBranchSelected && (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => saveGameData(game.id)}
+                                  className="gap-2"
+                                >
+                                  <Save className="h-4 w-4" />
+                                  Save
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Excel-like Grid */}
+                          <ScrollArea className="w-full">
+                            <div className="min-w-max">
+                              <table className="w-full border-collapse text-sm">
+                                <thead>
+                                  <tr className="bg-muted/50">
+                                    <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-semibold min-w-[140px] border-r">
+                                      Field
+                                    </th>
+                                    {daysInMonth.map(day => (
+                                      <th key={day.toISOString()} className="px-1 py-2 text-center font-medium min-w-[56px] border-r border-b">
+                                        <div className="text-xs text-muted-foreground">{format(day, 'EEE')}</div>
+                                        <div className="font-semibold">{format(day, 'dd')}</div>
+                                      </th>
+                                    ))}
+                                    <th className="px-3 py-2 text-center font-semibold min-w-[80px] bg-primary/5">
+                                      Total
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {/* Instant Stock to Begin */}
+                                  <tr className="border-b hover:bg-muted/30">
+                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
+                                      Instant Stock to begin
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const value = getCellValue(game.id, dateStr, 'stockBegin');
+                                      return (
+                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
+                                            value={value ?? ''}
+                                            readOnly
+                                            placeholder="-"
+                                            tabIndex={-1}
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
+                                      {gameTotals.initialStock}
+                                    </td>
+                                  </tr>
+
+                                  {/* Activated Tickets */}
+                                  <tr className="border-b hover:bg-muted/30">
+                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
+                                      Activated Tickets
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const value = getCellValue(game.id, dateStr, 'activatedTickets');
+                                      return (
+                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
+                                            value={value ?? ''}
+                                            readOnly
+                                            placeholder="-"
+                                            tabIndex={-1}
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
+                                      {gameTotals.totalActivated}
+                                    </td>
+                                  </tr>
+
+                                  {/* Total (calculated) */}
+                                  <tr className="border-b bg-blue-50/50 dark:bg-blue-950/20">
+                                    <td className="sticky left-0 z-10 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-1.5 font-medium border-r">
+                                      Total
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const calc = getDayCalculations(game.id, dateStr, game);
+                                      return (
+                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium border-r">
+                                          {calc.stockBegin || calc.activated ? calc.totalStock : '-'}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-bold bg-primary/5">
+                                      {gameTotals.initialStock + gameTotals.totalActivated}
+                                    </td>
+                                  </tr>
+
+                                  {/* Instant Stock End */}
+                                  <tr className="border-b hover:bg-muted/30">
+                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
+                                      Instant Stock End
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const value = getCellValue(game.id, dateStr, 'stockEnd');
+                                      return (
+                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
+                                            value={value ?? ''}
+                                            readOnly
+                                            placeholder="-"
+                                            tabIndex={-1}
+                                          />
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
+                                      {gameTotals.closingStock}
+                                    </td>
+                                  </tr>
+
+                                  {/* Returned / Removed */}
+                                  <tr className="border-b hover:bg-muted/30">
+                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
+                                      Returned / Removed
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const value = getCellValue(game.id, dateStr, 'returnedTickets');
+                                      return (
+                                        <td key={dateStr} className="px-1 py-1.5 text-center text-rose-700 border-r">
+                                          {value ? value : '-'}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
+                                      {gameTotals.totalReturned}
+                                    </td>
+                                  </tr>
+
+                                  {/* Tickets Sold (calculated) */}
+                                  <tr className="border-b bg-amber-50/50 dark:bg-amber-950/20">
+                                    <td className="sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-1.5 font-medium border-r">
+                                      <span className="flex items-center gap-2">
+                                        <Badge variant="outline" className="text-xs px-1.5" title="Price follows history by date">
+                                          {getMonthlyPriceLabel(game)}
+                                        </Badge>
+                                        No of Tickets Sold
+                                      </span>
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const calc = getDayCalculations(game.id, dateStr, game);
+                                      return (
+                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium border-r">
+                                          {calc.ticketsSold !== null ? calc.ticketsSold : '-'}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-bold bg-primary/5">
+                                      {gameTotals.totalTicketsSold}
+                                    </td>
+                                  </tr>
+
+                                  {/* Sales Value (calculated) */}
+                                  <tr className="bg-green-50/70 dark:bg-green-950/30">
+                                    <td className="sticky left-0 z-10 bg-green-50/70 dark:bg-green-950/30 px-3 py-1.5 font-medium border-r">
+                                      Tickets Sale Value
+                                    </td>
+                                    {daysInMonth.map(day => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      if (!inSeg(dateStr)) return <td key={dateStr} className="border-r bg-muted/40" />;
+                                      const calc = getDayCalculations(game.id, dateStr, game);
+                                      return (
+                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium text-green-700 dark:text-green-400 border-r">
+                                          {calc.salesValue !== null ? `£${calc.salesValue.toFixed(2)}` : '-'}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-1.5 text-center font-bold text-green-700 dark:text-green-400 bg-green-100/50 dark:bg-green-900/30">
+                                      £{gameTotals.totalSalesValue.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            <ScrollBar orientation="horizontal" />
+                          </ScrollArea>
+                        </div>
+    );
   };
 
   if (!user) return null;
@@ -1055,7 +1406,7 @@ export default function Lottery() {
           </h1>
           <p className="text-muted-foreground mt-1">Track scratchcard inventory, sales, and reconciliation</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3">
           {/* Month Navigation */}
           <div className="flex items-center gap-1 bg-card rounded-xl p-1 shadow-sm border border-primary/10">
@@ -1264,223 +1615,48 @@ export default function Lottery() {
                   </div>
                 ) : (
                   <div className="divide-y">
-                    {games.map((game) => {
-                      const gameTotals = getGameTotals(game.id, game);
-                      const hasUnsavedChanges = !!editingData[game.id];
-                      
-                      return (
-                        <div key={game.id} className="p-4">
-                          {/* Game Header */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold shadow-lg text-xs">
-                                £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
+                    {monthlySlotView.map(view => (
+                      <div key={view.branchId}>
+                        {monthlySlotView.length > 1 && (
+                          <div className="bg-muted/40 px-4 py-2 text-sm font-semibold text-muted-foreground">{view.branchName}</div>
+                        )}
+                        {view.groups.map(group => {
+                          const current = group.segments[group.segments.length - 1];
+                          const currentGame = gameById[current.gameId];
+                          const slotChanges = changesForSlot(planogramChanges, view.branchId, group.slot);
+                          return (
+                            <div key={`${view.branchId}-${group.slot}`} className="p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-12 min-w-[48px] flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 px-2 text-white shadow-md">
+                                    <span className="text-[9px] font-semibold uppercase tracking-[0.14em] opacity-70">Slot</span>
+                                    <span className="text-lg font-bold leading-none">{group.slot}</span>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold">{currentGame ? gameTitle(currentGame) : 'Unknown game'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {group.segments.length > 1 ? `${group.segments.length} games in this slot this month` : 'Same game all month'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isSingleBranchSelected && current.endsAfter && currentGame && !isReadOnlyMonth && (
+                                  <Button size="sm" variant="outline" className="gap-2 self-start sm:self-auto" onClick={() => openPlanogram(view.branchId, group.slot, currentGame)}>
+                                    <Repeat className="h-4 w-4" />
+                                    Planogram Change
+                                  </Button>
+                                )}
                               </div>
-                              <div>
-                                <h4 className="font-semibold text-lg">{game.game_name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {gameTotals.totalTicketsSold} tickets sold
-                                </p>
+                              <div className="mt-3">
+                                <ChangeHistoryLog changes={slotChanges} />
                               </div>
-                              {hasUnsavedChanges && (
-                                <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
-                                  Unsaved
-                                </Badge>
-                              )}
+                              {group.segments.map(seg => (gameById[seg.gameId] ? renderMonthlyGame(gameById[seg.gameId], seg) : null))}
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <p className="text-2xl font-bold text-green-600">
-                                  £{gameTotals.totalSalesValue.toFixed(2)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Total Sales</p>
-                              </div>
-                              {hasUnsavedChanges && isSingleBranchSelected && (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => saveGameData(game.id)}
-                                  className="gap-2"
-                                >
-                                  <Save className="h-4 w-4" />
-                                  Save
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Excel-like Grid */}
-                          <ScrollArea className="w-full">
-                            <div className="min-w-max">
-                              <table className="w-full border-collapse text-sm">
-                                <thead>
-                                  <tr className="bg-muted/50">
-                                    <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2 text-left font-semibold min-w-[140px] border-r">
-                                      Field
-                                    </th>
-                                    {daysInMonth.map(day => (
-                                      <th key={day.toISOString()} className="px-1 py-2 text-center font-medium min-w-[56px] border-r border-b">
-                                        <div className="text-xs text-muted-foreground">{format(day, 'EEE')}</div>
-                                        <div className="font-semibold">{format(day, 'dd')}</div>
-                                      </th>
-                                    ))}
-                                    <th className="px-3 py-2 text-center font-semibold min-w-[80px] bg-primary/5">
-                                      Total
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {/* Instant Stock to Begin */}
-                                  <tr className="border-b hover:bg-muted/30">
-                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
-                                      Instant Stock to begin
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const value = getCellValue(game.id, dateStr, 'stockBegin');
-                                      return (
-                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
-                                            value={value ?? ''}
-                                            readOnly
-                                            placeholder="-"
-                                            tabIndex={-1}
-                                          />
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
-                                      {gameTotals.initialStock}
-                                    </td>
-                                  </tr>
-                                  
-                                  {/* Activated Tickets */}
-                                  <tr className="border-b hover:bg-muted/30">
-                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
-                                      Activated Tickets
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const value = getCellValue(game.id, dateStr, 'activatedTickets');
-                                      return (
-                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
-                                            value={value ?? ''}
-                                            readOnly
-                                            placeholder="-"
-                                            tabIndex={-1}
-                                          />
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
-                                      {gameTotals.totalActivated}
-                                    </td>
-                                  </tr>
-                                  
-                                  {/* Total (calculated) */}
-                                  <tr className="border-b bg-blue-50/50 dark:bg-blue-950/20">
-                                    <td className="sticky left-0 z-10 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-1.5 font-medium border-r">
-                                      Total
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const calc = getDayCalculations(game.id, dateStr, game);
-                                      return (
-                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium border-r">
-                                          {calc.stockBegin || calc.activated ? calc.totalStock : '-'}
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-bold bg-primary/5">
-                                      {gameTotals.initialStock + gameTotals.totalActivated}
-                                    </td>
-                                  </tr>
-                                  
-                                  {/* Instant Stock End */}
-                                  <tr className="border-b hover:bg-muted/30">
-                                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium border-r">
-                                      Instant Stock End
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const value = getCellValue(game.id, dateStr, 'stockEnd');
-                                      return (
-                                        <td key={dateStr} className="px-0.5 py-0.5 border-r">
-                                          <Input
-                                            type="number"
-                                            min="0"
-                                            className="h-8 w-full text-center text-sm border-0 bg-muted/30 cursor-not-allowed"
-                                            value={value ?? ''}
-                                            readOnly
-                                            placeholder="-"
-                                            tabIndex={-1}
-                                          />
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-semibold bg-primary/5">
-                                      {gameTotals.closingStock}
-                                    </td>
-                                  </tr>
-                                  
-                                  {/* Tickets Sold (calculated) */}
-                                  <tr className="border-b bg-amber-50/50 dark:bg-amber-950/20">
-                                    <td className="sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-1.5 font-medium border-r">
-                                      <span className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs px-1.5" title="Price follows history by date">
-                                          {getMonthlyPriceLabel(game)}
-                                        </Badge>
-                                        No of Tickets Sold
-                                      </span>
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const calc = getDayCalculations(game.id, dateStr, game);
-                                      return (
-                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium border-r">
-                                          {calc.ticketsSold !== null ? calc.ticketsSold : '-'}
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-bold bg-primary/5">
-                                      {gameTotals.totalTicketsSold}
-                                    </td>
-                                  </tr>
-                                  
-                                  {/* Sales Value (calculated) */}
-                                  <tr className="bg-green-50/70 dark:bg-green-950/30">
-                                    <td className="sticky left-0 z-10 bg-green-50/70 dark:bg-green-950/30 px-3 py-1.5 font-medium border-r">
-                                      Tickets Sale Value
-                                    </td>
-                                    {daysInMonth.map(day => {
-                                      const dateStr = format(day, 'yyyy-MM-dd');
-                                      const calc = getDayCalculations(game.id, dateStr, game);
-                                      return (
-                                        <td key={dateStr} className="px-1 py-1.5 text-center font-medium text-green-700 dark:text-green-400 border-r">
-                                          {calc.salesValue !== null ? `£${calc.salesValue.toFixed(2)}` : '-'}
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="px-3 py-1.5 text-center font-bold text-green-700 dark:text-green-400 bg-green-100/50 dark:bg-green-900/30">
-                                      £{gameTotals.totalSalesValue.toFixed(2)}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                            <ScrollBar orientation="horizontal" />
-                          </ScrollArea>
-                        </div>
-                      );
-                    })}
-                    
+                          );
+                        })}
+                      </div>
+                    ))}
+                    {legacyGames.map(game => renderMonthlyGame(game, null))}
+
                     {/* Summary Section */}
                     {games.length > 0 && (
                       <div className="p-4 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -1631,7 +1807,7 @@ export default function Lottery() {
                                     {grandTotals.totalClosingStock}
                                   </td>
                                 </tr>
-                                
+
                                 {/* Stock Difference (Day over Day) */}
                                 <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                                   <td className="sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-2 font-semibold border-r">
@@ -1640,7 +1816,7 @@ export default function Lottery() {
                                   {daysInMonth.map((day, idx) => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
                                     const currentClosing = dailyTotals[dateStr]?.closingStock || 0;
-                                    
+
                                     // Get previous day's closing
                                     let previousClosing = 0;
                                     if (idx > 0) {
@@ -1653,7 +1829,7 @@ export default function Lottery() {
                                         previousClosing += stockBegin;
                                       });
                                     }
-                                    
+
                                     // If no data for this day, show dash
                                     if (currentClosing === 0) {
                                       return (
@@ -1662,7 +1838,7 @@ export default function Lottery() {
                                         </td>
                                       );
                                     }
-                                    
+
                                     // Get tickets sold for this day
                                     let ticketsSold = 0;
                                     let activatedToday = 0;
@@ -1671,12 +1847,12 @@ export default function Lottery() {
                                       ticketsSold += calc.ticketsSold ?? 0;
                                       activatedToday += calc.activated ?? 0;
                                     });
-                                    
+
                                     // Expected: previousClosing + activated - sold = currentClosing
                                     const expectedClosing = previousClosing + activatedToday - ticketsSold;
                                     const diff = currentClosing - expectedClosing;
                                     const hasError = diff !== 0 && currentClosing > 0;
-                                    
+
                                     return (
                                       <td key={dateStr} className={`px-1 py-2 text-center font-medium border-r ${hasError ? 'text-destructive' : 'text-green-600'}`}>
                                         {diff === 0 ? '✓' : (diff > 0 ? `+${diff}` : diff)}
@@ -1692,7 +1868,7 @@ export default function Lottery() {
                           </div>
                           <ScrollBar orientation="horizontal" />
                         </ScrollArea>
-                        
+
                         {isSingleBranchSelected && hasAnyUnsavedChanges && (
                           <div className="mt-4 flex justify-end">
                             <Button 
@@ -1876,11 +2052,12 @@ export default function Lottery() {
 
                     {/* Game Cards - Vertical Layout for Daily Entry */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {games.map((game) => {
+                      {dailyGames.map((game) => {
                         const dateStr = format(selectedDate, 'yyyy-MM-dd');
                         const calc = getDayCalculations(game.id, dateStr, game);
+                        const daySlot = slotOf(game.id, dateStr);
                         const hasUnsavedChanges = !!editingData[game.id]?.[dateStr];
-                        
+
                         return (
                           <Card key={game.id} className={`overflow-hidden transition-all ${hasUnsavedChanges ? 'ring-2 ring-amber-400' : ''}`}>
                             <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -1890,7 +2067,7 @@ export default function Lottery() {
                                     £{calc.ticketPrice.toFixed(0)}
                                   </div>
                                   <div>
-                                    <CardTitle className="text-lg">{game.game_name}</CardTitle>
+                                    <CardTitle className="text-lg">{daySlot ? `Slot ${daySlot} · ` : ''}{gameTitle(game)}</CardTitle>
                                     <CardDescription>£{calc.ticketPrice.toFixed(2)} per ticket for {format(selectedDate, 'dd MMM')}</CardDescription>
                                   </div>
                                 </div>
@@ -1908,7 +2085,7 @@ export default function Lottery() {
                             </CardHeader>
                             <CardContent className="p-4 space-y-4">
                               {/* Input Fields */}
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                                 <div className="space-y-1.5">
                                   <Label className="text-xs text-muted-foreground">Stock Begin</Label>
                                   <Input
@@ -1945,8 +2122,21 @@ export default function Lottery() {
                                     disabled={!isSingleBranchSelected}
                                   />
                                 </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">Returned</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    className="h-10 text-center font-semibold"
+                                    value={getCellValue(game.id, dateStr, 'returnedTickets') ?? ''}
+                                    onChange={(e) => handleCellEdit(game.id, dateStr, 'returnedTickets', e.target.value)}
+                                    placeholder="0"
+                                    title="Unsold tickets removed or returned (e.g. planogram swap)"
+                                    disabled={!isSingleBranchSelected}
+                                  />
+                                </div>
                               </div>
-                              
+
                               {/* Calculated Values */}
                               <div className="grid grid-cols-3 gap-3 pt-3 border-t">
                                 <div className="text-center p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30">
@@ -1973,7 +2163,7 @@ export default function Lottery() {
                         );
                       })}
                     </div>
-                    
+
                     {/* Daily Physical Stock & Difference - Auto Calculated */}
                     <Card className="bg-gradient-to-r from-muted/30 to-muted/10">
                       <CardContent className="p-4">
@@ -1996,7 +2186,7 @@ export default function Lottery() {
                                   autoPhysicalCount += stockEnd;
                                 }
                               });
-                              
+
                               return (
                                 <div className="h-10 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 flex items-center justify-center font-bold text-lg text-blue-700 dark:text-blue-400">
                                   {autoPhysicalCount}
@@ -2009,7 +2199,7 @@ export default function Lottery() {
                             {(() => {
                               const dateStr = format(selectedDate, 'yyyy-MM-dd');
                               const working = dailyTotals[dateStr]?.closingStock || 0;
-                              
+
                               // Auto-calculate physical count
                               let autoPhysicalCount = 0;
                               games.forEach(game => {
@@ -2018,11 +2208,11 @@ export default function Lottery() {
                                   autoPhysicalCount += stockEnd;
                                 }
                               });
-                              
+
                               // Difference = Working - Physical (should be 0 if data matches)
                               const diff = working - autoPhysicalCount;
                               const hasData = working > 0 || autoPhysicalCount > 0;
-                              
+
                               return (
                                 <div className={`h-10 px-3 rounded-lg border flex items-center justify-center font-bold text-lg ${
                                   !hasData ? 'bg-muted text-muted-foreground' :
@@ -2088,7 +2278,7 @@ export default function Lottery() {
                       £{grandTotals.totalSalesValue.toFixed(2)}
                     </p>
                   </div>
-                  
+
                   <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200/50">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -2157,24 +2347,24 @@ export default function Lottery() {
                           {daysInMonth.map((day, idx) => {
                             const dateStr = format(day, 'yyyy-MM-dd');
                             let opening = 0, activated = 0, sold = 0, closing = 0, sales = 0;
-                            
+
                             games.forEach(game => {
                               const stockBegin = getCellValue(game.id, dateStr, 'stockBegin') ?? 0;
                               const activatedTickets = getCellValue(game.id, dateStr, 'activatedTickets') ?? 0;
                               const calc = getDayCalculations(game.id, dateStr, game);
-                              
+
                               opening += stockBegin;
                               activated += activatedTickets;
                               sold += calc.ticketsSold ?? 0;
                               closing += calc.stockEnd ?? 0;
                               sales += calc.salesValue ?? 0;
                             });
-                            
+
                             // Check balance: opening + activated - sold = closing
                             const expectedClosing = opening + activated - sold;
                             const isBalanced = closing > 0 && expectedClosing === closing;
                             const hasData = opening > 0 || activated > 0 || closing > 0;
-                            
+
                             return (
                               <tr key={dateStr} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                                 <td className="sticky left-0 bg-inherit px-3 py-2 font-medium border-r">
@@ -2222,9 +2412,9 @@ export default function Lottery() {
                     <ScrollBar orientation="horizontal" />
                   </ScrollArea>
                 </div>
-                
+
                 <Separator className="my-6" />
-                
+
                 {/* Game-wise Breakdown */}
                 <div>
                   <h4 className="font-semibold mb-4">Game-wise Breakdown</h4>
@@ -2310,7 +2500,7 @@ export default function Lottery() {
                               £{getHistoricalTicketPrice(game, format(new Date(), 'yyyy-MM-dd')).toFixed(0)}
                             </div>
                             <div>
-                              <h4 className="font-semibold">{game.game_name}</h4>
+                              <h4 className="font-semibold">{gameTitle(game)}{game.game_number && game.game_name !== `Game ${game.game_number}` ? <span className="ml-2 text-sm font-normal text-muted-foreground">{game.game_name}</span> : null}</h4>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span>Current £{game.ticket_price.toFixed(2)} per ticket</span>
                                 <span>•</span>
@@ -2360,6 +2550,30 @@ export default function Lottery() {
         </>
       )}
 
+      {/* Planogram Change Dialog */}
+      {planogramTarget && gameById[planogramTarget.gameId] && (() => {
+        const pgGame = gameById[planogramTarget.gameId];
+        return (
+          <PlanogramChangeDialog
+            open
+            onOpenChange={(o) => { if (!o) setPlanogramTarget(null); }}
+            branchId={planogramTarget.branchId}
+            slot={planogramTarget.slot}
+            game={pgGame}
+            currentPrice={getHistoricalTicketPrice(pgGame, format(new Date(), 'yyyy-MM-dd'))}
+            minDate={planogramTarget.minDate}
+            occupiedSlots={slotAssignments.filter(a => a.branch_id === planogramTarget.branchId && !a.effective_to).map(a => a.slot_number)}
+            suggestClosing={(d) => {
+              const entered = getCellValue(pgGame.id, d, 'stockEnd');
+              if (entered !== null && entered !== undefined) return entered;
+              const begin = getCellValue(pgGame.id, d, 'stockBegin');
+              const activated = getCellValue(pgGame.id, d, 'activatedTickets') ?? 0;
+              return begin !== null && begin !== undefined ? begin + activated : null;
+            }}
+          />
+        );
+      })()}
+
       {/* Add Game Dialog */}
       <Dialog open={showAddGameDialog} onOpenChange={setShowAddGameDialog}>
         <DialogContent className="sm:max-w-[425px]">
@@ -2369,16 +2583,45 @@ export default function Lottery() {
               Add New Scratchcard Game
             </DialogTitle>
             <DialogDescription>
-              Add a new lottery game to track sales and inventory.
+              Put a new scratchcard game into an empty dispenser slot. To replace a game in a used slot, use Planogram Change on that slot.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Dispenser slot *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 7"
+                  value={newGame.slot}
+                  onChange={(e) => setNewGame(prev => ({ ...prev, slot: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>National Lottery game no. *</Label>
+                <Input
+                  placeholder="e.g. 1612"
+                  value={newGame.number}
+                  onChange={(e) => setNewGame(prev => ({ ...prev, number: e.target.value }))}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
-              <Label>Game Name *</Label>
+              <Label>Game title (optional)</Label>
               <Input
-                placeholder="e.g., Lucky 7s, Diamond Fortune"
+                placeholder="e.g. Lucky 7s, Diamond Fortune"
                 value={newGame.name}
                 onChange={(e) => setNewGame(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Start date *</Label>
+              <Input
+                type="date"
+                max={format(new Date(), 'yyyy-MM-dd')}
+                value={newGame.startDate}
+                onChange={(e) => setNewGame(prev => ({ ...prev, startDate: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -2397,7 +2640,7 @@ export default function Lottery() {
             <Button variant="outline" onClick={() => setShowAddGameDialog(false)}>Cancel</Button>
             <Button 
               onClick={() => addGameMutation.mutate()} 
-              disabled={!newGame.name.trim() || !parseFloat(newGame.ticketPrice) || parseFloat(newGame.ticketPrice) <= 0 || addGameMutation.isPending}
+              disabled={!(parseInt(newGame.slot) > 0) || !newGame.number.trim() || !newGame.startDate || !parseFloat(newGame.ticketPrice) || parseFloat(newGame.ticketPrice) <= 0 || addGameMutation.isPending}
             >
               {addGameMutation.isPending ? 'Adding...' : 'Add Game'}
             </Button>
@@ -2414,7 +2657,7 @@ export default function Lottery() {
               Edit Game
             </DialogTitle>
             <DialogDescription>
-              Update game name and ticket price.
+              Update the National Lottery game number and title. To change the price, swap the game or move it, use Planogram Change on its slot so earlier days keep their original values.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2427,29 +2670,23 @@ export default function Lottery() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Ticket Price (£) *</Label>
+              <Label>National Lottery game number</Label>
               <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={newGame.ticketPrice}
-                onChange={(e) => setNewGame(prev => ({ ...prev, ticketPrice: e.target.value }))}
-                placeholder="e.g. 1, 3, 6, 10"
+                placeholder="e.g. 1503"
+                value={newGame.number}
+                onChange={(e) => setNewGame(prev => ({ ...prev, number: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">
-                If price changes, previous dates keep their old price and the new price starts from today.
-              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setShowEditGameDialog(false);
               setEditingGame(null);
-              setNewGame({ name: '', ticketPrice: '1' });
+              setNewGame({ name: '', ticketPrice: '1', number: '', slot: '', startDate: format(new Date(), 'yyyy-MM-dd') });
             }}>Cancel</Button>
-            <Button 
-              onClick={() => updateGameMutation.mutate()} 
-              disabled={!newGame.name.trim() || !parseFloat(newGame.ticketPrice) || parseFloat(newGame.ticketPrice) <= 0 || updateGameMutation.isPending}
+            <Button
+              onClick={() => updateGameMutation.mutate()}
+              disabled={(!newGame.name.trim() && !newGame.number.trim()) || updateGameMutation.isPending}
             >
               {updateGameMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
