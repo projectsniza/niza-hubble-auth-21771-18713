@@ -57,7 +57,7 @@ All colors MUST be HSL.
 
     --gradient-primary: linear-gradient(135deg, hsl(162 78% 26%), hsl(98 52% 36%));
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(150 25% 97%));
-    --gradient-panel: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(150 38% 97%) 55%, hsl(152 45% 93%) 100%);
+    --gradient-panel: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(205,242,222,0.22) 100%);
 
     /* Sidebar tokens */
     --sidebar-background: 156 25% 14%;
@@ -245,4 +245,217 @@ All colors MUST be HSL.
   --tier-gold-bg: 43 40% 22%;
   --tier-platinum-bg: 200 30% 22%;
   --tier-diamond-bg: 195 40% 22%;
+}
+
+
+/* =====================================================================
+   NIZA UI v3 - aurora canvas, floating emerald sidebar, glass tiles
+   Purely visual: no behaviour is changed by anything below.
+   ===================================================================== */
+
+@keyframes niza-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(40px, -30px, 0) scale(1.08); }
+  100% { transform: translate3d(-30px, 40px, 0) scale(0.96); }
+}
+@keyframes niza-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes niza-pop {
+  0%   { transform: scale(1) rotate(0); }
+  35%  { transform: scale(1.18) rotate(-8deg); }
+  70%  { transform: scale(0.96) rotate(5deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes niza-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+@keyframes niza-wave {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes niza-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.95; transform: scale(1.15); }
+}
+@keyframes niza-sheen {
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to   { transform: translateX(320%) skewX(-18deg); }
+}
+
+.niza-canvas {
+  background:
+    radial-gradient(1100px 650px at 6% -8%, #d3f3e2 0%, transparent 62%),
+    radial-gradient(900px 600px at 100% 0%, #fdf0c4 0%, transparent 55%),
+    radial-gradient(1000px 700px at 62% 112%, #c6eed9 0%, transparent 60%),
+    #edf5f0;
+}
+.niza-blob {
+  position: fixed;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  animation: niza-drift 24s ease-in-out infinite alternate;
+}
+
+/* Floating glass content panel */
+.niza-panel {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 30px 80px -30px rgba(10, 80, 55, 0.28);
+}
+
+/* Reusable entrance + hover helpers */
+.niza-rise { animation: niza-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.niza-float { animation: niza-float 6s ease-in-out infinite; }
+.group:hover .niza-icon-pop { animation: niza-pop 0.6s ease; }
+
+/* Glass tile (home modules, stat cards) */
+.niza-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.6));
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 2px rgba(16, 60, 45, 0.05), 0 12px 30px -14px rgba(10, 90, 60, 0.28);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s, border-color 0.35s;
+}
+.niza-tile:hover {
+  transform: translateY(-6px);
+  border-color: rgba(22, 128, 92, 0.35);
+  box-shadow: 0 2px 4px rgba(16, 60, 45, 0.06), 0 26px 44px -16px rgba(10, 90, 60, 0.42);
+}
+.niza-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.75) 50%, transparent 70%);
+  transform: translateX(-120%) skewX(-18deg);
+  pointer-events: none;
+}
+.niza-tile:hover::after { animation: niza-sheen 0.9s ease; }
+
+/* ---------------------------------------------------------------------
+   Sidebars (all modules share the same skin via [data-niza-sidebar])
+   --------------------------------------------------------------------- */
+[data-niza-sidebar] {
+  background: linear-gradient(165deg, #0f7049 0%, #0a5738 45%, #063a27 100%) !important;
+  color: #fff;
+  border: 0 !important;
+  isolation: isolate;
+  box-shadow: 0 30px 60px -24px rgba(4, 50, 33, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+@media (min-width: 768px) {
+  [data-niza-sidebar] {
+    margin: 12px 0 12px 12px;
+    border-radius: 28px;
+    height: calc(100vh - 24px) !important;
+    top: 12px !important;
+  }
+}
+/* living glow + wave at the bottom of the sidebar */
+[data-niza-sidebar]::before {
+  content: "";
+  position: absolute;
+  left: -30%;
+  bottom: -18%;
+  width: 160%;
+  height: 46%;
+  background: radial-gradient(closest-side, rgba(170, 214, 70, 0.55), rgba(170, 214, 70, 0) 70%);
+  filter: blur(18px);
+  z-index: 0;
+  animation: niza-glow 7s ease-in-out infinite;
+  pointer-events: none;
+}
+[data-niza-sidebar]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 38%;
+  background: radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 60%);
+  z-index: 0;
+  pointer-events: none;
+}
+[data-niza-sidebar] svg[viewBox="0 0 593 470"] { display: none; }
+
+/* text + icons */
+[data-niza-sidebar] .text-foreground,
+[data-niza-sidebar] .text-foreground\/70,
+[data-niza-sidebar] .text-muted-foreground { color: rgba(255, 255, 255, 0.78) !important; }
+[data-niza-sidebar] p.font-semibold { color: #fff !important; }
+[data-niza-sidebar] p.text-xs { color: rgba(255, 255, 255, 0.6) !important; }
+[data-niza-sidebar] [class*="border-primary"] { border-color: rgba(255, 255, 255, 0.12) !important; }
+
+/* logo sits on a white chip so brand colours stay true */
+[data-niza-sidebar] img {
+  background: #fff;
+  border-radius: 16px;
+  padding: 6px 12px;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.35);
+}
+
+/* user card */
+[data-niza-sidebar] div.p-4.border-b {
+  margin: 4px 12px 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(6px);
+}
+
+/* nav items */
+[data-niza-sidebar] nav { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; padding: 8px 14px; }
+[data-niza-sidebar] nav a {
+  position: relative;
+  border-radius: 14px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  transition: background 0.25s, color 0.25s, transform 0.25s, box-shadow 0.25s;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+[data-niza-sidebar] nav a:hover:not([aria-current="page"]) {
+  background: rgba(255, 255, 255, 0.11) !important;
+  color: #fff !important;
+  transform: translateX(3px);
+}
+[data-niza-sidebar] nav a:hover svg { animation: niza-pop 0.55s ease; }
+[data-niza-sidebar] nav a[aria-current="page"] {
+  background: linear-gradient(90deg, #b9de4d 0%, #8fc83f 100%) !important;
+  color: #0a3a27 !important;
+  font-weight: 700;
+  box-shadow: 0 10px 24px -10px rgba(170, 220, 60, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+[data-niza-sidebar] nav a[aria-current="page"] * { color: #0a3a27 !important; }
+[data-niza-sidebar] nav a[aria-current="page"] [class*="bg-secondary"] { background: rgba(10, 58, 39, 0.14) !important; }
+[data-niza-sidebar] nav a .bg-secondary,
+[data-niza-sidebar] nav a [class*="bg-secondary"] {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #fff !important;
+  border: 0;
+}
+[data-niza-sidebar] nav a .bg-destructive { box-shadow: 0 0 0 2px #0a5738; }
+
+/* hamburger + logout */
+[data-niza-sidebar] button:hover { background: rgba(255, 255, 255, 0.12) !important; }
+[data-niza-sidebar] button.text-destructive,
+[data-niza-sidebar] button.text-destructive * { color: #fecaca !important; }
+
+/* nicer scrollbars everywhere */
+* { scrollbar-width: thin; scrollbar-color: hsl(150 12% 78%) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: hsl(150 12% 80%); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: hsl(150 14% 66%); background-clip: content-box; border: 3px solid transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .niza-blob, .niza-float, [data-niza-sidebar]::before { animation: none !important; }
+  .niza-rise { animation-duration: 0.01ms !important; }
 }

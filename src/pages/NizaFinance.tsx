@@ -279,7 +279,7 @@ export default function NizaFinance() {
       {/* Sidebar */}
       <aside 
         className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative h-screen sticky top-0 flex-shrink-0 overflow-hidden`}
-        style={{ background: 'var(--gradient-panel)', width: sidebarCollapsed ? '80px' : '320px' }}
+        data-niza-sidebar="" style={{ width: sidebarCollapsed ? '80px' : '320px' }}
       >
         {/* Logo */}
         <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: sidebarCollapsed ? '80px' : '320px' }}>

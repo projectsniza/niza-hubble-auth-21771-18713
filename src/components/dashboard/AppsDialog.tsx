@@ -149,7 +149,7 @@ export default function AppsDialog() {
           </div>
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md border-primary/20 backdrop-blur-xl" style={{ background: 'var(--gradient-panel)' }}>
+      <DialogContent className="sm:max-w-md border-primary/20 backdrop-blur-xl" style={{ background: 'linear-gradient(180deg,#fff 0%,#eefaf3 100%)' }}>
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Applications
@@ -160,7 +160,7 @@ export default function AppsDialog() {
             <button
               key={app.name}
               onClick={() => navigate(app.path)}
-              className="group relative overflow-hidden flex items-center gap-4 p-4 rounded-xl border border-primary/20 bg-card/80 backdrop-blur-sm hover:bg-card transition-all text-left hover:shadow-lg hover:-translate-y-0.5"
+              className="group relative overflow-hidden flex items-center gap-4 p-4 rounded-xl border niza-tile hover:bg-card transition-all text-left hover:shadow-lg hover:-translate-y-0.5"
             >
               {/* Icon */}
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${app.gradient} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform`}>

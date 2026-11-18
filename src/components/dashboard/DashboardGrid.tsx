@@ -102,63 +102,97 @@ export default function DashboardGrid() {
     return (counts as any)[key] || 0;
   };
 
-  return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto relative overflow-hidden" style={{ background: 'var(--gradient-panel)' }}>
-      {/* Decorative SVG Background */}
-      <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
-        <path d="M8.44398 0.617329H592.052V469.547C592.052 48.6499 274.052 498.547 366.552 250.047C459.052 1.5472 419.436 102.82 419.436 102.82C419.436 102.82 343.17 209.048 201.552 208.547C124.426 208.274 104.783 140.619 188.052 102.82C319.337 43.2233 149.498 31.3712 120.052 23.0472C56.1705 4.98889 22.6081 1.25634 8.44398 0.617329H0.0516663C0.0516663 0.617329 2.59244 0.353338 8.44398 0.617329Z" fill="url(#paint0_linear)" stroke="hsl(var(--border))"/>
-        <defs>
-          <linearGradient id="paint0_linear" x1="592.659" y1="0.617318" x2="376.315" y2="504.04" gradientUnits="userSpaceOnUse">
-            <stop offset="0.0734679" stopColor="hsl(var(--accent))"/>
-            <stop offset="0.458691" stopColor="hsl(var(--primary))"/>
-          </linearGradient>
-        </defs>
-      </svg>
+  const TONES = [
+    { box: 'from-emerald-50 to-emerald-100 text-emerald-700 border-emerald-200/80', art: '#34d399' },
+    { box: 'from-teal-50 to-teal-100 text-teal-700 border-teal-200/80', art: '#2dd4bf' },
+    { box: 'from-amber-50 to-orange-100 text-amber-700 border-amber-200/80', art: '#fbbf24' },
+    { box: 'from-lime-50 to-lime-100 text-lime-700 border-lime-200/80', art: '#a3e635' },
+  ];
+  const firstName = (user?.name || '').split(' ')[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-      <div className="mb-6 md:mb-8 relative z-10">
-        <h2 className="text-2xl md:text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Dashboard</h2>
-        <p className="text-sm md:text-base text-muted-foreground">Select a module to get started</p>
+  return (
+    <div className="relative max-w-[1400px] mx-auto px-5 py-8 md:px-10 md:py-10">
+      {/* Hero */}
+      <div className="relative mb-10 md:mb-12 min-h-[150px]">
+        <div className="relative z-10 max-w-2xl niza-rise">
+          <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+            Dashboard
+          </p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">
+            {greeting}{firstName ? `, ${firstName}` : ''} <span className="inline-block origin-[70%_70%] animate-[niza-pop_2.4s_ease-in-out_infinite]">👋</span>
+          </h2>
+          <p className="mt-3 text-base md:text-lg text-muted-foreground">
+            Select a module to get started and manage your organization seamlessly.
+          </p>
+        </div>
+
+        {/* Hero artwork: rolling hills, sun and rising bars */}
+        <svg className="pointer-events-none absolute -top-6 right-0 hidden h-[210px] w-[460px] lg:block" viewBox="0 0 460 210" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="gHillA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#bdf0d4" /><stop offset="1" stopColor="#34c48b" /></linearGradient>
+            <linearGradient id="gHillB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e8f8c8" /><stop offset="1" stopColor="#8fd16a" /></linearGradient>
+            <radialGradient id="gSun" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stopColor="#fff3b8" /><stop offset="1" stopColor="#fcd34d" stopOpacity="0" /></radialGradient>
+          </defs>
+          <circle cx="360" cy="52" r="62" fill="url(#gSun)"><animate attributeName="r" values="56;70;56" dur="6s" repeatCount="indefinite" /></circle>
+          <g opacity="0.95">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <rect key={i} x={250 + i * 34} y={150 - (i + 1) * 20} width="20" rx="6" height={(i + 1) * 20 + 40} fill="url(#gHillA)" opacity={0.45 + i * 0.1}>
+                <animate attributeName="height" values={`${(i + 1) * 20 + 40};${(i + 1) * 20 + 52};${(i + 1) * 20 + 40}`} dur={`${4 + i * 0.7}s`} repeatCount="indefinite" />
+              </rect>
+            ))}
+          </g>
+          <path d="M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z" fill="url(#gHillB)" opacity="0.85">
+            <animate attributeName="d" dur="9s" repeatCount="indefinite" values="M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z;M0 165 C 70 150, 140 125, 220 150 C 300 178, 380 140, 460 138 L 460 210 L 0 210 Z;M0 175 C 70 130, 140 140, 220 165 C 300 190, 380 120, 460 150 L 460 210 L 0 210 Z" />
+          </path>
+          <path d="M0 192 C 90 160, 170 190, 250 178 C 330 166, 400 176, 460 168 L 460 210 L 0 210 Z" fill="url(#gHillA)" opacity="0.8" />
+        </svg>
       </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 relative z-10">
-        {displayItems.map((item) => {
+
+      {/* Module tiles */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 md:gap-6">
+        {displayItems.map((item, i) => {
           const notifCount = getCountForPath(item.path);
+          const tone = TONES[i % TONES.length];
           return (
-            <Link key={item.path} to={item.path} className="group">
-              <Card className="relative h-32 md:h-48 overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 md:hover:-translate-y-2">
-                {/* Notification Badge */}
-                {notifCount > 0 && (
-                  <div className="absolute top-2 right-2 z-20">
-                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs font-bold">
-                      {notifCount > 99 ? '99+' : notifCount}
-                    </Badge>
+            <Link key={item.path} to={item.path} className="group niza-rise" style={{ animationDelay: `${Math.min(i, 14) * 45}ms` }}>
+              <div className="niza-tile h-36 md:h-40 p-5">
+                {/* graphic */}
+                <svg className="pointer-events-none absolute -bottom-1 -right-1 h-24 w-3/4 transition-transform duration-700 group-hover:scale-110 group-hover:-translate-x-1" viewBox="0 0 240 96" fill="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id={`tw${i}`} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stopColor={tone.art} stopOpacity="0.05" />
+                      <stop offset="1" stopColor={tone.art} stopOpacity="0.38" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 70 C 50 30, 110 90, 170 50 C 200 30, 225 36, 240 24 L 240 96 L 0 96 Z" fill={`url(#tw${i})`} />
+                  <path d="M60 96 C 100 60, 150 80, 240 52 L 240 96 Z" fill={`url(#tw${i})`} opacity="0.7" />
+                </svg>
+
+                <div className="relative z-10 flex h-full flex-col justify-between">
+                  <div className="flex items-start justify-between">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border bg-gradient-to-br shadow-sm ${tone.box}`}>
+                      <item.icon className="niza-icon-pop h-6 w-6" strokeWidth={1.9} />
+                    </div>
+                    {notifCount > 0 && (
+                      <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-500 px-1.5 text-[11px] font-bold text-white shadow-[0_6px_14px_-4px_rgba(249,115,22,0.7)]">
+                        {notifCount > 99 ? '99+' : notifCount}
+                      </span>
+                    )}
                   </div>
-                )}
-                
-                {/* Gradient Overlay */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-                
-                {/* Content */}
-                <div className="relative h-full flex flex-col items-center justify-center p-3 md:p-6 text-center">
-                  {/* Icon Container */}
-                  <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center mb-2 md:mb-4 group-hover:scale-110 transition-all duration-300 shadow-lg`}>
-                    <item.icon className="h-6 w-6 md:h-8 md:w-8 text-white" />
-                  </div>
-                  
-                  {/* Title */}
-                  <h3 className="font-semibold md:font-bold text-sm md:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                    {item.title}
-                  </h3>
-                  
-                  {/* Arrow Icon - Hidden on mobile */}
-                  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
-                    <ArrowRight className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+
+                  <div className="flex items-end justify-between gap-3">
+                    <h3 className="text-[17px] font-semibold leading-tight tracking-tight text-foreground line-clamp-2">
+                      {item.title}
+                    </h3>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white bg-white/90 text-primary shadow-md transition-all duration-300 group-hover:translate-x-1 group-hover:bg-primary group-hover:text-white">
+                      <ArrowRight className="h-4 w-4" />
+                    </span>
                   </div>
                 </div>
-                
-                {/* Shine Effect */}
-                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              </Card>
+              </div>
             </Link>
           );
         })}

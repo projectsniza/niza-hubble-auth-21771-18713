@@ -731,10 +731,10 @@ export default function Documents() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b bg-background px-6 pt-6 pb-5">
+      <div className="border-b border-white/70 bg-white/40 px-6 md:px-10 pt-8 pb-6">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
           <div className="text-left">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Documents</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Documents</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Manage all company and employee documents</p>
           </div>
           <div className="flex gap-2">
@@ -837,7 +837,7 @@ export default function Documents() {
 
       {/* Tabs and Content */}
       <div
-        className="flex-1 p-6 overflow-auto relative"
+        className="flex-1 px-6 md:px-10 py-8 overflow-auto relative"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -861,61 +861,40 @@ export default function Documents() {
             <span className="text-sm text-foreground">Uploading...</span>
           </div>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-5">
-          <TabsList className="flex h-auto w-full flex-wrap items-end justify-start gap-1 rounded-none border-b border-border bg-transparent p-0">
-            {/* All Documents - lightly highlighted as the home tab */}
-            <TabsTrigger
-              value="all"
-              className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=inactive]:bg-primary/5 data-[state=inactive]:text-foreground rounded-t-lg"
-            >
-              <Files className="h-4 w-4 shrink-0" />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+          <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-3 rounded-2xl border border-white/80 bg-white/60 p-3 shadow-sm backdrop-blur">
+            <TabsTrigger value="all" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><Files className="h-4 w-4" /></span>
               <span>All Documents</span>
-              <span className="min-w-[22px] rounded-full bg-primary/10 px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-primary">
-                {globalTotalCount}
-              </span>
+              <span className="min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white bg-primary/10 text-primary">{globalTotalCount}</span>
             </TabsTrigger>
-
-            <TabsTrigger value="audit-checklist" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
-              <ClipboardCheck className="h-4 w-4 shrink-0" />
+            <TabsTrigger value="audit-checklist" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><ClipboardCheck className="h-4 w-4" /></span>
               <span>Staff Document Checklist</span>
-              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wide text-emerald-700 dark:text-emerald-300">
-                Audit
-              </span>
+              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-emerald-700 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white">Audit</span>
+              
             </TabsTrigger>
-
-            <TabsTrigger value="overdue" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
+            <TabsTrigger value="overdue" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><AlertTriangle className="h-4 w-4" /></span>
               <span>Overdue</span>
-              <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${overdueCount > 0 ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
-                {overdueCount}
-              </span>
+              <span className={`min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white ${overdueCount > 0 ? 'bg-rose-500/15 text-rose-700' : 'bg-muted text-muted-foreground'}`}>{overdueCount}</span>
             </TabsTrigger>
-
-            <TabsTrigger value="upcoming" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
-              <Clock className="h-4 w-4 shrink-0" />
+            <TabsTrigger value="upcoming" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><Clock className="h-4 w-4" /></span>
               <span>Upcoming</span>
-              <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${upcomingCount > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
-                {upcomingCount}
-              </span>
+              <span className={`min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white ${upcomingCount > 0 ? 'bg-amber-500/15 text-amber-700' : 'bg-muted text-muted-foreground'}`}>{upcomingCount}</span>
             </TabsTrigger>
-
-            {/* Submissions (Super Admin) */}
             {user?.role === 'super_admin' && (
-              <TabsTrigger value="submissions" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
-                <Inbox className="h-4 w-4 shrink-0" />
-                <span>Submissions</span>
-                <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${submissionsPendingCount > 0 ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
-                  {submissionsPendingCount}
-                </span>
-              </TabsTrigger>
+            <TabsTrigger value="submissions" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><Inbox className="h-4 w-4" /></span>
+              <span>Submissions</span>
+              <span className={`min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white ${submissionsPendingCount > 0 ? 'bg-blue-500/15 text-blue-700' : 'bg-muted text-muted-foreground'}`}>{submissionsPendingCount}</span>
+            </TabsTrigger>
             )}
-
-            <TabsTrigger value="recycle-bin" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
-              <Trash2 className="h-4 w-4 shrink-0" />
+            <TabsTrigger value="recycle-bin" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><Trash2 className="h-4 w-4" /></span>
               <span>Recycle Bin</span>
-              <span className="min-w-[22px] rounded-full bg-muted px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-muted-foreground">
-                {recycleBinCount}
-              </span>
+              <span className="min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white bg-muted text-muted-foreground">{recycleBinCount}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>

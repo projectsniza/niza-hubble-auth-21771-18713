@@ -36,7 +36,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen flex w-full bg-background">
+    <div className="min-h-screen flex w-full niza-canvas relative">
+      {/* Living aurora backdrop */}
+      <div aria-hidden="true" className="pointer-events-none">
+        <div className="niza-blob" style={{ width: 520, height: 520, left: '-8%', top: '-10%', background: 'rgba(52,199,140,0.35)' }} />
+        <div className="niza-blob" style={{ width: 460, height: 460, right: '-6%', top: '6%', background: 'rgba(252,211,77,0.30)', animationDelay: '-8s' }} />
+        <div className="niza-blob" style={{ width: 560, height: 560, left: '38%', bottom: '-22%', background: 'rgba(110,231,183,0.32)', animationDelay: '-15s' }} />
+      </div>
       <TaskReminderListener />
       {(user?.role === 'super_admin' || user?.role === 'hr') && <ReminderDuePopup />}
       <ActionRequiredPopup />
@@ -63,9 +69,9 @@ export default function Dashboard() {
         </Sheet>
       )}
 
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="relative z-10 flex-1 min-w-0 flex flex-col overflow-clip md:m-3 md:rounded-[28px] niza-panel">
         <header
-          className="h-14 border-b border-border/80 bg-card/85 shadow-[0_1px_0_rgba(16,40,30,0.02)] backdrop-blur-xl flex items-center justify-between px-4 md:px-6 sticky top-0 z-50"
+          className="h-16 border-b border-white/70 bg-white/55 backdrop-blur-xl flex items-center justify-between px-4 md:px-8 sticky top-0 z-50"
         >
           <div className="flex items-center gap-3">
             {/* Mobile Menu Button */}

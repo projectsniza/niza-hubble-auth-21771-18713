@@ -33,7 +33,7 @@ export default function NizaAnalysisSidebar({ collapsed, onToggle }: Props) {
   return (
     <aside
       className="transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0"
-      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
+      data-niza-sidebar="" style={{ width: collapsed ? '80px' : '256px' }}
     >
       <div className="p-4 flex items-center justify-center min-h-[80px]">
         {collapsed ? (

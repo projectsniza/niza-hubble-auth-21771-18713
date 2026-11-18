@@ -201,7 +201,7 @@ export default function Overview() {
           </defs>
         </svg>
 
-        <div className="relative z-10 overflow-hidden rounded-2xl border border-primary/20 bg-card/80 backdrop-blur-sm p-6 md:p-8">
+        <div className="relative z-10 overflow-hidden rounded-2xl border niza-tile p-6 md:p-8">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
@@ -217,7 +217,7 @@ export default function Overview() {
             { icon: TrendingUp, label: 'Training', value: '—', sub: 'View courses' },
             { icon: Calendar, label: 'Requests', value: '—', sub: 'View all' },
           ].map((item, i) => (
-            <Card key={i} className="group relative overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
+            <Card key={i} className="group relative overflow-hidden niza-tile hover:shadow-xl transition-all duration-300">
               <div className="p-4 md:p-6">
                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg mb-3 md:mb-4">
                   <item.icon className="h-5 w-5 md:h-6 md:w-6 text-white" />
@@ -231,7 +231,7 @@ export default function Overview() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
-          <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden p-4 md:p-6">
+          <Card className="niza-tile overflow-hidden p-4 md:p-6">
             <h3 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
               {[
@@ -251,7 +251,7 @@ export default function Overview() {
             </div>
           </Card>
 
-          <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden p-4 md:p-6">
+          <Card className="niza-tile overflow-hidden p-4 md:p-6">
             <h3 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">Recent Activity</h3>
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
@@ -277,7 +277,7 @@ export default function Overview() {
       </svg>
 
       {/* Welcome Header */}
-      <div className="relative z-10 overflow-hidden rounded-2xl border border-primary/20 bg-card/80 backdrop-blur-sm p-6 md:p-8">
+      <div className="relative z-10 overflow-hidden rounded-2xl border niza-tile p-6 md:p-8">
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="h-5 w-5 text-primary" />
           <span className="text-sm font-medium text-muted-foreground">Welcome back</span>
@@ -288,7 +288,7 @@ export default function Overview() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 relative z-10">
-        <Card className="group relative overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <Card className="group relative overflow-hidden niza-tile ">
           <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-3 md:mb-4">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
@@ -302,7 +302,7 @@ export default function Overview() {
           </div>
         </Card>
 
-        <Card className="group relative overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <Card className="group relative overflow-hidden niza-tile ">
           <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-3 md:mb-4">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg">
@@ -316,7 +316,7 @@ export default function Overview() {
           </div>
         </Card>
 
-        <Card className="group relative overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <Card className="group relative overflow-hidden niza-tile ">
           <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-3 md:mb-4">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
@@ -330,7 +330,7 @@ export default function Overview() {
           </div>
         </Card>
 
-        <Card className="group relative overflow-hidden border-primary/20 bg-card/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <Card className="group relative overflow-hidden niza-tile ">
           <div className="p-4 md:p-6">
             <div className="flex items-start justify-between mb-3 md:mb-4">
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg">
@@ -348,7 +348,7 @@ export default function Overview() {
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 relative z-10">
         {/* Daily Reports */}
-        <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
+        <Card className="niza-tile overflow-hidden">
           <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export default function Overview() {
         </Card>
 
         {/* Pending Contract Approvals */}
-        <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
+        <Card className="niza-tile overflow-hidden">
           <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">
@@ -430,7 +430,7 @@ export default function Overview() {
 
         {/* Document Follow-ups (Super Admin / HR only) */}
         {isSuperAdminOrHr && (
-          <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
+          <Card className="niza-tile overflow-hidden">
             <div className="p-4 md:p-6">
               <div className="flex items-center justify-between mb-4 md:mb-6">
                 <div className="flex items-center gap-2">
@@ -484,7 +484,7 @@ export default function Overview() {
         )}
 
         {/* Maintenance Tickets */}
-        <Card className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden">
+        <Card className="niza-tile overflow-hidden">
           <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4 md:mb-6">
               <div className="flex items-center gap-2">

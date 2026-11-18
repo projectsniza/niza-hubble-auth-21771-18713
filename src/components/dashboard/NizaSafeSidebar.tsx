@@ -37,7 +37,7 @@ export default function NizaSafeSidebar({ collapsed, onToggle }: NizaSafeSidebar
   return (
     <aside 
       className={`transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0`}
-      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
+      data-niza-sidebar="" style={{ width: collapsed ? '80px' : '256px' }}
     >
       {/* Decorative SVG Background */}
       <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">

@@ -43,7 +43,7 @@ export default function NizaTemplatesSidebar({ collapsed, onToggle }: NizaTempla
   return (
     <aside 
       className={`border-r border-primary/20 backdrop-blur-xl transition-all duration-300 flex flex-col relative h-screen sticky top-0 flex-shrink-0 overflow-hidden`}
-      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
+      data-niza-sidebar="" style={{ width: collapsed ? '80px' : '256px' }}
     >
       {/* Logo */}
       <div className="p-4 flex items-center justify-center relative z-10 min-h-[80px] overflow-visible" style={{ width: collapsed ? '80px' : '256px' }}>

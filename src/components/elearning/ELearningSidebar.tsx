@@ -55,7 +55,7 @@ export default function ELearningSidebar({ collapsed, onToggle }: ELearningSideb
   return (
     <aside 
       className="transition-all duration-300 border-r border-primary/20 flex flex-col relative overflow-hidden h-screen sticky top-0 flex-shrink-0"
-      style={{ background: 'var(--gradient-panel)', width: collapsed ? '80px' : '256px' }}
+      data-niza-sidebar="" style={{ width: collapsed ? '80px' : '256px' }}
     >
       <svg className="absolute inset-0 w-full h-full opacity-5 z-0" viewBox="0 0 593 470" fill="none" preserveAspectRatio="xMidYMid slice">
         <path d="M8.44398 0.617329H592.052V469.547C592.052 48.6499 274.052 498.547 366.552 250.047C459.052 1.5472 419.436 102.82 419.436 102.82C419.436 102.82 343.17 209.048 201.552 208.547C124.426 208.274 104.783 140.619 188.052 102.82C319.337 43.2233 149.498 31.3712 120.052 23.0472C56.1705 4.98889 22.6081 1.25634 8.44398 0.617329H0.0516663C0.0516663 0.617329 2.59244 0.353338 8.44398 0.617329Z" fill="url(#paint0_linear_el)" stroke="hsl(var(--border))"/>
