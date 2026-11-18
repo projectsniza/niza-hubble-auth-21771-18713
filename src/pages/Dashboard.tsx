@@ -64,8 +64,7 @@ export default function Dashboard() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header
-          className="h-14 border-b border-primary/20 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 sticky top-0 z-50"
-          style={{ background: 'var(--gradient-panel)' }}
+          className="h-14 border-b border-border/80 bg-card/85 shadow-[0_1px_0_rgba(16,40,30,0.02)] backdrop-blur-xl flex items-center justify-between px-4 md:px-6 sticky top-0 z-50"
         >
           <div className="flex items-center gap-3">
             {/* Mobile Menu Button */}
