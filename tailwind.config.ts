@@ -71,6 +71,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
+        "signin-shine": {
+          "0%, 55%": { transform: "translateX(0) skewX(-12deg)" },
+          "100%": { transform: "translateX(500%) skewX(-12deg)" },
+        },
         "accordion-down": {
           from: {
             height: "0",

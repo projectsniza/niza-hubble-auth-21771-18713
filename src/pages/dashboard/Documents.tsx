@@ -76,7 +76,7 @@ interface DocumentItem {
   follow_up_date: string | null;
   created_at: string;
   folder_id: string | null;
-  employee?: { first_name: string; last_name: string } | null;
+  employee?: { first_name: string; last_name: string; status?: string; deactivation_reason?: string | null } | null;
 }
 
 export default function Documents() {
@@ -89,6 +89,7 @@ export default function Documents() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([]);
+  const [currentEmployeeFolder, setCurrentEmployeeFolder] = useState<FolderItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -193,7 +194,7 @@ export default function Documents() {
       const allDocs = await fetchAllPages<DocumentItem>((from, to) =>
         supabase
           .from('documents')
-          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)')
+          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
           .order('created_at', { ascending: false })
           .range(from, to)
       );
@@ -255,14 +256,20 @@ export default function Documents() {
           setFolders(topFolders || []);
         }
         setDocuments([]);
+        setCurrentEmployeeFolder(null);
         setBreadcrumbs([]);
       } else if (currentFolderId) {
         // If viewing an employee folder, ensure all 3 onboarding documents exist
         const { data: currentFolder } = await supabase
           .from('folders')
-          .select('id, folder_type, employee_id')
+          .select('id, folder_type, employee_id, name, parent_id, organization_id, branch_id, employee:employees(id, first_name, last_name, status, deactivation_reason)')
           .eq('id', currentFolderId)
           .maybeSingle();
+        setCurrentEmployeeFolder(
+          currentFolder && (currentFolder.folder_type === 'employee' || currentFolder.employee_id)
+            ? (currentFolder as unknown as FolderItem)
+            : null
+        );
 
         if (currentFolder?.folder_type === 'employee' && currentFolder?.employee_id) {
           await ensureEmployeeDocuments(currentFolder.employee_id, currentFolder.id, user?.id);
@@ -324,7 +331,7 @@ export default function Documents() {
         // Fetch documents in current folder
         const { data: docsData } = await supabase
           .from('documents')
-          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name)')
+          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
           .eq('folder_id', currentFolderId)
           .order('created_at', { ascending: false });
         setDocuments(docsData || []);
@@ -551,6 +558,19 @@ export default function Documents() {
     return null;
   };
 
+  const getDocumentOwnerBadge = (doc: DocumentItem) => {
+    // Document inside a deleted/deactivated employee's folder, or linked to such an employee
+    if (doc.employee?.status) {
+      return getFolderStatusBadge({
+        folder_type: 'employee',
+        employee_id: 'x',
+        employee: { id: 'x', first_name: doc.employee.first_name, last_name: doc.employee.last_name, status: doc.employee.status, deactivation_reason: doc.employee.deactivation_reason }
+      } as unknown as FolderItem);
+    }
+    if (currentEmployeeFolder) return getFolderStatusBadge(currentEmployeeFolder);
+    return null;
+  };
+
   const isProtectedFolder = (folder: FolderItem) => {
     return folder.is_deletable === false || 
            folder.folder_type === 'root' || 
@@ -711,11 +731,11 @@ export default function Documents() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b bg-background p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">All Documents</h1>
-            <p className="text-muted-foreground">Manage all company and employee documents</p>
+      <div className="border-b bg-background px-6 pt-6 pb-5">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div className="text-left">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Documents</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Manage all company and employee documents</p>
           </div>
           <div className="flex gap-2">
             <Button onClick={() => setShowUpload(true)} className="gap-2">
@@ -758,9 +778,9 @@ export default function Documents() {
         </div>
 
         {/* Stats - Clickable to filter */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <Card 
-            className="p-4 cursor-pointer hover:bg-destructive/5 transition-colors"
+            className="p-4 cursor-pointer rounded-xl shadow-none hover:border-destructive/40 hover:bg-destructive/5 transition-colors"
             onClick={() => setActiveTab('overdue')}
           >
             <div className="flex items-center gap-3">
@@ -774,7 +794,7 @@ export default function Documents() {
             </div>
           </Card>
           <Card 
-            className="p-4 cursor-pointer hover:bg-yellow-500/5 transition-colors"
+            className="p-4 cursor-pointer rounded-xl shadow-none hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-colors"
             onClick={() => setActiveTab('upcoming')}
           >
             <div className="flex items-center gap-3">
@@ -788,7 +808,7 @@ export default function Documents() {
             </div>
           </Card>
           <Card 
-            className="p-4 cursor-pointer hover:bg-primary/5 transition-colors"
+            className="p-4 cursor-pointer rounded-xl shadow-none hover:border-primary/40 hover:bg-primary/5 transition-colors"
             onClick={() => setActiveTab('all')}
           >
             <div className="flex items-center gap-3">
@@ -804,7 +824,7 @@ export default function Documents() {
         </div>
 
         {/* Search */}
-        <div className="relative">
+        <div className="relative max-w-xl">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search documents..."
@@ -841,112 +861,61 @@ export default function Documents() {
             <span className="text-sm text-foreground">Uploading...</span>
           </div>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
-          <TabsList className="flex flex-wrap items-center h-auto gap-2 p-1.5 bg-muted/40 border border-border/70 rounded-xl">
-            {/* All Documents */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-5">
+          <TabsList className="flex h-auto w-full flex-wrap items-end justify-start gap-1 rounded-none border-b border-border bg-transparent p-0">
+            {/* All Documents - lightly highlighted as the home tab */}
             <TabsTrigger
               value="all"
-              className="gap-2 px-3.5 py-2 font-semibold border border-slate-300/80 dark:border-slate-700 bg-slate-500/10 text-slate-800 dark:text-slate-200 hover:bg-slate-500/20 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:border-slate-800 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900 shadow-2xs transition-all"
+              className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=inactive]:bg-primary/5 data-[state=inactive]:text-foreground rounded-t-lg"
             >
-              <Files className="h-4 w-4 text-slate-700 dark:text-slate-300 data-[state=active]:text-white dark:data-[state=active]:text-slate-900 shrink-0" />
+              <Files className="h-4 w-4 shrink-0" />
               <span>All Documents</span>
-              {globalTotalCount > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white/20 data-[state=active]:text-white dark:data-[state=active]:bg-slate-900/20 dark:data-[state=active]:text-slate-900"
-                >
-                  {globalTotalCount}
-                </Badge>
-              )}
+              <span className="min-w-[22px] rounded-full bg-primary/10 px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-primary">
+                {globalTotalCount}
+              </span>
             </TabsTrigger>
 
-            {/* Staff Document Checklist - Highlighted with Audit tag */}
-            <TabsTrigger
-              value="audit-checklist"
-              className="gap-2 px-3.5 py-2 font-semibold border border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/20 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:border-emerald-600 shadow-2xs transition-all ring-1 ring-emerald-500/20"
-            >
-              <ClipboardCheck className="h-4 w-4 text-emerald-600 data-[state=active]:text-white shrink-0" />
+            <TabsTrigger value="audit-checklist" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
+              <ClipboardCheck className="h-4 w-4 shrink-0" />
               <span>Staff Document Checklist</span>
-              <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-emerald-700 shadow-2xs">
+              <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wide text-emerald-700 dark:text-emerald-300">
                 Audit
-              </Badge>
+              </span>
             </TabsTrigger>
 
-            {/* Overdue */}
-            <TabsTrigger
-              value="overdue"
-              className="gap-2 px-3.5 py-2 font-semibold border border-rose-500/50 bg-rose-500/10 text-rose-800 dark:text-rose-300 hover:bg-rose-500/20 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:border-rose-600 shadow-2xs transition-all"
-            >
-              <AlertTriangle className="h-4 w-4 text-rose-600 data-[state=active]:text-white shrink-0" />
+            <TabsTrigger value="overdue" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>Overdue</span>
-              {overdueCount > 0 ? (
-                <Badge className="bg-rose-600 text-white hover:bg-rose-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-rose-700">
-                  {overdueCount}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-rose-400/40 text-rose-700 dark:text-rose-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
-                  0
-                </Badge>
-              )}
+              <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${overdueCount > 0 ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
+                {overdueCount}
+              </span>
             </TabsTrigger>
 
-            {/* Upcoming */}
-            <TabsTrigger
-              value="upcoming"
-              className="gap-2 px-3.5 py-2 font-semibold border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 data-[state=active]:bg-amber-600 data-[state=active]:text-white data-[state=active]:border-amber-600 shadow-2xs transition-all"
-            >
-              <Clock className="h-4 w-4 text-amber-600 data-[state=active]:text-white shrink-0" />
+            <TabsTrigger value="upcoming" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
+              <Clock className="h-4 w-4 shrink-0" />
               <span>Upcoming</span>
-              {upcomingCount > 0 ? (
-                <Badge className="bg-amber-600 text-white hover:bg-amber-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-amber-700">
-                  {upcomingCount}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-amber-400/40 text-amber-700 dark:text-amber-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
-                  0
-                </Badge>
-              )}
+              <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${upcomingCount > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
+                {upcomingCount}
+              </span>
             </TabsTrigger>
 
             {/* Submissions (Super Admin) */}
             {user?.role === 'super_admin' && (
-              <TabsTrigger
-                value="submissions"
-                className="gap-2 px-3.5 py-2 font-semibold border border-blue-500/50 bg-blue-500/10 text-blue-800 dark:text-blue-300 hover:bg-blue-500/20 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:border-blue-600 shadow-2xs transition-all"
-              >
-                <Inbox className="h-4 w-4 text-blue-600 data-[state=active]:text-white shrink-0" />
+              <TabsTrigger value="submissions" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
+                <Inbox className="h-4 w-4 shrink-0" />
                 <span>Submissions</span>
-                {submissionsPendingCount > 0 ? (
-                  <Badge className="bg-blue-600 text-white hover:bg-blue-700 text-[10px] px-1.5 py-0 font-bold tracking-wide data-[state=active]:bg-white data-[state=active]:text-blue-700 animate-pulse">
-                    {submissionsPendingCount}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-semibold border-blue-400/40 text-blue-700 dark:text-blue-300 data-[state=active]:border-white/30 data-[state=active]:text-white">
-                    0
-                  </Badge>
-                )}
+                <span className={`min-w-[22px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${submissionsPendingCount > 0 ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
+                  {submissionsPendingCount}
+                </span>
               </TabsTrigger>
             )}
 
-            {/* Recycle Bin */}
-            <TabsTrigger
-              value="recycle-bin"
-              className="gap-2 px-3.5 py-2 font-semibold border border-slate-400/40 dark:border-slate-700/80 bg-slate-500/10 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20 data-[state=active]:bg-slate-700 data-[state=active]:text-white data-[state=active]:border-slate-700 dark:data-[state=active]:bg-slate-600 shadow-2xs transition-all"
-            >
-              <Trash2 className="h-4 w-4 text-slate-500 data-[state=active]:text-white shrink-0" />
+            <TabsTrigger value="recycle-bin" className="relative gap-2 rounded-none border-b-2 border-transparent bg-transparent px-4 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none">
+              <Trash2 className="h-4 w-4 shrink-0" />
               <span>Recycle Bin</span>
-              {recycleBinCount > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] px-1.5 py-0 font-bold tracking-wide border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 data-[state=active]:border-white/30 data-[state=active]:text-white"
-                >
-                  {recycleBinCount}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal border-slate-300/40 text-slate-500 data-[state=active]:border-white/30 data-[state=active]:text-white">
-                  0
-                </Badge>
-              )}
+              <span className="min-w-[22px] rounded-full bg-muted px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none text-muted-foreground">
+                {recycleBinCount}
+              </span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1086,6 +1055,14 @@ export default function Documents() {
                                 {doc.employee && (
                                   <span className="text-sm text-primary">• {doc.employee.first_name} {doc.employee.last_name}</span>
                                 )}
+                                {(() => {
+                                  const ownerBadge = getDocumentOwnerBadge(doc);
+                                  return ownerBadge ? (
+                                    <Badge className={`text-[10px] px-1.5 py-0 h-4 border font-normal ${ownerBadge.color}`}>
+                                      {ownerBadge.label}
+                                    </Badge>
+                                  ) : null;
+                                })()}
                               </div>
                               <div className="flex gap-2 mt-1 flex-wrap">
                                 {(() => {
