@@ -64,6 +64,13 @@ let memoryBranchPasscodes: Record<string, BranchPasscodeInfo> = (() => {
   return {};
 })();
 
+/**
+ * How long the scheduling / timesheet area stays unlocked after the passcode (or 2-step code) is accepted.
+ * This matches the 8-hour access token the server issues, so a manager can work through a shift.
+ * It used to be 2 minutes, which re-locked the page almost straight away.
+ */
+export const TIMESHEET_UNLOCK_MINUTES = 8 * 60;
+
 let memoryTimesheetVerifiedUntil = 0;
 
 /**
@@ -101,10 +108,9 @@ export function isTimesheetSessionVerified(branchId?: string): boolean {
 }
 
 /**
- * Mark the current timesheet session as verified.
- * For passcode mode, verification defaults to a 2-minute scheduling window so security remains tight.
+ * Mark the current timesheet session as verified for `durationMinutes` (default: a working shift).
  */
-export function setTimesheetSessionVerified(durationMinutes = 2): void {
+export function setTimesheetSessionVerified(durationMinutes = TIMESHEET_UNLOCK_MINUTES): void {
   memoryTimesheetVerifiedUntil = Date.now() + durationMinutes * 60 * 1000;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('niza_timesheet_session_unlocked'));
@@ -580,7 +586,7 @@ export async function verifyTimesheetPasscode(
   })();
 
   if (currentGlobalPasscode && cleanInput === currentGlobalPasscode) {
-    setTimesheetSessionVerified(2);
+    setTimesheetSessionVerified();
     return { success: true, verified: true, message: 'Authorized by universal master passcode' };
   }
 
@@ -599,7 +605,7 @@ export async function verifyTimesheetPasscode(
     const hasBranchPasscode = Boolean(bData?.isPasscodeSet && bData?.passcode);
     if (hasBranchPasscode && bData?.passcode) {
       if (cleanInput === bData.passcode.trim()) {
-        setTimesheetSessionVerified(2);
+        setTimesheetSessionVerified();
         return { success: true, verified: true, message: 'Passcode verified successfully' };
       }
     }
@@ -617,7 +623,7 @@ export async function verifyTimesheetPasscode(
     });
 
     if (branchRes?.verified) {
-      setTimesheetSessionVerified(2);
+      setTimesheetSessionVerified();
       return {
         success: true,
         verified: true,
@@ -638,7 +644,7 @@ export async function verifyTimesheetPasscode(
     });
 
     if (globalRes?.verified) {
-      setTimesheetSessionVerified(2);
+      setTimesheetSessionVerified();
       return {
         success: true,
         verified: true,
@@ -653,11 +659,11 @@ export async function verifyTimesheetPasscode(
   // 3. Fallback check: if disabled or not configured
   const mode = getTimesheetVerificationModeSync();
   if (mode === 'disabled') {
-    setTimesheetSessionVerified(2);
+    setTimesheetSessionVerified();
     return { success: true, verified: true, message: 'Verification disabled' };
   }
   if (mode === 'passcode' && !isTimesheetPasscodeConfiguredSync(branchId)) {
-    setTimesheetSessionVerified(2);
+    setTimesheetSessionVerified();
     return { success: true, verified: true, message: 'No passcode configured. Normal access granted.' };
   }
 

@@ -2674,7 +2674,7 @@ export function TimesheetView() {
         branchId={activeBranchId}
         branchName={activeBranchName}
         onSuccess={() => {
-          setTimesheetSessionVerified(2);
+          setTimesheetSessionVerified();
           setIsStoreVerified(true);
           setPasscodeModalOpen(false);
           if (pendingStoreAction) {

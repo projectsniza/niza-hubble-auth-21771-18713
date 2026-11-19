@@ -247,7 +247,7 @@ export function isStoreSchedulingVerified(): boolean {
 }
 
 export function setStoreSchedulingVerified(durationHours = 8): void {
-  setTimesheetSessionVerified(durationHours);
+  setTimesheetSessionVerified(durationHours * 60);
   try {
     sessionStorage.removeItem(STORE_SCHEDULING_KEY);
     localStorage.removeItem(STORE_SCHEDULING_KEY);
