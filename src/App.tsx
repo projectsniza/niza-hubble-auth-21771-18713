@@ -79,6 +79,9 @@ const CustomerAccounts = lazy(() => import("./pages/dashboard/CustomerAccounts")
 const DailySummary = lazy(() => import("./pages/dashboard/DailySummary"));
 const VerifyCertificate = lazy(() => import("./pages/VerifyCertificate"));
 const NizaAnalysis = lazy(() => import("./pages/NizaAnalysis"));
+const NizaFuel = lazy(() => import("./pages/NizaFuel"));
+const FuelStations = lazy(() => import("./pages/niza-fuel/Stations"));
+const FuelDataStatus = lazy(() => import("./pages/niza-fuel/DataStatus"));
 const NizaAnalysisHome = lazy(() => import("./pages/niza-analysis/Home"));
 const DailySalesAdmin = lazy(() => import("./pages/niza-analysis/DailySalesAdmin"));
 const XeroExport = lazy(() => import("./pages/niza-analysis/XeroExport"));
@@ -210,6 +213,10 @@ const App = () => (
                   <Route path="live-preview" element={<LivePreview />} />
                   <Route path="uploaded-files" element={<UploadedFiles />} />
                   <Route path="formulas" element={<Formulas />} />
+                </Route>
+                <Route path="/niza-fuel" element={<NizaFuel />}>
+                  <Route index element={<FuelStations />} />
+                  <Route path="data" element={<FuelDataStatus />} />
                 </Route>
                 <Route path="/verify-certificate/:token" element={<VerifyCertificate />} />
                 <Route path="/reset-password" element={<ResetPassword />} />

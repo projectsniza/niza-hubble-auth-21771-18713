@@ -16,3 +16,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.ai-assistant]
 verify_jwt = false
+
+[functions.fuel-prices]
+verify_jwt = false

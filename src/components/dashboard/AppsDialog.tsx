@@ -1,4 +1,4 @@
-import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users, GraduationCap, BarChart3 } from "lucide-react";
+import { Grid3x3, Shield, FileText, Calculator, ArrowRight, Users, GraduationCap, BarChart3, Fuel } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ interface AppItem {
   gradient: string;
   accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning' | 'niza_analysis';
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
 }
 
 const apps: AppItem[] = [
@@ -69,6 +70,14 @@ const apps: AppItem[] = [
     gradient: "from-indigo-500 to-violet-600",
     adminOnly: true,
   },
+  {
+    name: "Niza Fuel",
+    description: "UK Fuel Prices & Nearest Stations",
+    icon: <Fuel className="h-7 w-7" />,
+    path: "/niza-fuel",
+    gradient: "from-rose-500 to-orange-600",
+    superAdminOnly: true,
+  },
 ];
 
 export default function AppsDialog() {
@@ -109,6 +118,11 @@ export default function AppsDialog() {
       if (currentPath.startsWith('/dashboard')) return false;
     } else {
       if (currentPath.startsWith(app.path)) return false;
+    }
+
+    // Niza Fuel: Super Admin only
+    if (app.superAdminOnly) {
+      return user?.role === 'super_admin';
     }
 
     // Niza Analysis: only super_admin and hr
