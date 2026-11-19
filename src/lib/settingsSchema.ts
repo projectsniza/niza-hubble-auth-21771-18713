@@ -1,7 +1,7 @@
 // Business rules that can be changed per organisation (Settings -> Business Rules).
 // Every default below is exactly what the app did before, so nothing changes until someone edits a rule.
 
-export type SettingType = 'options' | 'list' | 'number' | 'text' | 'weekday';
+export type SettingType = 'options' | 'list' | 'number' | 'text' | 'weekday' | 'roleToggles';
 
 export interface OptionItem {
   value: string;
@@ -17,6 +17,10 @@ export interface SettingDef<T = unknown> {
   default: T;
   min?: number;
   max?: number;
+  /** Only a Super Admin can change this rule (HR can see it but not edit it). */
+  superAdminOnly?: boolean;
+  /** For 'roleToggles': one on/off switch per role. */
+  roles?: { key: string; label: string }[];
 }
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -95,6 +99,22 @@ export const SETTINGS = {
     min: 6,
     max: 64,
   },
+  documents_reauth: {
+    key: 'documents_reauth',
+    area: 'Security',
+    label: 'Ask for the password before opening Documents',
+    help:
+      'When on, the person must type their login password again every time they open the Documents page. ' +
+      'Turn a role off to let it open Documents without asking. Only a Super Admin can change this. ' +
+      'Set it on "Group default" to apply to every organisation, or on one organisation to override it there.',
+    type: 'roleToggles',
+    default: { super_admin: true, hr: true } as Record<string, boolean>,
+    superAdminOnly: true,
+    roles: [
+      { key: 'super_admin', label: 'Super Admin' },
+      { key: 'hr', label: 'HR' },
+    ],
+  },
 } satisfies Record<string, SettingDef>;
 
 export type SettingKey = keyof typeof SETTINGS;
@@ -111,9 +131,16 @@ export function resolveSetting<K extends SettingKey>(
     if (v === undefined || v === null) return false;
     const d = SETTINGS[key].default as unknown;
     if (Array.isArray(d)) return Array.isArray(v) && v.length > 0;
+    if (d !== null && typeof d === 'object') return typeof v === 'object' && !Array.isArray(v);
     return typeof v === typeof d;
   };
-  if (valid(orgValue)) return orgValue;
-  if (valid(groupValue)) return groupValue;
+  // A saved on/off map may lack a role added later: fill the gaps from the built-in default.
+  const withDefaults = (v: SettingValue<K>): SettingValue<K> => {
+    const d = SETTINGS[key].default as unknown;
+    if (d !== null && typeof d === 'object' && !Array.isArray(d)) return { ...(d as object), ...(v as object) } as SettingValue<K>;
+    return v;
+  };
+  if (valid(orgValue)) return withDefaults(orgValue);
+  if (valid(groupValue)) return withDefaults(groupValue);
   return fallback;
 }

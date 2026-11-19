@@ -228,18 +228,18 @@ export function useDocuments(folderId?: string, employeeId?: string) {
 
   const deleteDocument = async (id: string, filePath: string) => {
     try {
-      // Delete from storage
-      await supabase.storage
-        .from('documents')
-        .remove([filePath]);
-
-      // Delete record
+      // Delete the record first: if the database refuses (only a Super Admin may delete documents),
+      // the stored file must stay, otherwise the document would be left pointing at nothing.
       const { error } = await supabase
         .from('documents')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+
+      await supabase.storage
+        .from('documents')
+        .remove([filePath]);
       
       setDocuments(prev => prev.filter(d => d.id !== id));
       toast.success('Document deleted');

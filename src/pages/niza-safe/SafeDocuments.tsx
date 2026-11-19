@@ -572,7 +572,7 @@ export default function SafeDocuments() {
                             <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)} title="Download">
                               <Download className="h-4 w-4" />
                             </Button>
-                            {isAdmin && (
+                            {user?.role === 'super_admin' && (
                               <Button 
                                 variant="ghost" 
                                 size="icon" 

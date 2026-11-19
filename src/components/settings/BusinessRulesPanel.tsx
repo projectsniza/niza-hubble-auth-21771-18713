@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, X, RotateCcw, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganizations } from '@/hooks/useOrganizations';
 import { useOrgSettingsAdmin } from '@/hooks/useOrgSetting';
-import { SETTINGS, optionsFromLabels, resolveSetting, type OptionItem, type SettingKey } from '@/lib/settingsSchema';
+import { SETTINGS, optionsFromLabels, resolveSetting, type OptionItem, type SettingDef, type SettingKey } from '@/lib/settingsSchema';
 
 const GROUP = '__group__';
 const AREAS = ['People', 'Store operations', 'Attendance', 'Security'] as const;
@@ -85,7 +86,7 @@ export default function BusinessRulesPanel() {
                   orgId={orgId}
                   ownValue={getRow(k, orgId)?.value}
                   groupValue={getRow(k, null)?.value}
-                  canEdit={canEditScope}
+                  canEdit={canEditScope && (!(SETTINGS[k] as SettingDef).superAdminOnly || isSuper)}
                   onSave={save}
                   onReset={reset}
                 />
@@ -209,6 +210,23 @@ function RuleEditor({ settingKey, orgId, ownValue, groupValue, canEdit, onSave, 
               </Button>
             </div>
           )}
+        </div>
+      )}
+
+      {def.type === 'roleToggles' && (
+        <div className="space-y-2 max-w-sm">
+          {((def as SettingDef).roles ?? []).map((r) => (
+            <div key={r.key} className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+              <Label htmlFor={`${settingKey}-${r.key}`} className="text-sm font-normal">{r.label}</Label>
+              <Switch
+                id={`${settingKey}-${r.key}`}
+                disabled={!canEdit}
+                checked={Boolean((value as Record<string, boolean>)[r.key])}
+                onCheckedChange={(on) => setValue({ ...(value as Record<string, boolean>), [r.key]: on })}
+              />
+            </div>
+          ))}
+          {!canEdit && <p className="text-xs text-muted-foreground">Only a Super Admin can change this.</p>}
         </div>
       )}
 

@@ -23,6 +23,7 @@ const EmployeeProfile = lazy(() => import("./pages/dashboard/EmployeeProfile"));
 const MyProfile = lazy(() => import("./pages/dashboard/MyProfile"));
 const Onboarding = lazy(() => import("./pages/dashboard/Onboarding"));
 const Documents = lazy(() => import("./pages/dashboard/Documents"));
+const DocumentsPasswordGate = lazy(() => import("./components/documents/DocumentsPasswordGate"));
 const SubmitDocuments = lazy(() => import("./pages/dashboard/SubmitDocuments"));
 const DocumentsTodo = lazy(() => import("./pages/dashboard/DocumentsTodo"));
 const Attendance = lazy(() => import("./pages/dashboard/Attendance"));
@@ -138,7 +139,7 @@ const App = () => (
                   <Route path="onboarding" element={<Onboarding />} />
                   <Route path="onboarding/:id" element={<AddEmployee />} />
                   <Route path="add-employee" element={<AddEmployee />} />
-                  <Route path="documents" element={<Documents />} />
+                  <Route path="documents" element={<DocumentsPasswordGate><Documents /></DocumentsPasswordGate>} />
                   <Route path="documents/submit" element={<SubmitDocuments />} />
                   <Route path="documents/todo" element={<DocumentsTodo />} />
                   <Route path="attendance" element={<Attendance />} />

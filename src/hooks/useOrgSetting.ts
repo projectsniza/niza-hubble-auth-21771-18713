@@ -45,6 +45,25 @@ export function useOrgSetting<K extends SettingKey>(key: K, organizationId?: str
   }, [rows, key, orgId]);
 }
 
+/**
+ * Same as useOrgSetting, but also says whether the saved rules have finished loading.
+ * Use it where showing the wrong value for a moment would matter (for example a password prompt).
+ */
+export function useOrgSettingState<K extends SettingKey>(
+  key: K,
+  organizationId?: string | null
+): { value: SettingValue<K>; isLoading: boolean } {
+  const { user } = useAuth();
+  const { data: rows, isLoading } = useSettingRows();
+  const orgId = organizationId === undefined ? user?.organizationId ?? null : organizationId;
+  const value = useMemo(() => {
+    const own = orgId ? rows?.find((r) => r.key === key && r.organization_id === orgId)?.value : undefined;
+    const group = rows?.find((r) => r.key === key && r.organization_id === null)?.value;
+    return resolveSetting(key, own, group);
+  }, [rows, key, orgId]);
+  return { value, isLoading: !!user && isLoading };
+}
+
 /** Read / change rules for the Business Rules screen. */
 export function useOrgSettingsAdmin() {
   const queryClient = useQueryClient();

@@ -83,6 +83,7 @@ interface DocumentItem {
 
 export default function Documents() {
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [searchParams] = useSearchParams();
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -112,7 +113,7 @@ export default function Documents() {
   const [isDragging, setIsDragging] = useState(false);
   const [isDropUploading, setIsDropUploading] = useState(false);
   const [recycleBinCount, setRecycleBinCount] = useState(0);
-  useEffect(() => { getRecycleBinCount().then(setRecycleBinCount).catch(() => {}); }, []);
+  useEffect(() => { if (isSuperAdmin) getRecycleBinCount().then(setRecycleBinCount).catch(() => {}); }, [isSuperAdmin]);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
@@ -386,6 +387,11 @@ export default function Documents() {
 
   const handleDeleteDocument = async () => {
     if (!deleteDocId) return;
+    if (!isSuperAdmin) {
+      toast.error('Only a Super Admin can delete documents');
+      setDeleteDocId(null);
+      return;
+    }
 
     try {
       const docToDelete = documents.find(d => d.id === deleteDocId) || allDocuments.find(d => d.id === deleteDocId);
@@ -897,17 +903,19 @@ export default function Documents() {
               <span className={`min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white ${submissionsPendingCount > 0 ? 'bg-blue-500/15 text-blue-700' : 'bg-muted text-muted-foreground'}`}>{submissionsPendingCount}</span>
             </TabsTrigger>
             )}
+            {isSuperAdmin && (
             <TabsTrigger value="recycle-bin" className="group gap-2.5 rounded-xl border border-border/70 bg-white/80 px-3.5 py-2.5 text-sm font-semibold text-foreground/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white hover:shadow-md data-[state=active]:border-transparent data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_-8px_rgba(6,95,70,0.6)]">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-data-[state=active]:bg-white/20 group-data-[state=active]:text-white"><Trash2 className="h-4 w-4" /></span>
               <span>Recycle Bin</span>
               <span className="min-w-[24px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold leading-none group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white bg-muted text-muted-foreground">{recycleBinCount}</span>
             </TabsTrigger>
+            )}
           </TabsList>
         </Tabs>
 
         {activeTab === 'audit-checklist' ? (
           <StaffDocumentAuditTab />
-        ) : activeTab === 'recycle-bin' ? (
+        ) : activeTab === 'recycle-bin' && isSuperAdmin ? (
           <DocumentRecycleBinTab
             onDocumentRestored={() => {
               fetchFoldersAndDocuments();
@@ -1113,17 +1121,19 @@ export default function Documents() {
                             >
                               <Download className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => {
-                                setDeleteDocId(doc.id);
-                                setDeleteDocPath(doc.file_path);
-                              }}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isSuperAdmin && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setDeleteDocId(doc.id);
+                                  setDeleteDocPath(doc.file_path);
+                                }}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </Card>
