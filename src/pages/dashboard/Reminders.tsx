@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { todayUK } from '@/lib/ukDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -65,7 +66,7 @@ export default function Reminders() {
       .from('reminders')
       .insert({
         title: newTask.trim(),
-        reminder_date: newDate || new Date().toISOString().split('T')[0],
+        reminder_date: newDate || todayUK(),
         created_by: user.id,
         assigned_to: user.id,
         is_completed: false,

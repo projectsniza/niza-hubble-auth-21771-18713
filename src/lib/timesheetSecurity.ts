@@ -605,14 +605,6 @@ export async function verifyTimesheetPasscode(
     }
   }
 
-  // 1b-ii. Check if cleanInput matches ANY branch's unique passcode in memory / localStorage
-  for (const [bId, bInfo] of Object.entries(currentBranches)) {
-    if (bInfo?.isPasscodeSet && bInfo?.passcode && cleanInput === bInfo.passcode.trim()) {
-      setTimesheetSessionVerified(2);
-      return { success: true, verified: true, message: 'Passcode verified successfully' };
-    }
-  }
-
   // 2. Remote Edge Function Verification
   // 2a. Attempt branch-specific verification via edge function
   try {
@@ -655,87 +647,8 @@ export async function verifyTimesheetPasscode(
     }
   } catch {}
 
-  // 2c. Multi-branch verification check via edge function:
-  // If specific branchId was omitted or failed, check all candidate branches that have custom passcodes
-  const candidateBranchIds = Object.keys(currentBranches).filter(
-    (bId) => currentBranches[bId]?.isPasscodeSet && bId !== branchId
-  );
-
-  // If memory/cache didn't have candidate branches, try fetching the latest list of branch IDs
-  if (candidateBranchIds.length === 0) {
-    try {
-      const cfg = await getTimesheetSecurityConfig();
-      if (cfg.branchPasscodes) {
-        for (const [bId, bInfo] of Object.entries(cfg.branchPasscodes)) {
-          if (bInfo?.isPasscodeSet && bId !== branchId && !candidateBranchIds.includes(bId)) {
-            candidateBranchIds.push(bId);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // Also query branches table to get all branch IDs if candidate list is still empty
-  if (candidateBranchIds.length === 0) {
-    try {
-      const { data: bList } = await supabase.from('branches').select('id');
-      if (bList) {
-        for (const b of bList) {
-          if (b.id !== branchId && !candidateBranchIds.includes(b.id)) {
-            candidateBranchIds.push(b.id);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // Test candidate branches against edge function
-  for (const candBranchId of candidateBranchIds) {
-    try {
-      const { data: candRes } = await supabase.functions.invoke('resend-2fa', {
-        body: {
-          action: 'verify_timesheet_passcode',
-          passcode: cleanInput,
-          branchId: candBranchId,
-        },
-      });
-      if (candRes?.verified) {
-        setTimesheetSessionVerified(2);
-        return {
-          success: true,
-          verified: true,
-          message: candRes.message || 'Passcode verified successfully',
-        };
-      }
-    } catch {}
-  }
-
-  // 2d. Direct database check against message_settings table as failover
-  try {
-    const { data: dbData } = await supabase
-      .from('message_settings')
-      .select('setting_value')
-      .eq('setting_key', 'timesheet_passcode_config')
-      .maybeSingle();
-
-    if (dbData?.setting_value && typeof dbData.setting_value === 'object') {
-      const val = dbData.setting_value as any;
-      if (val.branches && typeof val.branches === 'object') {
-        if (branchId && val.branches[branchId]?.passcode_plain) {
-          if (val.branches[branchId].passcode_plain.trim() === cleanInput) {
-            setTimesheetSessionVerified(2);
-            return { success: true, verified: true, message: 'Passcode verified successfully' };
-          }
-        }
-        for (const [bId, bObj] of Object.entries(val.branches as Record<string, any>)) {
-          if (bObj?.passcode_plain && bObj.passcode_plain.trim() === cleanInput) {
-            setTimesheetSessionVerified(2);
-            return { success: true, verified: true, message: 'Passcode verified successfully' };
-          }
-        }
-      }
-    }
-  } catch {}
+  // A passcode only unlocks the branch it belongs to (or the Super Admin master passcode,
+  // which the server checks above). Other branches' passcodes are never tried.
 
   // 3. Fallback check: if disabled or not configured
   const mode = getTimesheetVerificationModeSync();

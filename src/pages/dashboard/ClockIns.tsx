@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,7 +114,6 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
 const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
 const BEST_GPS_ACCURACY_METERS = 80;
 const GEOLOCATION_WATCH_WINDOW_MS = 12000;
-const MISCONFIGURED_PIN_DISTANCE_METERS = 500000;
 const MIN_PRACTICAL_GEOFENCE_RADIUS_METERS = 10;
 
 const getPositionOnce = () =>
@@ -185,6 +185,7 @@ const decimalToDms = (decimal: number, isLat: boolean): string => {
 
 export default function ClockIns() {
   const { user } = useAuth();
+  const defaultRadius = useOrgSetting('geofence_default_radius');
   const [locations, setLocations] = useState<Location[]>([]);
   const [clockIns, setClockIns] = useState<ClockIn[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -344,6 +345,7 @@ export default function ClockIns() {
       const monthEnd = new Date(parseInt(historyFilterYear), parseInt(historyFilterMonth) + 1, 0, 23, 59, 59);
 
       let locationsQuery = supabase.from('locations').select('*').order('name');
+      if (user?.role === 'employee') locationsQuery = locationsQuery.neq('is_active', false);
       if (scopedBranchId) {
         locationsQuery = locationsQuery.eq('branch_id', scopedBranchId);
       } else if (scopedBranchIds.length > 0) {
@@ -563,7 +565,7 @@ export default function ClockIns() {
       address: location.address || '',
       latitude: location.latitude.toString(),
       longitude: location.longitude.toString(),
-      radius: (location.radius || 100).toString(),
+      radius: (location.radius || defaultRadius).toString(),
       organizationId: branch?.organization_id || '',
       branchId: location.branch_id,
       qrEnabled: location.qr_enabled ?? true
@@ -572,30 +574,28 @@ export default function ClockIns() {
   };
 
   const handleDeleteLocation = async (locationId: string) => {
-    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
-      return;
-    }
-
     try {
-      // Delete dependent clock-ins first to satisfy FK clock_ins_location_id_fkey
-      const { error: clockInsError } = await supabase
+      // A location with clock-in history is switched off instead of deleted, so no history is lost.
+      const { count, error: countError } = await supabase
         .from('clock_ins')
-        .delete()
+        .select('id', { count: 'exact', head: true })
         .eq('location_id', locationId);
+      if (countError) throw countError;
 
-      if (clockInsError) throw clockInsError;
-
-      const { error } = await supabase
-        .from('locations')
-        .delete()
-        .eq('id', locationId);
-
-      if (error) throw error;
-
-      toast.success('Location deleted successfully');
+      if ((count || 0) > 0) {
+        if (!confirm(`This location has ${count} clock-ins on record, so it will be switched off (hidden from clocking in) rather than deleted. Continue?`)) return;
+        const { error } = await supabase.from('locations').update({ is_active: false }).eq('id', locationId);
+        if (error) throw error;
+        toast.success('Location switched off. Its clock-in history is kept.');
+      } else {
+        if (!confirm('Delete this location? This cannot be undone.')) return;
+        const { error } = await supabase.from('locations').delete().eq('id', locationId);
+        if (error) throw error;
+        toast.success('Location deleted successfully');
+      }
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete location');
+      toast.error(error.message || 'Failed to remove location');
     }
   };
 
@@ -644,7 +644,7 @@ export default function ClockIns() {
       const { latitude, longitude, accuracy } = position.coords;
 
       const distance = calculateDistance(latitude, longitude, targetLatitude, targetLongitude);
-      const configuredRadius = locationData.radius || 100;
+      const configuredRadius = locationData.radius || defaultRadius;
       const radius = Math.max(configuredRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS);
 
       if (configuredRadius < MIN_PRACTICAL_GEOFENCE_RADIUS_METERS) {
@@ -665,11 +665,8 @@ export default function ClockIns() {
         (location) => location.branch_id === locationData.branch_id && location.is_active
       ).length;
 
-      const shouldAllowMisconfiguredPinOverride =
-        user.role === 'employee' &&
-        distance > MISCONFIGURED_PIN_DISTANCE_METERS &&
-        accuracy <= BEST_GPS_ACCURACY_METERS &&
-        branchActiveLocationCount <= 1;
+      // No distance override: a clock-in is only accepted inside the location's geofence.
+      const shouldAllowMisconfiguredPinOverride = false as boolean;
 
       if (effectiveDistance > radius && !shouldAllowMisconfiguredPinOverride) {
         toast.error(`You are ${Math.round(distance)}m away from ${locationData.name} (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`);
@@ -1094,7 +1091,7 @@ export default function ClockIns() {
                     )}
                   </div>
                   <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                    <p>Radius: {location.radius || 100}m</p>
+                    <p>Radius: {location.radius || defaultRadius}m</p>
                     <p className="text-xs">
                       Decimal: {location.latitude}, {location.longitude}
                     </p>

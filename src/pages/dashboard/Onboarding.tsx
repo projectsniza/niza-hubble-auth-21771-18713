@@ -69,6 +69,7 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
         .select(`
           id,
           employee_id,
+          status,
           approved_at,
           employer_signed_date,
           signed_contract_path,
@@ -82,6 +83,8 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
             address,
             job_title,
             join_date,
+            organization_id,
+            branch_id,
             branch:branches(name),
             organization:organizations(name)
           )
@@ -93,6 +96,7 @@ function ApprovedContractsList({ onSelectEmployee }: { onSelectEmployee: (id: st
       setContracts(data || []);
     } catch (error) {
       console.error('Error fetching contracts:', error);
+      toast.error('Could not load approved contracts');
     } finally {
       setLoading(false);
     }
@@ -326,10 +330,10 @@ function OnboardingProgressTab() {
 
 export default function Onboarding() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(tabParam === 'contracts' ? 'contracts' : 'onboarding');
   const [searchParams] = useSearchParams();
   const empParam = searchParams.get('employeeId');
   const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabParam === 'contracts' ? 'contracts' : 'onboarding');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(empParam || null);
 
   useEffect(() => {

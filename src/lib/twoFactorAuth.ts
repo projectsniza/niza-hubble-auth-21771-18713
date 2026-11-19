@@ -22,6 +22,7 @@ export interface Send2FAResponse {
   email?: string;
   purpose?: TwoFactorPurpose;
   expiresInSeconds?: number;
+  disabled?: boolean;
   error?: string;
 }
 

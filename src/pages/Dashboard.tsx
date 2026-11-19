@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import RouteErrorBoundary from '@/components/shared/RouteErrorBoundary';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
@@ -18,7 +19,7 @@ import { Menu, CheckSquare } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
 import { useCustomRoleAccess } from '@/hooks/useCustomRoleAccess';
-import { canOpenPath } from '@/lib/permissions';
+import { canOpenPathForRole } from '@/lib/permissions';
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
@@ -39,7 +40,7 @@ export default function Dashboard() {
   }
 
   // Route guard: a custom role can only open pages its permissions allow (same rules as the menu).
-  if (!canOpenPath(pathname, !!customRole, hasPermission)) {
+  if (!canOpenPathForRole(pathname, user.role, !!customRole, hasPermission)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -125,7 +126,9 @@ export default function Dashboard() {
         />
 
         <div className="flex-1 overflow-y-auto">
-          <Outlet />
+          <RouteErrorBoundary key={pathname}>
+            <Outlet />
+          </RouteErrorBoundary>
         </div>
       </main>
     </div>

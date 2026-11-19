@@ -96,36 +96,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       let profile = profileResult.data;
 
-      // Auto-heal missing profile from auth user metadata if needed
+      // Auto-heal a missing profile row. Only the name/email come from the user's own
+      // metadata; scope fields come from app_metadata (which users cannot edit), and the
+      // role is never written from the browser — user_roles is managed by the server.
       if (!profile) {
         try {
           const { data: authUserData } = await supabase.auth.getUser();
           if (authUserData?.user && authUserData.user.id === userId) {
             const meta = authUserData.user.user_metadata || {};
-            const fallbackRole = (meta.role as UserRole) || 'employee';
+            const appMeta = authUserData.user.app_metadata || {};
             const { data: healedProfile } = await supabase
               .from('profiles')
               .upsert({
                 id: userId,
                 email: authUserData.user.email || '',
                 name: meta.name || authUserData.user.email || 'User',
-                organization_id: meta.organization_id || null,
-                branch_id: meta.branch_id || null,
-                custom_role_id: meta.custom_role_id || null,
-                hr_access_level: meta.hr_access_level || 'full',
+                organization_id: appMeta.organization_id || null,
+                branch_id: appMeta.branch_id || null,
                 is_active: true,
               })
               .select('id, email, name, organization_id, branch_id, hr_access_level, is_active, custom_role_id')
               .maybeSingle();
 
-            if (healedProfile) {
-              profile = healedProfile;
-              // Also ensure user_roles row exists
-              await supabase.from('user_roles').upsert({
-                user_id: userId,
-                role: fallbackRole,
-              });
-            }
+            if (healedProfile) profile = healedProfile;
           }
         } catch (healErr) {
           console.warn('Auto-healing profile error:', healErr);

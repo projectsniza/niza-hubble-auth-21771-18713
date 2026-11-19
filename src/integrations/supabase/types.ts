@@ -714,6 +714,123 @@ export type Database = {
           },
         ]
       }
+      contract_change_log: {
+        Row: {
+          action: string
+          changed_at: string
+          changed_by: string | null
+          changed_by_name: string | null
+          contract_id: string
+          employee_id: string
+          field: string | null
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          reason: string | null
+        }
+        Insert: {
+          action: string
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          contract_id: string
+          employee_id: string
+          field?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          contract_id?: string
+          employee_id?: string
+          field?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      deleted_documents: {
+        Row: {
+          branch_id: string | null
+          deleted_at: string
+          deleted_by: string | null
+          deleted_by_name: string | null
+          employee_name: string | null
+          file_name: string | null
+          file_path: string | null
+          folder_name: string | null
+          folder_path: string | null
+          id: string
+          organization_id: string | null
+          original: Json
+          title: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          employee_name?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          folder_name?: string | null
+          folder_path?: string | null
+          id: string
+          organization_id?: string | null
+          original: Json
+          title?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          employee_name?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          folder_name?: string | null
+          folder_path?: string | null
+          id?: string
+          organization_id?: string | null
+          original?: Json
+          title?: string | null
+        }
+        Relationships: []
+      }
+      org_settings: {
+        Row: {
+          id: string
+          key: string
+          organization_id: string | null
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          id?: string
+          key: string
+          organization_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          id?: string
+          key?: string
+          organization_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       contract_approvals: {
         Row: {
           admin_signature: string | null
@@ -2751,6 +2868,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           date_of_birth: string | null
+          deactivation_notes: string | null
           deactivation_reason: string | null
           department: string | null
           email: string
@@ -2761,6 +2879,7 @@ export type Database = {
           id: string
           job_title: string | null
           join_date: string | null
+          leaving_date: string | null
           last_name: string
           manager_id: string | null
           national_insurance_number: string | null
@@ -2779,6 +2898,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null
+          deactivation_notes?: string | null
           deactivation_reason?: string | null
           department?: string | null
           email: string
@@ -2789,6 +2909,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           join_date?: string | null
+          leaving_date?: string | null
           last_name: string
           manager_id?: string | null
           national_insurance_number?: string | null
@@ -2807,6 +2928,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           date_of_birth?: string | null
+          deactivation_notes?: string | null
           deactivation_reason?: string | null
           department?: string | null
           email?: string
@@ -2817,6 +2939,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           join_date?: string | null
+          leaving_date?: string | null
           last_name?: string
           manager_id?: string | null
           national_insurance_number?: string | null
@@ -8058,6 +8181,46 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      replace_payroll_items: {
+        Args: { p_employee_id: string; p_items: Json; p_month: string }
+        Returns: undefined
+      }
+      replace_daily_sales_upload: {
+        Args: { p_branch_id: string; p_formats: string[]; p_row: Json; p_sale_date: string }
+        Returns: string
+      }
+      approve_contract: {
+        Args: {
+          p_approval_id: string
+          p_employer_name?: string
+          p_signature: string
+          p_signature_date: string
+          p_signature_type: string
+        }
+        Returns: Database["public"]["Tables"]["contract_approvals"]["Row"]
+      }
+      reject_contract: {
+        Args: { p_approval_id: string; p_reason: string }
+        Returns: Database["public"]["Tables"]["contract_approvals"]["Row"]
+      }
+      reopen_contract: {
+        Args: { p_approval_id: string; p_reason: string }
+        Returns: Database["public"]["Tables"]["contract_approvals"]["Row"]
+      }
+      update_contract_details: {
+        Args: {
+          p_approval_id: string
+          p_content: Json
+          p_employee?: Json
+          p_reason?: string
+          p_signed_date?: string
+        }
+        Returns: Database["public"]["Tables"]["contract_approvals"]["Row"]
+      }
+      log_contract_signed_copy: {
+        Args: { p_approval_id: string; p_path: string; p_reason?: string }
+        Returns: undefined
+      }
       add_lottery_game_to_slot: {
         Args: {
           p_branch_id: string

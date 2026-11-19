@@ -208,23 +208,18 @@ export default function DailySalesUpload() {
         await uploadStorage(xreadFile!, date);
         await uploadStorage(deptFile!, date);
 
-        // Remove existing daily row for this date to replace
-        await supabase.from('daily_sales_uploads')
-          .delete()
-          .eq('branch_id', profile.branch_id)
-          .eq('sale_date', date)
-          .in('source_format', ['coop_fuel', 'xread', 'deptvat']);
-
-        const { error } = await supabase.from('daily_sales_uploads').insert({
-          organization_id: profile.organization_id,
-          branch_id: profile.branch_id,
-          sale_date: date,
-          source_filename: `${xreadFile!.name} + ${deptFile!.name}`,
-          source_format: 'coop_fuel',
-          storage_path: `${profile.branch_id}/${date}/`,
-          raw_text: [txtText, deptText].join('\n---DEPT---\n').slice(0, 200000),
-          parsed_totals: combinedTotals as any,
-          uploaded_by: user!.id,
+        // Replace the existing daily row in one step (the old row is kept if this fails).
+        const { error } = await supabase.rpc('replace_daily_sales_upload', {
+          p_branch_id: profile.branch_id,
+          p_sale_date: date,
+          p_formats: ['coop_fuel', 'xread', 'deptvat'],
+          p_row: {
+            source_filename: `${xreadFile!.name} + ${deptFile!.name}`,
+            source_format: 'coop_fuel',
+            storage_path: `${profile.branch_id}/${date}/`,
+            raw_text: [txtText, deptText].join('\n---DEPT---\n').slice(0, 200000),
+            parsed_totals: combinedTotals,
+          } as any,
         });
         if (error) throw error;
       } else if (isCharfield) {

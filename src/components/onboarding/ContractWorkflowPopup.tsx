@@ -368,41 +368,14 @@ export default function ContractWorkflowPopup() {
     if (!selectedApprovalForSign) return;
 
     try {
-      const approvalId = selectedApprovalForSign.id;
-      const empId = selectedApprovalForSign.employee_id;
-
-      const { data: existing } = await supabase
-        .from('contract_approvals')
-        .select('contract_content')
-        .eq('id', approvalId)
-        .single();
-
-      const existingContent = (existing?.contract_content as any) || {};
-      const updatedContent = {
-        ...existingContent,
-        employer_name: employerName || existingContent.employer_name || user?.name || 'Super Admin',
-      };
-
-      const { error: updateError } = await supabase
-        .from('contract_approvals')
-        .update({
-          status: 'approved',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-          employer_signature: signature,
-          employer_signature_type: signatureType,
-          employer_signed_date: signatureDate,
-          contract_content: updatedContent,
-        })
-        .eq('id', approvalId);
-
-      if (updateError) throw updateError;
-
-      // Update employee status to awaiting_signature for 3-stage physical upload
-      await supabase
-        .from('employees')
-        .update({ status: 'awaiting_signature' })
-        .eq('id', empId);
+      const { error } = await supabase.rpc('approve_contract', {
+        p_approval_id: selectedApprovalForSign.id,
+        p_signature: signature,
+        p_signature_type: signatureType,
+        p_signature_date: signatureDate,
+        p_employer_name: employerName || null,
+      });
+      if (error) throw error;
 
       toast.success('Contract approved and signed successfully!');
       setSelectedApprovalForSign(null);
@@ -417,16 +390,10 @@ export default function ContractWorkflowPopup() {
     if (!selectedApprovalForSign) return;
 
     try {
-      const { error } = await supabase
-        .from('contract_approvals')
-        .update({
-          status: 'rejected',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-          rejection_reason: reason,
-        })
-        .eq('id', selectedApprovalForSign.id);
-
+      const { error } = await supabase.rpc('reject_contract', {
+        p_approval_id: selectedApprovalForSign.id,
+        p_reason: reason,
+      });
       if (error) throw error;
       toast.success('Contract rejected');
       setSelectedApprovalForSign(null);

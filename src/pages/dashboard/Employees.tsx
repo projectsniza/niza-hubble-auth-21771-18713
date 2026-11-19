@@ -80,31 +80,24 @@ function PendingAccountsOnly() {
 
     setActivatingId(employee.id);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: employee.email,
-        password: activationData.password,
-        options: {
-          data: {
-            name: `${employee.first_name} ${employee.last_name}`,
-            role: 'employee',
-            organization_id: employee.organization_id,
-            branch_id: employee.branch_id,
-          }
-        }
+      // Created on the server: the admin stays signed in, and the role is set explicitly.
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: employee.email,
+          password: activationData.password,
+          name: `${employee.first_name} ${employee.last_name}`,
+          role: 'employee',
+          organization_id: employee.organization_id,
+          branch_id: employee.branch_id,
+          employee_id: employee.id,
+        },
       });
-      if (authError) throw authError;
+      if (fnError) throw fnError;
+      if (!fnData?.success) throw new Error(fnData?.error || 'Failed to create account');
 
-      if (authData.user) {
-        const { error: updateError } = await supabase
-          .from('employees')
-          .update({ user_id: authData.user.id, account_activated: true, status: 'active' })
-          .eq('id', employee.id);
-        if (updateError) throw updateError;
-
-        toast.success(`Account created for ${employee.first_name} ${employee.last_name}`);
-        setActivationData(null);
-        fetchPending();
-      }
+      toast.success(`Account created for ${employee.first_name} ${employee.last_name}`);
+      setActivationData(null);
+      fetchPending();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create account');
     } finally {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { validateLeaveRequest } from '@/lib/leaveValidation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgBranch } from '@/contexts/OrgBranchContext';
 import { Card } from '@/components/ui/card';
@@ -231,6 +232,11 @@ export default function Attendance() {
     const selectedLeaveType = leaveTypes.find(lt => lt.id === newLeave.leaveTypeId);
     if (selectedLeaveType?.requires_supporting_document && !newLeave.supportingDocument) {
       toast.error('This leave type requires a supporting document');
+      return;
+    }
+    const leaveProblem = await validateLeaveRequest(newLeave.employeeId, newLeave.startDate, newLeave.endDate);
+    if (leaveProblem) {
+      toast.error(leaveProblem);
       return;
     }
 
@@ -579,6 +585,12 @@ export default function Attendance() {
 
       if (!employeeId) {
         toast.error('Employee record not found');
+        return;
+      }
+
+      const ownLeaveProblem = await validateLeaveRequest(employeeId, employeeLeaveForm.startDate, employeeLeaveForm.endDate);
+      if (ownLeaveProblem) {
+        toast.error(ownLeaveProblem);
         return;
       }
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { localDateString } from '@/lib/ukDate';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,7 +175,7 @@ export default function UploadDocumentDialog({
         file_size: selectedFile.size,
         file_type: selectedFile.type,
         folder_id: folderId || null,
-        expiry_date: expiryDate?.toISOString().split('T')[0] || null,
+        expiry_date: expiryDate ? localDateString(expiryDate) : null,
       };
 
       if (requiresEsignature) {

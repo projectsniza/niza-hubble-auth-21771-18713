@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -76,6 +77,12 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
   const [deactivateEmployee, setDeactivateEmployee] = useState<any>(null);
   const [deactivationReason, setDeactivationReason] = useState('');
   const [deactivationNotes, setDeactivationNotes] = useState('');
+  const [leavingDate, setLeavingDate] = useState('');
+  // Reasons come from Settings -> Business Rules (per organisation); colours stay with the known ones.
+  const reasonOptions = useOrgSetting('deactivation_reasons', deactivateEmployee?.organization_id ?? null).map(o => ({
+    ...o,
+    color: DEACTIVATION_REASONS.find(d => d.value === o.value)?.color || 'bg-gray-100 text-gray-700 border-gray-200',
+  }));
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [certEmployeeId, setCertEmployeeId] = useState<string | null>(null);
   const [transferEmployee, setTransferEmployee] = useState<any>(null);
@@ -203,28 +210,29 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
         .from('employees')
         .update({ 
           status: 'inactive', 
-          deactivation_reason: deactivationReason
+          deactivation_reason: deactivationReason,
+          deactivation_notes: deactivationNotes.trim() || null,
+          leaving_date: leavingDate || null,
         })
         .eq('id', deactivateEmployee.id);
       if (error) throw error;
 
-      // Deactivate linked profile (by user_id or email fallback)
-      if (deactivateEmployee.user_id) {
-        await supabase
-          .from('profiles')
-          .update({ is_active: false })
-          .eq('id', deactivateEmployee.user_id);
-      } else if (deactivateEmployee.email) {
-        await supabase
-          .from('profiles')
-          .update({ is_active: false })
-          .eq('email', deactivateEmployee.email);
+      // Block the login too (by user_id, or email when there is no link).
+      const profileUpdate = deactivateEmployee.user_id
+        ? supabase.from('profiles').update({ is_active: false }).eq('id', deactivateEmployee.user_id)
+        : deactivateEmployee.email
+          ? supabase.from('profiles').update({ is_active: false }).eq('email', deactivateEmployee.email)
+          : null;
+      if (profileUpdate) {
+        const { error: profileError } = await profileUpdate;
+        if (profileError) throw new Error('Employee deactivated, but the login could not be blocked: ' + profileError.message);
       }
 
       toast.success(`${deactivateEmployee.first_name} ${deactivateEmployee.last_name} has been deactivated`);
       setDeactivateEmployee(null);
       setDeactivationReason('');
       setDeactivationNotes('');
+      setLeavingDate('');
       fetchEmployees(true);
     } catch (err: any) {
       toast.error(err.message);
@@ -234,23 +242,22 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
   };
 
   const handleReactivateEmployee = async (employee: any) => {
+    if (!confirm(`Reactivate ${employee.first_name} ${employee.last_name}? They will be able to sign in again.`)) return;
     try {
       const { error } = await supabase
         .from('employees')
-        .update({ status: 'active', deactivation_reason: null })
+        .update({ status: 'active', deactivation_reason: null, deactivation_notes: null, leaving_date: null })
         .eq('id', employee.id);
       if (error) throw error;
 
-      if (employee.user_id) {
-        await supabase
-          .from('profiles')
-          .update({ is_active: true })
-          .eq('id', employee.user_id);
-      } else if (employee.email) {
-        await supabase
-          .from('profiles')
-          .update({ is_active: true })
-          .eq('email', employee.email);
+      const profileUpdate = employee.user_id
+        ? supabase.from('profiles').update({ is_active: true }).eq('id', employee.user_id)
+        : employee.email
+          ? supabase.from('profiles').update({ is_active: true }).eq('email', employee.email)
+          : null;
+      if (profileUpdate) {
+        const { error: profileError } = await profileUpdate;
+        if (profileError) throw new Error('Employee reactivated, but the login could not be restored: ' + profileError.message);
       }
 
       toast.success(`${employee.first_name} ${employee.last_name} has been reactivated`);
@@ -628,7 +635,7 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {DEACTIVATION_REASONS.map(reason => (
+                  {reasonOptions.map(reason => (
                     <SelectItem key={reason.value} value={reason.value} className="py-2">
                       <div className="flex items-center gap-2">
                         <Badge className={`text-xs px-2 py-0.5 font-medium border ${reason.color}`}>
@@ -642,7 +649,7 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
 
               {/* Reason Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {DEACTIVATION_REASONS.map(reason => {
+                {reasonOptions.map(reason => {
                   const isSelected = deactivationReason === reason.value;
                   return (
                     <button
@@ -660,6 +667,15 @@ export default function EmployeeList({ searchQuery = '' }: EmployeeListProps) {
                   );
                 })}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Last working day (optional)</Label>
+              <input
+                type="date"
+                value={leavingDate}
+                onChange={(e) => setLeavingDate(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
             </div>
             <div className="space-y-2">
               <Label>Additional notes (optional)</Label>

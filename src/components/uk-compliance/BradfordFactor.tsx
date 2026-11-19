@@ -46,6 +46,18 @@ interface EmployeeBradford {
   color: string;
 }
 
+/** Monday-to-Friday days of a spell that fall on or after the start of the 12-month window. */
+function workingDaysInWindow(start: string, end: string, windowStart: Date): number {
+  const from = new Date(Math.max(new Date(start + 'T00:00:00').getTime(), new Date(windowStart.toDateString()).getTime()));
+  const to = new Date(end + 'T00:00:00');
+  let days = 0;
+  for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) days++;
+  }
+  return days;
+}
+
 export function BradfordFactor() {
   const [absences, setAbsences] = useState<AbsenceRecord[]>([]);
   const [thresholds, setThresholds] = useState<BradfordThreshold[]>([]);
@@ -83,7 +95,8 @@ export function BradfordFactor() {
       const twelveMonthsAgo = subMonths(new Date(), 12);
       const [absencesRes, thresholdsRes, employeesRes] = await Promise.all([
         supabase.from('absence_records').select('*, employees(first_name, last_name)')
-          .gte('start_date', format(twelveMonthsAgo, 'yyyy-MM-dd'))
+          // Spells that overlap the 12-month window (a spell starting before it but still running counts).
+          .gte('end_date', format(twelveMonthsAgo, 'yyyy-MM-dd'))
           .order('start_date', { ascending: false }),
         supabase.from('bradford_thresholds').select('*').eq('is_active', true).order('threshold_score'),
         supabase.from('employees').select('id, first_name, last_name').eq('status', 'active')
@@ -112,11 +125,15 @@ export function BradfordFactor() {
     employeeData.forEach(emp => {
       employeeAbsences[emp.id] = { spells: 0, days: 0, name: `${emp.first_name} ${emp.last_name}` };
     });
+    const windowStart = subMonths(new Date(), 12);
     absenceData.forEach(absence => {
-      if (employeeAbsences[absence.employee_id]) {
-        employeeAbsences[absence.employee_id].spells += 1;
-        employeeAbsences[absence.employee_id].days += absence.days_count;
-      }
+      // The Bradford Factor measures sickness only (holiday, training etc. are not absences of this kind).
+      if (absence.absence_type !== 'sickness') return;
+      if (!employeeAbsences[absence.employee_id]) return;
+      const days = workingDaysInWindow(absence.start_date, absence.end_date, windowStart);
+      if (days <= 0) return;
+      employeeAbsences[absence.employee_id].spells += 1;
+      employeeAbsences[absence.employee_id].days += days;
     });
 
     const scores: EmployeeBradford[] = Object.entries(employeeAbsences)
@@ -124,7 +141,7 @@ export function BradfordFactor() {
         const score = Math.pow(data.spells, 2) * data.days;
         let action: string | null = null;
         let color = '#10B981';
-        for (const threshold of thresholdData.sort((a, b) => b.threshold_score - a.threshold_score)) {
+        for (const threshold of [...thresholdData].sort((a, b) => b.threshold_score - a.threshold_score)) {
           if (score >= threshold.threshold_score) {
             action = threshold.action_required;
             color = threshold.color;
@@ -159,6 +176,14 @@ export function BradfordFactor() {
 
   const handleSaveAbsence = async () => {
     try {
+      if (!newAbsence.employee_id || !newAbsence.start_date || !newAbsence.end_date) {
+        toast.error('Please choose the employee and both dates');
+        return;
+      }
+      if (newAbsence.end_date < newAbsence.start_date) {
+        toast.error('The end date cannot be before the start date');
+        return;
+      }
       const daysCount = differenceInDays(new Date(newAbsence.end_date), new Date(newAbsence.start_date)) + 1;
       if (editingAbsence) {
         const { error } = await supabase.from('absence_records').update({

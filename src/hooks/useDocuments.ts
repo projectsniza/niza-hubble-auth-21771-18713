@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { todayUK } from '@/lib/ukDate';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -282,7 +283,7 @@ export function useDocumentFollowUps() {
   const fetchFollowUps = async () => {
     try {
       setIsLoading(true);
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayUK();
       const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       const { data, error } = await supabase
@@ -310,22 +311,22 @@ export function useDocumentFollowUps() {
   };
 
   const getOverdueCount = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayUK();
     return documents.filter(d => d.follow_up_date && d.follow_up_date < today).length;
   };
 
   const getUpcomingCount = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayUK();
     return documents.filter(d => d.follow_up_date && d.follow_up_date >= today).length;
   };
 
   const getOverdueDocuments = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayUK();
     return documents.filter(d => d.follow_up_date && d.follow_up_date < today);
   };
 
   const getUpcomingDocuments = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayUK();
     return documents.filter(d => d.follow_up_date && d.follow_up_date >= today);
   };
 

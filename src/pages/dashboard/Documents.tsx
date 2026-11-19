@@ -24,7 +24,7 @@ import StaffDocumentAuditTab from '@/components/documents/StaffDocumentAuditTab'
 import DeleteDocumentConfirmDialog from '@/components/documents/DeleteDocumentConfirmDialog';
 import { useDocumentSubmissions } from '@/hooks/useDocumentSubmissions';
 import { ensureEmployeeDocuments, getOrCreateEmployeeFolder } from '@/lib/ensureEmployeeDocuments';
-import { moveToRecycleBin, getRecycleBinDocuments } from '@/lib/recycleBin';
+import { moveToRecycleBin, getRecycleBinCount } from '@/lib/recycleBin';
 import { fetchAllPages } from '@/lib/supabasePagination';
 import {
   AlertDialog,
@@ -76,6 +76,8 @@ interface DocumentItem {
   follow_up_date: string | null;
   created_at: string;
   folder_id: string | null;
+  file_type?: string | null;
+  file_size?: number | null;
   employee?: { first_name: string; last_name: string; status?: string; deactivation_reason?: string | null } | null;
 }
 
@@ -109,7 +111,8 @@ export default function Documents() {
   const [followUpIntervals, setFollowUpIntervals] = useState<number[]>([30]); // Default fallback
   const [isDragging, setIsDragging] = useState(false);
   const [isDropUploading, setIsDropUploading] = useState(false);
-  const [recycleBinCount, setRecycleBinCount] = useState(() => getRecycleBinDocuments().length);
+  const [recycleBinCount, setRecycleBinCount] = useState(0);
+  useEffect(() => { getRecycleBinCount().then(setRecycleBinCount).catch(() => {}); }, []);
 
   const hasAccess = user?.role === 'super_admin' || user?.role === 'hr';
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
@@ -402,7 +405,7 @@ export default function Documents() {
       setDocuments(prev => prev.filter(d => d.id !== deleteDocId));
       setAllDocuments(prev => prev.filter(d => d.id !== deleteDocId));
       setTotalDocumentCount(prev => prev !== null ? Math.max(0, prev - 1) : null);
-      setRecycleBinCount(getRecycleBinDocuments().length);
+      getRecycleBinCount().then(setRecycleBinCount).catch(() => {});
       toast.success('Document moved to Recycle Bin (available for 90 days)');
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete document');
@@ -905,7 +908,7 @@ export default function Documents() {
           <DocumentRecycleBinTab
             onDocumentRestored={() => {
               fetchFoldersAndDocuments();
-              setRecycleBinCount(getRecycleBinDocuments().length);
+              getRecycleBinCount().then(setRecycleBinCount).catch(() => {});
             }}
           />
         ) : activeTab === 'submissions' ? (

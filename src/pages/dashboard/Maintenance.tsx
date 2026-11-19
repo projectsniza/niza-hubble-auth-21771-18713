@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { fetchAllPages } from '@/lib/supabasePagination';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +64,7 @@ export default function Maintenance() {
   const [selectedBranch, setSelectedBranch] = useState('');
   
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
+  const priorityOptions = useOrgSetting('maintenance_priorities');
 
   // Debounce ref to prevent excessive refetches
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -104,8 +107,7 @@ export default function Maintenance() {
           branch:branches(name),
           organization:organizations(name)
         `)
-        .order('created_at', { ascending: false })
-        .limit(100);
+        .order('created_at', { ascending: false });
 
       // Filter based on role and access level
       if (user.role === 'manager') {
@@ -125,8 +127,7 @@ export default function Maintenance() {
         // HR with no org/branch sees all tickets (same as super admin)
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllPages<any>((from, to) => query.range(from, to));
       
       // Fetch reporter profiles
       if (data && data.length > 0) {
@@ -147,6 +148,11 @@ export default function Maintenance() {
       }
     } catch (error) {
       console.error('Error fetching tickets:', error);
+      toast({
+        title: 'Could not load tickets',
+        description: error instanceof Error ? error.message : 'Please refresh the page',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -275,6 +281,33 @@ export default function Maintenance() {
         variant: "destructive",
       });
     }
+  };
+
+  // Reopen a resolved ticket (it goes back to pending and the old resolution time is cleared).
+  const handleReopenTicket = async (ticketId: string) => {
+    const { error } = await supabase
+      .from('maintenance_tickets')
+      .update({ status: 'pending', resolved_at: null, reopened_at: new Date().toISOString() } as any)
+      .eq('id', ticketId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Ticket reopened' });
+    fetchTickets();
+    setViewingTicket(null);
+  };
+
+  // Correct the title or priority of a ticket.
+  const handleEditTicket = async (ticketId: string, changes: { title?: string; priority?: string }) => {
+    const { error } = await supabase.from('maintenance_tickets').update(changes).eq('id', ticketId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Ticket updated' });
+    setViewingTicket(prev => (prev ? { ...prev, ...changes } : prev));
+    fetchTickets();
   };
 
   const handleResolveTicket = async () => {
@@ -502,9 +535,9 @@ export default function Maintenance() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
+                      {priorityOptions.map(p => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -785,6 +818,41 @@ export default function Maintenance() {
                   )}
                   <Button size="sm" variant="outline" onClick={() => { setClosureFiles([]); setClosureNotes(''); setResolveOpen(true); }}>
                     Mark Resolved
+                  </Button>
+                </div>
+              )}
+
+              {canUpdateStatus && viewingTicket.status === 'resolved' && (
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button size="sm" variant="outline" onClick={() => handleReopenTicket(viewingTicket.id)}>
+                    Reopen ticket
+                  </Button>
+                </div>
+              )}
+
+              {canUpdateStatus && (
+                <div className="flex flex-wrap items-center gap-2 pt-4 border-t">
+                  <Label className="text-muted-foreground">Priority:</Label>
+                  <Select
+                    value={viewingTicket.priority || 'medium'}
+                    onValueChange={(v) => handleEditTicket(viewingTicket.id, { priority: v })}
+                  >
+                    <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {priorityOptions.map(p => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const next = window.prompt('Ticket title', viewingTicket.title || '');
+                      if (next && next.trim() && next.trim() !== viewingTicket.title) handleEditTicket(viewingTicket.id, { title: next.trim() });
+                    }}
+                  >
+                    Edit title
                   </Button>
                 </div>
               )}

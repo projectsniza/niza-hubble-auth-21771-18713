@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { todayUK } from '@/lib/ukDate';
 import HeroArt from '@/components/ui/hero-art';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -68,7 +69,7 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayUK();
     
     const [employeesRes, clockInsRes, approvalsRes, eventsRes] = await Promise.all([
       supabase.from('employees').select('id', { count: 'exact', head: true }).eq('status', 'active'),

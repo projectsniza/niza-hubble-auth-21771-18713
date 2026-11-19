@@ -386,17 +386,16 @@ export default function Payroll() {
         created_by: user?.id
       };
 
-      if (existing) {
-        await supabase.from('salary_structures').update(data).eq('id', existing.id);
-      } else {
-        await supabase.from('salary_structures').insert(data);
-      }
+      const { error: salaryError } = existing
+        ? await supabase.from('salary_structures').update(data).eq('id', existing.id)
+        : await supabase.from('salary_structures').insert(data);
+      if (salaryError) throw salaryError;
 
       toast.success('Salary structure saved');
       setShowEditSalary(false);
       fetchData();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to save salary';
+      const message = (error as { message?: string })?.message || 'Failed to save salary';
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -439,26 +438,18 @@ export default function Payroll() {
     try {
       const monthDate = selectedMonth + '-01';
       
-      // Delete existing items for this employee/month
-      await supabase
-        .from('payroll_items')
-        .delete()
-        .eq('employee_id', adjustingEmployee.id)
-        .eq('month', monthDate);
-      
-      // Insert new items
-      if (employeeItems.length > 0) {
-        const itemsToInsert = employeeItems.map(item => ({
-          employee_id: adjustingEmployee.id,
-          month: monthDate,
+      // Old items are replaced only if the new ones are saved (single database step).
+      const { error: replaceError } = await supabase.rpc('replace_payroll_items', {
+        p_employee_id: adjustingEmployee.id,
+        p_month: monthDate,
+        p_items: employeeItems.map(item => ({
           category_id: item.category_id,
           amount: item.amount,
-          notes: item.notes,
-          created_by: user?.id
-        }));
-        await supabase.from('payroll_items').insert(itemsToInsert);
-      }
-      
+          notes: item.notes ?? null,
+        })) as any,
+      });
+      if (replaceError) throw replaceError;
+
       toast.success('Monthly adjustments saved');
       setShowAdjustmentsPanel(false);
       fetchPayrollItems();
@@ -500,7 +491,7 @@ export default function Payroll() {
         
         const netSalary = (salary.basic_salary || 0) + totalAllowances - totalDeductions;
 
-        await supabase.from('payroll_records').insert({
+        const { error: insertError } = await supabase.from('payroll_records').insert({
           employee_id: employee.id,
           month: monthDate.toISOString().split('T')[0],
           basic_salary: salary.basic_salary,
@@ -509,6 +500,10 @@ export default function Payroll() {
           net_salary: netSalary,
           generated_by: user?.id
         });
+        if (insertError) {
+          throw new Error(`Payroll for ${employee.first_name} ${employee.last_name} failed: ${insertError.message}` +
+            (generated > 0 ? ` (${generated} payslips were created before this error)` : ''));
+        }
         generated++;
       }
 
@@ -531,13 +526,16 @@ export default function Payroll() {
     setIsSaving(true);
     try {
       if (deleteTarget.type === 'salary') {
-        await supabase.from('salary_structures').delete().eq('id', deleteTarget.id);
+        const { error } = await supabase.from('salary_structures').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
         toast.success('Salary structure deleted');
       } else if (deleteTarget.type === 'payroll') {
-        await supabase.from('payroll_records').delete().eq('id', deleteTarget.id);
+        const { error } = await supabase.from('payroll_records').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
         toast.success('Payroll record deleted');
       } else if (deleteTarget.type === 'category') {
-        await supabase.from('payroll_categories').delete().eq('id', deleteTarget.id);
+        const { error } = await supabase.from('payroll_categories').delete().eq('id', deleteTarget.id);
+        if (error) throw error;
         toast.success('Category deleted');
       }
       setDeleteTarget(null);
@@ -557,19 +555,21 @@ export default function Payroll() {
     setIsSaving(true);
     try {
       if (editingCategory) {
-        await supabase.from('payroll_categories').update({
+        const { error } = await supabase.from('payroll_categories').update({
           name: categoryForm.name,
           category_type: categoryForm.category_type,
           description: categoryForm.description || null
         }).eq('id', editingCategory.id);
+        if (error) throw error;
         toast.success('Category updated');
       } else {
-        await supabase.from('payroll_categories').insert({
+        const { error } = await supabase.from('payroll_categories').insert({
           name: categoryForm.name,
           category_type: categoryForm.category_type,
           description: categoryForm.description || null,
           created_by: user?.id
         });
+        if (error) throw error;
         toast.success('Category created');
       }
       setShowCategoryDialog(false);

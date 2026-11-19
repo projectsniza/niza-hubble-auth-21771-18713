@@ -57,6 +57,9 @@ const MANAGER_FEATURES: Record<string, { key: string; label: string }[]> = {
   'Templates': [{ key: 'templates', label: 'Templates' }],
   'Customer Accounts': [{ key: 'customer_accounts', label: 'Customer Accounts' }],
   'Sales Analysis': [{ key: 'daily_summary', label: 'Sales Analysis' }],
+  'Reminders': [{ key: 'reminders', label: 'Reminders' }],
+  'Safety': [{ key: 'safety', label: 'Safety' }],
+  'Settings': [{ key: 'settings', label: 'Settings (own account)' }],
 };
 
 const HR_FEATURES: Record<string, { key: string; label: string }[]> = {
@@ -66,9 +69,21 @@ const HR_FEATURES: Record<string, { key: string; label: string }[]> = {
   'Onboarding': [{ key: 'onboarding', label: 'Onboarding' }],
 };
 
+// Employee roles use the same page keys as the rest of the app (the old 'self_service' and
+// 'communication' keys matched no page, so an employee custom role could open nothing).
 const EMPLOYEE_FEATURES: Record<string, { key: string; label: string }[]> = {
-  'Self Service': [{ key: 'self_service', label: 'Self Service' }],
-  'Communication': [{ key: 'communication', label: 'Communication' }],
+  'Clock In/Out': [{ key: 'clock_ins', label: 'Clock In/Out' }],
+  'My Schedule': [{ key: 'scheduling', label: 'My Schedule' }],
+  'Holiday Diary': [{ key: 'attendance', label: 'Holiday Diary' }],
+  'Pay Slips': [{ key: 'payroll', label: 'Pay Slips' }],
+  'Reminders': [{ key: 'reminders', label: 'Reminders' }],
+  'Safety': [{ key: 'safety', label: 'Safety' }],
+  'Training': [{ key: 'training', label: 'Training' }],
+  'Events & News': [{ key: 'events', label: 'Events & News' }],
+  'Performance': [{ key: 'performance', label: 'Performance' }],
+  'Messages': [{ key: 'messages', label: 'Messages' }],
+  'Submit Documents': [{ key: 'documents', label: 'Submit Documents' }],
+  'Settings': [{ key: 'settings', label: 'Settings (own account)' }],
 };
 
 export default function CustomRolesManagement() {

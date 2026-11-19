@@ -720,7 +720,7 @@ export async function buildCompleteContractPdf({
   // Resolve merged values with fallbacks across data structures
   const empName = contractData.employee_name || `${employeeData.first_name || ''} ${employeeData.last_name || ''}`.trim() || 'Employee';
   const empAddress = contractData.employee_address || employeeData.address || '';
-  const orgName = organizationData?.name || employeeData.organizations?.name || employeeData.organization?.name || contractData.employer_name || 'SantoGe TECH';
+  const orgName = organizationData?.name || employeeData.organizations?.name || employeeData.organization?.name || '………………………………';
   const orgRegNo = contractData.registered_number || organizationData?.registration_number || organizationData?.registered_number || '________';
   const orgVatNo = contractData.vat_number || organizationData?.vat_number || '';
   const orgOffice = contractData.registered_office || organizationData?.address || employeeData.organizations?.address || '________________';

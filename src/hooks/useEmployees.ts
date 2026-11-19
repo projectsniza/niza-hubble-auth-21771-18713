@@ -256,56 +256,16 @@ export function usePendingApprovals() {
 
   const approveContract = useCallback(async (approvalId: string, signature: string, signatureType: string, signatureDate: string, employerName?: string) => {
     try {
-      // First get existing contract_content to merge employer_name
-      const { data: existing } = await supabase
-        .from('contract_approvals')
-        .select('contract_content')
-        .eq('id', approvalId)
-        .single();
-
-      const updatedContent = {
-        ...((existing?.contract_content as any) || {}),
-        employer_name: employerName || '',
-        // The contract is made on the day the Super Admin signs it
-        contract_date: signatureDate
-      };
-
-      const { data, error } = await supabase
-        .from('contract_approvals')
-        .update({
-          status: 'approved',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-          admin_signature: signature,
-          employer_signature: signature,
-          employer_signature_type: signatureType,
-          employer_signed_date: signatureDate,
-          contract_content: updatedContent
-        })
-        .eq('id', approvalId)
-        .select()
-        .single();
-
+      // One database function does the whole approval (status, signature, onboarding, employee status).
+      const { data, error } = await supabase.rpc('approve_contract', {
+        p_approval_id: approvalId,
+        p_signature: signature,
+        p_signature_type: signatureType,
+        p_signature_date: signatureDate,
+        p_employer_name: employerName || null,
+      });
       if (error) throw error;
 
-      // Update onboarding status
-      const approval = pendingApprovals.find(a => a.id === approvalId);
-      if (approval) {
-        await Promise.all([
-          supabase
-            .from('employee_onboarding')
-            .update({
-              contract_approved: true,
-              current_step: 4
-            })
-            .eq('employee_id', approval.employee_id),
-          supabase
-            .from('employees')
-            .update({ status: 'awaiting_signature' })
-            .eq('id', approval.employee_id)
-        ]);
-      }
-      
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
       toast.success('Contract approved successfully');
       return { data, error: null };
@@ -314,24 +274,16 @@ export function usePendingApprovals() {
       toast.error(message);
       return { data: null, error: message };
     }
-  }, [user?.id, pendingApprovals]);
+  }, []);
 
   const rejectContract = useCallback(async (approvalId: string, reason: string) => {
     try {
-      const { data, error } = await supabase
-        .from('contract_approvals')
-        .update({
-          status: 'rejected',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-          rejection_reason: reason
-        })
-        .eq('id', approvalId)
-        .select()
-        .single();
-
+      const { data, error } = await supabase.rpc('reject_contract', {
+        p_approval_id: approvalId,
+        p_reason: reason,
+      });
       if (error) throw error;
-      
+
       setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
       toast.success('Contract rejected');
       return { data, error: null };
@@ -340,7 +292,7 @@ export function usePendingApprovals() {
       toast.error(message);
       return { data: null, error: message };
     }
-  }, [user?.id]);
+  }, []);
 
   const dismissDuplicateApproval = useCallback(async (approvalId: string) => {
     try {

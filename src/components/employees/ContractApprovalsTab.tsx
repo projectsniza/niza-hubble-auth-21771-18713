@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Search, CheckCircle2, User, Building, Calendar, 
   FileSignature, FileText, Clock, ShieldAlert, Check, ArrowRight,
-  AlertTriangle, Trash2, Loader2
+  AlertTriangle, Trash2, Loader2, Pencil, XCircle, RotateCcw
 } from 'lucide-react';
+import { toast } from 'sonner';
+import EditApprovedContractDialog from '@/components/onboarding/EditApprovedContractDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,12 +34,45 @@ export default function ContractApprovalsTab() {
   const [completedCount, setCompletedCount] = useState(0);
   const [approvalToDismiss, setApprovalToDismiss] = useState<any>(null);
   const [dismissing, setDismissing] = useState(false);
+  const [editingContract, setEditingContract] = useState<any>(null);
+  const [rejected, setRejected] = useState<any[]>([]);
   
   const { pendingApprovals, isLoading, approveContract, rejectContract, dismissDuplicateApproval, refetch } = usePendingApprovals();
 
   useEffect(() => {
     fetchStats();
+    fetchRejected();
   }, []);
+
+  // Rejected contracts stay visible here (with the reason) until fixed and resubmitted.
+  const fetchRejected = async () => {
+    const { data, error } = await supabase
+      .from('contract_approvals')
+      .select('*, employee:employees(*, organization:organizations(*), branch:branches(*))')
+      .eq('status', 'rejected')
+      .order('approved_at', { ascending: false });
+    if (error) {
+      toast.error('Could not load rejected contracts: ' + error.message);
+      return;
+    }
+    setRejected(data || []);
+  };
+
+  const handleResubmit = async (approval: any) => {
+    const { error } = await supabase
+      .from('contract_approvals')
+      .update({ status: 'pending', rejection_reason: null, submitted_at: new Date().toISOString(), approved_by: null, approved_at: null })
+      .eq('id', approval.id);
+    if (error) {
+      toast.error('Could not resubmit: ' + error.message);
+      return;
+    }
+    await supabase.from('employee_onboarding').update({ contract_submitted_for_approval: true }).eq('employee_id', approval.employee_id);
+    await supabase.from('employees').update({ status: 'awaiting_approval' }).eq('id', approval.employee_id);
+    toast.success('Contract is back in the pending list');
+    fetchRejected();
+    refetch?.();
+  };
 
   const fetchStats = async () => {
     try {
@@ -62,7 +97,8 @@ export default function ContractApprovalsTab() {
 
   const handleApprove = async (signature: string, signatureType: string, signatureDate: string, employerName: string) => {
     if (selectedApproval) {
-      await approveContract(selectedApproval.id, signature, signatureType, signatureDate, employerName);
+      const { error } = await approveContract(selectedApproval.id, signature, signatureType, signatureDate, employerName);
+      if (error) return; // keep the dialog open so nothing typed is lost
       setSelectedApproval(null);
       fetchStats();
       refetch?.();
@@ -71,9 +107,11 @@ export default function ContractApprovalsTab() {
 
   const handleReject = async (reason: string) => {
     if (selectedApproval) {
-      await rejectContract(selectedApproval.id, reason);
+      const { error } = await rejectContract(selectedApproval.id, reason);
+      if (error) return;
       setSelectedApproval(null);
       fetchStats();
+      fetchRejected();
       refetch?.();
     }
   };
@@ -279,6 +317,10 @@ export default function ContractApprovalsTab() {
                         <span>Dismiss</span>
                       </Button>
                     )}
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setEditingContract(approval)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>Edit</span>
+                    </Button>
                     <Button onClick={() => setSelectedApproval(approval)} size="sm" className="h-8 text-xs gap-1.5">
                       <span>Review & Sign</span>
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -290,6 +332,38 @@ export default function ContractApprovalsTab() {
           })}
         </div>
       )}
+
+      {rejected.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><XCircle className="h-4 w-4 text-destructive" /> Rejected contracts ({rejected.length})</h3>
+          {rejected.map((r) => (
+            <Card key={r.id} className="p-4 border border-destructive/30">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm">{r.employee?.first_name} {r.employee?.last_name}</p>
+                  <p className="text-xs text-muted-foreground">{r.employee?.organization?.name} • {r.employee?.branch?.name}</p>
+                  <p className="text-xs mt-1"><span className="font-medium">Reason:</span> {r.rejection_reason || 'No reason recorded'}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setEditingContract(r)}>
+                    <Pencil className="h-3.5 w-3.5" /> Fix
+                  </Button>
+                  <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => handleResubmit(r)}>
+                    <RotateCcw className="h-3.5 w-3.5" /> Resubmit
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <EditApprovedContractDialog
+        open={!!editingContract}
+        onOpenChange={(open) => !open && setEditingContract(null)}
+        contract={editingContract}
+        onSaved={() => { refetch?.(); fetchRejected(); fetchStats(); }}
+      />
 
       <ContractApprovalDialog
         open={!!selectedApproval}

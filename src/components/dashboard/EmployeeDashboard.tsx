@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,7 +75,6 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
 const MIN_ACCEPTABLE_ACCURACY_METERS = 250;
 const BEST_GPS_ACCURACY_METERS = 80;
 const GEOLOCATION_WATCH_WINDOW_MS = 12000;
-const MISCONFIGURED_PIN_DISTANCE_METERS = 500000;
 const MIN_PRACTICAL_GEOFENCE_RADIUS_METERS = 10;
 
 const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -158,6 +158,7 @@ const getReliablePosition = async (
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
+  const defaultRadius = useOrgSetting('geofence_default_radius');
   const navigate = useNavigate();
   const [employeeData, setEmployeeData] = useState<EmployeeData | null>(null);
   const [todayClockIn, setTodayClockIn] = useState<ClockInRecord | null>(null);
@@ -467,7 +468,7 @@ export default function EmployeeDashboard() {
         }
       }
 
-      const configuredRadius = nearest.radius || 100;
+      const configuredRadius = nearest.radius || defaultRadius;
       const radius = Math.max(configuredRadius, MIN_PRACTICAL_GEOFENCE_RADIUS_METERS);
 
       if (configuredRadius < MIN_PRACTICAL_GEOFENCE_RADIUS_METERS) {
@@ -484,10 +485,8 @@ export default function EmployeeDashboard() {
       const uncertaintyPenalty = accuracy > radius * 4 ? accuracy * 0.1 : 0;
       const effectiveDistance = nearestDistance + uncertaintyPenalty;
 
-      const allowMisconfiguredPinOverride =
-        nearestDistance > MISCONFIGURED_PIN_DISTANCE_METERS &&
-        accuracy <= BEST_GPS_ACCURACY_METERS &&
-        locationCandidates.length === 1;
+      // No distance override: a clock-in is only accepted inside the location's geofence.
+      const allowMisconfiguredPinOverride = false as boolean;
 
       if (effectiveDistance > radius && !allowMisconfiguredPinOverride) {
         const message = `You are ${Math.round(nearestDistance)}m away from ${nearest.name} (GPS ±${Math.round(accuracy)}m). Must be within ${radius}m to clock in.`;
@@ -526,7 +525,7 @@ export default function EmployeeDashboard() {
     } finally {
       setClockAction(null);
     }
-  }, [user?.id, clockAction, activeClockIn, employeeLocations, fetchEmployeeData]);
+  }, [user?.id, clockAction, activeClockIn, employeeLocations, fetchEmployeeData, defaultRadius]);
 
   const handleEmployeeClockOut = useCallback(async () => {
     if (!activeClockIn || clockAction) return;

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { localDateString } from '@/lib/ukDate';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -102,8 +103,8 @@ export function useDriveOffs(month?: Date, selectedOrg?: string, selectedBranch?
         const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
         const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
         query = query
-          .gte('drive_off_date', startOfMonth.toISOString().split('T')[0])
-          .lte('drive_off_date', endOfMonth.toISOString().split('T')[0]);
+          .gte('drive_off_date', localDateString(startOfMonth))
+          .lte('drive_off_date', localDateString(endOfMonth));
       }
 
       const { data, error } = await query;

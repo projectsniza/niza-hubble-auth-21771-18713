@@ -1,6 +1,37 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Find an auth user by email without the 50-user page limit of listUsers().
+// Looks in profiles first (profiles.id = auth user id), then pages through every auth user.
+// deno-lint-ignore no-explicit-any
+async function findAuthUserByEmail(supabaseAdmin: any, email: string): Promise<{ id: string; email?: string } | null> {
+  const target = String(email || "").trim().toLowerCase();
+  if (!target) return null;
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .ilike("email", target)
+    .limit(1)
+    .maybeSingle();
+  if (profile?.id) {
+    const { data } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+    if (data?.user && data.user.email?.toLowerCase() === target) return data.user;
+  }
+
+  const perPage = 1000;
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users || [];
+    // deno-lint-ignore no-explicit-any
+    const hit = users.find((u: any) => u.email?.toLowerCase() === target);
+    if (hit) return hit;
+    if (users.length < perPage) break;
+  }
+  return null;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -832,25 +863,7 @@ serve(async (req) => {
         }
       }
 
-      // Check if cleanInput matches ANY configured branch unique passcode in branchConfigs
-      if (!isMatch && branchConfigs && typeof branchConfigs === "object") {
-        for (const [bId, bConfig] of Object.entries(branchConfigs)) {
-          if (bConfig && typeof bConfig === "object" && (bConfig as any).is_set) {
-            const bHash = (bConfig as any).hash || "";
-            const bEncrypted = (bConfig as any).encrypted || "";
-            if (bHash && inputHash === bHash) {
-              isMatch = true;
-              break;
-            } else if (bEncrypted) {
-              const decryptedBranch = await decryptPasscode(bEncrypted, supabaseServiceKey);
-              if (decryptedBranch && decryptedBranch.trim() === cleanInput) {
-                isMatch = true;
-                break;
-              }
-            }
-          }
-        }
-      }
+      // Another branch's passcode never unlocks this branch.
 
       if (!isMatch) {
         return new Response(
@@ -965,12 +978,7 @@ serve(async (req) => {
 
       // For password_reset, ensure the user exists
       if (purpose === "password_reset") {
-        const { data: usersData, error: listError } =
-          await supabaseAdmin.auth.admin.listUsers();
-        if (listError) throw listError;
-        const exists = usersData.users.some(
-          (u) => u.email?.toLowerCase() === normalizedEmail
-        );
+        const exists = await findAuthUserByEmail(supabaseAdmin, normalizedEmail);
         if (!exists) {
           throw new Error("No account found with this email address");
         }
@@ -1177,12 +1185,7 @@ serve(async (req) => {
         }
 
         // Apply new password
-        const { data: usersData, error: listError } =
-          await supabaseAdmin.auth.admin.listUsers();
-        if (listError) throw listError;
-        const targetUser = usersData.users.find(
-          (u) => u.email?.toLowerCase() === email.toLowerCase()
-        );
+        const targetUser = await findAuthUserByEmail(supabaseAdmin, email);
 
         if (!targetUser) {
           throw new Error("User account not found");
@@ -1210,12 +1213,7 @@ serve(async (req) => {
 
       if (purpose === "admin_password_change") {
         if (newPassword && newPassword.length >= 6) {
-          const { data: usersData, error: listError } =
-            await supabaseAdmin.auth.admin.listUsers();
-          if (listError) throw listError;
-          const targetUser = usersData.users.find(
-            (u) => u.email?.toLowerCase() === email.toLowerCase()
-          );
+          const targetUser = await findAuthUserByEmail(supabaseAdmin, email);
 
           if (targetUser) {
             const { error: updateError } =

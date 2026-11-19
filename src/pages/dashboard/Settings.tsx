@@ -11,7 +11,8 @@ import CustomRolesManagement from '@/components/settings/CustomRolesManagement';
 import DocumentSettingsPanel from '@/components/settings/DocumentSettingsPanel';
 import DepartmentManagement from '@/components/settings/DepartmentManagement';
 import SecuritySettingsPanel from '@/components/settings/SecuritySettingsPanel';
-import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, ShieldCheck, FileText, Briefcase } from 'lucide-react';
+import { Building2, Users, Lock, Eye, EyeOff, User, Loader2, MessageSquare, Shield, ShieldCheck, FileText, Briefcase, SlidersHorizontal } from 'lucide-react';
+import BusinessRulesPanel from '@/components/settings/BusinessRulesPanel';
 import { NizaLoaderInline } from '@/components/ui/niza-loader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import CodeVerification from '@/components/auth/CodeVerification';
@@ -243,6 +244,12 @@ export default function Settings() {
             <TabsTrigger value="departments" className="gap-2">
               <Briefcase className="h-4 w-4" />
               Departments
+            </TabsTrigger>
+          )}
+          {canManageDepartments && (
+            <TabsTrigger value="business-rules" className="gap-2">
+              <SlidersHorizontal className="h-4 w-4" />
+              Business Rules
             </TabsTrigger>
           )}
           {user?.role === 'super_admin' && (
@@ -517,6 +524,12 @@ export default function Settings() {
         {canManageDepartments && (
           <TabsContent value="departments" forceMount className="data-[state=inactive]:hidden">
             <DepartmentManagement />
+          </TabsContent>
+        )}
+
+        {canManageDepartments && (
+          <TabsContent value="business-rules" className="data-[state=inactive]:hidden">
+            <BusinessRulesPanel />
           </TabsContent>
         )}
 

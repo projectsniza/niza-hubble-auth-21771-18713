@@ -15,17 +15,18 @@ export default function OnboardingApprovals() {
   
   const { pendingApprovals, isLoading, approveContract, rejectContract } = usePendingApprovals();
 
-  const handleApprove = async (signature: string, signatureType: string, signatureDate: string) => {
+  const handleApprove = async (signature: string, signatureType: string, signatureDate: string, employerName?: string) => {
     if (selectedApproval) {
-      await approveContract(selectedApproval.id, signature, signatureType, signatureDate);
-      setSelectedApproval(null);
+      const { error } = await approveContract(selectedApproval.id, signature, signatureType, signatureDate, employerName);
+      // Keep the dialog open on failure so nothing typed is lost.
+      if (!error) setSelectedApproval(null);
     }
   };
 
   const handleReject = async (reason: string) => {
     if (selectedApproval) {
-      await rejectContract(selectedApproval.id, reason);
-      setSelectedApproval(null);
+      const { error } = await rejectContract(selectedApproval.id, reason);
+      if (!error) setSelectedApproval(null);
     }
   };
 

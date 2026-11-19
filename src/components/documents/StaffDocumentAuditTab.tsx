@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { todayUK } from '@/lib/ukDate';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -201,9 +202,11 @@ export default function StaffDocumentAuditTab() {
 
       if (error) {
         console.error('Error syncing audit record to database:', error);
+        toast.error('The audit change could not be saved: ' + error.message);
       }
     } catch (err) {
       console.error('Failed to sync audit record to database:', err);
+      toast.error('The audit change could not be saved');
     }
   };
 
@@ -257,7 +260,9 @@ export default function StaffDocumentAuditTab() {
 
       if (empErr) throw empErr;
 
-      const employeeList = emps || [];
+      // These two relations come back as lists; the audit reads one record each.
+      const first = <T,>(v: T[] | T | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+      const employeeList = ((emps || []) as any[]).map(e => ({ ...e, onboarding: first(e.onboarding), contract_approval: first(e.contract_approval) })) as EmployeeItem[];
       setEmployees(employeeList);
 
       // 3. Fetch any existing audit records saved in Supabase database
@@ -595,18 +600,25 @@ export default function StaffDocumentAuditTab() {
     });
   };
 
-  // Mark all requirements complete for an employee
+  // Mark every requirement that already has a file as verified.
+  // Requirements with nothing on file are left alone (they must be uploaded first).
   const handleMarkAllComplete = (employeeId: string) => {
+    let skipped = 0;
     setAuditRecords(prev => {
       const empRecord = prev[employeeId] || { employeeId, requirements: {} };
-      const updatedReqs: Record<string, AuditCheckItem> = {};
+      const updatedReqs: Record<string, AuditCheckItem> = { ...empRecord.requirements };
+      skipped = 0;
 
       requirements.forEach(req => {
         const current = empRecord.requirements[req.id];
+        if (!current?.checked) {
+          skipped++;
+          return;
+        }
         updatedReqs[req.id] = {
-          checked: true,
+          ...current,
           status: 'verified',
-          notes: current?.notes || 'Marked verified by HR',
+          notes: current.notes || 'Marked verified by HR',
           verifiedAt: new Date().toISOString(),
           verifiedBy: user?.name || 'HR Staff',
           isManual: true,
@@ -627,7 +639,11 @@ export default function StaffDocumentAuditTab() {
         [employeeId]: updatedRecord,
       };
     });
-    toast.success('All documents marked on file for this employee');
+    if (skipped > 0) {
+      toast.warning(`Verified the documents on file. ${skipped} requirement(s) have no file yet and were not marked.`);
+    } else {
+      toast.success('All documents on file were marked verified');
+    }
   };
 
   // Reset to auto-detection
@@ -841,7 +857,7 @@ export default function StaffDocumentAuditTab() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Staff Document Audit');
 
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = todayUK();
       XLSX.writeFile(workbook, `Staff_Documentation_Audit_${dateStr}.xlsx`);
       toast.success('Excel audit matrix exported successfully');
     } catch (e: any) {
@@ -885,7 +901,7 @@ export default function StaffDocumentAuditTab() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = todayUK();
       link.download = `Staff_Documentation_Audit_${dateStr}.csv`;
       link.click();
       URL.revokeObjectURL(url);
@@ -1805,7 +1821,7 @@ export default function StaffDocumentAuditTab() {
                         className="h-7 text-xs px-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                         onClick={() => handleMarkAllComplete(splitViewEmployee.id)}
                       >
-                        Mark All (6/6)
+                        Verify all on file
                       </Button>
                     </div>
                   </div>

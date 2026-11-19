@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { todayUK } from '@/lib/ukDate';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -109,7 +110,7 @@ export function DriveOffFormDialog({
     resolver: zodResolver(formSchema),
     defaultValues: {
       branch_id: '',
-      drive_off_date: new Date().toISOString().split('T')[0],
+      drive_off_date: todayUK(),
       vehicle_registration: '',
       vehicle_model: '',
       fuel_type: '',

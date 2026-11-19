@@ -54,9 +54,12 @@ export default function DocumentRecycleBinTab({ onDocumentRestored }: DocumentRe
   const [confirmEmptyOpen, setConfirmEmptyOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const loadDocs = () => {
-    const list = getRecycleBinDocuments();
-    setDeletedDocs(list);
+  const loadDocs = async () => {
+    try {
+      setDeletedDocs(await getRecycleBinDocuments());
+    } catch (err: any) {
+      toast.error('Could not load the recycle bin: ' + (err?.message || 'unknown error'));
+    }
   };
 
   useEffect(() => {
@@ -94,7 +97,7 @@ export default function DocumentRecycleBinTab({ onDocumentRestored }: DocumentRe
     try {
       await restoreFromRecycleBin(docId);
       toast.success(`"${title}" has been restored successfully`);
-      loadDocs();
+      await loadDocs();
       onDocumentRestored?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to restore document');
@@ -110,7 +113,7 @@ export default function DocumentRecycleBinTab({ onDocumentRestored }: DocumentRe
       await permanentlyDeleteFromRecycleBin(permanentDeleteDocId);
       toast.success('Document permanently deleted');
       setPermanentDeleteDocId(null);
-      loadDocs();
+      await loadDocs();
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete document permanently');
     } finally {
@@ -124,7 +127,7 @@ export default function DocumentRecycleBinTab({ onDocumentRestored }: DocumentRe
       await emptyRecycleBin();
       toast.success('Recycle bin emptied');
       setConfirmEmptyOpen(false);
-      loadDocs();
+      await loadDocs();
     } catch (err: any) {
       toast.error(err.message || 'Failed to empty recycle bin');
     } finally {

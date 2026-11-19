@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { currentHolidayYearStart, holidayYearOptions } from '@/lib/holidayYear';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -94,7 +95,7 @@ export function HolidayBalance() {
   const [balances, setBalances] = useState<EmployeeBalance[]>([]);
   const [payrollNotes, setPayrollNotes] = useState<Record<string, PayrollNote>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedYear, setSelectedYear] = useState('2025-04-01');
+  const [selectedYear, setSelectedYear] = useState(currentHolidayYearStart());
   const [viewMode, setViewMode] = useState<'ref' | 'monthly'>('ref');
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; organization_id: string }[]>([]);
@@ -510,9 +511,9 @@ export function HolidayBalance() {
                 <Select value={selectedYear} onValueChange={setSelectedYear}>
                   <SelectTrigger className="w-44 bg-background shadow-sm"><SelectValue placeholder="Select year" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="2024-04-01">Apr 2024 - Mar 2025</SelectItem>
-                    <SelectItem value="2025-04-01">Apr 2025 - Mar 2026</SelectItem>
-                    <SelectItem value="2026-04-01">Apr 2026 - Mar 2027</SelectItem>
+                    {holidayYearOptions().map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}

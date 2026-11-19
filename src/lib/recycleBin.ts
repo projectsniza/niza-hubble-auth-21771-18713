@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface DeletedDocumentRecord {
   id: string; // original document ID
@@ -18,193 +19,199 @@ export interface DeletedDocumentRecord {
   deleted_by_name?: string | null;
 }
 
-const RECYCLE_BIN_STORAGE_KEY = 'niza_documents_recycle_bin';
+// Older versions kept the recycle bin in each browser. Anything still there is imported once.
+const LEGACY_STORAGE_KEY = 'niza_documents_recycle_bin';
 const RETENTION_DAYS = 90;
 
-/**
- * Get all deleted documents stored within the last 90 days.
- * Documents older than 90 days are automatically purged.
- */
-export function getRecycleBinDocuments(): DeletedDocumentRecord[] {
+async function importLegacyBin(userId?: string | null) {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(RECYCLE_BIN_STORAGE_KEY);
-    if (!raw) return [];
+    raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+  } catch {
+    return; // storage unavailable: nothing to import
+  }
+  if (!raw) return;
+  try {
     const list: DeletedDocumentRecord[] = JSON.parse(raw);
-    const now = Date.now();
-    const ninetyDaysMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
-
-    // Filter out items older than 90 days
-    const active = list.filter(item => {
-      const deletedTime = new Date(item.deleted_at).getTime();
-      return !isNaN(deletedTime) && (now - deletedTime) <= ninetyDaysMs;
-    });
-
-    if (active.length !== list.length) {
-      localStorage.setItem(RECYCLE_BIN_STORAGE_KEY, JSON.stringify(active));
+    if (list.length > 0) {
+      const rows = list.map(d => ({
+        id: d.id,
+        original: {
+          id: d.id,
+          title: d.title,
+          file_name: d.file_name,
+          file_path: d.file_path,
+          file_size: d.file_size ?? null,
+          file_type: d.file_type ?? null,
+          folder_id: d.folder_id,
+          expiry_date: d.expiry_date ?? null,
+          follow_up_date: d.follow_up_date ?? null,
+        } as Json,
+        title: d.title,
+        file_name: d.file_name,
+        file_path: d.file_path,
+        folder_name: d.folder_name ?? null,
+        folder_path: d.folder_path ?? null,
+        employee_name: d.employee_name ?? null,
+        deleted_at: d.deleted_at,
+        deleted_by: userId ?? null,
+        deleted_by_name: d.deleted_by_name ?? null,
+      }));
+      const { error } = await supabase.from('deleted_documents').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
     }
-
-    return active.sort((a, b) => new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime());
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch (err) {
-    console.error('Error reading recycle bin documents:', err);
-    return [];
+    console.warn('Could not import the old recycle bin yet:', err);
   }
 }
 
+function toRecord(r: any): DeletedDocumentRecord {
+  const o = (r.original || {}) as Record<string, any>;
+  return {
+    id: r.id,
+    title: r.title || o.title || '',
+    file_name: r.file_name || o.file_name || '',
+    file_path: r.file_path || o.file_path || '',
+    file_size: o.file_size ?? null,
+    file_type: o.file_type ?? null,
+    folder_id: o.folder_id ?? null,
+    folder_name: r.folder_name,
+    folder_path: r.folder_path,
+    employee_id: o.employee_id ?? null,
+    employee_name: r.employee_name,
+    expiry_date: o.expiry_date ?? null,
+    follow_up_date: o.follow_up_date ?? null,
+    deleted_at: r.deleted_at,
+    deleted_by_name: r.deleted_by_name,
+  };
+}
+
+/** Deleted documents from the last 90 days. Older ones are purged (database row and stored file). */
+export async function getRecycleBinDocuments(): Promise<DeletedDocumentRecord[]> {
+  const { data: auth } = await supabase.auth.getUser();
+  await importLegacyBin(auth?.user?.id);
+
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data: expired } = await supabase.from('deleted_documents').select('id, file_path').lt('deleted_at', cutoff);
+  if (expired && expired.length > 0) {
+    const paths = expired.map(e => e.file_path).filter(Boolean) as string[];
+    if (paths.length > 0) await supabase.storage.from('documents').remove(paths);
+    await supabase.from('deleted_documents').delete().in('id', expired.map(e => e.id));
+  }
+
+  const { data, error } = await supabase
+    .from('deleted_documents')
+    .select('*')
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(toRecord);
+}
+
+export async function getRecycleBinCount(): Promise<number> {
+  const { count } = await supabase.from('deleted_documents').select('id', { count: 'exact', head: true });
+  return count || 0;
+}
+
 /**
- * Move a document to the Recycle Bin (90-day retention).
- * The database row is removed from the active documents view,
- * but the physical storage file is preserved so it can be restored.
+ * Move a document to the Recycle Bin (90-day retention). The complete row is kept, so a restore
+ * brings back the employee, folder, dates and everything else. The stored file is not touched.
  */
 export async function moveToRecycleBin(
-  doc: {
-    id: string;
-    title: string;
-    file_name: string;
-    file_path: string;
-    folder_id: string | null;
-    file_size?: number | null;
-    file_type?: string | null;
-    expiry_date?: string | null;
-    follow_up_date?: string | null;
-    employee?: { first_name: string; last_name: string } | null;
-  },
+  doc: { id: string; [key: string]: any },
   deletedByName?: string,
   folderInfo?: { name: string; path: string }
 ): Promise<boolean> {
-  try {
-    // 1. Get current recycle bin
-    const current = getRecycleBinDocuments();
+  const { data: auth } = await supabase.auth.getUser();
 
-    // 2. Build record
-    const record: DeletedDocumentRecord = {
+  // Read the full row (the screen's copy may be missing columns).
+  const { data: full, error: readError } = await supabase.from('documents').select('*').eq('id', doc.id).maybeSingle();
+  if (readError) throw readError;
+  const row = (full || doc) as Record<string, any>;
+
+  const employeeName = doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}`.trim() : null;
+  const { error: binError } = await supabase.from('deleted_documents').upsert(
+    {
       id: doc.id,
-      title: doc.title,
-      file_name: doc.file_name,
-      file_path: doc.file_path,
-      file_size: doc.file_size,
-      file_type: doc.file_type,
-      folder_id: doc.folder_id,
+      original: row as Json,
+      title: row.title,
+      file_name: row.file_name,
+      file_path: row.file_path,
       folder_name: folderInfo?.name || null,
       folder_path: folderInfo?.path || null,
-      employee_name: doc.employee ? `${doc.employee.first_name} ${doc.employee.last_name}`.trim() : null,
-      expiry_date: doc.expiry_date || null,
-      follow_up_date: doc.follow_up_date || null,
-      deleted_at: new Date().toISOString(),
+      employee_name: employeeName,
+      organization_id: row.organization_id ?? null,
+      branch_id: row.branch_id ?? null,
+      deleted_by: auth?.user?.id ?? null,
       deleted_by_name: deletedByName || null,
-    };
+    },
+    { onConflict: 'id' }
+  );
+  if (binError) throw binError;
 
-    // Filter out any prior entry with same id, add new record
-    const updated = [record, ...current.filter(item => item.id !== doc.id)];
-    localStorage.setItem(RECYCLE_BIN_STORAGE_KEY, JSON.stringify(updated));
-
-    // 3. Remove document record from active database table (leave storage file intact for restore)
-    const { error: dbError } = await supabase.from('documents').delete().eq('id', doc.id);
-    if (dbError) throw dbError;
-
-    return true;
-  } catch (err) {
-    console.error('Error moving document to recycle bin:', err);
-    throw err;
+  const { error: dbError } = await supabase.from('documents').delete().eq('id', doc.id);
+  if (dbError) {
+    // Do not leave a recycle-bin copy of a document that is still live.
+    await supabase.from('deleted_documents').delete().eq('id', doc.id);
+    throw dbError;
   }
+  return true;
 }
 
-/**
- * Restore a document from Recycle Bin back into its original folder (or fallback root folder).
- */
+/** Restore a document with all its original fields, into its folder (or the root folder if that folder is gone). */
 export async function restoreFromRecycleBin(docId: string): Promise<boolean> {
-  try {
-    const list = getRecycleBinDocuments();
-    const doc = list.find(d => d.id === docId);
-    if (!doc) {
-      throw new Error('Document not found in recycle bin');
-    }
+  const { data: bin, error } = await supabase.from('deleted_documents').select('*').eq('id', docId).maybeSingle();
+  if (error) throw error;
+  if (!bin) throw new Error('Document not found in recycle bin');
 
-    // Check if the target folder exists, if not fallback to root
-    let targetFolderId = doc.folder_id;
-    if (targetFolderId) {
-      const { data: folderCheck } = await supabase
+  const original = { ...((bin.original || {}) as Record<string, any>) };
+
+  if (original.folder_id) {
+    const { data: folderCheck } = await supabase.from('folders').select('id').eq('id', original.folder_id).maybeSingle();
+    if (!folderCheck) {
+      const { data: rootFolder } = await supabase
         .from('folders')
         .select('id')
-        .eq('id', targetFolderId)
+        .or('folder_type.eq.root,parent_id.is.null')
+        .limit(1)
         .maybeSingle();
-
-      if (!folderCheck) {
-        // Fallback: look for root folder regardless of rename
-        const { data: rootFolder } = await supabase
-          .from('folders')
-          .select('id')
-          .or('folder_type.eq.root,parent_id.is.null')
-          .limit(1)
-          .maybeSingle();
-        targetFolderId = rootFolder?.id || null;
-      }
+      original.folder_id = rootFolder?.id || null;
     }
-
-    // Re-insert document row into database
-    const { error: insertError } = await supabase.from('documents').insert({
-      id: doc.id,
-      title: doc.title,
-      file_name: doc.file_name,
-      file_path: doc.file_path,
-      file_size: doc.file_size || null,
-      file_type: doc.file_type || null,
-      folder_id: targetFolderId,
-      expiry_date: doc.expiry_date || null,
-      follow_up_date: doc.follow_up_date || null,
-    });
-
-    if (insertError) throw insertError;
-
-    // Remove from recycle bin
-    const updated = list.filter(d => d.id !== docId);
-    localStorage.setItem(RECYCLE_BIN_STORAGE_KEY, JSON.stringify(updated));
-
-    return true;
-  } catch (err) {
-    console.error('Error restoring document:', err);
-    throw err;
   }
+
+  const { error: insertError } = await supabase.from('documents').insert(original as any);
+  if (insertError) throw insertError;
+
+  const { error: removeError } = await supabase.from('deleted_documents').delete().eq('id', docId);
+  if (removeError) throw removeError;
+  return true;
 }
 
-/**
- * Permanently delete a document from both Recycle Bin and Supabase storage.
- */
+/** Permanently delete one document from the Recycle Bin and from storage. */
 export async function permanentlyDeleteFromRecycleBin(docId: string): Promise<boolean> {
-  try {
-    const list = getRecycleBinDocuments();
-    const doc = list.find(d => d.id === docId);
-    if (!doc) return true;
-
-    // Remove file from storage
-    if (doc.file_path) {
-      await supabase.storage.from('documents').remove([doc.file_path]);
-    }
-
-    // Remove from recycle bin
-    const updated = list.filter(d => d.id !== docId);
-    localStorage.setItem(RECYCLE_BIN_STORAGE_KEY, JSON.stringify(updated));
-
-    return true;
-  } catch (err) {
-    console.error('Error permanently deleting document:', err);
-    throw err;
+  const { data: bin } = await supabase.from('deleted_documents').select('file_path').eq('id', docId).maybeSingle();
+  if (!bin) return true;
+  if (bin.file_path) {
+    const { error: storageError } = await supabase.storage.from('documents').remove([bin.file_path]);
+    if (storageError) throw storageError;
   }
+  const { error } = await supabase.from('deleted_documents').delete().eq('id', docId);
+  if (error) throw error;
+  return true;
 }
 
-/**
- * Empty all items from the recycle bin permanently.
- */
+/** Empty the Recycle Bin permanently. */
 export async function emptyRecycleBin(): Promise<boolean> {
-  try {
-    const list = getRecycleBinDocuments();
-    const filePaths = list.map(d => d.file_path).filter(Boolean);
-    if (filePaths.length > 0) {
-      await supabase.storage.from('documents').remove(filePaths);
-    }
-    localStorage.removeItem(RECYCLE_BIN_STORAGE_KEY);
-    return true;
-  } catch (err) {
-    console.error('Error emptying recycle bin:', err);
-    throw err;
+  const { data: rows, error } = await supabase.from('deleted_documents').select('id, file_path');
+  if (error) throw error;
+  const paths = (rows || []).map(r => r.file_path).filter(Boolean) as string[];
+  if (paths.length > 0) {
+    const { error: storageError } = await supabase.storage.from('documents').remove(paths);
+    if (storageError) throw storageError;
   }
+  if ((rows || []).length > 0) {
+    const { error: delError } = await supabase.from('deleted_documents').delete().in('id', rows.map(r => r.id));
+    if (delError) throw delError;
+  }
+  return true;
 }

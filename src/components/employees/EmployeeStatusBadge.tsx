@@ -50,6 +50,14 @@ export const STATUS_CONFIG: Record<string, {
     borderColor: 'border-blue-500/20',
     icon: Loader2
   },
+  awaiting_approval: {
+    label: 'Waiting Approval',
+    description: 'Contract submitted, awaiting Super Admin approval',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+    icon: FileSignature
+  },
   waiting_approval: {
     label: 'Waiting Approval',
     description: 'Contract submitted, awaiting Super Admin approval',

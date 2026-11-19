@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,7 @@ export default function DailyReports() {
   const [selectedBranch, setSelectedBranch] = useState('');
   
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
+  const reportCategoryOptions = useOrgSetting('report_categories');
   
   // Debounce ref to prevent excessive refetches
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -470,8 +472,11 @@ export default function DailyReports() {
     });
   };
 
-  const REPORT_CATEGORIES = ['report', 'invoice', 'receipt', 'letter', 'other'] as const;
-  const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
+  const REPORT_CATEGORIES = reportCategoryOptions.map(o => o.value);
+  const categoryLabel = (cat: string) => {
+    const label = reportCategoryOptions.find(o => o.value === cat)?.label || cat.charAt(0).toUpperCase() + cat.slice(1);
+    return label + 's';
+  };
 
   // Group reports by branch
   const reportsByBranch = useMemo(() => {

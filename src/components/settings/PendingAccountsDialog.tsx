@@ -130,6 +130,7 @@ export default function PendingAccountsDialog({
           role: 'employee',
           organization_id: employee.organization_id,
           branch_id: employee.branch_id,
+          employee_id: employee.id,
         }
       });
 

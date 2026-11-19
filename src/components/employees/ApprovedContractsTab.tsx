@@ -31,6 +31,7 @@ import nizaLogo from '@/assets/niza-group-logo.png';
 interface ApprovedContract {
   id: string;
   employee_id: string;
+  status?: string;
   approved_at: string | null;
   employer_signed_date: string | null;
   employer_signature: string | null;
@@ -85,6 +86,7 @@ export default function ApprovedContractsTab() {
         .select(`
           id,
           employee_id,
+          status,
           approved_at,
           employer_signed_date,
           employer_signature,
@@ -113,6 +115,7 @@ export default function ApprovedContractsTab() {
       setContracts(data || []);
     } catch (error) {
       console.error('Error fetching contracts:', error);
+      toast.error('Could not load approved contracts');
     } finally {
       setLoading(false);
     }

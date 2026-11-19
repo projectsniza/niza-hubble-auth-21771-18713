@@ -29,6 +29,7 @@ export default function EditEmployeeDialog({
   const { organizations } = useOrganizations();
   const { branches } = useBranches();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const canMove = user?.role === 'super_admin' || user?.role === 'hr';
 
   // Form state
   const [formData, setFormData] = useState({
@@ -90,28 +91,48 @@ export default function EditEmployeeDialog({
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('employees')
-        .update({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          email: formData.email,
-          phone: formData.phone || null,
-          date_of_birth: formData.date_of_birth || null,
-          address: formData.address || null,
-          job_title: formData.job_title || null,
-          department: formData.department || null,
-          organization_id: formData.organization_id,
-          branch_id: formData.branch_id,
-          join_date: formData.join_date || null,
-          national_insurance_number: formData.national_insurance_number || null,
-          emergency_contact_name: formData.emergency_contact_name || null,
-          emergency_contact_phone: formData.emergency_contact_phone || null,
-          status: formData.status
-        })
-        .eq('id', employee.id);
+      // Only Super Admin / HR can change organisation, branch or status.
+      const branchChanged = canMove && !!formData.branch_id && formData.branch_id !== employee.branch_id;
 
+      // A branch change goes through the same transfer as the "Transfer" action,
+      // so the employee's document folder and documents move with them.
+      if (branchChanged) {
+        const { error: transferError } = await supabase.rpc('transfer_employee', {
+          p_employee_id: employee.id,
+          p_new_branch_id: formData.branch_id,
+          p_reset_data: false,
+        });
+        if (transferError) throw transferError;
+      }
+
+      const update: Record<string, unknown> = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone || null,
+        date_of_birth: formData.date_of_birth || null,
+        address: formData.address || null,
+        job_title: formData.job_title || null,
+        department: formData.department || null,
+        join_date: formData.join_date || null,
+        national_insurance_number: formData.national_insurance_number || null,
+        emergency_contact_name: formData.emergency_contact_name || null,
+        emergency_contact_phone: formData.emergency_contact_phone || null,
+      };
+      if (canMove) update.status = formData.status;
+
+      const { error } = await supabase.from('employees').update(update).eq('id', employee.id);
       if (error) throw error;
+
+      // Ending employment blocks the login; any other status restores it.
+      if (canMove && formData.status !== employee.status && employee.user_id) {
+        const ended = formData.status === 'terminated' || formData.status === 'inactive';
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ is_active: !ended })
+          .eq('id', employee.user_id);
+        if (profileError) throw new Error('Saved, but the login access could not be updated: ' + profileError.message);
+      }
 
       // Log activity for notifications
       if (user) {
@@ -251,6 +272,7 @@ export default function EditEmployeeDialog({
                 <Label>Organization</Label>
                 <Select 
                   value={formData.organization_id} 
+                  disabled={!canMove}
                   onValueChange={(v) => {
                     handleInputChange('organization_id', v);
                     handleInputChange('branch_id', '');
@@ -271,7 +293,7 @@ export default function EditEmployeeDialog({
                 <Select 
                   value={formData.branch_id} 
                   onValueChange={(v) => handleInputChange('branch_id', v)}
-                  disabled={!formData.organization_id}
+                  disabled={!canMove || !formData.organization_id}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select branch" />
@@ -309,6 +331,7 @@ export default function EditEmployeeDialog({
                     <SelectItem value="onboarding">Onboarding</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="on_leave">On Leave</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
                     <SelectItem value="terminated">Terminated</SelectItem>
                   </SelectContent>
                 </Select>

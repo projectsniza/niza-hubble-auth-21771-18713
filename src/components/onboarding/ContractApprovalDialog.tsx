@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Building, User, FileText, CheckCircle, CheckCircle2, FileCheck, Check, XCircle, Download, PenTool, Upload, Type, Calendar, File, AlertCircle, Plus, Eye, X, Pencil, Save, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { moveToRecycleBin } from '@/lib/recycleBin';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -234,7 +235,8 @@ export default function ContractApprovalDialog({
         .from('folders')
         .select('id')
         .eq('employee_id', employee.id)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (existingFolder) {
         folderId = existingFolder.id;
@@ -252,7 +254,7 @@ export default function ContractApprovalDialog({
       if (uploadError) throw uploadError;
 
       // Save document record
-      await supabase.from('documents').insert({
+      const { error: insertError } = await supabase.from('documents').insert({
         title: 'Right to Work (Verified)',
         file_name: rtwFile.name,
         file_path: filePath,
@@ -266,6 +268,24 @@ export default function ContractApprovalDialog({
         verified_by_name: user?.name || 'Super Admin',
         verified_by_role: user?.role || 'super_admin'
       });
+      if (insertError) throw insertError;
+
+      // A replacement moves the earlier verified RTW document to the recycle bin (restorable).
+      if (showReplaceRtw) {
+        const { data: oldDocs } = await supabase
+          .from('documents')
+          .select('id')
+          .eq('employee_id', employee.id)
+          .eq('title', 'Right to Work (Verified)')
+          .neq('file_path', filePath);
+        for (const old of oldDocs || []) {
+          try {
+            await moveToRecycleBin({ id: old.id }, user?.name || user?.email || undefined);
+          } catch (archiveError) {
+            console.warn('Could not archive the previous RTW document:', archiveError);
+          }
+        }
+      }
 
       clearInterval(interval);
       setRtwUploadProgress(100);
@@ -330,7 +350,14 @@ export default function ContractApprovalDialog({
       finalSignature = typedSignature;
     } else if (signatureType === 'drawn') {
       if (!canvasRef.current) return;
-      finalSignature = canvasRef.current.toDataURL();
+      // Reject an empty canvas (no pixel has been drawn on it).
+      const c = canvasRef.current;
+      const px = c.getContext('2d')?.getImageData(0, 0, c.width, c.height).data;
+      if (!px || !px.some((v, i) => i % 4 === 3 && v !== 0)) {
+        toast.error('Please draw your signature');
+        return;
+      }
+      finalSignature = c.toDataURL();
     } else if (signatureType === 'uploaded') {
       if (!uploadedSignature) {
         toast.error('Please upload a signature');

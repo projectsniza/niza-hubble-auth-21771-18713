@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useOrgSetting } from '@/hooks/useOrgSetting';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ interface PendingEmployee {
 }
 
 export default function UserManagement() {
+  const minPw = useOrgSetting('min_password_length');
   const { user: currentUser } = useAuth();
   const { users, isLoading: usersLoading, updateUserRole, updateUserProfile, fetchUsers } = useUsers();
   const { organizations } = useOrganizations();
@@ -137,8 +139,8 @@ export default function UserManagement() {
   const handleActivateAccount = async () => {
     if (!selectedEmployee) return;
     
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (password.length < minPw) {
+      toast.error(`Password must be at least ${minPw} characters`);
       return;
     }
     
@@ -158,14 +160,15 @@ export default function UserManagement() {
           role: selectedRole,
           organization_id: selectedEmployee.organization_id || '',
           branch_id: selectedEmployee.branch_id || '',
-          hr_access_level: selectedRole === 'hr' ? hrAccessLevel : ''
+          hr_access_level: selectedRole === 'hr' ? hrAccessLevel : '',
+          employee_id: selectedEmployee.id,
         }
       });
 
       if (fnError) throw fnError;
       if (fnData?.error) throw new Error(fnData.error);
 
-      const newUserId = fnData?.user?.id;
+      const newUserId = fnData?.userId;
       if (!newUserId) throw new Error('Failed to create user');
 
       // Link employee to user and activate
@@ -358,8 +361,8 @@ export default function UserManagement() {
   const handleResetPassword = async () => {
     if (!resetPasswordUser) return;
     
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (newPassword.length < minPw) {
+      toast.error(`Password must be at least ${minPw} characters`);
       return;
     }
     

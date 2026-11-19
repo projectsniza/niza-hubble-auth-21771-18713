@@ -177,24 +177,37 @@ export default function ContractTemplate({
     setContractData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Find this employee's contract row and make sure it is still editable here.
+  // An approved contract is never overwritten from this screen (a Super Admin edits it
+  // through "Edit Contract", which keeps a history).
+  const findEditableContract = async () => {
+    const { data: existing, error } = await supabase
+      .from('contract_approvals')
+      .select('id, status')
+      .eq('employee_id', employeeId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (existing?.status === 'approved') {
+      throw new Error('This contract is already approved. A Super Admin can change it with "Edit Contract".');
+    }
+    return existing;
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
-      const { data: existing } = await supabase
-        .from('contract_approvals')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const existing = await findEditableContract();
 
       if (existing) {
-        await supabase
+        const { error } = await supabase
           .from('contract_approvals')
           .update({ contract_content: contractData as any })
           .eq('id', existing.id);
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('contract_approvals')
           .insert({
             employee_id: employeeId,
@@ -202,6 +215,7 @@ export default function ContractTemplate({
             contract_content: contractData as any,
             status: 'draft'
           } as any);
+        if (error) throw error;
       }
 
       toast.success('Contract draft saved successfully');
@@ -218,25 +232,21 @@ export default function ContractTemplate({
   const handleSubmitForApproval = async () => {
     setLoading(true);
     try {
-      const { data: existing } = await supabase
-        .from('contract_approvals')
-        .select('id')
-        .eq('employee_id', employeeId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const existing = await findEditableContract();
 
       if (existing) {
-        await supabase
+        const { error } = await supabase
           .from('contract_approvals')
-          .update({ 
+          .update({
             contract_content: contractData as any,
             status: 'pending',
+            rejection_reason: null,
             submitted_at: new Date().toISOString()
           })
           .eq('id', existing.id);
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('contract_approvals')
           .insert({
             employee_id: employeeId,
@@ -245,17 +255,20 @@ export default function ContractTemplate({
             status: 'pending',
             submitted_at: new Date().toISOString()
           } as any);
+        if (error) throw error;
       }
 
-      await supabase
+      const { error: onbError } = await supabase
         .from('employee_onboarding')
         .update({ contract_submitted_for_approval: true })
         .eq('employee_id', employeeId);
+      if (onbError) throw onbError;
 
-      await supabase
+      const { error: empError } = await supabase
         .from('employees')
-        .update({ status: 'waiting_approval' })
+        .update({ status: 'awaiting_approval' })
         .eq('id', employeeId);
+      if (empError) throw empError;
 
       toast.success('Contract submitted for approval');
       onSubmit();
@@ -272,36 +285,28 @@ export default function ContractTemplate({
       toast.error('Please provide your signature and date');
       return;
     }
+    if (!contractApproval?.id) {
+      toast.error('No submitted contract was found to approve');
+      return;
+    }
 
     setLoading(true);
     try {
       let signatureData = typedSignature;
-      
+
       if (signatureType === 'drawn' && canvasRef.current) {
         signatureData = canvasRef.current.toDataURL();
       }
 
-      await supabase
-        .from('contract_approvals')
-        .update({
-          status: 'approved',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString(),
-          employer_signature: signatureData,
-          employer_signature_type: signatureType,
-          employer_signed_date: signatureDate
-        })
-        .eq('id', contractApproval?.id);
-
-      await supabase
-        .from('employee_onboarding')
-        .update({ contract_approved: true })
-        .eq('employee_id', employeeId);
-
-      await supabase
-        .from('employees')
-        .update({ status: 'awaiting_signature' })
-        .eq('id', employeeId);
+      // Same database function as every other approval screen.
+      const { error } = await supabase.rpc('approve_contract', {
+        p_approval_id: contractApproval.id,
+        p_signature: signatureData,
+        p_signature_type: signatureType,
+        p_signature_date: signatureDate,
+        p_employer_name: (contractApproval?.contract_content?.employer_name as string) || user?.name || null,
+      });
+      if (error) throw error;
 
       toast.success('Contract approved and signed');
       setShowSignatureDialog(false);

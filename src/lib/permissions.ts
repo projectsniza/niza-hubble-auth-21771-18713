@@ -54,3 +54,41 @@ export function canOpenPath(path: string, hasCustomRole: boolean, hasPermission:
   if (!keys) return true;
   return keys.some((k) => hasPermission(k));
 }
+
+// ---------------------------------------------------------------------------
+// Default page access for people WITHOUT a custom role. Before this, anyone without a
+// custom role could open any URL (for example a store account could type /dashboard/payroll).
+// The lists mirror each role's sidebar. Data is still protected by the database either way.
+// ---------------------------------------------------------------------------
+const EMPLOYEE_DEFAULT_KEYS = [
+  'reminders', 'clock_ins', 'scheduling', 'attendance', 'safety', 'payroll', 'training',
+  'events', 'performance', 'settings', 'messages',
+];
+const MANAGER_DEFAULT_KEYS = [
+  'overview', 'messages', 'reminders', 'employee_management', 'documents', 'drive_offs', 'lottery',
+  'daily_reports', 'daily_summary', 'maintenance', 'safety', 'templates', 'scheduling', 'clock_ins',
+  'attendance', 'events', 'training', 'performance', 'customer_accounts', 'settings',
+];
+
+/** Route check that also covers users who have no custom role (employee, store account, HR). */
+export function canOpenPathForRole(
+  path: string,
+  role: string,
+  hasCustomRole: boolean,
+  hasPermission: (key: string) => boolean
+): boolean {
+  if (role === 'super_admin') return true;
+  if (hasCustomRole) return canOpenPath(path, true, hasPermission);
+
+  const clean = path.replace(/\/+$/, '') || '/';
+  if (role === 'hr') return clean !== '/dashboard/visualization';
+
+  const keys = permissionForPath(clean);
+  if (!keys) return true;
+
+  // The full Documents library is HR-only; employees and store accounts only use the submit / to-do pages.
+  if (clean === '/dashboard/documents') return false;
+  if (role === 'employee') return keys.some((k) => EMPLOYEE_DEFAULT_KEYS.includes(k) || (k === 'documents' && clean.startsWith('/dashboard/documents/')));
+  if (role === 'manager') return keys.some((k) => MANAGER_DEFAULT_KEYS.includes(k));
+  return true;
+}

@@ -31,7 +31,9 @@ import {
   recordUserSessionStart 
 } from '@/lib/twoFactorAuth';
 
-const REMEMBER_ME_KEY = 'niza_remember_credentials';
+// Only the email is remembered; the old key that also held the password is removed on load.
+const LEGACY_REMEMBER_KEY = 'niza_remember_credentials';
+const REMEMBER_ME_KEY = 'niza_remember_email';
 
 
 export default function Login() {
@@ -52,17 +54,21 @@ export default function Login() {
 
   // Load saved credentials on mount
   useEffect(() => {
-    const saved = localStorage.getItem(REMEMBER_ME_KEY);
-    if (saved) {
-      try {
-        const { email: savedEmail, password: savedPassword } = JSON.parse(atob(saved));
-        setEmail(savedEmail || '');
-        setPassword(savedPassword || '');
-        setRememberMe(true);
-      } catch (e) {
-        localStorage.removeItem(REMEMBER_ME_KEY);
+    try {
+      const legacy = localStorage.getItem(LEGACY_REMEMBER_KEY);
+      if (legacy) {
+        localStorage.removeItem(LEGACY_REMEMBER_KEY);
+        try {
+          const { email: legacyEmail } = JSON.parse(atob(legacy));
+          if (legacyEmail) localStorage.setItem(REMEMBER_ME_KEY, legacyEmail);
+        } catch { /* unreadable old value: just drop it */ }
       }
-    }
+      const savedEmail = localStorage.getItem(REMEMBER_ME_KEY);
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch { /* storage blocked (private mode): nothing to restore */ }
   }, []);
 
   // Redirect if already logged in
@@ -113,7 +119,7 @@ export default function Login() {
         }
 
         if (rememberMe) {
-          localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email: email.trim().toLowerCase(), password })));
+          localStorage.setItem(REMEMBER_ME_KEY, email.trim().toLowerCase());
         } else {
           localStorage.removeItem(REMEMBER_ME_KEY);
         }
@@ -146,7 +152,7 @@ export default function Login() {
         const { error: directLoginError } = await login(email.trim().toLowerCase(), password);
         if (!directLoginError) {
           if (rememberMe) {
-            localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify({ email: email.trim().toLowerCase(), password })));
+            localStorage.setItem(REMEMBER_ME_KEY, email.trim().toLowerCase());
           } else {
             localStorage.removeItem(REMEMBER_ME_KEY);
           }
@@ -195,7 +201,7 @@ export default function Login() {
     }
 
     if (rememberMe) {
-      localStorage.setItem(REMEMBER_ME_KEY, btoa(JSON.stringify(pendingLoginCredentials)));
+      localStorage.setItem(REMEMBER_ME_KEY, pendingLoginCredentials.email.trim().toLowerCase());
     } else {
       localStorage.removeItem(REMEMBER_ME_KEY);
     }

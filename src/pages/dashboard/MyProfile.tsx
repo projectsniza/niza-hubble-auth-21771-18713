@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { validateLeaveRequest } from '@/lib/leaveValidation';
+import { localDateString, todayUK } from '@/lib/ukDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -72,7 +74,7 @@ export default function MyProfile() {
           .from('rota_shifts')
           .select('*, rotas(*)')
           .eq('employee_id', empData.id)
-          .gte('shift_date', new Date().toISOString().split('T')[0])
+          .gte('shift_date', todayUK())
           .order('shift_date', { ascending: true });
         setShifts(shiftsData || []);
 
@@ -128,12 +130,21 @@ export default function MyProfile() {
     if (!employee) return;
 
     try {
+      // Picked dates are local calendar days: format them as such (toISOString shifts them by a day in summer).
+      const startStr = localDateString(leaveForm.start_date);
+      const endStr = localDateString(leaveForm.end_date);
+      const leaveProblem = await validateLeaveRequest(employee.id, startStr, endStr);
+      if (leaveProblem) {
+        toast({ title: 'Cannot submit', description: leaveProblem, variant: 'destructive' });
+        return;
+      }
       const { error } = await supabase.from('leave_requests').insert({
         employee_id: employee.id,
         leave_type_id: leaveForm.leave_type_id,
-        start_date: leaveForm.start_date.toISOString().split('T')[0],
-        end_date: leaveForm.end_date.toISOString().split('T')[0],
+        start_date: startStr,
+        end_date: endStr,
         reason: leaveForm.reason,
+        status: 'pending',
       });
 
       if (error) throw error;
