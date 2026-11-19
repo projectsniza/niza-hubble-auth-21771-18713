@@ -831,6 +831,57 @@ export type Database = {
         }
         Relationships: []
       }
+      fuel_saved_searches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          fuel: string
+          id: string
+          kind: string
+          latitude: number
+          longitude: number
+          name: string
+          place_label: string | null
+          position: number
+          query: string | null
+          radius_miles: number
+          result_limit: number
+          sort: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          fuel?: string
+          id?: string
+          kind: string
+          latitude: number
+          longitude: number
+          name: string
+          place_label?: string | null
+          position?: number
+          query?: string | null
+          radius_miles?: number
+          result_limit?: number
+          sort?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          fuel?: string
+          id?: string
+          kind?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          place_label?: string | null
+          position?: number
+          query?: string | null
+          radius_miles?: number
+          result_limit?: number
+          sort?: string
+        }
+        Relationships: []
+      }
       contract_approvals: {
         Row: {
           admin_signature: string | null

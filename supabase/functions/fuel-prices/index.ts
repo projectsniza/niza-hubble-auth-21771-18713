@@ -3,17 +3,21 @@
 //   POST { action: "search", query?: "LS1 4AP" | "Leeds", lat?: 53.8, lng?: -1.55,
 //          radius_km?: 10, fuel?: "e10"|"e5"|"b7", limit?: 20, sort?: "distance"|"price" }
 //   POST { action: "status" }
-//   POST { action: "refresh", force?: true }        (Super Admin, or the x-cron-secret header)
+//   POST { action: "sync" }                    check for new data, download only if the source published some
+//   POST { action: "refresh", force?: true }   download now, whatever the version
+//   ("sync" and "refresh" also accept the x-cron-secret header, so a scheduler can call them)
 //
 // Data: FuelCosts.co.uk's free daily export, read from its Hugging Face copy (jamesb7/fuel-prices-uk):
 //   stations.csv (9 MB)  +  the END of price_history.csv (175 MB; only the last few MB are read).
-// It is downloaded at most once every 24 hours (the first search after that triggers it) and cached in the
-// fuel_stations table. Prices not seen in the part of the history that was read keep yesterday's value.
+//
+// Searches ALWAYS answer straight away from the saved copy in fuel_stations. A check for new data runs in the
+// background at most once an hour (or on a schedule) and downloads only when the source's version changed.
+// When new data arrives it REPLACES the saved copy: stations that are gone are deleted and no history is kept.
 //
 // Optional secrets:  FUEL_STATIONS_URL, FUEL_PRICES_URL (override the two file addresses; the prices host
 //                    must support HTTP Range requests, Hugging Face does)
 //                    FUEL_CSV_TOKEN (sent as "Authorization: Bearer ...")
-//                    FUEL_CRON_SECRET (lets a scheduler call "refresh" without a user login)
+//                    FUEL_CRON_SECRET (lets a scheduler call "sync" / "refresh" without a user login)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseCsv, parseStations, scanPriceLines, splitChunk, wantedKeys, buildRows, type LatestPrices, type SavedPrices } from "./csv.ts";
@@ -24,7 +28,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const CHECK_EVERY_MS = HOUR_MS;            // a search starts a background "is there new data?" check at most this often
+const OLD_DATA_WARNING_MS = 36 * HOUR_MS;  // warn when the saved copy is older than this
+const HF_DATASET_API = "https://huggingface.co/api/datasets/jamesb7/fuel-prices-uk";
+
+// Supabase's background-task hook: lets a request finish while a download carries on.
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: any;
 const MIN_ROWS_TO_REPLACE = 50; // a file smaller than this is treated as a broken download
 const DEFAULT_STATIONS_URL = "https://huggingface.co/datasets/jamesb7/fuel-prices-uk/resolve/main/stations.csv";
 const DEFAULT_PRICES_URL = "https://huggingface.co/datasets/jamesb7/fuel-prices-uk/resolve/main/price_history.csv";
@@ -126,7 +137,7 @@ async function loadPreviousPrices(admin: any): Promise<Map<string, SavedPrices>>
 }
 
 // deno-lint-ignore no-explicit-any
-async function refreshCache(admin: any, force: boolean) {
+async function refreshCache(admin: any, force: boolean, upstream: Upstream | null = null) {
   const stationsUrl = Deno.env.get("FUEL_STATIONS_URL") || DEFAULT_STATIONS_URL;
   const pricesUrl = Deno.env.get("FUEL_PRICES_URL") || DEFAULT_PRICES_URL;
 
@@ -174,6 +185,7 @@ async function refreshCache(admin: any, force: boolean) {
 
     await admin.from("fuel_price_sync").update({
       status: "ok", last_fetched_at: runStart, row_count: rows.length, skipped_count: skipped + withoutPrice, error: null,
+      ...(upstream ? { source_version: upstream.version, source_published_at: upstream.publishedAt } : {}),
     }).eq("id", 1);
     return {
       rows: rows.length,
@@ -189,22 +201,83 @@ async function refreshCache(admin: any, force: boolean) {
   }
 }
 
-// deno-lint-ignore no-explicit-any
-async function ensureFresh(admin: any) {
-  const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
-  const fresh = sync?.last_fetched_at && Date.now() - new Date(sync.last_fetched_at).getTime() < DAY_MS;
-  if (fresh) return { stale: false, warning: null as string | null };
+interface Upstream {
+  version: string;
+  publishedAt: string | null;
+}
+
+/** A cheap "has the source published something new?" check that downloads none of the data files. */
+async function getUpstreamVersion(): Promise<Upstream | null> {
+  const customStations = Deno.env.get("FUEL_STATIONS_URL");
+  const customPrices = Deno.env.get("FUEL_PRICES_URL");
   try {
-    await refreshCache(admin, false);
-    return { stale: false, warning: null };
-  } catch (e) {
-    // Keep serving yesterday's data if there is any.
-    const { count } = await admin.from("fuel_stations").select("id", { count: "exact", head: true });
-    if ((count || 0) > 0) {
-      return { stale: true, warning: "Showing the last saved prices. Today's refresh failed: " + (e instanceof Error ? e.message : String(e)) };
+    if (!customStations && !customPrices) {
+      const res = await fetchWithTimeout(HF_DATASET_API, { headers: authHeaders() }, 15_000);
+      if (res.ok) {
+        const d = await res.json();
+        if (d?.sha) return { version: String(d.sha), publishedAt: d.lastModified ?? null };
+      }
     }
-    throw e;
+    // Another host: use the file's ETag / Last-Modified.
+    const res = await fetchWithTimeout(customPrices || DEFAULT_PRICES_URL, { method: "HEAD", headers: authHeaders() }, 20_000);
+    if (!res.ok) return null;
+    const version = res.headers.get("x-linked-etag") || res.headers.get("etag") || res.headers.get("last-modified");
+    return version ? { version, publishedAt: res.headers.get("last-modified") ? new Date(res.headers.get("last-modified")!).toISOString() : null } : null;
+  } catch {
+    return null; // could not check: the caller falls back to the age of the saved copy
   }
+}
+
+/**
+ * Check for new data and replace the saved copy ONLY when the source's version changed
+ * (or there is nothing saved yet, or `force` is set).
+ */
+// deno-lint-ignore no-explicit-any
+async function syncIfNew(admin: any, force: boolean) {
+  const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
+  await admin.from("fuel_price_sync").update({ last_checked_at: new Date().toISOString() }).eq("id", 1);
+
+  const hasData = (sync?.row_count ?? 0) > 0;
+  const upstream = await getUpstreamVersion();
+
+  if (!force && hasData) {
+    if (upstream && sync?.source_version === upstream.version) return { changed: false, reason: "no new data" };
+    // Could not read the version: only re-download if the saved copy is a day old.
+    if (!upstream && sync?.last_fetched_at && Date.now() - new Date(sync.last_fetched_at).getTime() < 24 * HOUR_MS) {
+      return { changed: false, reason: "could not check; saved copy is under a day old" };
+    }
+  }
+  const result = await refreshCache(admin, force, upstream);
+  return { changed: true, ...result };
+}
+
+/**
+ * Get ready to answer a search. Searches never wait for a download, except the very first one ever
+ * (there is nothing saved to show yet). Otherwise a check for new data starts in the background.
+ */
+// deno-lint-ignore no-explicit-any
+async function prepareCache(admin: any) {
+  const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
+  const hasData = (sync?.row_count ?? 0) > 0;
+
+  if (!hasData) {
+    await syncIfNew(admin, true); // first run only; throws a clear error if it cannot download
+    return { stale: false, warning: null as string | null, refreshing: false };
+  }
+
+  const checkedAgo = Date.now() - new Date(sync?.last_checked_at ?? 0).getTime();
+  let refreshing = false;
+  if (checkedAgo > CHECK_EVERY_MS && sync?.status !== "running") {
+    const task = syncIfNew(admin, false).catch((e) => console.error("background sync failed:", e instanceof Error ? e.message : e));
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
+    refreshing = true;
+  }
+
+  const age = sync?.last_fetched_at ? Date.now() - new Date(sync.last_fetched_at).getTime() : Infinity;
+  const warning = age > OLD_DATA_WARNING_MS
+    ? "The saved prices are more than a day and a half old" + (sync?.error ? `. The last update failed: ${sync.error}` : ".")
+    : null;
+  return { stale: !!warning, warning, refreshing };
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +349,7 @@ serve(async (req) => {
 
     // Who is calling: a signed-in Super Admin, or a scheduler holding the cron secret (refresh only).
     const cronSecret = Deno.env.get("FUEL_CRON_SECRET");
-    const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret && action === "refresh";
+    const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret && (action === "refresh" || action === "sync");
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) throw new Error("Missing authorization header");
@@ -296,6 +369,12 @@ serve(async (req) => {
       return json({ success: true, sync, source_configured: true });
     }
 
+    if (action === "sync") {
+      const result = await syncIfNew(admin, body.force === true);
+      const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
+      return json({ success: true, result, sync });
+    }
+
     if (action === "refresh") {
       const result = await refreshCache(admin, body.force === true);
       const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
@@ -304,7 +383,7 @@ serve(async (req) => {
 
     if (action !== "search") throw new Error("Unknown action");
 
-    const cache = await ensureFresh(admin);
+    const cache = await prepareCache(admin);
 
     // Where to search from: latitude/longitude, or a postcode / city typed in `query`.
     let center: { lat: number; lng: number; label: string };
@@ -329,7 +408,7 @@ serve(async (req) => {
     });
     if (error) throw new Error("Search failed: " + error.message);
 
-    const { data: sync } = await admin.from("fuel_price_sync").select("last_fetched_at, row_count").eq("id", 1).maybeSingle();
+    const { data: sync } = await admin.from("fuel_price_sync").select("last_fetched_at, source_published_at, row_count").eq("id", 1).maybeSingle();
 
     // deno-lint-ignore no-explicit-any
     const stations = (data || []).map((s: any) => ({
@@ -359,7 +438,7 @@ serve(async (req) => {
       sort,
       count: stations.length,
       stations,
-      cache: { last_fetched_at: sync?.last_fetched_at ?? null, stations_held: sync?.row_count ?? 0, stale: cache.stale, warning: cache.warning },
+      cache: { last_fetched_at: sync?.last_fetched_at ?? null, source_published_at: sync?.source_published_at ?? null, stations_held: sync?.row_count ?? 0, stale: cache.stale, refreshing: cache.refreshing, warning: cache.warning },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "An error occurred";
