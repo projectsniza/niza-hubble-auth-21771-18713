@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, BarChart3, FilePlus, Loader2, Download } from 'lucide-react';
+import { CalendarIcon, BarChart3, FilePlus, Loader2, Download, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/csvExport';
 import DailySummaryForm from '@/components/daily-summary/DailySummaryForm';
 import DailySummaryCharts, { type DailySummaryRow } from '@/components/daily-summary/DailySummaryCharts';
 import BranchComparison from '@/components/daily-summary/BranchComparison';
+import YearlyComparison from '@/components/daily-summary/YearlyComparison';
 
 export default function DailySummary() {
   const { user } = useAuth();
@@ -44,10 +45,10 @@ export default function DailySummary() {
   const [rows, setRows] = useState<DailySummaryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [managerTab, setManagerTab] = useState<'entry' | 'analytics'>('entry');
+  const [managerTab, setManagerTab] = useState<'entry' | 'analytics' | 'yearly'>('entry');
 
   // Hide range/export when manager is on the Entry tab (single-date entry only)
-  const hideRangeFilters = isManager && managerTab === 'entry';
+  const hideRangeFilters = isManager && (managerTab === 'entry' || managerTab === 'yearly');
 
   useEffect(() => {
     const load = async () => {
@@ -185,10 +186,11 @@ export default function DailySummary() {
 
       {/* Manager view */}
       {isManager && (
-        <Tabs value={managerTab} onValueChange={(v) => setManagerTab(v as 'entry' | 'analytics')} className="space-y-4">
+        <Tabs value={managerTab} onValueChange={(v) => setManagerTab(v as 'entry' | 'analytics' | 'yearly')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="entry"><FilePlus className="h-4 w-4 mr-2" /> Entry</TabsTrigger>
             <TabsTrigger value="analytics"><BarChart3 className="h-4 w-4 mr-2" /> My Analytics</TabsTrigger>
+            <TabsTrigger value="yearly"><CalendarRange className="h-4 w-4 mr-2" /> Yearly Comparison</TabsTrigger>
           </TabsList>
           <TabsContent value="entry">
             <DailySummaryForm
@@ -200,6 +202,9 @@ export default function DailySummary() {
           <TabsContent value="analytics">
             {loading ? <LoadingState /> : <DailySummaryCharts rows={rows} />}
           </TabsContent>
+          <TabsContent value="yearly">
+            <YearlyComparison branchId={user!.branchId!} />
+          </TabsContent>
         </Tabs>
       )}
 
@@ -209,6 +214,7 @@ export default function DailySummary() {
           <TabsList>
             <TabsTrigger value="branch">Branch View</TabsTrigger>
             <TabsTrigger value="comparison">Consolidated Comparison</TabsTrigger>
+            <TabsTrigger value="yearly">Yearly Comparison</TabsTrigger>
           </TabsList>
 
           <Card>
@@ -255,6 +261,10 @@ export default function DailySummary() {
             {loading ? <LoadingState /> : (
               <BranchComparison rows={rows} branches={visibleBranches} />
             )}
+          </TabsContent>
+
+          <TabsContent value="yearly">
+            <YearlyComparison organizationId={selectedOrg} branchId={selectedBranch} />
           </TabsContent>
         </Tabs>
       )}

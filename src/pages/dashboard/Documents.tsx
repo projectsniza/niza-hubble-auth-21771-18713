@@ -740,16 +740,19 @@ export default function Documents() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Documents</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Manage all company and employee documents</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowUpload(true)} className="gap-2">
-              <Upload className="h-4 w-4" />
-              Upload
-            </Button>
-            <Button onClick={() => setShowCreateFolder(true)} variant="outline" className="gap-2">
-              <FolderPlus className="h-4 w-4" />
-              New Folder
-            </Button>
-          </div>
+          {/* Upload / New Folder only make sense inside a folder, not on the top-level list */}
+          {currentFolderId !== null && (
+            <div className="flex gap-2">
+              <Button onClick={() => setShowUpload(true)} className="gap-2">
+                <Upload className="h-4 w-4" />
+                Upload
+              </Button>
+              <Button onClick={() => setShowCreateFolder(true)} variant="outline" className="gap-2">
+                <FolderPlus className="h-4 w-4" />
+                New Folder
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Breadcrumb */}
@@ -1140,16 +1143,18 @@ export default function Documents() {
                       Documents will appear here once organizations and employees are created.
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => setShowCreateFolder(true)} className="gap-2">
-                      <FolderPlus className="h-4 w-4" />
-                      Create Folder
-                    </Button>
-                    <Button onClick={() => setShowUpload(true)} variant="outline" className="gap-2">
-                      <Upload className="h-4 w-4" />
-                      Upload Document
-                    </Button>
-                  </div>
+                  {currentFolderId !== null && (
+                    <div className="flex gap-2">
+                      <Button onClick={() => setShowCreateFolder(true)} className="gap-2">
+                        <FolderPlus className="h-4 w-4" />
+                        Create Folder
+                      </Button>
+                      <Button onClick={() => setShowUpload(true)} variant="outline" className="gap-2">
+                        <Upload className="h-4 w-4" />
+                        Upload Document
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Card>
             ) : null}
