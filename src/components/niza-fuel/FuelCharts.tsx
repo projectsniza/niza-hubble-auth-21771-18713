@@ -263,7 +263,7 @@ export default function FuelCharts({ onGoToSaved }: { onGoToSaved: () => void })
         </Card>
       ) : noData ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">
-          There are no prices saved yet, so there is nothing to chart. A Super Admin can download them from "Data &amp; Refresh".
+          There are no prices saved yet, so there is nothing to chart. A Super Admin can load them from "Data &amp; Refresh".
         </CardContent></Card>
       ) : overview ? (
         <>

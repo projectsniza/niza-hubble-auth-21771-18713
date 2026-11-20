@@ -251,9 +251,6 @@ export default function Stations() {
         ))}
       </Tabs>
 
-      <p className="text-xs text-muted-foreground">
-        Source: FuelCosts.co.uk, UK Fuel Price Data. Originally from the UK Government Fuel Finder, Open Government Licence v3.0.
-      </p>
 
       <SavedLocationDialog
         open={saveDraft !== null}

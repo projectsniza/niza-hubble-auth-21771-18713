@@ -38,8 +38,8 @@ export default function DataStatus() {
     try {
       const r = await syncFuelPrices();
       setSync(r.sync);
-      if (r.result.changed) toast.success(`New data downloaded: ${r.result.rows ?? 0} stations`);
-      else toast.info('Already up to date: the source has not published anything new.');
+      if (r.result.changed) toast.success(`New prices loaded: ${r.result.rows ?? 0} stations`);
+      else toast.info('Already up to date: nothing new has been published anything new.');
     } catch (e) {
       toast.error((e as Error).message);
       await load();
@@ -53,7 +53,7 @@ export default function DataStatus() {
     try {
       const r = await refreshFuelPrices();
       setSync(r.sync);
-      toast.success(`Prices downloaded: ${r.result.rows ?? 0} stations`);
+      toast.success(`Prices loaded: ${r.result.rows ?? 0} stations`);
     } catch (e) {
       toast.error((e as Error).message);
       await load();
@@ -72,7 +72,7 @@ export default function DataStatus() {
           Data & Refresh
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Searches always answer straight away from the saved copy. The app checks the source for new data and replaces the saved copy
+          Searches always answer straight away from the saved copy. The app checks for new prices and updates its saved copy
           only when something new has been published. No old data is kept.
         </p>
       </div>
@@ -96,13 +96,13 @@ export default function DataStatus() {
               <dt className="text-muted-foreground">Status</dt>
               <dd>
                 {sync?.status === 'ok' && <Badge className="bg-emerald-600 gap-1"><CheckCircle2 className="h-3 w-3" /> Up to date</Badge>}
-                {sync?.status === 'running' && <Badge variant="secondary">Downloading…</Badge>}
-                {sync?.status === 'error' && <Badge variant="destructive">Last download failed</Badge>}
-                {(!sync || sync.status === 'never') && <Badge variant="outline">Not downloaded yet</Badge>}
+                {sync?.status === 'running' && <Badge variant="secondary">Updating…</Badge>}
+                {sync?.status === 'error' && <Badge variant="destructive">Last update failed</Badge>}
+                {(!sync || sync.status === 'never') && <Badge variant="outline">Not loaded yet</Badge>}
               </dd>
-              <dt className="text-muted-foreground">Source published</dt>
+              <dt className="text-muted-foreground">Prices published</dt>
               <dd>{when(sync?.source_published_at)}</dd>
-              <dt className="text-muted-foreground">Downloaded into the app</dt>
+              <dt className="text-muted-foreground">Loaded into the app</dt>
               <dd>{when(sync?.last_fetched_at)}</dd>
               <dt className="text-muted-foreground">Last checked for new data</dt>
               <dd>{when(sync?.last_checked_at)}</dd>
@@ -112,11 +112,6 @@ export default function DataStatus() {
               <dd>
                 {sync?.skipped_count?.toLocaleString('en-GB') ?? 0}
                 <span className="text-muted-foreground"> (closed, no price, or no valid location)</span>
-              </dd>
-              <dt className="text-muted-foreground">Source</dt>
-              <dd className="break-all">
-                FuelCosts.co.uk daily export (Hugging Face: jamesb7/fuel-prices-uk), from the UK Government Fuel Finder.
-                <div className="text-xs text-muted-foreground">{sync?.source_url}</div>
               </dd>
               {sync?.error && (
                 <>
@@ -133,7 +128,7 @@ export default function DataStatus() {
             </Button>
             <Button onClick={force} disabled={busy !== null || loading} variant="outline" className="gap-2">
               {busy === 'force' ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
-              Download again anyway
+              Update again anyway
             </Button>
           </div>
         </CardContent>
@@ -145,8 +140,8 @@ export default function DataStatus() {
         </CardHeader>
         <CardContent className="text-sm space-y-2 text-muted-foreground">
           <p>
-            The source publishes a new file once a day. Each check only asks "has anything new been published?" and downloads nothing
-            unless the answer is yes. When there is new data, it replaces the saved copy: stations that are gone are deleted and no history is kept.
+            New prices are published about once a day. Each check only asks "has anything new been published?" and updates nothing
+            unless the answer is yes. When there are new prices, they replace the saved copy: stations that are gone are deleted and no history is kept.
           </p>
           <p>
             A check starts in the background whenever someone searches and the last check was over an hour ago, so a search never waits for it.
