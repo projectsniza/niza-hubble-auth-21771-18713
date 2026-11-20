@@ -291,6 +291,18 @@ export default function CustomRolesManagement() {
 
     setIsSubmitting(true);
     try {
+      // One login per email: check BEFORE saving anything, so a duplicate never leaves a role behind.
+      const wanted = userEmail.trim();
+      const { data: taken } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', wanted.replace(/[\\%_]/g, (m) => `\\${m}`))
+        .limit(1);
+      if (taken && taken.length > 0) {
+        toast.error('An account with this email already exists. Use a different email.');
+        return;
+      }
+
       // Create the custom role first
       const { data: roleData, error: roleError } = await supabase
         .from('custom_roles')
@@ -328,12 +340,14 @@ export default function CustomRolesManagement() {
           },
         });
 
-        if (response.error) {
-          toast.error('Role created but user creation failed: ' + (response.error.message || 'Unknown error'));
-        } else if (response.data?.success) {
+        if (response.data?.success) {
           toast.success('Custom role and user created successfully');
         } else {
-          toast.error('Role created but user creation failed: ' + (response.data?.error || 'Unknown error'));
+          // The account was refused (for example the email is already used): do not keep a role without a user.
+          await supabase.from('custom_roles').delete().eq('id', roleData.id);
+          const reason = response.data?.error || response.error?.message || 'Unknown error';
+          toast.error('Nothing was saved: ' + reason);
+          return;
         }
       }
 

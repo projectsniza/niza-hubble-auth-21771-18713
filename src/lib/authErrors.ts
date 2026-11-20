@@ -7,7 +7,7 @@ const ERROR_MAP: Array<[RegExp, string]> = [
   [/otp_expired|expired/i, 'This code has expired. Please request a new one.'],
   [/over_email_send_rate_limit|rate.?limit/i, 'Too many code requests. Please wait a minute before trying again.'],
   [/token|otp|code.*(invalid|incorrect)/i, 'The code you entered is incorrect. Please check and try again.'],
-  [/email not confirmed|not confirmed/i, 'Your email is not verified yet. Please use "Login with email code" to receive a 6-digit code.'],
+  [/email not confirmed|not confirmed/i, 'Your email is not verified yet. Please use "Forgot password?" on the sign-in page to verify your email.'],
   [/user.*not found|no user/i, 'We could not find an account with those details.'],
   [/same.*(email|address)|already.*current/i, 'Please enter a different email address than your current one.'],
   [/new email.*required|email.*required/i, 'Please enter a new email address.'],

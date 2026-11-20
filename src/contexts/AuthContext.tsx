@@ -441,7 +441,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (data.user && !data.user.email_confirmed_at) {
       await supabase.auth.signOut();
       return {
-        error: 'Your email is not verified yet. Use "Login with email code" on the sign-in page to receive a 6-digit code.',
+        error: 'Your email is not verified yet. Use "Forgot password?" on the sign-in page to verify your email and set a new password.',
       };
     }
 

@@ -9,7 +9,7 @@ import { NizaLoaderFullPage, NizaLoaderOverlay } from '@/components/ui/niza-load
 import { 
   Eye, 
   EyeOff, 
-  KeyRound, 
+   
   ArrowLeft, 
   ArrowRight, 
   Mail, 
@@ -42,9 +42,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<'password' | 'code-request' | 'code-verify' | '2fa-verify'>('password');
-  const [codeEmail, setCodeEmail] = useState('');
-  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [mode, setMode] = useState<'password' | '2fa-verify'>('password');
   const [loginChallengeToken, setLoginChallengeToken] = useState<string | null>(null);
   const [pendingLoginCredentials, setPendingLoginCredentials] = useState<{ email: string; password: string } | null>(null);
   const { login, user, isLoading: authLoading } = useAuth();
@@ -224,68 +222,6 @@ export default function Login() {
     return { error: null };
   };
 
-  const handleSendCode = async () => {
-    if (!codeEmail) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please enter your email address',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSendingCode(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: codeEmail,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/login`,
-        },
-      });
-
-      if (error) {
-        toast({
-          title: 'Could not send code',
-          description: friendlyAuthError(error.message),
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setMode('code-verify');
-      toast({ title: 'Code sent', description: `A 6-digit code was sent to ${codeEmail}` });
-    } finally {
-      setIsSendingCode(false);
-    }
-  };
-
-  const handleVerifyEmailCode = async (code: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.verifyOtp({
-      email: codeEmail,
-      token: code,
-      type: 'email',
-    });
-
-    if (error) return { error: friendlyAuthError(error.message) };
-
-    recordUserSessionStart();
-    toast({ title: 'Welcome back!', description: 'Login successful' });
-    navigate('/dashboard', { replace: true });
-    return { error: null };
-  };
-
-  const handleResendEmailCode = async (): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email: codeEmail,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    });
-    return error ? { error: friendlyAuthError(error.message) } : { error: null };
-  };
-
   if (authLoading) {
     return <NizaLoaderFullPage />;
   }
@@ -379,20 +315,12 @@ export default function Login() {
               {/* Title & Subtitle */}
               <div className="relative mb-[2.8vh]">
                 <h2 className="text-[min(clamp(28px,5.4vh,50px),8.4vw)] font-bold leading-tight tracking-tight text-[#0F3D2E]">
-                  {mode === 'code-verify'
-                    ? 'Check your email'
-                    : mode === 'code-request'
-                    ? 'Sign in with code'
-                    : mode === '2fa-verify'
+                  {mode === '2fa-verify'
                     ? '2-Step Verification'
                     : 'Welcome back'}
                 </h2>
                 <p className="mt-[0.6vh] text-[min(clamp(13px,2vh,19px),3.9vw)] text-gray-500">
-                  {mode === 'code-verify'
-                    ? `We sent a 6-digit sign-in code to ${codeEmail}`
-                    : mode === 'code-request'
-                    ? 'Enter your email to receive a 6-digit sign-in code'
-                    : mode === '2fa-verify'
+                  {mode === '2fa-verify'
                     ? 'Enter the 6-digit security code sent to your email'
                     : 'Sign in to access your HR dashboard'}
                 </p>
@@ -501,98 +429,7 @@ export default function Login() {
                       </>
                     )}
                   </Button>
-
-                  {/* Divider */}
-                  <div className="relative my-[1.6vh] text-center">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-100" />
-                    </div>
-                    <span className="relative bg-[#FBFDFC] px-3 text-sm text-gray-500 font-normal">or</span>
-                  </div>
-
-                  {/* Secondary: Login with email code */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCodeEmail(email);
-                      setMode('code-request');
-                    }}
-                    className="w-full h-[clamp(40px,6.4vh,62px)] rounded-full border border-[#BFE3D2] bg-white/70 hover:bg-emerald-50/60 text-[#0F3D2E] text-[15px] font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-gray-300"
-                  >
-                    <KeyRound className="w-4 h-4 text-[#0F7A4F]" />
-                    <span>Login with email code</span>
-                  </button>
                 </form>
-              )}
-
-              {/* --------------------------------------------------- */}
-              {/* MODE: Code Request Form                             */}
-              {/* --------------------------------------------------- */}
-              {mode === 'code-request' && (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendCode();
-                  }}
-                  className="space-y-[2.2vh]"
-                >
-                  <div>
-                    <label
-                      className="mb-[1vh] block text-[clamp(13px,1.9vh,17px)] font-semibold text-gray-800"
-                      htmlFor="code-email-input"
-                    >
-                      Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <Input
-                        id="code-email-input"
-                        type="email"
-                        placeholder="info@nizagroup.com"
-                        value={codeEmail}
-                        onChange={(e) => setCodeEmail(e.target.value)}
-                        className="h-[clamp(40px,6.3vh,60px)] pl-11 pr-4 text-[clamp(14px,1.9vh,17px)] rounded-2xl bg-[#EEF2F9] border border-[#E2E8F2] text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                        disabled={isSendingCode}
-                        autoComplete="email"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-[clamp(42px,6.9vh,66px)] text-[clamp(15px,2.1vh,19px)] font-semibold rounded-full text-white shadow-[0_12px_26px_rgba(5,120,80,0.35)] transition-all"
-                    style={{
-                      background: 'linear-gradient(90deg, #04643F 0%, #0B7D4C 50%, #5BB02F 100%)',
-                    }}
-                    disabled={isSendingCode}
-                  >
-                    {isSendingCode ? 'Sending code...' : 'Send code'}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={() => setMode('password')}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 pt-2 transition-colors"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    Back to password login
-                  </button>
-                </form>
-              )}
-
-              {/* --------------------------------------------------- */}
-              {/* MODE: Code Verify Form                              */}
-              {/* --------------------------------------------------- */}
-              {mode === 'code-verify' && (
-                <CodeVerification
-                  email={codeEmail}
-                  title="Enter your code"
-                  description="Type the 6-digit code from your email to sign in"
-                  onVerify={handleVerifyEmailCode}
-                  onResend={handleResendEmailCode}
-                  onChangeEmail={() => setMode('code-request')}
-                />
               )}
 
               {/* --------------------------------------------------- */}
