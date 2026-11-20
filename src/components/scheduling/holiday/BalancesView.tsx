@@ -8,9 +8,9 @@ import type { EmployeeBalance } from '../HolidayBalance';
 import { MONTH_NAMES, hrs, payrollPeriodLabel, statusOf, usedShare } from './holidayData';
 
 const STATUS_STYLE: Record<string, { badge: string; bar: string }> = {
-  OK: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300', bar: 'bg-emerald-500' },
-  Low: { badge: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300', bar: 'bg-amber-500' },
-  Overdrawn: { badge: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300', bar: 'bg-rose-500' },
+  OK: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200', bar: 'bg-emerald-500' },
+  Low: { badge: 'bg-amber-100 text-amber-900 border-amber-400 font-semibold dark:bg-amber-950/40 dark:text-amber-200', bar: 'bg-amber-500' },
+  Overdrawn: { badge: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200', bar: 'bg-rose-500' },
   'No entitlement yet': { badge: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300', bar: 'bg-slate-400' },
 };
 

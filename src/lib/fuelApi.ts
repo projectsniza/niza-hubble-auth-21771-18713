@@ -80,6 +80,27 @@ export const refreshFuelPrices = () =>
 export const KM_PER_MILE = 1.609344;
 
 // ---------------------------------------------------------------------------
+// Market overview (the numbers behind the Charts tab)
+// ---------------------------------------------------------------------------
+export interface FuelOverview {
+  fuel: FuelType;
+  stats: { n: number; avg: number | null; min: number | null; max: number | null; median: number | null };
+  /** Price bars, 2p wide, cheapest first. */
+  histogram: Array<{ from: number; to: number; count: number }>;
+  brands: Array<{ name: string; stations: number; avg: number; min: number }>;
+  cities_cheapest: Array<{ name: string; stations: number; avg: number }>;
+  cities_dearest: Array<{ name: string; stations: number; avg: number }>;
+  fuel_averages: { e10: number | null; e5: number | null; b7: number | null; n_e10: number; n_e5: number; n_b7: number };
+}
+
+export interface FuelOverviewResult {
+  overview: FuelOverview;
+  cache: FuelSearchResult['cache'];
+}
+
+export const getFuelOverview = (fuel: FuelType) => call<FuelOverviewResult>({ action: 'overview', fuel });
+
+// ---------------------------------------------------------------------------
 // Saved locations (kept for good, shown without configuring again)
 // ---------------------------------------------------------------------------
 export interface SavedLocation {

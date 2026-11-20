@@ -30,7 +30,7 @@ export interface AppCustomRole {
   name: string;
   base_role: string;
   permissions: Record<string, boolean>;
-  app_access: { niza_safe: boolean; niza_finance: boolean; niza_templates: boolean; niza_elearning: boolean };
+  app_access: { niza_safe: boolean; niza_finance: boolean; niza_templates: boolean; niza_elearning: boolean; niza_fuel: boolean };
   organization_id: string | null;
   branch_id: string | null;
   branch_ids: string[];
@@ -192,6 +192,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               niza_finance: Boolean(access.niza_finance),
               niza_templates: Boolean(access.niza_templates),
               niza_elearning: Boolean(access.niza_elearning),
+              niza_fuel: Boolean(access.niza_fuel),
             },
             organization_id: customRole.organization_id ?? null,
             branch_id: customRole.branch_id ?? null,

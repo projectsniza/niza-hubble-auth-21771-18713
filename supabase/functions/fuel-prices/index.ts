@@ -1,11 +1,12 @@
-// UK fuel prices endpoint (Super Admin only).
+// UK fuel prices endpoint (Super Admin, or a login whose custom role has "Niza Fuel" switched on).
 //
 //   POST { action: "search", query?: "LS1 4AP" | "Leeds", lat?: 53.8, lng?: -1.55,
 //          radius_km?: 10, fuel?: "e10"|"e5"|"b7", limit?: 20, sort?: "distance"|"price" }
+//   POST { action: "overview", fuel?: "e10"|"e5"|"b7" }   market numbers for the Charts tab
 //   POST { action: "status" }
 //   POST { action: "sync" }                    check for new data, download only if the source published some
 //   POST { action: "refresh", force?: true }   download now, whatever the version
-//   ("sync" and "refresh" also accept the x-cron-secret header, so a scheduler can call them)
+//   ("sync" and "refresh" are Super Admin only, or the x-cron-secret header for a scheduler)
 //
 // Data: FuelCosts.co.uk's free daily export, read from its Hugging Face copy (jamesb7/fuel-prices-uk):
 //   stations.csv (9 MB)  +  the END of price_history.csv (175 MB; only the last few MB are read).
@@ -347,7 +348,8 @@ serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = body.action || "search";
 
-    // Who is calling: a signed-in Super Admin, or a scheduler holding the cron secret (refresh only).
+    // Who is calling: a scheduler holding the cron secret (sync / refresh only), or a signed-in person who may use
+    // Niza Fuel (Super Admin, or a custom role with "Niza Fuel" switched on). Refreshing the data is Super Admin only.
     const cronSecret = Deno.env.get("FUEL_CRON_SECRET");
     const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret && (action === "refresh" || action === "sync");
     if (!isCron) {
@@ -358,15 +360,35 @@ serve(async (req) => {
       });
       const { data: { user }, error: userError } = await userClient.auth.getUser();
       if (userError || !user) throw new Error("Unauthorized");
-      const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", user.id);
-      if (!(roles || []).some((r: { role: string }) => r.role === "super_admin")) {
-        throw new Error("Only a Super Admin can use fuel prices");
+
+      const { data: allowed, error: accessError } = await admin.rpc("fuel_access_for", { p_user: user.id });
+      if (accessError) throw new Error("Could not check your access: " + accessError.message);
+      if (!allowed) throw new Error("Niza Fuel is not switched on for your login. Ask a Super Admin to turn it on in your role.");
+
+      if (action === "refresh" || action === "sync") {
+        const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", user.id);
+        if (!(roles || []).some((r: { role: string }) => r.role === "super_admin")) {
+          throw new Error("Only a Super Admin can refresh the price data");
+        }
       }
     }
 
     if (action === "status") {
       const { data: sync } = await admin.from("fuel_price_sync").select("*").eq("id", 1).maybeSingle();
       return json({ success: true, sync, source_configured: true });
+    }
+
+    if (action === "overview") {
+      const cache = await prepareCache(admin);
+      const fuelIn = String(body.fuel || "e10").toLowerCase();
+      const { data: overview, error: overviewError } = await admin.rpc("fuel_market_overview", { p_fuel: fuelIn });
+      if (overviewError) throw new Error("Could not build the overview: " + overviewError.message);
+      const { data: sync } = await admin.from("fuel_price_sync").select("last_fetched_at, source_published_at, row_count").eq("id", 1).maybeSingle();
+      return json({
+        success: true,
+        overview,
+        cache: { last_fetched_at: sync?.last_fetched_at ?? null, source_published_at: sync?.source_published_at ?? null, stations_held: sync?.row_count ?? 0, stale: cache.stale, refreshing: cache.refreshing, warning: cache.warning },
+      });
     }
 
     if (action === "sync") {

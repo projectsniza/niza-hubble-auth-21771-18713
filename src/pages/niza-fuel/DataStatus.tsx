@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +11,7 @@ import { getFuelStatus, refreshFuelPrices, syncFuelPrices, type FuelSync } from 
 const when = (v: string | null | undefined) => (v ? new Date(v).toLocaleString('en-GB') : 'Never');
 
 export default function DataStatus() {
+  const { user } = useAuth();
   const [sync, setSync] = useState<FuelSync | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'check' | 'force' | null>(null);
@@ -58,6 +61,9 @@ export default function DataStatus() {
       setBusy(null);
     }
   };
+
+  // Refreshing the data is for the Super Admin; everyone else goes back to the prices page.
+  if (user && user.role !== 'super_admin') return <Navigate to="/niza-fuel" replace />;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-3xl">

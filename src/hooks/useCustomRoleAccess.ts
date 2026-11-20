@@ -6,6 +6,7 @@ export interface AppAccess {
   niza_finance: boolean;
   niza_templates: boolean;
   niza_elearning: boolean;
+  niza_fuel: boolean;
 }
 
 /**
@@ -22,6 +23,9 @@ export function useCustomRoleAccess() {
 
   const hasAppAccess = (app: keyof AppAccess): boolean => {
     if (user?.role === 'super_admin') return true;
+    // Niza Fuel is only available when a Super Admin switches it on in the person's custom role
+    // (full HR accounts without a custom role do not get it automatically).
+    if (app === 'niza_fuel') return customRole?.app_access?.niza_fuel === true;
     if (user?.role === 'hr' && !customRole) return true;
     if (customRole?.app_access) return customRole.app_access[app] === true;
     return false;

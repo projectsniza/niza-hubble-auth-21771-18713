@@ -17,6 +17,7 @@ export interface AppAccess {
   niza_finance: boolean;
   niza_templates: boolean;
   niza_elearning: boolean;
+  niza_fuel: boolean;
 }
 
 export type FeatureDef = { key: string; label: string };
@@ -350,6 +351,7 @@ function CustomRoleFormImpl({
             { key: 'niza_finance', label: 'Niza Finance', desc: 'Profit & Loss Calculator', show: formData.base_role !== 'manager' },
             { key: 'niza_templates', label: 'Niza Templates', desc: 'Templates & Brand Assets', show: formData.base_role !== 'manager' },
             { key: 'niza_elearning', label: 'Niza E-Learning', desc: 'Training courses & certifications', show: true },
+            { key: 'niza_fuel', label: 'Niza Fuel', desc: 'UK fuel prices, saved locations & live charts', show: true },
           ] as const).filter(x => x.show).map(x => (
             <div key={x.key} className="flex items-center justify-between p-3 border rounded-lg">
               <div>

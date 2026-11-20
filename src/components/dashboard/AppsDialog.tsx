@@ -17,9 +17,8 @@ interface AppItem {
   icon: React.ReactNode;
   path: string;
   gradient: string;
-  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning' | 'niza_analysis';
+  accessKey?: 'niza_safe' | 'niza_finance' | 'niza_templates' | 'niza_elearning' | 'niza_analysis' | 'niza_fuel';
   adminOnly?: boolean;
-  superAdminOnly?: boolean;
 }
 
 const apps: AppItem[] = [
@@ -76,7 +75,7 @@ const apps: AppItem[] = [
     icon: <Fuel className="h-7 w-7" />,
     path: "/niza-fuel",
     gradient: "from-rose-500 to-orange-600",
-    superAdminOnly: true,
+    accessKey: 'niza_fuel',
   },
 ];
 
@@ -94,7 +93,8 @@ export default function AppsDialog() {
     customRole.app_access.niza_safe || 
     customRole.app_access.niza_finance || 
     customRole.app_access.niza_templates ||
-    customRole.app_access.niza_elearning
+    customRole.app_access.niza_elearning ||
+    customRole.app_access.niza_fuel
   );
 
   // Show dialog for: super admin, full HR, or users with custom role app access
@@ -118,11 +118,6 @@ export default function AppsDialog() {
       if (currentPath.startsWith('/dashboard')) return false;
     } else {
       if (currentPath.startsWith(app.path)) return false;
-    }
-
-    // Niza Fuel: Super Admin only
-    if (app.superAdminOnly) {
-      return user?.role === 'super_admin';
     }
 
     // Niza Analysis: only super_admin and hr

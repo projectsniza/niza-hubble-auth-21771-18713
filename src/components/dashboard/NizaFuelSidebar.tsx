@@ -10,13 +10,15 @@ interface Props {
   onToggle: () => void;
 }
 
-const items = [
-  { title: 'Nearest Stations', icon: Fuel, path: '/niza-fuel', end: true },
-  { title: 'Data & Refresh', icon: Database, path: '/niza-fuel/data', end: false },
+const allItems = [
+  { title: 'Fuel Prices', icon: Fuel, path: '/niza-fuel', end: true, superAdminOnly: false },
+  // Downloading / refreshing the price data is for the Super Admin only
+  { title: 'Data & Refresh', icon: Database, path: '/niza-fuel/data', end: false, superAdminOnly: true },
 ];
 
 export default function NizaFuelSidebar({ collapsed, onToggle }: Props) {
   const { user, logout } = useAuth();
+  const items = allItems.filter((i) => !i.superAdminOnly || user?.role === 'super_admin');
 
   return (
     <aside

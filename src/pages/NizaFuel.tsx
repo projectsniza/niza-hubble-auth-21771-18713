@@ -1,29 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
 import NizaFuelSidebar from '@/components/dashboard/NizaFuelSidebar';
 import AppsDialog from '@/components/dashboard/AppsDialog';
-import { NizaLoaderFullPage } from '@/components/ui/niza-loader';
+import AppRouteGuard from '@/components/shared/AppRouteGuard';
 import RouteErrorBoundary from '@/components/shared/RouteErrorBoundary';
 
-/** Niza Fuel: UK fuel prices. Super Admin only. */
-export default function NizaFuel() {
-  const { user, isLoading } = useAuth();
-  const navigate = useNavigate();
+function FuelShell() {
   const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) {
-      navigate('/login', { replace: true });
-      return;
-    }
-    if (user.role !== 'super_admin') navigate('/dashboard', { replace: true });
-  }, [user, isLoading, navigate]);
-
-  if (isLoading) return <NizaLoaderFullPage />;
-  if (!user || user.role !== 'super_admin') return null;
-
   return (
     <div className="min-h-screen flex w-full bg-background">
       <NizaFuelSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
@@ -38,5 +21,17 @@ export default function NizaFuel() {
         </div>
       </main>
     </div>
+  );
+}
+
+/**
+ * Niza Fuel: UK fuel prices, saved locations and live charts.
+ * Super Admin always; any other login only when a Super Admin switched "Niza Fuel" on in its custom role.
+ */
+export default function NizaFuel() {
+  return (
+    <AppRouteGuard appKey="niza_fuel">
+      <FuelShell />
+    </AppRouteGuard>
   );
 }

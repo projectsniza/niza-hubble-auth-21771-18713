@@ -111,6 +111,7 @@ export default function CustomRolesManagement() {
     niza_finance: false,
     niza_templates: false,
     niza_elearning: false,
+    niza_fuel: false,
   };
   
   // Form state
@@ -169,6 +170,7 @@ export default function CustomRolesManagement() {
             niza_finance: Boolean(access.niza_finance),
             niza_templates: Boolean(access.niza_templates),
             niza_elearning: Boolean(access.niza_elearning),
+            niza_fuel: Boolean(access.niza_fuel),
           };
         }
         
@@ -778,6 +780,9 @@ export default function CustomRolesManagement() {
                   )}
                   {role.app_access?.niza_templates && (
                     <Badge variant="outline" className="text-xs">Templates</Badge>
+                  )}
+                  {role.app_access?.niza_fuel && (
+                    <Badge variant="outline" className="text-xs">Fuel</Badge>
                   )}
                 </div>
 

@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Search, LocateFixed, AlertTriangle, BookmarkPlus, Bookmark } from 'lucide-react';
+import { Loader2, Search, LocateFixed, AlertTriangle, BookmarkPlus, Bookmark, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import StationResults, { FUEL_LABEL } from '@/components/niza-fuel/StationResults';
 import SavedLocations from '@/components/niza-fuel/SavedLocations';
+import FuelCharts from '@/components/niza-fuel/FuelCharts';
 import SavedLocationDialog, { type SavedLocationDraft } from '@/components/niza-fuel/SavedLocationDialog';
 import {
   searchFuelStations, createSavedLocation, KM_PER_MILE,
@@ -17,7 +18,7 @@ import {
 
 const RADII_MILES = [1, 2, 5, 10, 20, 30];
 
-type Tab = 'saved' | 'place' | 'coords';
+type Tab = 'saved' | 'charts' | 'place' | 'coords';
 
 export default function Stations() {
   // "Saved locations" comes first and is what opens by default.
@@ -122,19 +123,24 @@ export default function Stations() {
           Nearest Fuel Stations
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          UK pump prices for E10, E5 and B7 diesel. Keep your regular places saved, or search by postcode, city, or latitude and longitude.
+          UK pump prices for E10, E5 and B7 diesel. Keep your regular places saved, see them as live charts, or search by postcode, city, or latitude and longitude.
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="space-y-4">
         <TabsList>
           <TabsTrigger value="saved" className="gap-2"><Bookmark className="h-4 w-4" /> Saved locations</TabsTrigger>
+          <TabsTrigger value="charts" className="gap-2"><BarChart3 className="h-4 w-4" /> Charts</TabsTrigger>
           <TabsTrigger value="place">Postcode or city</TabsTrigger>
           <TabsTrigger value="coords">Latitude / longitude</TabsTrigger>
         </TabsList>
 
         <TabsContent value="saved" className="space-y-4">
           <SavedLocations />
+        </TabsContent>
+
+        <TabsContent value="charts" className="space-y-4">
+          <FuelCharts onGoToSaved={() => setTab('saved')} />
         </TabsContent>
 
         {(['place', 'coords'] as const).map((t) => (
