@@ -109,6 +109,18 @@ export default function DocumentSettingsPanel() {
 
       toast.success('Document follow-up settings saved');
       fetchSettings();
+
+      // Send any alert that is already due right away. After this the daily schedule keeps it going.
+      if (isActive) {
+        const { data: run, error: runError } = await supabase.functions.invoke('document-expiry-alerts', { body: { action: 'run' } });
+        if (runError || run?.success === false) {
+          toast.error('Settings saved, but the alert emails could not be sent: ' + (run?.error || runError?.message || 'unknown error'));
+        } else if (run?.emails > 0) {
+          toast.success(`Alert emails sent to ${run.emails} ${run.emails === 1 ? 'person' : 'people'} about ${run.documents} document${run.documents === 1 ? '' : 's'}`);
+        } else {
+          toast.info('No documents are due for an alert right now. Emails go out automatically each day.');
+        }
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings');
     } finally {
@@ -157,6 +169,8 @@ export default function DocumentSettingsPanel() {
             <p className="text-sm text-muted-foreground">
               Configure automatic follow-up reminders before document expiry dates. 
               Follow-ups are calculated based on the expiry date set during upload.
+              When a document reaches one of these intervals, or passes its date, an email goes to the Super Admin,
+              and to the HR and store logins whose employees it belongs to (each person only gets their own area).
             </p>
 
             <div className="bg-muted/50 rounded-lg p-4 space-y-4">

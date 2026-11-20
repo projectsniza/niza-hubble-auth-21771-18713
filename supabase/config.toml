@@ -19,3 +19,6 @@ verify_jwt = false
 
 [functions.fuel-prices]
 verify_jwt = false
+
+[functions.document-expiry-alerts]
+verify_jwt = false

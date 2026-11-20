@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -119,7 +119,7 @@ export default function Documents() {
   const { pendingCount: submissionsPendingCount } = useDocumentSubmissions('pending');
 
   // Resolve root folder dynamically: works even if renamed to "Employee Documents", "emploe documnts", etc.
-  const resolveRootFolder = async (): Promise<FolderItem | null> => {
+  const resolveRootFolderUncached = async (): Promise<FolderItem | null> => {
     try {
       const { data: rootCandidates } = await supabase
         .from('folders')
@@ -158,6 +158,20 @@ export default function Documents() {
     }
   };
 
+  // Looked up once and shared: the first screen load and the folder load used to each repeat it.
+  const rootPromise = useRef<Promise<FolderItem | null> | null>(null);
+  const resolveRootFolder = (): Promise<FolderItem | null> => {
+    if (!rootPromise.current) {
+      rootPromise.current = resolveRootFolderUncached().then((r) => {
+        if (!r) rootPromise.current = null; // try again next time if nothing was found
+        return r;
+      });
+    }
+    return rootPromise.current;
+  };
+
+  const intervalsRef = useRef<number[]>([30]);
+
   useEffect(() => {
     const initializeRoot = async () => {
       const rootFolder = await resolveRootFolder();
@@ -167,53 +181,64 @@ export default function Documents() {
       }
     };
     initializeRoot();
-    
-    // Fetch configured follow-up intervals
-    const fetchFollowUpSettings = async () => {
+
+    // The configured follow-up intervals decide what counts as "upcoming", so read them first,
+    // then look up only the documents that are overdue or close to a date (not the whole library).
+    const start = async () => {
       const { data } = await supabase
         .from('document_follow_up_settings')
         .select('follow_up_intervals, is_active')
         .is('organization_id', null)
-        .single();
-      
+        .maybeSingle();
+      let list = [30];
       if (data?.is_active && data.follow_up_intervals?.length > 0) {
-        setFollowUpIntervals(data.follow_up_intervals);
+        list = data.follow_up_intervals;
+        setFollowUpIntervals(list);
       }
+      intervalsRef.current = list;
+      fetchFlaggedDocuments(list);
     };
-    fetchFollowUpSettings();
+    start();
+    fetchTotalCount();
   }, []);
 
-  // Fetch all documents for global stats & search without 1000 limit
-  const fetchAllDocuments = async () => {
-    try {
-      // 1. Fetch exact total count first so it isn't limited to 1000
-      const { count, error: countErr } = await supabase
-        .from('documents')
-        .select('*', { count: 'exact', head: true });
-      if (!countErr && typeof count === 'number') {
-        setTotalDocumentCount(count);
-      }
+  // The cards and the Overdue / Upcoming tabs need only the documents with a date that is already past or
+  // within the longest follow-up interval. That is a short list, so it is fetched by the database filter
+  // instead of downloading every document in the company on each visit.
+  const [flaggedLoading, setFlaggedLoading] = useState(true);
+  const flaggedSeq = useRef(0);
 
-      // 2. Paginate all rows to get complete document list without 1000 row truncation
-      const allDocs = await fetchAllPages<DocumentItem>((from, to) =>
+  const fetchFlaggedDocuments = async (intervals: number[] = intervalsRef.current) => {
+    const seq = ++flaggedSeq.current;
+    try {
+      const widest = Math.max(...intervals, 0);
+      const limit = new Date(Date.now() + widest * 86_400_000).toISOString().slice(0, 10);
+      const rows = await fetchAllPages<DocumentItem>((from, to) =>
         supabase
           .from('documents')
           .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
-          .order('created_at', { ascending: false })
+          .or(`expiry_date.lte.${limit},follow_up_date.lte.${limit}`)
+          .order('expiry_date', { ascending: true, nullsFirst: false })
           .range(from, to)
       );
-      setAllDocuments(allDocs || []);
-      if (allDocs && allDocs.length > (count || 0)) {
-        setTotalDocumentCount(allDocs.length);
-      }
+      if (seq !== flaggedSeq.current) return;
+      setAllDocuments(rows || []);
     } catch (err) {
-      console.error('Error fetching all documents:', err);
+      console.error('Error fetching overdue / upcoming documents:', err);
+    } finally {
+      if (seq === flaggedSeq.current) setFlaggedLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAllDocuments();
-  }, []);
+  const fetchTotalCount = async () => {
+    const { count, error } = await supabase.from('documents').select('id', { count: 'exact', head: true });
+    if (!error && typeof count === 'number') setTotalDocumentCount(count);
+  };
+
+  const fetchAllDocuments = () => {
+    fetchTotalCount();
+    fetchFlaggedDocuments();
+  };
 
   // Update activeTab when URL filter changes
   useEffect(() => {
@@ -227,7 +252,11 @@ export default function Documents() {
     fetchFoldersAndDocuments();
   }, [currentFolderId, rootFolderId]);
 
+  const foldersSeq = useRef(0);
+
   const fetchFoldersAndDocuments = async () => {
+    const seq = ++foldersSeq.current;
+    const stale = () => seq !== foldersSeq.current;
     setLoading(true);
     try {
       // Ensure root folder ID is resolved
@@ -249,6 +278,7 @@ export default function Documents() {
             .eq('id', activeRootId)
             .maybeSingle();
           
+          if (stale()) return;
           setFolders(rootFolder ? [rootFolder] : []);
         } else {
           // Fallback: show top-level folders
@@ -257,34 +287,56 @@ export default function Documents() {
             .select('*')
             .is('parent_id', null)
             .order('name');
+          if (stale()) return;
           setFolders(topFolders || []);
         }
         setDocuments([]);
         setCurrentEmployeeFolder(null);
         setBreadcrumbs([]);
       } else if (currentFolderId) {
-        // If viewing an employee folder, ensure all 3 onboarding documents exist
-        const { data: currentFolder } = await supabase
-          .from('folders')
-          .select('id, folder_type, employee_id, name, parent_id, organization_id, branch_id, employee:employees(id, first_name, last_name, status, deactivation_reason)')
-          .eq('id', currentFolderId)
-          .maybeSingle();
+        // The folder, its sub-folders, its documents and the breadcrumb trail are independent: ask for them
+        // all at once instead of one after another.
+        buildBreadcrumbs(currentFolderId, stale);
+        const [{ data: currentFolder }, { data: foldersData }, { data: docsData }] = await Promise.all([
+          supabase
+            .from('folders')
+            .select('id, folder_type, employee_id, name, parent_id, organization_id, branch_id, employee:employees(id, first_name, last_name, status, deactivation_reason)')
+            .eq('id', currentFolderId)
+            .maybeSingle(),
+          supabase
+            .from('folders')
+            .select('*, employee:employees(id, first_name, last_name, status, deactivation_reason)')
+            .eq('parent_id', currentFolderId)
+            .order('name'),
+          supabase
+            .from('documents')
+            .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
+            .eq('folder_id', currentFolderId)
+            .order('created_at', { ascending: false }),
+        ]);
+        if (stale()) return;
+
         setCurrentEmployeeFolder(
           currentFolder && (currentFolder.folder_type === 'employee' || currentFolder.employee_id)
             ? (currentFolder as unknown as FolderItem)
             : null
         );
 
+        // Generating the onboarding PDFs can take a while: do it in the background and reload the
+        // document list afterwards, so the folder itself opens straight away.
         if (currentFolder?.folder_type === 'employee' && currentFolder?.employee_id) {
-          await ensureEmployeeDocuments(currentFolder.employee_id, currentFolder.id, user?.id);
+          ensureEmployeeDocuments(currentFolder.employee_id, currentFolder.id, user?.id)
+            .then(async (res) => {
+              if (!res || !res.generatedCount || stale()) return;
+              const { data: fresh } = await supabase
+                .from('documents')
+                .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
+                .eq('folder_id', currentFolderId)
+                .order('created_at', { ascending: false });
+              if (!stale() && fresh) setDocuments(fresh as any);
+            })
+            .catch((e) => console.error('ensureEmployeeDocuments failed:', e));
         }
-
-        // Fetch subfolders of current folder with employee status & deactivation reason
-        const { data: foldersData } = await supabase
-          .from('folders')
-          .select('*, employee:employees(id, first_name, last_name, status, deactivation_reason)')
-          .eq('parent_id', currentFolderId)
-          .order('name');
 
         // Sanitize: Employee folders should never be located directly under root ("Company Documents")
         if (currentFolderId === rootFolderId && foldersData) {
@@ -331,26 +383,16 @@ export default function Documents() {
           return true;
         });
         setFolders(visibleFolders);
-
-        // Fetch documents in current folder
-        const { data: docsData } = await supabase
-          .from('documents')
-          .select('id, title, file_name, file_path, expiry_date, follow_up_date, created_at, folder_id, employee:employees(first_name, last_name, status, deactivation_reason)')
-          .eq('folder_id', currentFolderId)
-          .order('created_at', { ascending: false });
-        setDocuments(docsData || []);
-
-        // Build breadcrumbs
-        await buildBreadcrumbs(currentFolderId);
+        setDocuments((docsData as any) || []);
       }
     } catch (error) {
       console.error('Error fetching documents:', error);
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
 
-  const buildBreadcrumbs = async (folderId: string) => {
+  const buildBreadcrumbs = async (folderId: string, stale: () => boolean = () => false) => {
     const crumbs: FolderItem[] = [];
     let currentId: string | null = folderId;
     
@@ -369,7 +411,7 @@ export default function Documents() {
       }
     }
     
-    setBreadcrumbs(crumbs);
+    if (!stale()) setBreadcrumbs(crumbs);
   };
 
   const handleFolderClick = (folderId: string) => {
@@ -481,7 +523,7 @@ export default function Documents() {
   const urlFilter = searchParams.get('filter');
   const isFromRoute = urlFilter === 'overdue' || urlFilter === 'upcoming';
   const isOverdueOrUpcoming = activeTab === 'overdue' || activeTab === 'upcoming';
-  const docsToFilter = isOverdueOrUpcoming && isFromRoute ? allDocuments : documents;
+  const docsToFilter = isOverdueOrUpcoming ? allDocuments : documents;
   
   const filteredDocuments = docsToFilter.filter(doc => {
     const matchesSearch = !searchQuery || 
@@ -504,8 +546,9 @@ export default function Documents() {
   const globalUpcomingCount = allDocuments.filter(d => getDocumentStatus(d) === 'upcoming').length;
   const globalTotalCount = totalDocumentCount !== null ? totalDocumentCount : allDocuments.length;
 
-  const overdueCount = documents.filter(d => getDocumentStatus(d) === 'overdue').length;
-  const upcomingCount = documents.filter(d => getDocumentStatus(d) === 'upcoming').length;
+  // the tabs show the same company-wide numbers as the cards above them
+  const overdueCount = globalOverdueCount;
+  const upcomingCount = globalUpcomingCount;
 
   const getFolderStatusBadge = (folder: FolderItem): { label: string; color: string; isDeleted?: boolean; isDeactivated?: boolean } | null => {
     if (folder.folder_type !== 'employee' && !folder.employee_id) return null;
@@ -924,7 +967,7 @@ export default function Documents() {
           />
         ) : activeTab === 'submissions' ? (
           <DocumentSubmissionsTab />
-        ) : loading ? (
+        ) : (isOverdueOrUpcoming ? flaggedLoading : loading) ? (
           <div className="flex items-center justify-center h-40">
             <NizaLoaderInline />
           </div>
@@ -1021,7 +1064,7 @@ export default function Documents() {
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">
                   Documents ({filteredDocuments.length})
-                  {isOverdueOrUpcoming && isFromRoute && <span className="ml-2 text-xs">• Showing all {activeTab} documents</span>}
+                  {isOverdueOrUpcoming && <span className="ml-2 text-xs">• All {activeTab} documents, company-wide. Click one to open its folder.</span>}
                 </h3>
                 <div className="space-y-2">
                   {filteredDocuments.map((doc) => {
@@ -1032,7 +1075,7 @@ export default function Documents() {
                         className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => {
                           // Navigate to the document's folder
-                          if (isOverdueOrUpcoming && isFromRoute && doc.folder_id) {
+                          if (isOverdueOrUpcoming && doc.folder_id) {
                             setCurrentFolderId(doc.folder_id);
                             setActiveTab('all');
                           }
@@ -1089,7 +1132,7 @@ export default function Documents() {
                                     Expires: {format(new Date(doc.expiry_date), 'dd MMM yyyy')}
                                   </Badge>
                                 )}
-                                {isOverdueOrUpcoming && isFromRoute && doc.folder_id && (
+                                {isOverdueOrUpcoming && doc.folder_id && (
                                   <Badge variant="secondary" className="gap-1">
                                     <Folder className="h-3 w-3" />
                                     Click to view in folder
@@ -1098,7 +1141,7 @@ export default function Documents() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                             <Button 
                               variant="ghost" 
                               size="icon"
@@ -1141,6 +1184,20 @@ export default function Documents() {
                   })}
                 </div>
               </div>
+            ) : isOverdueOrUpcoming ? (
+              <Card className="p-12 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    {activeTab === 'overdue' ? <AlertTriangle className="h-8 w-8 text-primary" /> : <Clock className="h-8 w-8 text-primary" />}
+                  </div>
+                  <h3 className="text-xl font-semibold text-foreground">
+                    {searchQuery ? 'No matches' : activeTab === 'overdue' ? 'No overdue documents' : 'No upcoming follow-ups'}
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {activeTab === 'overdue' ? 'Nothing has passed its expiry or follow-up date.' : 'Nothing is due within the follow-up intervals.'}
+                  </p>
+                </div>
+              </Card>
             ) : filteredFolders.length === 0 && activeTab === 'all' ? (
               <Card className="p-12 text-center">
                 <div className="flex flex-col items-center gap-4">

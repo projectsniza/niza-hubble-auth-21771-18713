@@ -21,6 +21,9 @@ import { format } from 'date-fns';
 import { OrgBranchFilter } from '@/components/filters/OrgBranchFilter';
 import { logActivity } from '@/hooks/useActivityLogs';
 
+/** How many cards the list shows at first; "Show more" adds the same again. */
+const LIST_PAGE = 50;
+
 interface DailyReport {
   id: string;
   title: string;
@@ -53,7 +56,9 @@ export default function DailyReports() {
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [viewingReport, setViewingReport] = useState<DailyReport | null>(null);
+  // The open report is looked up by id, so the dialog always shows the freshest copy.
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
   const [reportToDelete, setReportToDelete] = useState<DailyReport | null>(null);
   
   // Use centralized org/branch data
@@ -64,102 +69,122 @@ export default function DailyReports() {
   
   const canViewFilters = user?.role === 'super_admin' || user?.role === 'hr';
   const reportCategoryOptions = useOrgSetting('report_categories');
+  const viewingReport = useMemo(() => reports.find(r => r.id === viewingId) ?? null, [reports, viewingId]);
+  const setViewingReport = (r: DailyReport | null) => setViewingId(r?.id ?? null);
   
-  // Debounce ref to prevent excessive refetches
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // ---- loading ---------------------------------------------------------------------------------
+  // The newest reports are fetched and shown straight away; the older history follows in the background in
+  // parallel pages. A sequence number makes sure a slow, older answer can never overwrite a newer one.
+  const fetchSeq = useRef(0);
+  const profileCache = useRef(new Map<string, { id: string; name: string; display_name: string | null }>());
+  const REPORT_SELECT = `*, branch:branches(name), organization:organizations(name)`;
+  const FIRST_PAGE = 200;
+  const PAGE = 500;
 
-  const debouncedFetchReports = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchReports();
-    }, 300);
+  const scopeQuery = useCallback((query: any) => {
+    if (!user) return query;
+    if (user.role === 'manager') return query.eq('submitted_by', user.id);
+    if (user.role === 'hr') {
+      if (user.organizationId && user.branchId) return query.eq('branch_id', user.branchId);
+      if (user.organizationId) return query.eq('organization_id', user.organizationId);
+    }
+    return query;
+  }, [user?.id, user?.role, user?.organizationId, user?.branchId]);
+
+  const attachSubmitters = useCallback(async (rows: any[]): Promise<DailyReport[]> => {
+    const missing = [...new Set(rows.map(r => r.submitted_by))].filter(id => id && !profileCache.current.has(id));
+    for (let i = 0; i < missing.length; i += 100) {
+      const { data } = await supabase.from('profiles').select('id, name, display_name').in('id', missing.slice(i, i + 100));
+      (data || []).forEach((p: any) => profileCache.current.set(p.id, p));
+    }
+    return rows.map(r => ({ ...r, submitter: profileCache.current.get(r.submitted_by) || null }));
   }, []);
+
+  const fetchReports = useCallback(async () => {
+    if (!user) return;
+    const seq = ++fetchSeq.current;
+    try {
+      const first = await scopeQuery(
+        supabase.from('daily_reports').select(REPORT_SELECT)
+          .order('submitted_at', { ascending: false }).order('id').range(0, FIRST_PAGE - 1)
+      );
+      if (first.error) throw first.error;
+      const firstRows = await attachSubmitters(first.data || []);
+      if (seq !== fetchSeq.current) return;
+      setReports(firstRows);
+      setLoading(false);
+      if ((first.data || []).length < FIRST_PAGE) return;
+
+      // the rest of the history, a few pages at a time
+      const { count } = await scopeQuery(supabase.from('daily_reports').select('id', { count: 'exact', head: true }));
+      const total = Math.min(count ?? 0, 20000);
+      const starts: number[] = [];
+      for (let from = FIRST_PAGE; from < total; from += PAGE) starts.push(from);
+      let merged = firstRows;
+      for (let i = 0; i < starts.length; i += 4) {
+        const results = await Promise.all(starts.slice(i, i + 4).map(from =>
+          scopeQuery(
+            supabase.from('daily_reports').select(REPORT_SELECT)
+              .order('submitted_at', { ascending: false }).order('id').range(from, from + PAGE - 1)
+          )
+        ));
+        const rows: any[] = [];
+        for (const r of results) {
+          if (r.error) throw r.error;
+          rows.push(...(r.data || []));
+        }
+        const withSubmitters = await attachSubmitters(rows);
+        if (seq !== fetchSeq.current) return;
+        const have = new Set(merged.map(m => m.id));
+        merged = [...merged, ...withSubmitters.filter(w => !have.has(w.id))];
+        setReports(merged);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      if (seq === fetchSeq.current) setLoading(false);
+    }
+  }, [user?.id, scopeQuery, attachSubmitters]);
+
+  // Bring ONE report up to date (after a change somewhere else) without reloading the whole list.
+  const refreshOne = useCallback(async (id: string) => {
+    if (!user) return;
+    const { data } = await scopeQuery(supabase.from('daily_reports').select(REPORT_SELECT).eq('id', id)).maybeSingle();
+    if (!data) {
+      setReports(prev => prev.filter(r => r.id !== id));
+      return;
+    }
+    const [row] = await attachSubmitters([data]);
+    setReports(prev => {
+      const without = prev.filter(r => r.id !== id);
+      return [row, ...without].sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''));
+    });
+  }, [user?.id, scopeQuery, attachSubmitters]);
 
   useEffect(() => {
     fetchReports();
 
-    // Real-time subscription with debounce
+    // Live updates: apply just the row that changed
     const channel = supabase
       .channel('daily-reports-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daily_reports' },
-        debouncedFetchReports
+        (payload: any) => {
+          if (payload.eventType === 'DELETE') {
+            setReports(prev => prev.filter(r => r.id !== payload.old?.id));
+            setViewingId(prev => (prev === payload.old?.id ? null : prev));
+          } else if (payload.new?.id) {
+            refreshOne(payload.new.id);
+          }
+        }
       )
       .subscribe();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      fetchSeq.current++;
       supabase.removeChannel(channel);
     };
-  }, [user, debouncedFetchReports]);
-
-  const fetchReports = async () => {
-    if (!user) return;
-    
-    setLoading(true);
-    try {
-      // Paginate to bypass Supabase's 1000-row default and fetch ALL reports
-      // so super admin / HR see the full history (not just the latest 100).
-      const PAGE_SIZE = 1000;
-      const all: any[] = [];
-      let from = 0;
-      // Cap at 20k rows as a safety net
-      while (from < 20000) {
-        let query = supabase
-          .from('daily_reports')
-          .select(`
-            *,
-            branch:branches(name),
-            organization:organizations(name)
-          `)
-          .order('submitted_at', { ascending: false })
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (user.role === 'manager') {
-          query = query.eq('submitted_by', user.id);
-        } else if (user.role === 'hr') {
-          if (user.organizationId && user.branchId) {
-            query = query.eq('branch_id', user.branchId);
-          } else if (user.organizationId) {
-            query = query.eq('organization_id', user.organizationId);
-          }
-        }
-
-        const { data: page, error } = await query;
-        if (error) throw error;
-        if (!page || page.length === 0) break;
-        all.push(...page);
-        if (page.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-      }
-      const data = all;
-      const error = null as any;
-      if (error) throw error;
-      
-      // Fetch submitter profiles
-      if (data && data.length > 0) {
-        const submitterIds = [...new Set(data.map(r => r.submitted_by))];
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, display_name')
-          .in('id', submitterIds);
-        
-        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-        const reportsWithSubmitters = data.map(report => ({
-          ...report,
-          submitter: profileMap.get(report.submitted_by) || null
-        }));
-        setReports(reportsWithSubmitters);
-      } else {
-        setReports([]);
-      }
-    } catch (error) {
-      console.error('Error fetching reports:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchReports, refreshOne]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(e.target.files || []);
@@ -204,11 +229,16 @@ export default function DailyReports() {
   // Build a global vendor map for displaying tags on report cards.
   // Use union of branches across all loaded reports + ids referenced directly,
   // so tags resolve even when scope filters change.
-  useEffect(() => {
-    const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean)));
+  const vendorKey = useMemo(() => {
+    const branchIds = Array.from(new Set(reports.map(r => r.branch_id).filter(Boolean))).sort();
     const vendorIds = Array.from(new Set(
       reports.flatMap(r => Array.isArray(r.vendor_ids) ? r.vendor_ids : []).filter(Boolean)
-    ));
+    )).sort();
+    return JSON.stringify([branchIds, vendorIds]);
+  }, [reports]);
+
+  useEffect(() => {
+    const [branchIds, vendorIds] = JSON.parse(vendorKey) as [string[], string[]];
     if (branchIds.length === 0 && vendorIds.length === 0) { setVendorMap({}); return; }
     const run = async () => {
       const map: Record<string, string> = {};
@@ -231,7 +261,7 @@ export default function DailyReports() {
       setVendorMap(map);
     };
     run();
-  }, [reports]);
+  }, [vendorKey]);
 
   const toggleVendor = (id: string) => {
     setSelectedVendorIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -300,7 +330,7 @@ export default function DailyReports() {
 
       // Insert report record
       const finalReportType = reportType === 'other' && customTypeName ? customTypeName : reportType;
-      const { error } = await supabase.from('daily_reports').insert({
+      const { data: inserted, error } = await supabase.from('daily_reports').insert({
         title: reportTitle,
         report_type: finalReportType,
         report_month: reportMonthYear,
@@ -311,9 +341,10 @@ export default function DailyReports() {
         submitted_at: new Date().toISOString(),
         organization_id: submitOrgId,
         branch_id: submitBranchId
-      } as any);
+      } as any).select('id').single();
 
       if (error) throw error;
+      if (inserted?.id) refreshOne(inserted.id);
 
       // Log activity for super admin notification
       await logActivity({
@@ -340,7 +371,6 @@ export default function DailyReports() {
       setFiles([]);
       setSelectedVendorIds([]);
       setShowUploadDialog(false);
-      fetchReports();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to submit report';
       toast({
@@ -393,9 +423,9 @@ export default function DailyReports() {
         description: 'Daily report deleted successfully.',
       });
 
-      setViewingReport((prev) => (prev?.id === report.id ? null : prev));
+      setReports(prev => prev.filter(r => r.id !== report.id));
+      setViewingId((prev) => (prev === report.id ? null : prev));
       setReportToDelete(null);
-      fetchReports();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to delete report';
       toast({
@@ -437,6 +467,8 @@ export default function DailyReports() {
 
     return matchesSearch && matchesMonth && matchesDate;
   }), [reports, searchQuery, dateFilter, monthFilter, canViewFilters, viewMode, selectedOrg, selectedBranch]);
+
+  useEffect(() => { setVisibleCount(LIST_PAGE); }, [searchQuery, dateFilter, monthFilter, viewMode, selectedOrg, selectedBranch]);
 
   const canCreateReport = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'hr';
 
@@ -807,7 +839,7 @@ export default function DailyReports() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {filteredReports.map((report) => (
+          {filteredReports.slice(0, visibleCount).map((report) => (
             <Card key={report.id} className="p-6 hover:shadow-lg transition-shadow">
               <div className="flex justify-between items-start">
                 <div className="flex gap-4 flex-1">
@@ -892,6 +924,12 @@ export default function DailyReports() {
               </div>
             </Card>
           ))}
+          {filteredReports.length > visibleCount && (
+            <div className="flex flex-col items-center gap-2 py-2">
+              <p className="text-xs text-muted-foreground">Showing {visibleCount} of {filteredReports.length} reports</p>
+              <Button variant="outline" onClick={() => setVisibleCount(c => c + LIST_PAGE)}>Show more</Button>
+            </div>
+          )}
         </div>
       )}
 
