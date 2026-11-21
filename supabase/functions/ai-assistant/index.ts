@@ -20,6 +20,35 @@ const MODELS = [
   "particle-ai/particle-1:free",
 ]; // OpenRouter allows at most 3 models per request
 
+// Pages of the app, so the assistant can hand out real links. The app itself still decides who may open a page.
+const ROUTES: [string, string][] = [
+  ["Overview", "/dashboard/overview"], ["Employees", "/dashboard/employees"], ["Onboarding", "/dashboard/onboarding"],
+  ["Add employee", "/dashboard/add-employee"], ["Documents", "/dashboard/documents"], ["Submit documents", "/dashboard/documents/submit"],
+  ["Documents to do", "/dashboard/documents/todo"], ["Attendance", "/dashboard/attendance"], ["Scheduling / rota", "/dashboard/scheduling"],
+  ["Clock-ins", "/dashboard/clock-ins"], ["Payroll", "/dashboard/payroll"], ["Performance", "/dashboard/performance"],
+  ["Daily reports", "/dashboard/daily-reports"], ["Events", "/dashboard/events"], ["E-learning (dashboard)", "/dashboard/elearning"],
+  ["Templates (dashboard)", "/dashboard/templates"], ["Store templates", "/dashboard/store-templates"], ["Settings", "/dashboard/settings"],
+  ["Maintenance", "/dashboard/maintenance"], ["UK compliance", "/dashboard/uk-compliance"], ["Safety tasks", "/dashboard/safety-tasks"],
+  ["Messages", "/dashboard/messages"], ["Lottery", "/dashboard/lottery"], ["Reminders", "/dashboard/reminders"],
+  ["Notifications", "/dashboard/notifications"], ["Drive-offs", "/dashboard/drive-offs"], ["Customer accounts", "/dashboard/customer-accounts"],
+  ["Daily summary (sales entry)", "/dashboard/daily-summary"], ["Daily sales upload", "/dashboard/daily-sales-upload"],
+  ["Niza Templates home", "/niza-templates"], ["ID cards template", "/niza-templates/id-cards"], ["Business cards template", "/niza-templates/business-cards"],
+  ["Invoice template", "/niza-templates/invoices"], ["Letterhead template", "/niza-templates/letterhead"], ["Gift cards template", "/niza-templates/gift-cards"],
+  ["Email signature template", "/niza-templates/email-signature"], ["Brand settings", "/niza-templates/brand-settings"],
+  ["Shared templates", "/niza-templates/shared"], ["Store and HR templates", "/niza-templates/store-hr"],
+  ["Niza Analysis (Sales Analysis) home", "/niza-analysis"], ["Sales Analysis: daily sales", "/niza-analysis/daily-sales"],
+  ["Sales Analysis: branch performance", "/niza-analysis/branch-performance"], ["Sales Analysis: variance dashboard", "/niza-analysis/variance"],
+  ["Sales Analysis: category alerts", "/niza-analysis/category-alerts"], ["Sales Analysis: category mappings", "/niza-analysis/category-mappings"],
+  ["Sales Analysis: supplier ledger", "/niza-analysis/supplier-ledger"], ["Sales Analysis: Xero export", "/niza-analysis/xero-export"],
+  ["Sales Analysis: uploaded files", "/niza-analysis/uploaded-files"], ["Sales Analysis: email agents", "/niza-analysis/email-agents"],
+  ["Sales Analysis: branch formats", "/niza-analysis/branch-formats"], ["Sales Analysis: formulas", "/niza-analysis/formulas"],
+  ["Sales Analysis: live preview", "/niza-analysis/live-preview"], ["Sales Analysis: settings", "/niza-analysis/settings"],
+  ["Niza Safe", "/niza-safe"], ["Niza Safe: risk management", "/niza-safe/risk-management"], ["Niza Safe: incidents", "/niza-safe/incident-management"],
+  ["Niza Safe: documents", "/niza-safe/documents"], ["Niza Safe: tasks", "/niza-safe/tasks"], ["Niza Finance", "/niza-finance"],
+  ["Niza E-Learning", "/niza-elearning"], ["E-Learning course library", "/niza-elearning/library"], ["E-Learning my courses", "/niza-elearning/my-courses"],
+  ["E-Learning certificates", "/niza-elearning/certificates"], ["Niza Fuel", "/niza-fuel"],
+];
+
 type Role = "super_admin" | "hr" | "manager" | "employee";
 
 const json = (body: unknown, status = 200) =>
@@ -289,20 +318,182 @@ serve(async (req) => {
       }
     }
 
+    // ---- extra data, loaded only when the question is about it ----------------------------------------------
+    // The fixed snapshot above covers HR basics. Everything else (templates, sales, drive-offs, lottery...) is looked up
+    // on demand, using the caller's own login so database rules still decide what they can see.
+    const APP_URL = (Deno.env.get("APP_URL") || "https://nizacloud.nizagroup.uk").replace(/\/+$/, "");
+    ctx.app_pages = ROUTES.map(([label, path]) => `${label}: ${APP_URL}${path}`);
+
+    const askedBefore = [...history].reverse().filter((m: any) => m.role === "user").slice(0, 2).map((m: any) => m.content).join(" ").toLowerCase();
+    const wants = (re: RegExp) => re.test(askedBefore);
+    const r2 = (n: unknown) => Math.round(Number(n || 0) * 100) / 100;
+    const safe = async (name: string, fn: () => Promise<unknown>) => {
+      try { ctx[name] = await fn(); } catch (e) { console.error("topic failed", name, e); ctx[name] = "could not be loaded"; }
+    };
+
+    // Templates
+    if (wants(/templat|letterhead|id card|business card|gift card|signature|form\b|letter\b|download/)) {
+      await safe("templates", async () => {
+        const [st, sh] = await Promise.all([
+          inScope(db.from("store_templates").select("title, template_type, description, branch_id, file_path").eq("is_active", true).order("created_at", { ascending: false }).limit(80)),
+          db.from("shared_templates").select("title, template_type, description, is_global, file_path").eq("is_active", true).order("created_at", { ascending: false }).limit(80),
+        ]);
+        return {
+          note: "Each uploaded template's link is in 'link'. Built-in templates are the Niza Templates pages in app_pages.",
+          store_templates: (st.data || []).map((t: any) => ({ title: t.title, type: t.template_type, about: t.description, store: branchName.get(t.branch_id) ?? null, link: t.file_path })),
+          shared_templates: (sh.data || []).map((t: any) => ({ title: t.title, type: t.template_type, about: t.description, for: t.is_global ? "all stores" : "specific stores", link: t.file_path })),
+        };
+      });
+    }
+
+    // Sales analysis
+    if (!isStaff && wants(/sale|turnover|revenue|takings|variance|fuel|shop|cash|customer count|atm|paid.?out|\bnet\b|analy|upload|categor|supplier|vat|xero|compar|year|month|profit|branch performance|best|worst|top/)) {
+      await safe("sales", async () => {
+        const yearly = wants(/year|compar|annual|ytd|previous|trend|last month|month on month|12 month/);
+        const from = londonDate(new Date(Date.now() - (yearly ? 430 : 70) * 864e5));
+        const pages = await Promise.all(Array.from({ length: yearly ? 14 : 5 }, (_, i) =>
+          inScope(db.from("daily_summaries").select("summary_date, branch_id, net_sale, fuel_sale, shop_sale, fuel_volume, cash_sale, customer_count, store_paid_outs").gte("summary_date", from).order("summary_date", { ascending: false }).range(i * 1000, i * 1000 + 999))
+        ));
+        const rows: any[] = pages.flatMap((p: any) => p.data || []);
+        if (rows.length === 0) return { note: "No daily sales have been entered in this period (or none are visible to this user)." };
+
+        const latest = rows.reduce((m, r) => (r.summary_date > m ? r.summary_date : m), "0000-00-00");
+        const ago = (n: number) => londonDate(new Date(Date.parse(`${latest}T12:00:00Z`) - n * 864e5));
+        const d7 = ago(6);
+        const monthStart = `${latest.slice(0, 7)}-01`;
+        const prev = new Date(Date.parse(`${monthStart}T12:00:00Z`) - 864e5);
+        const prevMonth = londonDate(prev).slice(0, 7);
+        const sum = (list: any[]) => ({
+          net: r2(list.reduce((a, r) => a + Number(r.net_sale || 0), 0)),
+          fuel: r2(list.reduce((a, r) => a + Number(r.fuel_sale || 0), 0)),
+          shop: r2(list.reduce((a, r) => a + Number(r.shop_sale || 0), 0)),
+          customers: list.reduce((a, r) => a + Number(r.customer_count || 0), 0),
+          fuel_litres: r2(list.reduce((a, r) => a + Number(r.fuel_volume || 0), 0)),
+        });
+        const periods = (list: any[]) => ({
+          [`latest_day_${latest}`]: sum(list.filter((r) => r.summary_date === latest)),
+          last_7_days: sum(list.filter((r) => r.summary_date >= d7)),
+          month_to_date: sum(list.filter((r) => r.summary_date >= monthStart)),
+          [`previous_month_${prevMonth}`]: sum(list.filter((r) => r.summary_date.startsWith(prevMonth))),
+        });
+        const byBranch: Record<string, any[]> = {};
+        for (const r of rows) (byBranch[branchName.get(r.branch_id) ?? "?"] ||= []).push(r);
+
+        const out: Record<string, unknown> = {
+          note: "All amounts are GBP from the daily sales summaries. 'net' is net sales.",
+          latest_sale_date: latest,
+          all_stores: periods(rows),
+          per_store: Object.fromEntries(Object.entries(byBranch).map(([n, l]) => [n, periods(l)])),
+          last_14_days_all_stores_net: Object.fromEntries(
+            [...new Set(rows.filter((r) => r.summary_date >= ago(13)).map((r) => r.summary_date))].sort().map((d) => [d, r2(rows.filter((r) => r.summary_date === d).reduce((a, r) => a + Number(r.net_sale || 0), 0))])
+          ),
+        };
+        if (yearly) {
+          const months = [...new Set(rows.map((r) => String(r.summary_date).slice(0, 7)))].sort();
+          out.monthly_all_stores = Object.fromEntries(months.map((m) => [m, sum(rows.filter((r) => r.summary_date.startsWith(m)))]));
+          out.monthly_net_per_store = Object.fromEntries(Object.entries(byBranch).map(([n, l]) => [n, Object.fromEntries(months.map((m) => [m, r2(l.filter((r) => r.summary_date.startsWith(m)).reduce((a, r) => a + Number(r.net_sale || 0), 0))]))]));
+        }
+
+        // missing uploads / alerts
+        const [upl, alerts] = await Promise.all([
+          inScope(db.from("daily_sales_uploads").select("branch_id, sale_date, status").gte("sale_date", ago(3)).limit(500)),
+          inScope(db.from("niza_category_alerts").select("id", { count: "exact", head: true }).is("resolved_at", null)),
+        ]);
+        const yesterday = londonDate(new Date(Date.now() - 864e5));
+        const uploadedYesterday = new Set((upl.data || []).filter((u: any) => u.sale_date === yesterday).map((u: any) => u.branch_id));
+        out.stores_without_sales_upload_yesterday = (branches || []).filter((b: any) => !uploadedYesterday.has(b.id)).map((b: any) => b.name);
+        out.open_category_alerts = (alerts as any).count ?? 0;
+        return out;
+      });
+    }
+
+    // Invoices / suppliers
+    if (!isStaff && wants(/invoice|supplier|vat|xero|purchase|bill/)) {
+      await safe("supplier_invoices", async () => {
+        const { data } = await inScope(db.from("niza_invoices").select("supplier, net, vat, gross, invoice_date, branch_id").gte("invoice_date", londonDate(new Date(Date.now() - 90 * 864e5))).limit(1500));
+        const by: Record<string, { invoices: number; net: number; vat: number; gross: number }> = {};
+        for (const i of data || []) {
+          const k = i.supplier || "Unknown";
+          const e = (by[k] ||= { invoices: 0, net: 0, vat: 0, gross: 0 });
+          e.invoices++; e.net += Number(i.net || 0); e.vat += Number(i.vat || 0); e.gross += Number(i.gross || 0);
+        }
+        return {
+          note: "Last 90 days, GBP.",
+          top_suppliers: Object.entries(by).sort((a, b) => b[1].gross - a[1].gross).slice(0, 15).map(([supplier, v]) => ({ supplier, invoices: v.invoices, net: r2(v.net), vat: r2(v.vat), gross: r2(v.gross) })),
+        };
+      });
+    }
+
+    // Drive-offs
+    if (!isStaff && wants(/drive.?off/)) {
+      await safe("drive_offs", async () => {
+        const { data } = await inScope(db.from("drive_offs").select("drive_off_date, branch_id, amount_drive_off, fuel_type, pump_number, payment_received_date").gte("drive_off_date", londonDate(new Date(Date.now() - 90 * 864e5))).order("drive_off_date", { ascending: false }).limit(300));
+        const per: Record<string, { count: number; total: number; unpaid: number }> = {};
+        for (const d of data || []) {
+          const k = branchName.get(d.branch_id) ?? "?";
+          const e = (per[k] ||= { count: 0, total: 0, unpaid: 0 });
+          e.count++; e.total += Number(d.amount_drive_off || 0);
+          if (!d.payment_received_date) e.unpaid += Number(d.amount_drive_off || 0);
+        }
+        return {
+          note: "Last 90 days, GBP.",
+          per_store: Object.fromEntries(Object.entries(per).map(([k, v]) => [k, { count: v.count, total: r2(v.total), not_yet_paid: r2(v.unpaid) }])),
+          latest: (data || []).slice(0, 15).map((d: any) => ({ date: d.drive_off_date, store: branchName.get(d.branch_id) ?? "?", amount: r2(d.amount_drive_off), fuel: d.fuel_type, pump: d.pump_number, paid: Boolean(d.payment_received_date) })),
+        };
+      });
+    }
+
+    // Lottery
+    if (!isStaff && wants(/lotter|scratch|ticket/)) {
+      await safe("lottery_last_7_days", async () => {
+        const { data } = await inScope(db.from("lottery_daily_records").select("record_date, branch_id, tickets_sold, game:lottery_games(game_name, ticket_price)").gte("record_date", weekAgo).limit(1500));
+        const per: Record<string, { tickets: number; value: number }> = {};
+        for (const r of data || []) {
+          const k = branchName.get(r.branch_id) ?? "?";
+          const e = (per[k] ||= { tickets: 0, value: 0 });
+          const sold = Number(r.tickets_sold || 0);
+          e.tickets += sold; e.value += sold * Number((r.game as any)?.ticket_price || 0);
+        }
+        return Object.fromEntries(Object.entries(per).map(([k, v]) => [k, { tickets_sold: v.tickets, sales_value_gbp: r2(v.value) }]));
+      });
+    }
+
+    // Safety tasks
+    if (!isStaff && wants(/safety|hazard|risk|incident|task/)) {
+      await safe("open_safety_tasks", async () => {
+        const { data } = await inScope(db.from("safety_tasks").select("title, status, priority, due_date, branch_id").is("completed_at", null).order("due_date", { ascending: true }).limit(40));
+        return (data || []).map((t: any) => ({ title: t.title, status: t.status, priority: t.priority, due: t.due_date, store: branchName.get(t.branch_id) ?? "?" }));
+      });
+    }
+
+    // Customer accounts
+    if (!isStaff && wants(/customer account|account customer|credit account/)) {
+      await safe("customer_accounts", async () => {
+        const { data } = await inScope(db.from("customer_accounts").select("name, status, branch_id").limit(300));
+        const per: Record<string, number> = {};
+        for (const c of data || []) per[branchName.get(c.branch_id) ?? "?"] = (per[branchName.get(c.branch_id) ?? "?"] || 0) + 1;
+        return { total: (data || []).length, per_store: per, accounts: (data || []).slice(0, 40).map((c: any) => `${c.name} (${c.status}, ${branchName.get(c.branch_id) ?? "?"})`) };
+      });
+    }
+
     const system = `You are "Niza AI", the in-app assistant for the Niza Cloud HR & operations platform.
 
-You answer questions using ONLY the LIVE DATA below, which has already been filtered to what this user is allowed to see (${scopeLabel}).
+You answer using ONLY the LIVE DATA below, which is already filtered to what this user is allowed to see (${scopeLabel}).
+The data has the HR basics, plus extra blocks that appear only when the question needs them: templates, sales, supplier_invoices, drive_offs, lottery_last_7_days, open_safety_tasks, customer_accounts. "app_pages" lists the real address of every page in the app.
 Rules:
 - Be fast and concise: lead with the direct answer, then short bullet points if useful. No long preambles.
-- Times are UK local time. "Today" is ${today}.
+- Times are UK local time. "Today" is ${today}. Money is GBP.
+- LINKS: when someone asks for a link, a page, where to find something, or how to open it, give the full address from app_pages (or a template's own 'link') as a markdown link like [Invoice template](${APP_URL}/niza-templates/invoices). Never invent an address that is not in the data.
+- Templates: use the templates block (uploaded files have a 'link') and the Niza Templates pages in app_pages (ID cards, business cards, invoice, letterhead, gift cards, email signature, shared, store and HR).
+- Sales and analysis: use the sales block (latest day, last 7 days, month to date, previous month, per store, and monthly history when asked to compare). Work out totals, differences and percentages from those numbers and show them. For deeper views, link the matching Sales Analysis page.
 - For "who/which store submitted first", use daily_reports_today (order_submitted 1 = first) and say the time.
 - Scheduling: use shifts_today, scheduled_today_but_not_clocked_in, shifts_awaiting_employee_response (or my_upcoming_shifts for staff).
 - Onboarding: use onboarding_in_progress (with next_step) and contracts_awaiting_approval.
 - Documents: use documents (overdue_follow_ups, follow_ups_due_soon, expiring_next_30_days).
-- If asked about something outside the user's scope or not present in the data, say you don't have access to that data or it isn't in the current data. NEVER guess, never invent names, numbers or times, and never reveal anything beyond the data given.
+- If the answer is not in the data, say so plainly and, if a page would show it, give that page's link. NEVER guess or invent names, numbers, dates or links.
 - Never output personal sensitive data (addresses, NI numbers, DOB, salary, passwords); you don't have them.
-- You may also explain how to use app modules (Employee Hub, Documents, Daily Reports, Clock-ins, Rota, Leave, Payroll, Lottery, Messages, Reminders) in a few steps.
-- Format: plain text with simple markdown (bold, bullets). Keep answers under ~150 words unless asked for detail.
+- You may also explain how to use any module in a few steps.
+- Format: plain text with simple markdown (bold, bullets, links). Keep answers under ~180 words unless asked for detail.
 
 LIVE DATA (JSON):
 ${JSON.stringify(ctx)}`;
@@ -322,7 +513,7 @@ ${JSON.stringify(ctx)}`;
         reasoning: { enabled: false }, // skip "thinking" tokens for the fastest replies
         stream: true,
         temperature: 0.2,
-        max_tokens: 700,
+        max_tokens: 1100,
         messages: [{ role: "system", content: system }, ...history],
       }),
     });

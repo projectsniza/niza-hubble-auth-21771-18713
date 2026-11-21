@@ -16,6 +16,7 @@
 //   Super Admin: every document.   HR: by access level (full = all, organisation = their organisation,
 //   branch = their branches).   Store login (manager): their own branch(es).
 //   A custom role's organisation / branches override the profile, the same way the app does.
+//   A login whose custom role has Documents switched OFF gets no emails at all.
 //   Documents of deactivated or deleted employees are left out.
 //
 // Secrets: RESEND_API_KEY (already used by the login-code emails), optional RESEND_FROM_EMAIL, APP_URL.
@@ -243,7 +244,7 @@ serve(async (req) => {
     const customIds = [...new Set(profiles.map((p: Row) => p.custom_role_id).filter(Boolean))];
     const customRoles = new Map<string, Row>();
     if (customIds.length) {
-      const { data } = await admin.from("custom_roles").select("id, base_role, organization_id, branch_id, branch_ids, is_active").in("id", customIds);
+      const { data } = await admin.from("custom_roles").select("id, base_role, organization_id, branch_id, branch_ids, is_active, permissions").in("id", customIds);
       (data || []).forEach((c: Row) => customRoles.set(c.id, c));
     }
 
@@ -255,6 +256,12 @@ serve(async (req) => {
       let orgId: string | null = p.organization_id ?? null;
       let branchIds: string[] = p.branch_id ? [p.branch_id] : [];
       const cr = p.custom_role_id ? customRoles.get(p.custom_role_id) : null;
+      // A login on a custom role only gets these emails when that role has Documents switched on.
+      // (A Super Admin always does; HR and store logins without a custom role keep their default access.)
+      if (p.custom_role_id && role !== "super_admin") {
+        const documentsOn = Boolean(cr && cr.is_active !== false && cr.permissions && cr.permissions.documents === true);
+        if (!documentsOn && !(cr && cr.base_role === "super_admin")) continue;
+      }
       if (cr && cr.is_active !== false) {
         if (cr.base_role === "hr" || cr.base_role === "manager" || cr.base_role === "super_admin") role = cr.base_role;
         const ids: string[] = (cr.branch_ids && cr.branch_ids.length ? cr.branch_ids : cr.branch_id ? [cr.branch_id] : []) as string[];

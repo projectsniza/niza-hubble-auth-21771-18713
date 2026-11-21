@@ -22,15 +22,26 @@ let assistantSlug = 'ai-assistant';
 
 // ---- tiny, safe markdown renderer (bold, bullets, numbered lists, line breaks) ----
 function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={i} className="font-semibold">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  // bold, [label](https://link) and bare https:// addresses; only web links are made clickable
+  return text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s)]+)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={i} className="font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    const md = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    const href = md ? md[2] : /^https?:\/\//.test(part) ? part : null;
+    if (href) {
+      return (
+        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="break-all font-medium text-primary underline underline-offset-2 hover:opacity-80">
+          {md ? md[1] : part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 function RichText({ text }: { text: string }) {
