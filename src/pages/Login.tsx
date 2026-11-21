@@ -257,7 +257,7 @@ export default function Login() {
               <span>HR Workspace</span>
             </div>
 
-            <h1 className="mt-[2.2vh] shrink-0 text-[clamp(34px,7.2vh,70px)] font-semibold leading-[1.04] tracking-tight text-[#141C18]">
+            <h1 style={{ animation: 'niza-rise .8s .12s cubic-bezier(.2,.7,.2,1) both' }} className="mt-[2.2vh] shrink-0 text-[clamp(34px,7.2vh,70px)] font-semibold leading-[1.04] tracking-tight text-[#141C18]">
               People, Process &amp;
               <br />
               <span
@@ -282,9 +282,10 @@ export default function Login() {
           {/* ------------------------------------------------------- */}
           <div className="flex h-full w-full max-h-full items-center justify-center lg:w-auto lg:justify-end">
             <div
-              className="relative flex max-h-full w-full max-w-[460px] lg:w-[clamp(440px,62vh,580px)] lg:max-w-none flex-col overflow-y-auto overflow-x-hidden rounded-[clamp(28px,4.5vh,44px)] border border-white bg-white/95 px-[min(clamp(24px,5vh,52px),6vw)] py-[min(clamp(20px,4.2vh,48px),6vw)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="relative flex max-h-full w-full max-w-[460px] lg:w-[clamp(440px,62vh,580px)] lg:max-w-none flex-col overflow-y-auto overflow-x-hidden rounded-[clamp(26px,4.2vh,36px)] border border-white/80 bg-white/[0.97] px-[min(clamp(24px,5vh,52px),6vw)] py-[min(clamp(20px,4.2vh,48px),6vw)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{
-                boxShadow: '0 30px 70px -20px rgba(16, 120, 80, 0.22), 0 0 0 6px rgba(255,255,255,0.45), inset 0 1px 2px rgba(255, 255, 255, 1)',
+                boxShadow: '0 44px 90px -34px rgba(6, 95, 70, 0.32), 0 14px 32px -20px rgba(6, 95, 70, 0.2), inset 0 1px 0 rgba(255, 255, 255, 1)',
+                animation: 'niza-rise .7s cubic-bezier(.2,.7,.2,1) both',
               }}
             >
               {/* Silk swoosh in the top-right corner */}
@@ -334,20 +335,20 @@ export default function Login() {
                   {/* Email Input */}
                   <div>
                     <label
-                      className="mb-[1vh] block text-[clamp(13px,1.9vh,17px)] font-semibold text-gray-800"
+                      className="mb-2 block text-[13px] font-semibold tracking-wide text-[#14332A]"
                       htmlFor="email-input"
                     >
                       Email
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Mail className="w-4 h-4 text-[#7D9488] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <Input
                         id="email-input"
                         type="email"
                         placeholder="info@nizagroup.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="h-[clamp(40px,6.3vh,60px)] pl-11 pr-4 text-[clamp(14px,1.9vh,17px)] rounded-2xl bg-[#EEF2F9] border border-[#E2E8F2] text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                        className="h-[clamp(42px,6.4vh,58px)] pl-11 pr-4 text-[15px] rounded-xl bg-[#F6F9F7] border border-[#D9E5DE] text-gray-900 placeholder:text-[#A3B3AA] shadow-none focus-visible:outline-none focus:bg-white focus:border-[#0F8A57] focus:ring-4 focus:ring-emerald-500/15 transition-[border-color,box-shadow,background-color] duration-200"
                         disabled={isLoading}
                         autoComplete="email"
                       />
@@ -357,20 +358,20 @@ export default function Login() {
                   {/* Password Input */}
                   <div>
                     <label
-                      className="mb-[1vh] block text-[clamp(13px,1.9vh,17px)] font-semibold text-gray-800"
+                      className="mb-2 block text-[13px] font-semibold tracking-wide text-[#14332A]"
                       htmlFor="password-input"
                     >
                       Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Lock className="w-4 h-4 text-[#7D9488] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <Input
                         id="password-input"
                         type={showPassword ? 'text' : 'password'}
                         placeholder="••••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="h-[clamp(40px,6.3vh,60px)] pl-11 pr-11 text-[clamp(14px,1.9vh,17px)] rounded-2xl bg-[#EEF2F9] border border-[#E2E8F2] text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all tracking-wider"
+                        className="h-[clamp(42px,6.4vh,58px)] pl-11 pr-11 text-[15px] rounded-xl bg-[#F6F9F7] border border-[#D9E5DE] text-gray-900 placeholder:text-[#A3B3AA] shadow-none focus-visible:outline-none focus:bg-white focus:border-[#0F8A57] focus:ring-4 focus:ring-emerald-500/15 transition-[border-color,box-shadow,background-color] duration-200 tracking-wider"
                         disabled={isLoading}
                         autoComplete="current-password"
                       />
@@ -378,7 +379,7 @@ export default function Login() {
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#7D9488] transition-colors hover:bg-emerald-50 hover:text-[#0F7A4F]"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -413,7 +414,7 @@ export default function Login() {
                   {/* Sign In Button with exact green-to-lime gradient */}
                   <Button
                     type="submit"
-                    className="relative overflow-hidden w-full h-[clamp(42px,6.9vh,66px)] text-[clamp(15px,2.1vh,19px)] font-semibold rounded-full text-white shadow-[0_12px_26px_rgba(5,120,80,0.35)] hover:brightness-105 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-3"
+                    className="group relative overflow-hidden w-full h-[clamp(44px,6.6vh,60px)] text-[16px] font-semibold rounded-full text-white shadow-[0_16px_30px_-12px_rgba(5,120,80,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_38px_-12px_rgba(5,120,80,0.66)] active:translate-y-0 active:scale-[0.99] disabled:opacity-80 flex items-center justify-center gap-2 mt-4"
                     style={{
                       background: 'linear-gradient(90deg, #04643F 0%, #0B7D4C 50%, #5BB02F 100%)',
                     }}
@@ -447,7 +448,7 @@ export default function Login() {
               )}
 
               {/* Security Compliance Footer inside Card */}
-              <div className="mt-[2.6vh] flex items-center gap-3 border-t border-gray-100 pt-[2vh]">
+              <div className="mt-[3vh] flex items-center gap-3 rounded-xl bg-[#F3F8F5] px-4 py-3">
                 <ShieldCheck className="w-6 h-6 text-gray-500 flex-shrink-0" strokeWidth={1.5} />
                 <p className="text-[min(clamp(10.5px,1.55vh,13px),2.9vw)] text-gray-500 leading-snug">
                   AES-256 Encrypted · TLS 1.3 · OAuth 2.0 · GDPR Compliant ·<br />

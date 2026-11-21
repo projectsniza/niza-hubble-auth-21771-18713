@@ -172,6 +172,8 @@ export default function LoginHeroGraphic() {
     });
     ro.observe(stage);
 
+    // pointer parallax: the cards drift a little toward the mouse (front cards move more)
+    let mx = 0, my = 0, tmx = 0, tmy = 0;
     const paint = (t: number) => {
       for (let i = 0; i < CARDS.length; i++) {
         const el = cardRefs.current[i];
@@ -179,13 +181,17 @@ export default function LoginHeroGraphic() {
         const c = state[i];
         const d = c.depth;
         const size = (CARDS[i].width / 100) * W;
+        const par = 0.45 + 0.55 * d;
+        const ox = mx * W * 0.022 * par;
+        const oy = my * H * 0.022 * par;
         // float amplitude is a % of the stage so it scales with screen size
-        const px = ((c.x + sample(c.float.x, t)) / 100) * W - size / 2;
-        const py = ((c.y + sample(c.float.y, t)) / 100) * H - size / 2;
-        const scale = 0.82 + 0.18 * d;
+        const px = ((c.x + sample(c.float.x, t)) / 100) * W - size / 2 + ox;
+        const py = ((c.y + sample(c.float.y, t)) / 100) * H - size / 2 + oy;
+        const breathe = 1 + 0.012 * Math.sin(t * 0.9 + i * 1.7);
+        const scale = (0.82 + 0.18 * d) * breathe;
         el.style.transform =
           `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) ` +
-          `rotateX(${sample(c.float.rx, t).toFixed(1)}deg) rotateY(${sample(c.float.ry, t).toFixed(1)}deg) ` +
+          `rotateX(${(sample(c.float.rx, t) - my * 3 * par).toFixed(1)}deg) rotateY(${(sample(c.float.ry, t) + mx * 4 * par).toFixed(1)}deg) ` +
           `rotateZ(${(c.baseRotate + sample(c.float.rz, t)).toFixed(1)}deg) scale(${scale.toFixed(3)})`;
         el.style.opacity = (0.55 + 0.45 * d).toFixed(3);
         const layer = d > 0.5 ? LEAF_Z + 10 + Math.round(d * 5) : LEAF_Z - 10;
@@ -245,14 +251,25 @@ export default function LoginHeroGraphic() {
         c.y += (c.ty - c.y) * GLIDE;
         c.depth += (c.targetDepth - c.depth) * GLIDE * 1.2;
       }
+      mx += (tmx - mx) * 0.05;
+      my += (tmy - my) * 0.05;
       paint(t);
       raf = requestAnimationFrame(tick);
     };
+    const onPointer = (e: PointerEvent) => {
+      const r = stage.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      tmx = Math.max(-1, Math.min(1, ((e.clientX - (r.left + r.width / 2)) / r.width) * 2));
+      tmy = Math.max(-1, Math.min(1, ((e.clientY - (r.top + r.height / 2)) / r.height) * 2));
+    };
+    window.addEventListener('pointermove', onPointer, { passive: true });
+
     raf = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(swapTimer);
+      window.removeEventListener('pointermove', onPointer);
       ro.disconnect();
     };
   }, [initial]);
@@ -355,10 +372,10 @@ export default function LoginHeroGraphic() {
               transformStyle: 'preserve-3d',
               willChange: 'transform, opacity',
               background:
-                'linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(240,253,247,0.86) 50%, rgba(214,245,229,0.78) 100%)',
-              border: '1.5px solid rgba(255,255,255,0.95)',
+                'linear-gradient(145deg, rgba(255,255,255,0.97) 0%, rgba(243,252,248,0.9) 55%, rgba(222,247,236,0.84) 100%)',
+              border: '1px solid rgba(255,255,255,0.9)',
               boxShadow:
-                '0 22px 38px -16px rgba(5,150,105,0.32), inset 0 2px 4px rgba(255,255,255,1), inset -3px -3px 8px rgba(245,158,11,0.16)',
+                '0 26px 46px -20px rgba(6,95,70,0.36), 0 2px 6px rgba(6,95,70,0.08), inset 0 1px 0 rgba(255,255,255,1), inset 0 -2px 8px rgba(16,185,129,0.12)',
             } as CSSProperties
           }
         >
