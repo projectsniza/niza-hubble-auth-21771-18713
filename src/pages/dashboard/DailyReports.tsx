@@ -60,6 +60,8 @@ export default function DailyReports() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
   const [reportToDelete, setReportToDelete] = useState<DailyReport | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<{ reportId: string; file: any } | null>(null);
+  const [deletingFile, setDeletingFile] = useState(false);
   
   // Use centralized org/branch data
   const { organizations, branches } = useOrgBranch();
@@ -403,6 +405,62 @@ export default function DailyReports() {
         description: "Failed to download file",
         variant: "destructive",
       });
+    }
+  };
+
+  // Open one attached file in a new tab (PDFs and images show straight in the browser).
+  const handleViewFile = async (filePath: string) => {
+    const win = window.open('', '_blank');
+    try {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(filePath, 300);
+      if (error || !data?.signedUrl) throw error || new Error('No link');
+      if (win) win.location.href = data.signedUrl;
+      else window.open(data.signedUrl, '_blank');
+    } catch {
+      win?.close();
+      toast({ title: 'Error', description: 'Failed to open file', variant: 'destructive' });
+    }
+  };
+
+  // Only a Super Admin, or the person who submitted the report, may remove a file from it
+  // (that is what the database allows).
+  const canDeleteFile = useCallback((report: DailyReport) => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    return (user.role === 'manager' || user.role === 'hr') && report.submitted_by === user.id;
+  }, [user]);
+
+  // Remove ONE attached file: the report keeps its other files.
+  const handleDeleteFile = async () => {
+    if (!fileToDelete) return;
+    const { reportId, file } = fileToDelete;
+    const report = reports.find(r => r.id === reportId);
+    if (!report) { setFileToDelete(null); return; }
+    setDeletingFile(true);
+    try {
+      const remaining = (Array.isArray(report.files) ? report.files : []).filter((f: any) => f.path !== file.path);
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .update({ files: remaining } as any)
+        .eq('id', reportId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('You can only delete files from reports you submitted.');
+
+      // the report no longer points at the file, so clean up the stored copy too
+      try { await supabase.storage.from('documents').remove([file.path]); } catch { /* the record is already updated */ }
+
+      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, files: remaining } : r)));
+      toast({ title: 'File deleted', description: `"${file.name}" was removed from this report.` });
+    } catch (error: unknown) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete file',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingFile(false);
+      setFileToDelete(null);
     }
   };
 
@@ -1128,6 +1186,32 @@ export default function DailyReports() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && !deletingFile && setFileToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{fileToDelete?.file?.name}" will be removed from this report and deleted. The report's other files stay.
+              {(() => {
+                const r = reports.find(x => x.id === fileToDelete?.reportId);
+                return Array.isArray(r?.files) && r!.files.length <= 1 ? ' This is the only file, so the report will have no files left.' : '';
+              })()}
+              {' '}This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingFile}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingFile}
+              onClick={(e) => { e.preventDefault(); handleDeleteFile(); }}
+            >
+              {deletingFile ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* View Report Dialog */}
       <Dialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>
         <DialogContent className="max-w-2xl">
@@ -1183,9 +1267,26 @@ export default function DailyReports() {
                           <FileText className="h-4 w-4" />
                           <span className="text-sm">{file.name}</span>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(file.path, file.name)}>
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" title="View" aria-label={`View ${file.name}`} onClick={() => handleViewFile(file.path)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" title="Download" aria-label={`Download ${file.name}`} onClick={() => handleDownloadFile(file.path, file.name)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          {canDeleteFile(viewingReport) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Delete this file"
+                              aria-label={`Delete ${file.name}`}
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setFileToDelete({ reportId: viewingReport.id, file })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (

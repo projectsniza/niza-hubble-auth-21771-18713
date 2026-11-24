@@ -171,6 +171,34 @@ export function useEmployees(filters?: {
 
   const deleteEmployee = useCallback(async (id: string) => {
     try {
+      // Timesheets are deleted together with the employee, which would wipe their pay history.
+      // So someone who has timesheets is deactivated instead: gone from scheduling, history kept.
+      const { count: timesheetCount } = await supabase
+        .from('timesheets')
+        .select('id', { count: 'exact', head: true })
+        .eq('employee_id', id);
+
+      if ((timesheetCount ?? 0) > 0) {
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('user_id, email, leaving_date')
+          .eq('id', id)
+          .maybeSingle();
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update({ status: 'terminated', leaving_date: emp?.leaving_date || new Date().toISOString().slice(0, 10) } as any)
+          .eq('id', id);
+        if (updateError) throw updateError;
+
+        // Block the login too, like deactivating does.
+        if (emp?.user_id) await supabase.from('profiles').update({ is_active: false }).eq('id', emp.user_id);
+        else if (emp?.email) await supabase.from('profiles').update({ is_active: false }).eq('email', emp.email);
+
+        setEmployees(prev => prev.map(e => (e.id === id ? { ...e, status: 'terminated' } : e)));
+        toast.success('This employee has timesheet records, so they were deactivated instead of deleted. Their history is kept.');
+        return { error: null };
+      }
+
       const { error } = await supabase
         .from('employees')
         .delete()

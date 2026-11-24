@@ -60,6 +60,7 @@ interface Employee {
   last_name: string;
   organization_id: string;
   branch_id: string;
+  status?: string;
   branch?: { name: string };
 }
 
@@ -183,6 +184,18 @@ const entryTotal = (entry: Partial<TimesheetEntry> | null | undefined) =>
   (Number(entry?.holiday_hours) || 0) +
   (Number(entry?.sick_hours) || 0) +
   (Number(entry?.adjustment_hours) || 0);
+
+// Someone who has left (deactivated, dismissed or deleted) stays in the history of the weeks and months they
+// worked. They are simply not listed for a week or month where nothing was recorded for them.
+// This only decides who is LISTED: no hours or totals are calculated differently.
+const LEFT_STATUSES = ['inactive', 'terminated', 'deleted'];
+const hasLeft = (emp?: { status?: string } | null) => Boolean(emp?.status && LEFT_STATUSES.includes(emp.status));
+const timesheetHasRecordedTime = (ts: { total_worked_hours?: number; total_holiday_hours?: number; total_sick_hours?: number; total_adjustment_hours?: number; entries?: Partial<TimesheetEntry>[] }) =>
+  (Number(ts.total_worked_hours) || 0) !== 0 ||
+  (Number(ts.total_holiday_hours) || 0) !== 0 ||
+  (Number(ts.total_sick_hours) || 0) !== 0 ||
+  (Number(ts.total_adjustment_hours) || 0) !== 0 ||
+  (ts.entries || []).some((e) => entryTotal(e) !== 0);
 
 const getWeeklyEntrySignature = (entry: Partial<TimesheetEntry> | null | undefined) => [
   entry?.shift_start_time || '',
@@ -669,7 +682,7 @@ export function TimesheetView() {
       const weekTimesheetsData = await fetchAllPages((from, to) => {
         let query = supabase
           .from('timesheets')
-          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .select('*, branch:branches(name), employee:employees(id, status, first_name, last_name, organization_id, branch_id, branch:branches(name))')
           .eq('week_start_date', weekStartStr)
           .order('id');
         if (user?.role === 'manager' && user.branchId) query = query.eq('branch_id', user.branchId);
@@ -703,7 +716,7 @@ export function TimesheetView() {
       const monthTimesheetsData = await fetchAllPages((from, to) => {
         let query = supabase
           .from('timesheets')
-          .select('*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name))')
+          .select('*, branch:branches(name), employee:employees(id, status, first_name, last_name, organization_id, branch_id, branch:branches(name))')
           .gte('week_start_date', format(monthRangeStart, 'yyyy-MM-dd'))
           .lte('week_start_date', format(payroll.end, 'yyyy-MM-dd'))
           .order('id');
@@ -755,7 +768,7 @@ export function TimesheetView() {
       const datedEntries = await fetchAllPages((from, to) =>
         (supabase as any)
           .from('timesheet_entries')
-          .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
+          .select('*, timesheet:timesheets(*, branch:branches(name), employee:employees(id, status, first_name, last_name, organization_id, branch_id, branch:branches(name)))')
           .gte('entry_date', format(payroll.start, 'yyyy-MM-dd'))
           .lte('entry_date', format(payroll.end, 'yyyy-MM-dd'))
           .order('id')
@@ -1243,6 +1256,7 @@ export function TimesheetView() {
   const filteredTimesheets = useMemo(() => timesheets.filter(t => {
     const emp = t.employee;
     if (!emp) return true;
+    if (hasLeft(emp) && !timesheetHasRecordedTime(t)) return false;
     const matchesSearch = `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
     if (!canViewFilters) return true;
@@ -1394,6 +1408,7 @@ export function TimesheetView() {
 
     const grouped: Record<string, typeof consolidation> = {};
     Object.entries(consolidation).forEach(([rowKey, data]) => {
+      if (hasLeft(data.employee) && data.totalHrs === 0 && data.holidayHrs === 0 && data.sickHrs === 0) return; // left, nothing recorded this month
       const branchName = data.employee.branch?.name;
       if (!branchName) return; // hide Unassigned
       if (!grouped[branchName]) grouped[branchName] = {};
